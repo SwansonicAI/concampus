@@ -1,0 +1,118 @@
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client
+
+from core.models import Message, Person
+from core.testing import Seeded, flashes
+from courses.models import Course, Participation, Score
+from students.models import Document, Study, StudyTerm
+from .views import checklist
+
+PANEL = {'X-Panel': '1'}
+
+
+def upload(name, kind='video'):
+    return {'kind': kind, 'file': SimpleUploadedFile(name, b'\x00\x00\x00\x18ftypmp42', content_type='video/mp4')}
+
+
+class DecisionTest(Seeded):
+    def test_decide_accept_enrol(self):
+        asa = self.login('asa')
+        study = Study.objects.filter(status='applied').exclude(person__username='bewerbung').first()
+        asa.post(f'/aufnahme/bewerbung/{study.pk}/entscheidung/', {'status': 'admitted'})
+        self.assertTrue(Message.objects.filter(person=study.person, subject='Zulassungsbescheid').exists())
+        applicant = Client()
+        applicant.force_login(study.person)
+        self.assertTrue(flashes(applicant.post(f'/aufnahme/meine/{study.pk}/annahme/', {'decision': 'yes'}, follow=True)))
+        applicant.post(f'/aufnahme/meine/{study.pk}/annahme/', {'decision': 'yes', 'insurer': 'BARMER', 'insurance': 'gesetzlich'})
+        study.person.refresh_from_db()
+        self.assertEqual(study.person.insurer, 'BARMER')
+        self.assertTrue(StudyTerm.objects.filter(study=study).exists())
+        asa.post(f'/studierende/{study.pk}/versicherung/')
+        asa.post(f'/studierende/{study.pk}/immatrikulieren/')
+        study.refresh_from_db()
+        self.assertEqual(study.status, Study.Status.ENROLLED)
+
+
+class ApplicationTest(Seeded):
+    def test_sign_up_and_apply(self):
+        anon = Client()
+        r = anon.post('/aufnahme/konto/', {
+            'first_name': 'Ida', 'last_name': 'Testfall', 'email': 'ida@example.org', 'gender': 'w', 'birth_date': '2005-05-05',
+            'birth_place': 'Erfurt', 'nationality': 'deutsch', 'password1': 'Geige-Weimar-2026', 'password2': 'Geige-Weimar-2026',
+        }, follow=True)
+        audition = r.context['form'].fields['audition'].queryset.filter(video=True).first()
+        anon.post('/aufnahme/bewerben/', {'audition': audition.pk, 'repertoire': 'Bach, Partita Nr. 2', 'accompanist': 'on', 'declaration': 'on'})
+        ida = Person.objects.get(username='ida@example.org')
+        study = ida.studies.get()
+        self.assertEqual(study.status, Study.Status.APPLIED)
+        anon.post(f'/aufnahme/bewerbung/{study.pk}/unterlagen/', {'kind': 'cv', 'file': SimpleUploadedFile('cv.pdf', b'%PDF-1.4', content_type='application/pdf')})
+        anon.post(f'/aufnahme/bewerbung/{study.pk}/unterlagen/', upload('vortrag.mp4'))
+        self.assertEqual(ida.documents.count(), 2)
+        self.assertTrue(Participation.objects.filter(study=study, course=audition).exists())
+
+    def test_declaration_is_required(self):
+        c = self.login('bewerbung')
+        audition = c.get('/aufnahme/bewerben/').context['form'].fields['audition'].queryset.first()
+        self.assertIn('declaration', c.post('/aufnahme/bewerben/', {'audition': audition.pk, 'repertoire': 'x'}).context['form'].errors)
+
+
+class VideoTest(Seeded):
+    """One uncut file per video round, replaced by a new upload; no links; only where the HfM asks for a video."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        c = Client()
+        c.force_login(Person.objects.get(username='bewerbung'))
+        course = c.get('/aufnahme/bewerben/').context['form'].fields['audition'].queryset.filter(video=True).exclude(subject__name='Violoncello').first()
+        c.post('/aufnahme/bewerben/', {'audition': course.pk, 'repertoire': 'Mozart, Konzert', 'declaration': 'on'})
+        cls.study = Study.objects.get(person__username='bewerbung', subject=course.subject)
+
+    def setUp(self):
+        self.applicant = self.login('bewerbung')
+        self.url = f'/aufnahme/bewerbung/{self.study.pk}/unterlagen/'
+
+    def test_checklist(self):
+        section = next(s for s in self.applicant.get('/aufnahme/meine/').context['studies'] if s.pk == self.study.pk)
+        self.assertEqual([i['label'] for i in section.checklist][:3], ['Video', 'Lebenslauf', 'Abitur- oder letztes Schulzeugnis'])
+        no_video = Study.objects.filter(participations__course__program__isnull=False, participations__course__video=False, status='applied').first()
+        self.assertNotIn('Video', [i['label'] for i in checklist(no_video)])
+
+    def test_upload_replace_discard(self):
+        r = self.applicant.post(self.url, upload('take.mp4'), headers=PANEL)
+        self.assertEqual(r.headers['X-Location'], '/aufnahme/meine/')
+        self.assertIn('Bitte das Video als Datei hochladen', flashes(self.applicant.post(self.url, upload('cv.pdf'), follow=True))[-1])
+        self.assertIn('Bitte das Video als Datei hochladen', flashes(self.applicant.post(self.url, {'kind': 'video', 'url': 'https://youtu.be/x'}, follow=True))[-1])
+        self.applicant.post(self.url, upload('take2.webm'))
+        video = Document.objects.get(study=self.study, kind='video')
+        self.assertEqual(video.title, 'take2.webm')
+        self.assertTrue(video.playable)
+        self.assertIn('<video controls', self.applicant.get('/aufnahme/meine/').text)
+        self.applicant.post(f'/aufnahme/unterlagen/{video.pk}/entfernen/')
+        self.assertFalse(Document.objects.filter(pk=video.pk).exists())
+
+    def test_others_cannot_upload(self):
+        self.assertEqual(self.login('student').post(self.url, {'kind': 'cv', 'url': 'https://x.org/a.pdf'}).status_code, 403)
+
+
+class JuryTest(Seeded):
+    def test_juror_works_through_the_video_round(self):
+        wendt = Person.objects.get(username='lehre')
+        juror = self.login('lehre')
+        video_round = Course.objects.get(title='Videostufe Violine', released=None)
+        self.assertIn(f'/aufnahme/pruefung/{video_round.pk}/sichtung/', juror.get('/').text)
+        r = juror.get(f'/aufnahme/pruefung/{video_round.pk}/sichtung/', headers=PANEL)
+        first = r.context['p']
+        self.assertIn('<video', r.text)
+        url = f'/aufnahme/pruefung/{video_round.pk}/sichtung/?bewerbung={first.pk}'
+        juror.post(url, {f'score-{first.pk}-{wendt.pk}': '19,5'}, headers=PANEL)
+        self.assertEqual(str(Score.objects.get(participation=first, examiner=wendt).value), '19.50')
+        self.assertIn('Bitte Punkte zwischen 0 und 25 eintragen.', flashes(juror.post(url, {f'score-{first.pk}-{wendt.pk}': '31'}, follow=True)))
+        self.assertEqual(self.login('student').get(f'/aufnahme/pruefung/{video_round.pk}/sichtung/').status_code, 403)
+
+    def test_board_flags_incomplete_applications(self):
+        self.assertIn('unvollständig', self.login('asa').get('/aufnahme/bewerbungen/').text)
+
+    def test_students_find_how_to_apply_for_a_master(self):
+        r = self.login('student').get('/suche/', {'q': 'master'}, headers={'X-Fragment': '1'})
+        self.assertIn('Bewerbung für ein weiteres Studium', r.text)
