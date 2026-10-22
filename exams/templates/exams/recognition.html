@@ -1,0 +1,24 @@
+{% extends base %}
+{% block title %}Anerkennung{% endblock %}
+{% block subnav %}{% include "exams/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Anerkennung</h1>
+<p class="lead">Leistungen aus anderen Hochschulen oder Studiengängen auf Module anrechnen. Jede Anerkennung erscheint sofort in der Leistungsübersicht.</p>
+<div class="cols">
+  <form method="post" class="form">
+    {% csrf_token %}
+    {{ form }}
+    <div class="actions"><button class="btn">Anerkennen</button></div>
+  </form>
+  {% include "students/_enrolled.html" %}
+  <div>
+    <h3>Zuletzt anerkannt · {{ course.term }}</h3>
+    <table data-panel>
+      {% for p in recent %}
+      <tr><td><a href="{% url 'exams:transcript' p.study.pk %}">{{ p.study.person.name }}</a></td><td>{{ p.module.code }}</td><td class="num">{% if p.grade is not None %}{{ p.grade|floatformat:1 }}{% else %}bestanden{% endif %}</td></tr>
+      {% empty %}<tr><td class="empty">Noch keine Anerkennungen in diesem Semester.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}

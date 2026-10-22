@@ -1,0 +1,21 @@
+{% extends base %}
+{% block title %}Semesterwechsel{% endblock %}
+{% block subnav %}{% include "courses/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Semesterwechsel</h1>
+<p class="lead">{{ pending|length }} Veranstaltungen sind im {{ target }} noch nicht angelegt.</p>
+<div class="cols">
+  <div>
+    <p>Lehrveranstaltungen kommen aus dem Semester ein Jahr zuvor, weil die meisten zwischen Winter und Sommer wechseln; Einzelunterricht kommt aus dem laufenden Semester.</p>
+    <p>Übernommen werden Titel, Art, Hauptfach, SWS, Plätze, Beschreibung, Lehrende und anrechenbare Module. Einzelunterricht behält seine Klasse: immatrikulierte Studierende werden mitgenommen. Termine plant jede Veranstaltung neu.</p>
+    {% if pending %}
+    <form method="post">{% csrf_token %}<button class="btn">{{ pending|length }} Veranstaltungen übernehmen</button></form>
+    {% endif %}
+  </div>
+  <div>
+    <table>
+      {% for c in pending %}<tr><td>{{ c.title }}</td><td class="muted">{{ c.get_kind_display }} · {{ c.term }}</td></tr>{% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}

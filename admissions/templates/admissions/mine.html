@@ -1,0 +1,58 @@
+{% extends base %}
+{% block title %}Meine Bewerbung{% endblock %}
+{% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Meine Bewerbung</h1>
+{% for s in studies %}
+<section>
+  <h2>{{ s.program.degree }} {{ s.program.name }} · {{ s.subject }}</h2>
+  <p class="lead">Studienbeginn {{ s.start_term }} · <span class="badge {{ s.status }}">{{ s.get_status_display }}</span></p>
+  <table>
+    <thead><tr><th>Stufe</th><th>Termin</th><th>Ergebnis</th></tr></thead>
+    <tbody>
+      {% for p in s.stages %}
+      <tr>
+        <td>{{ p.course.title }}</td>
+        <td>{% if p.slot %}{{ p.slot|date:"l, j. F Y, H:i" }}{% elif p.course.video %}online{% else %}wird mitgeteilt{% endif %}</td>
+        <td>{% if p.course.released %}{% if p.passed %}<span class="badge yes">bestanden</span>{% else %}<span class="badge no">nicht bestanden</span>{% endif %}{% else %}<span class="muted">ausstehend</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if s.checklist %}
+  <h3 style="margin-top: 28px">Video und Unterlagen{% if s.open %} · bis {{ s.deadline|date:"j. F Y" }} änderbar{% endif %}</h3>
+  {% include "admissions/_checklist.html" with checklist=s.checklist study=s upload=s.open %}
+  {% endif %}
+  {% if s.status == 'admitted' %}
+  <div class="panel" style="margin-top: 24px">
+    {% if s.accepted %}
+    <h3>Studienplatz angenommen</h3>
+    <p>Bitte überweisen Sie den Semesterbeitrag von {{ s.start_term.fee }} € bis zum {{ s.start_term.deadline|date:"j. F Y" }}.</p>
+    {% if s.waiting %}<p>Für die Immatrikulation fehlt noch: {{ s.waiting|join:" · " }}.</p>{% endif %}
+    {% else %}
+    <h3>Sie haben einen Studienplatz</h3>
+    <p>Zum Annehmen brauchen wir Ihre Krankenversicherung: Die Kasse meldet Ihren Status anschließend elektronisch an die Hochschule.</p>
+    <form method="post" action="{% url 'admissions:accept' s.pk %}" class="form">
+      {% csrf_token %}
+      {{ accept }}
+      <datalist id="insurers">{% for name in insurers %}<option value="{{ name }}">{% endfor %}</datalist>
+      <div class="actions">
+        <button class="btn" name="decision" value="yes">Studienplatz annehmen</button>
+        <button class="btn danger" name="decision" value="no" formnovalidate>Ablehnen</button>
+      </div>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+</section>
+{% empty %}
+<p class="lead">Sie haben sich noch nicht beworben.</p>
+<p><a class="btn" href="{% url 'admissions:apply' %}">Jetzt bewerben</a></p>
+{% endfor %}
+{% if documents %}
+<section>
+  <h2>Bescheide</h2>
+  <table>{% for d in documents %}<tr><td><a href="{{ d.href }}">{{ d.title }}</a></td><td class="muted">{{ d.created|date:"j. F Y" }}</td></tr>{% endfor %}</table>
+</section>
+{% endif %}
+{% endblock %}

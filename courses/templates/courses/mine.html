@@ -1,0 +1,60 @@
+{% extends base %}
+{% block title %}Meine Lehre{% endblock %}
+{% block subnav %}{% include "courses/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>{% if teaching is not None %}Meine Lehre{% else %}Meine Veranstaltungen{% endif %}</h1>
+  <form class="actions"><select name="semester" onchange="this.form.requestSubmit()" aria-label="Semester">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></form>
+</div>
+
+{% if teaching is not None %}
+<div class="stats">
+  <div class="stat"><b>{{ teaching|length }}</b><span>Veranstaltungen im {{ term }}</span></div>
+  <div class="stat"><b>{{ load }}</b><span>SWS Deputat</span></div>
+  <div class="stat"><b>{{ students|length }}</b><span>Studierende in meiner Klasse</span></div>
+</div>
+<section>
+  <h2>Veranstaltungen</h2>
+  <table data-panel>
+    <thead><tr><th>Veranstaltung</th><th>Art</th><th class="num">SWS</th><th class="num">Teilnahmen</th></tr></thead>
+    <tbody>
+      {% for c in teaching %}
+      <tr><td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a></td><td>{{ c.get_kind_display }}</td><td class="num">{{ c.hours|default_if_none:"" }}</td><td class="num">{{ c.size }}</td></tr>
+      {% empty %}<tr><td colspan="4" class="empty">Keine Veranstaltungen in diesem Semester.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+<section>
+  <h2>Meine Klasse</h2>
+  <table data-panel>
+    <thead><tr><th>Name</th><th>Studiengang</th><th>Hauptfach</th><th>Seit</th></tr></thead>
+    <tbody>
+      {% for s in students %}
+      <tr><td><a href="{{ s.get_absolute_url }}">{{ s.person.name }}</a></td><td>{{ s.program }}</td><td>{{ s.subject }}</td><td>{{ s.start_term }}</td></tr>
+      {% empty %}<tr><td colspan="4" class="empty">Keine Studierenden zugeordnet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if registrations is not None %}
+<section>
+  <h2>Belegt</h2>
+  <table{% if registrations %} data-panel{% endif %}>
+    <thead><tr><th>Veranstaltung</th><th>Modul</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for p in registrations %}
+      <tr>
+        <td><a href="{% url 'courses:course' p.course.pk %}"><b>{{ p.course.title }}</b></a></td>
+        <td>{{ p.module|default:"" }}</td>
+        <td>{% if p.passed %}<span class="badge yes">bestanden</span>{% elif p.course.capacity and p.ahead >= p.course.capacity %}<span class="badge wait">Warteliste</span>{% else %}<span class="badge open">angemeldet</span>{% endif %}</td>
+      </tr>
+      {% empty %}<tr><td colspan="3" class="empty">Noch nichts belegt. <a class="more" href="{% url 'courses:catalogue' %}">Vorlesungsverzeichnis</a></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

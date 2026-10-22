@@ -1,0 +1,25 @@
+{% extends base %}
+{% block title %}Studiengänge{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Studiengänge</h1>
+  {% if 'Dekanat' in user.roles %}<div class="actions"><a class="btn ghost" href="{% url 'admin:curriculum_program_add' %}">Neuer Studiengang</a></div>{% endif %}
+</div>
+<p class="lead">Jeder Studiengang ist ein Baum aus Modulen. Pflicht und Wahl folgen aus den ECTS: Ein Bereich ist erfüllt, sobald seine bestandenen Module seine ECTS erreichen.</p>
+<table>
+  <thead><tr><th>Studiengang</th><th>Hauptfächer</th><th class="num">PO</th><th class="num">Semester</th><th class="num">Module</th><th class="num">Studierende</th><th class="num">Bewerbungen</th></tr></thead>
+  <tbody>
+    {% for p in programs %}
+    <tr>
+      <td><a href="{{ p.get_absolute_url }}"><b>{{ p.degree }} {{ p.name }}</b></a></td>
+      <td>{{ p.subjects.all|join:", " }}</td>
+      <td class="num">{{ p.version }}</td>
+      <td class="num">{{ p.semesters }}</td>
+      <td class="num">{{ p.size }}</td>
+      <td class="num">{{ p.students }}</td>
+      <td class="num">{{ p.applicants }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -1,0 +1,16 @@
+{% extends base %}
+{% block title %}{{ room }}{% endblock %}
+{% block subnav %}{% include "rooms/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>{{ room.name }}</h1>
+  <div class="actions">
+    <a class="btn ghost" href="?tag={{ prev|date:'Y-m-d' }}" data-key="ArrowLeft" title="Vorherige Woche (←)">← Woche</a>
+    <a class="btn ghost" href="?tag={{ next|date:'Y-m-d' }}" data-key="ArrowRight" title="Nächste Woche (→)">Woche →</a>
+    {% if bookable %}<a class="btn" href="{% url 'rooms:new' %}?raum={{ room.pk }}">Buchen</a>{% endif %}
+  </div>
+</div>
+<p class="lead">{{ room.purpose|default:room.get_function_display }} · {{ room.building }} · {{ room.capacity }} Plätze{% if room.equipment %} · {{ room.equipment }}{% endif %}</p>
+<p class="muted">{% if room.function in 'veranstaltung sitzung' %}Buchung über das Veranstaltungsbüro.{% else %}Buchbar für {% for i in room.institutes.all %}{% if not forloop.first %}, {% endif %}Institut {{ i }}{% empty %}das Veranstaltungsbüro{% endfor %}.{% endif %}</p>
+{% include "rooms/_week.html" %}
+{% endblock %}

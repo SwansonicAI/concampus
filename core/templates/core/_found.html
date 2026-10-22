@@ -1,0 +1,8 @@
+{% for label, hits in groups %}
+<div class="found">
+  <h4>{{ label }}</h4>
+  {% for h in hits %}<a href="{{ h.url }}"><b>{{ h.title }}</b>{% if h.meta %}<small>{{ h.meta }}</small>{% endif %}</a>{% endfor %}
+</div>
+{% empty %}
+{% if q %}<p class="empty">Nichts gefunden für „{{ q }}“.</p>{% endif %}
+{% endfor %}

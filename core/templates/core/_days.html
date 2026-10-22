@@ -1,0 +1,3 @@
+<nav class="days">
+  {% for d in days %}<a class="day{% if d.busy %} busy{% endif %}{% if d.on %} on{% endif %}" href="{% querystring tag=d.date|date:'Y-m-d' %}"><small>{{ d.date|date:"D" }}</small><b>{{ d.date|date:"j" }}</b></a>{% endfor %}
+</nav>

@@ -1,0 +1,7 @@
+{% extends base %}
+{% block title %}Kein Zugriff{% endblock %}
+{% block content %}
+<h1>Kein Zugriff</h1>
+<p class="lead">Diese Seite gehört zu einer Rolle, die Sie nicht haben.</p>
+<p><a class="more" href="{% url 'home' %}">Zur Startseite</a></p>
+{% endblock %}

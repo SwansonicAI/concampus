@@ -1,0 +1,15 @@
+{% extends base %}
+{% block title %}Stundenplan{% endblock %}
+{% block subnav %}{% include "courses/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Stundenplan</h1>
+  <div class="actions">
+    <a class="btn ghost" href="?tag={{ prev|date:'Y-m-d' }}" data-key="ArrowLeft" title="Vorherige Woche (←)">← Woche</a>
+    <a class="btn ghost" href="?" data-key="h" title="Diese Woche (H)">Diese Woche</a>
+    <a class="btn ghost" href="?tag={{ next|date:'Y-m-d' }}" data-key="ArrowRight" title="Nächste Woche (→)">Woche →</a>
+  </div>
+</div>
+<p class="lead">Woche vom {{ dates.0|date:"j. F" }} bis {{ dates.6|date:"j. F Y" }} · Überschneidungen sind rot umrandet.</p>
+{% include "rooms/_week.html" %}
+{% endblock %}

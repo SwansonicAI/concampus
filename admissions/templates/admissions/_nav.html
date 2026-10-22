@@ -1,0 +1,10 @@
+{% with here=request.resolver_match.url_name roles=user.roles %}
+<nav class="subnav">
+  {% if 'ASA' in roles %}<a href="{% url 'admissions:board' %}" class="{% if here == 'board' or here == 'application' %}on{% endif %}">Bewerbungen</a>{% endif %}
+  {% if 'teacher' in roles %}<a href="{% url 'admissions:juries' %}" class="{% if here == 'juries' or here == 'audition' %}on{% endif %}">Meine Kommissionen</a>{% endif %}
+  {% if 'applicant' in roles or not roles %}
+  <a href="{% url 'admissions:mine' %}" class="{% if here == 'mine' %}on{% endif %}">Meine Bewerbung</a>
+  <a href="{% url 'admissions:apply' %}" class="{% if here == 'apply' %}on{% endif %}">Neue Bewerbung</a>
+  {% endif %}
+</nav>
+{% endwith %}

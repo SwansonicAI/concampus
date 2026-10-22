@@ -1,0 +1,41 @@
+{% extends base %}
+{% block title %}Buchung{% endblock %}
+{% block subnav %}{% include "rooms/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>{% if booking.pk %}Buchung bearbeiten{% else %}Raum buchen{% endif %}</h1>
+{% if booking.pk %}
+<p class="lead">Gebucht für {{ booking.person }} am {{ booking.created|date:"j.n.Y, H:i" }}{% if booking.course %} · <a href="{{ booking.course.get_absolute_url }}">{{ booking.course.title }}</a>{% endif %}{% if series %} · Teil einer Serie mit {{ series }} Terminen{% endif %}{% if form.office %} · <a href="{% url 'history' 'rooms.booking' booking.pk %}" data-panel>Verlauf</a>{% endif %}</p>
+{% elif left is not None %}
+<p class="lead">Ihr Kontingent heute: noch {{ left|floatformat:"-1" }} von 4 Stunden.</p>
+{% endif %}
+<div class="cols">
+  <form method="post" class="form">
+    {% csrf_token %}
+    {{ form }}
+    <div class="actions">
+      <button class="btn">Speichern</button>
+      <a class="btn ghost" href="{% url 'rooms:index' %}">Abbrechen</a>
+    </div>
+  </form>
+  <div>
+    {% if booking.pk %}
+    <div class="panel">
+      <h3>Stornieren</h3>
+      <form method="post" action="{% url 'rooms:delete' booking.pk %}" class="actions">
+        {% csrf_token %}
+        <button class="btn danger">Diesen Termin</button>
+        {% if series %}<button class="btn danger" name="serie" value="1">Diesen und alle folgenden</button>{% endif %}
+      </form>
+      <p class="muted" style="margin: 12px 0 0"><small>Eine Veranstaltung, die sichtbar bleiben soll, lieber auf „Abgesagt“ setzen.</small></p>
+    </div>
+    {% else %}
+    <div class="panel">
+      <h3>Regeln</h3>
+      <p>Lehrende und Studierende buchen die Räume ihres Instituts. Veranstaltungs- und Sitzungsräume bucht das Veranstaltungsbüro.</p>
+      <p>Studierende buchen bis 24 Stunden im Voraus und höchstens 4 Stunden am Tag. Was in den nächsten 3 Stunden beginnt, ist eine Last-Minute-Buchung und zählt nicht. Kammermusikproben gehen bis 10 Tage im Voraus, mit mindestens einer weiteren Person aus dem Ensemble.</p>
+      <p>Lehrende buchen bis sechs Monate im Voraus, ohne Kontingent. Wiederkehrende Buchungen werden nur gespeichert, wenn alle Termine frei sind.</p>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends base %}
+{% block title %}Raum finden{% endblock %}
+{% block subnav %}{% include "rooms/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Raum finden</h1>
+<p class="lead">Wann, für wie viele, mit welcher Ausstattung. Angezeigt werden nur Räume, die Sie buchen dürfen und die frei sind.</p>
+<form class="toolbar">
+  <div class="inline">
+    {% for field in form %}<label>{{ field.label }}{{ field }}</label>{% endfor %}
+    <button class="btn">Freie Räume zeigen</button>
+  </div>
+</form>
+{{ form.non_field_errors }}
+{% if rooms is not None %}
+<table data-panel>
+  <thead><tr><th>Raum</th><th>Gebäude</th><th class="num">Plätze</th><th>Ausstattung</th><th></th></tr></thead>
+  <tbody>
+    {% for r in rooms %}
+    <tr>
+      <td class="mid"><a href="{% url 'rooms:room' r.pk %}?tag={{ start|date:'Y-m-d' }}"><b>{{ r.name }}</b></a><br><small class="muted">{{ r.purpose }}</small></td>
+      <td class="mid">{{ r.building }}</td>
+      <td class="num mid">{{ r.capacity }}</td>
+      <td class="mid">{{ r.equipment }}</td>
+      <td class="num mid"><a class="btn small" href="{% url 'rooms:new' %}?raum={{ r.pk }}&amp;start={{ start|date:'Y-m-d\TH:i' }}&amp;ende={{ end|date:'Y-m-d\TH:i' }}">Buchen</a></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="empty">Kein passender Raum frei. Andere Zeit oder weniger Ausstattung versuchen.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

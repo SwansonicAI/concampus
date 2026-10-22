@@ -1,0 +1,12 @@
+{% extends base %}
+{% block title %}{% if course.pk %}{{ course.title }}{% else %}{{ heading }}{% endif %}{% endblock %}
+{% block subnav %}{% include menu %}{% endblock %}
+{% block content %}
+<h1>{% if course.pk %}{{ course.title }}{% else %}{{ heading }}{% endif %}</h1>
+<p class="lead">{{ course.term }}</p>
+<form method="post" class="form">
+  {% csrf_token %}
+  {{ form }}
+  <div class="actions"><button class="btn">Speichern</button><a class="btn ghost" href="{{ back }}">Abbrechen</a></div>
+</form>
+{% endblock %}

@@ -1,0 +1,1 @@
+<datalist id="enrolled">{% for s in enrolled %}<option value="{{ s.person.last_name }}, {{ s.person.first_name }} ({{ s.person.matriculation }})">{{ s.subject }} · {{ s.program.degree }}</option>{% endfor %}</datalist>

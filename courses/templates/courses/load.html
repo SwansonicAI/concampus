@@ -1,0 +1,23 @@
+{% extends base %}
+{% block title %}Deputat{% endblock %}
+{% block subnav %}{% include "courses/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Deputat</h1>
+  <form class="actions"><select name="semester" onchange="this.form.requestSubmit()" aria-label="Semester">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></form>
+</div>
+<p class="lead">Lehrumfang in SWS im {{ term }}. Einzelunterricht zählt je Teilnahme.</p>
+<table data-panel>
+  <thead><tr><th>Lehrende</th><th>Veranstaltungen</th><th class="num">SWS</th></tr></thead>
+  <tbody>
+    {% for teacher, courses, total in rows %}
+    <tr>
+      <td><b>{{ teacher }}</b></td>
+      <td>{% for c in courses %}<a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a> <small class="muted">{{ c.load }}</small>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+      <td class="num"><b>{{ total }}</b></td>
+    </tr>
+    {% empty %}<tr><td colspan="3" class="empty">Keine Lehre erfasst.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

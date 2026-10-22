@@ -1,0 +1,31 @@
+{% extends base %}
+{% block title %}Veranstaltungen{% endblock %}
+{% block subnav %}{% include "rooms/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Veranstaltungen</h1>
+  <form class="actions">
+    <select name="kategorie" onchange="this.form.requestSubmit()" aria-label="Kategorie">
+      <option value="">Alle Kategorien</option>
+      {% for value, label in categories %}<option value="{{ value }}"{% if value == picked %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </form>
+</div>
+<p class="lead">Konzerte, Klassenabende, Meisterkurse und Vorträge der nächsten vier Monate.</p>
+<table data-panel>
+  <thead><tr><th>Termin</th><th>Veranstaltung</th><th>Ort</th><th>Kategorie</th></tr></thead>
+  <tbody>
+    {% for b in events %}
+    {% ifchanged b.start.date %}<tr><td colspan="4" class="mid"><b>{{ b.start|date:"l, j. F" }}</b></td></tr>{% endifchanged %}
+    <tr>
+      <td class="mid">{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</td>
+      <td class="mid"><a href="{% url 'rooms:booking' b.pk %}"><b>{{ b.label }}</b></a></td>
+      <td class="mid">{{ b.room }} <small class="muted">{{ b.room.building }}</small></td>
+      <td class="mid"><span class="booking {{ b.tone }}">{{ b.get_category_display }}</span></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="4" class="empty">Keine Veranstaltungen.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

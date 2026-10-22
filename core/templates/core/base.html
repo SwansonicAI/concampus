@@ -1,0 +1,65 @@
+{% load static %}<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{% endblock %} · Campus HfM Weimar</title>
+<link rel="stylesheet" href="{% static 'core/hfm.css' %}">
+<script src="{% static 'core/app.js' %}" defer></script>
+</head>
+<body>
+<header class="appbar">
+  <div class="wrap appbar-row">
+    <a class="product" href="{% url 'home' %}">
+      <span class="house">Hochschule für Musik<br><span>Franz Liszt Weimar</span></span>
+      <span class="name">Campus</span>
+    </a>
+    {% if nav %}
+    <nav class="apps">
+      {% for app, title in nav %}<a href="{% url app.url %}" class="{% if request.resolver_match.app_name == app.label %}on{% endif %}">{{ title }}</a>{% endfor %}
+    </nav>
+    {% endif %}
+    {% if user.is_authenticated %}
+    <div class="me">
+      <form action="{% url 'search' %}" class="search" role="search"><input type="search" name="q" placeholder="Suchen oder springen …" aria-label="Suchen" title="Strg+K oder /" autocomplete="off"></form>
+      <a href="{% url 'inbox' %}">Postfach{% if unread %}<span class="count">{{ unread }}</span>{% endif %}</a>
+      <details class="menu">
+        <summary>{{ user.first_name|default:user.username }}</summary>
+        <div>
+          <b>{{ user }}</b>
+          <small class="muted">{{ user.email }}</small>
+          {% if user.is_staff %}<a href="{% url 'admin:index' %}">Datenpflege</a>{% endif %}
+          <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link">Abmelden</button></form>
+        </div>
+      </details>
+    </div>
+    {% endif %}
+  </div>
+</header>
+<main class="wrap page">
+  {% block subnav %}{% endblock %}
+  {% for message in messages %}<p class="flash {{ message.tags }}">{{ message }}</p>{% endfor %}
+  {% block content %}{% endblock %}
+</main>
+<footer class="foot">
+  <div class="wrap">
+    <span>Campus · Hochschule für Musik FRANZ LISZT Weimar</span>
+    <a href="mailto:campus@hfm-weimar.de">Hilfe und Rückmeldung</a>
+    <a href="https://www.hfm-weimar.de">Website der Hochschule</a>
+    <a href="https://www.hfm-weimar.de/footer/impressum">Impressum</a>
+    <a href="https://www.hfm-weimar.de/footer/datenschutz">Datenschutz</a>
+    <a href="https://www.hfm-weimar.de/footer/barrierefreiheit">Barrierefreiheit</a>
+  </div>
+</footer>
+{% if user.is_authenticated %}
+<aside class="drawer" aria-label="Details">
+  <div class="drawer-bar">
+    <a class="page" href="">Als Seite öffnen</a>
+    <button type="button" class="link wider">Breiter</button>
+    <button type="button" class="link close" title="Esc">Schließen</button>
+  </div>
+  <div class="drawer-body"></div>
+</aside>
+{% endif %}
+</body>
+</html>

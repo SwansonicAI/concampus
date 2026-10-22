@@ -1,0 +1,46 @@
+{% extends base %}
+{% block title %}{{ course.title }}{% endblock %}
+{% block subnav %}{% include "exams/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>{{ course.title }}</h1>
+  <div class="actions">
+    {% if office %}<a class="btn ghost" href="{% url 'exams:edit' course.pk %}">Bearbeiten</a>{% endif %}
+    {% if office %}<a class="btn ghost" href="{% url 'history' 'courses.course' course.pk %}" data-panel>Verlauf</a>{% endif %}
+    {% if course.kind == 'exam' %}
+    <form method="post" action="{% url 'exams:release' course.pk %}">
+      {% csrf_token %}
+      {% if course.released %}{% if office %}<button class="btn ghost">Wieder öffnen</button>{% endif %}
+      {% else %}<button class="btn"{% if missing %} title="Noch {{ missing }} ohne Ergebnis"{% endif %}>Ergebnisse freigeben</button>{% endif %}
+    </form>
+    {% endif %}
+  </div>
+</div>
+<p class="lead">{{ course.get_kind_display }} · {{ course.term }}{% if course.released %} · <span class="badge green">freigegeben am {{ course.released|date:"j.n.Y" }}, gesperrt</span>{% endif %}</p>
+
+<div class="cols">
+  <dl class="facts">
+    <dt>Kommission</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
+    <dt>Anmeldeschluss</dt><dd>{{ course.deadline|date:"j. F Y"|default:"–" }}</dd>
+    <dt>Bewertung</dt><dd>{% if course.points %}Punkte, bestanden ab {{ course.pass_mark }}{% else %}Noten 1,0–5,0, bestanden bis 4,0{% endif %}</dd>
+    <dt>Module</dt><dd>{% for m in modules %}{{ m.code }} {{ m.title }} <small class="muted">{{ m.program.degree }} {{ m.program.name }}</small><br>{% empty %}–{% endfor %}</dd>
+    <dt>Räume</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, <a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a><br>{% empty %}–{% endfor %}</dd>
+  </dl>
+  {% if slots and not course.released and course.kind == 'exam' %}
+  <form method="post" action="{% url 'exams:plan' course.pk %}" class="panel">
+    {% csrf_token %}
+    <h3>Termine vergeben</h3>
+    <div class="inline">{% for field in slots %}<label>{{ field.label }}{{ field }}</label>{% endfor %}</div>
+    <p class="muted" style="margin: 12px 0"><small>Alle Angemeldeten ohne Termin erhalten nacheinander einen Termin und eine Einladung ins Postfach. Der Raum wird für den ganzen Block gebucht.</small></p>
+    <button class="btn">Termine vergeben</button>
+  </form>
+  {% endif %}
+</div>
+
+<section>
+  <h2>Kandidat:innen</h2>
+  {% if not office %}<p class="lead">Sie tragen Ihre eigene Wertung ein. Das Ergebnis ergibt sich aus den Wertungen der ganzen Kommission.</p>{% endif %}
+  {% include "courses/_sheet.html" with decide=office %}
+  {% if office and not course.released %}{% include "courses/_add.html" %}{% endif %}
+</section>
+{% endblock %}

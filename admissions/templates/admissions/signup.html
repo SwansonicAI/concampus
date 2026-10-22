@@ -1,0 +1,11 @@
+{% extends base %}
+{% block title %}Konto anlegen{% endblock %}
+{% block content %}
+<h1>Konto anlegen</h1>
+<p class="lead">Mit diesem Konto bewerben Sie sich, laden Unterlagen hoch und erhalten Einladungen und Bescheide.</p>
+<form method="post" class="form">
+  {% csrf_token %}
+  {{ form }}
+  <div class="actions"><button class="btn">Konto anlegen</button><a href="{% url 'login' %}">Ich habe schon ein Konto</a></div>
+</form>
+{% endblock %}

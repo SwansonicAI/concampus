@@ -1,0 +1,15 @@
+{% extends base %}
+{% block title %}{{ booking.label }}{% endblock %}
+{% block subnav %}{% include "rooms/_nav.html" %}{% endblock %}
+{% block content %}
+<p class="eyebrow">{{ booking.get_category_display }}</p>
+<h1>{{ booking.label }}</h1>
+<p class="lead">{{ booking.start|date:"l, j. F Y" }}, {{ booking.start|time:"H:i" }}–{{ booking.end|time:"H:i" }} Uhr{% if booking.category == 'abgesagt' %} · <span class="badge no">abgesagt</span>{% endif %}</p>
+<dl class="facts">
+  <dt>Ort</dt><dd><a href="{% url 'rooms:room' booking.room.pk %}?tag={{ booking.start|date:'Y-m-d' }}">{{ booking.room }}</a> {{ booking.room.purpose }}, {{ booking.room.building }}</dd>
+  {% if booking.course %}<dt>Veranstaltung</dt><dd><a href="{{ booking.course.get_absolute_url }}">{{ booking.course.title }}</a></dd>{% endif %}
+  <dt>Verantwortlich</dt><dd>{{ booking.person }}</dd>
+  {% if participants %}<dt>Teilnehmende</dt><dd>{% for p in participants %}{{ p.first_name }} {{ p.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% endif %}
+  {% if booking.description %}<dt>Beschreibung</dt><dd>{{ booking.description|linebreaksbr }}</dd>{% endif %}
+</dl>
+{% endblock %}

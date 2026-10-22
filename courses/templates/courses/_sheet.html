@@ -1,0 +1,64 @@
+{% load l10n %}
+<form method="post" class="scroll">
+  {% csrf_token %}
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Name</th>
+        {% if panel %}
+        <th>Termin</th>
+        <th>{% if course.kind == 'recognition' %}Herkunft{% else %}Repertoire{% endif %}</th>
+        {% for e in staff %}<th class="num">{{ e.last_name }}</th>{% endfor %}
+        <th class="num">{% if course.points %}Punkte{% else %}Note{% endif %}</th>
+        <th>Ergebnis</th>
+        {% if decide and not course.released %}<th class="num" title="Nur ausfüllen, wenn das Ergebnis vom Mittelwert abweichen soll">Abweichend</th>{% endif %}
+        {% else %}
+        <th>Modul</th>
+        <th>Angemeldet</th>
+        <th class="num">Note</th>
+        <th>Bestanden</th>
+        {% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in rows %}
+      <tr class="{% if p.waiting %}wait{% endif %}">
+        <td class="mid muted">{{ forloop.counter }}</td>
+        <td class="mid"><a href="{{ p.study.get_absolute_url }}">{{ p.study.person.name }}</a><br><small class="muted">{{ p.study.subject }} · {{ p.study.program.degree }}{% if p.waiting %} · <b>Warteliste</b>{% endif %}{% if review %} · <a href="{% url 'admissions:review' course.pk %}?bewerbung={{ p.pk }}">Video</a>{% endif %}</small></td>
+        {% if panel %}
+        <td class="mid">{{ p.slot|date:"j.n. H:i"|default:"–" }}</td>
+        <td class="mid"><small title="{{ p.note }}">{{ p.note|truncatechars:42 }}</small></td>
+        {% for e, value in p.marks %}
+        <td class="num mid">{% if e.pk in columns and not course.released %}<input class="cell" type="text" inputmode="decimal" name="score-{{ p.pk }}-{{ e.pk }}" value="{{ value|default_if_none:''|unlocalize }}" aria-label="Wertung {{ e.last_name }}">{% else %}{{ value|default_if_none:"" }}{% endif %}</td>
+        {% endfor %}
+        <td class="num mid"><b>{% if p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</b>{% if p.grade is None and p.mean is not None %}<span class="muted" title="Noch nicht alle Wertungen">{{ p.mean }}…</span>{% endif %}{% if p.override is not None %} <small class="muted" title="Von Hand festgelegt">✎</small>{% endif %}</td>
+        <td class="mid">{% if p.passed %}<span class="badge yes">bestanden</span>{% elif p.passed is False %}<span class="badge no">nicht bestanden</span>{% else %}<span class="muted">offen</span>{% endif %}</td>
+        {% if decide and not course.released %}<td class="num mid"><input class="cell" type="text" inputmode="decimal" name="grade-{{ p.pk }}" value="{{ p.override|default_if_none:''|unlocalize }}" aria-label="Abweichendes Ergebnis"></td>{% endif %}
+        {% else %}
+        <td class="mid muted">{{ p.module.code|default:"" }}</td>
+        <td class="mid muted">{{ p.created|date:"j.n. H:i" }}</td>
+        <td class="num mid">{% if decide and not course.released %}<input class="cell" type="text" inputmode="decimal" name="grade-{{ p.pk }}" value="{{ p.grade|default_if_none:''|unlocalize }}" aria-label="Note">{% elif p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</td>
+        <td class="mid">
+          {% if decide and not course.released %}
+          <select class="cell" name="passed-{{ p.pk }}" aria-label="Bestanden">
+            <option value="">–</option>
+            <option value="1"{% if p.passed %} selected{% endif %}>ja</option>
+            <option value="0"{% if p.passed is False %} selected{% endif %}>nein</option>
+          </select>
+          {% elif p.passed %}<span class="badge yes">ja</span>{% elif p.passed is False %}<span class="badge no">nein</span>{% endif %}
+        </td>
+        {% endif %}
+      </tr>
+      {% empty %}
+      <tr><td colspan="12" class="empty">Noch keine Teilnehmenden.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if rows and not course.released %}{% if decide or columns %}
+  <div class="actions" style="margin-top: 20px">
+    <button class="btn">Speichern</button>
+    <small class="muted">{% if panel %}Das Ergebnis ist der Mittelwert, sobald alle Mitglieder gewertet haben. Bestanden folgt aus {% if course.points %}der Grenze von {{ course.pass_mark }} Punkten{% else %}der Note bis 4,0{% endif %}.{% else %}Eine Note bestimmt „bestanden“ selbst; ohne Note gilt die Auswahl.{% endif %}</small>
+  </div>
+  {% endif %}{% endif %}
+</form>

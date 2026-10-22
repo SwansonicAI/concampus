@@ -1,0 +1,15 @@
+{% extends base %}
+{% block title %}{{ program }}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>{{ program.degree }} {{ program.name }}</h1>
+  {% if 'Dekanat' in user.roles %}<div class="actions"><a class="btn ghost" href="{% url 'admin:curriculum_program_change' program.pk %}">Bearbeiten</a></div>{% endif %}
+</div>
+<p class="lead">Prüfungsordnung {{ program.version }} · {{ program.semesters }} Semester · {{ total }} CP · {{ students }} Studierende</p>
+<p>{% for s in program.subjects.all %}<span class="badge">{{ s }}</span> {% endfor %}</p>
+<section>
+  <h2>Studienverlaufs- und Prüfungsplan</h2>
+  <p class="lead">Credits je Fachsemester, T Testat ohne eigene CP, ● Prüfung. Gewicht: Anteil an der Modulnote, bei Modulen an der Gesamtnote. Darunter die Veranstaltungen im {{ term }}.</p>
+  {% include "curriculum/_plan.html" %}
+</section>
+{% endblock %}

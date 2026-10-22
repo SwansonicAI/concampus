@@ -1,0 +1,61 @@
+{% extends base %}
+{% block title %}Start{% endblock %}
+{% block content %}
+<p class="eyebrow">{% now "l, j. F Y" %}{% if term %} · {{ term }}{% endif %}</p>
+<h1>Guten Tag, {{ user.first_name|default:user.username }}</h1>
+
+<section style="margin-top: 8px">
+  <h2>Zu erledigen</h2>
+  {% if tasks %}
+  <ul class="todo">
+    {% for t in tasks %}
+    <li><a href="{{ t.url }}">
+      <span class="what">{{ t.text }}</span>
+      <span class="where">{{ t.app }}</span>
+      <span class="due{% if t.due and t.due <= soon %} soon{% endif %}">{% if t.due %}bis {{ t.due|date:"j.n.Y" }}{% endif %}</span>
+    </a></li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="calm">Nichts offen. Neue Aufgaben erscheinen hier, sobald etwas Ihre Mitwirkung braucht.</p>
+  {% endif %}
+</section>
+
+<section>
+  <h2>Anwendungen</h2>
+  <div class="launch">
+    {% for tile in tiles %}
+    <a class="app" href="{% url tile.app.url %}">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="{{ tile.app.icon }}"/></svg>
+      <span><b>{{ tile.title }}</b><small>{{ tile.figure }}</small></span>
+    </a>
+    {% endfor %}
+  </div>
+</section>
+
+{% if calendar %}
+<section>
+  <h2>Termine</h2>
+  {% include "core/_days.html" %}
+  <div class="cards" data-panel>
+    {% for b in agenda %}
+    <a class="card" href="{% if b.course %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}">
+      <div class="top">{{ b.start|time:"H:i" }} – {{ b.end|time:"H:i" }}</div>
+      <div class="body"><h3>{{ b.label }}</h3>{{ b.room }} · {{ b.room.building }}</div>
+    </a>
+    {% empty %}
+    <p class="empty">Keine Termine am {{ day|date:"l, j. F" }}.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endif %}
+
+{% if letters %}
+<section>
+  <h2>Ungelesen im Postfach</h2>
+  <ul class="todo">
+    {% for m in letters %}<li><a href="{{ m.get_absolute_url }}"><span class="what">{{ m.subject }}</span><span class="where">Postfach</span><span class="due">{{ m.created|date:"j.n.Y" }}</span></a></li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

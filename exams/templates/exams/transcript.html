@@ -1,0 +1,43 @@
+{% extends base %}
+{% block title %}{% if complete %}Zeugnis{% else %}Leistungsübersicht{% endif %} {{ study.person.name }}{% endblock %}
+{% block content %}
+<div class="document">
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
+  {% include "core/_letterhead.html" with office="Prüfungsamt" %}
+  <h1>{% if complete %}Zeugnis{% else %}Leistungsübersicht{% endif %}</h1>
+  <dl class="facts">
+    <dt>Name</dt><dd><b>{{ study.person.legal_name }}</b>{% if study.person.birth_name %}, geb. {{ study.person.birth_name }}{% endif %}</dd>
+    <dt>Geboren</dt><dd>{{ study.person.birth_date|date:"j. F Y" }}{% if study.person.birth_place %} in {{ study.person.birth_place }}{% endif %}</dd>
+    <dt>Matrikelnummer</dt><dd>{{ study.person.matriculation|default:"–" }}</dd>
+    <dt>Studiengang</dt><dd>{{ study.program.degree }} {{ study.program.name }}, Prüfungsordnung {{ study.program.version }}</dd>
+    <dt>Hauptfach</dt><dd>{{ study.subject }}</dd>
+  </dl>
+  <section>
+    <table>
+      <thead><tr><th>Modul</th><th>Titel</th><th class="num">CP</th><th class="num">Gewicht</th><th class="num">Note</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        {% if r.kind == 'part' %}
+        {% for i in r.items %}{% if i.done %}<tr><td></td><td class="muted">{{ i.title }}</td><td></td><td class="num muted">{{ i.weight|floatformat:"-2" }}</td><td class="num muted">{% if i.grade is not None %}{{ i.grade|floatformat:1 }}{% else %}bestanden{% endif %}</td></tr>{% endif %}{% endfor %}
+        {% else %}
+        <tr>
+          <td><b>{{ r.node.code }}</b></td>
+          <td><b>{{ r.node.title }}</b>{% if not r.node.done %} <small class="muted">(laufend)</small>{% endif %}</td>
+          <td class="num">{{ r.node.earned }}{% if r.node.earned != r.node.credits %} / {{ r.node.credits }}{% endif %}</td>
+          <td class="num">{% if r.node.weight %}{{ r.node.weight|floatformat:"-2" }}{% endif %}</td>
+          <td class="num"><b>{% if r.node.done %}{{ r.node.grade|default_if_none:"bestanden" }}{% endif %}</b></td>
+        </tr>
+        {% endif %}
+        {% empty %}<tr><td colspan="5" class="empty">Noch keine Leistungen.</td></tr>
+        {% endfor %}
+        <tr class="total"><td colspan="2">Summe</td><td class="num">{{ earned }} / {{ total }}</td><td></td><td class="num">{{ average|default:"–" }}</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <p class="muted" style="margin-top: 16px"><small>Die Gesamtnote ist das gewichtete Mittel der Modulnoten nach dem Studienverlaufs- und Prüfungsplan, auf eine Nachkommastelle kaufmännisch gerundet (RPSO § 15). Unbenotete Module gehen nicht ein.</small></p>
+  {% if complete %}
+  <p style="margin-top: 24px">Gesamtnote: <b>{{ average }} ({{ verbal }}){% if honours %}, mit Auszeichnung{% endif %}</b></p>
+  {% endif %}
+  <div class="sign"><span>Weimar, {{ today|date:"j. F Y" }}</span><span>Vorsitz Prüfungsausschuss</span></div>
+</div>
+{% endblock %}

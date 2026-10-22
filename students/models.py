@@ -1,0 +1,193 @@
+import re
+
+from django.db import models
+from django.urls import reverse
+from django.utils import timezone
+
+from core.models import Message, Person, Term, Tracked
+from core.text import matching
+from curriculum.models import Program, Subject, weighted
+
+APPEAL = (  # part of every Bescheid that turns someone down
+    'Rechtsbehelfsbelehrung: Gegen diesen Bescheid kann innerhalb eines Monats nach seiner Bekanntgabe Widerspruch erhoben '
+    'werden. Der Widerspruch ist schriftlich oder zur Niederschrift bei der Hochschule für Musik FRANZ LISZT Weimar, '
+    'Platz der Demokratie 2/3, 99423 Weimar, einzulegen.'
+)
+
+
+class Study(Tracked, models.Model):
+    """One person's path through one programme, from application to graduation."""
+
+    owner = 'person_id'
+    offices = ('ASA',)
+
+    class Status(models.TextChoices):
+        APPLIED = 'applied', 'Beworben'
+        ADMITTED = 'admitted', 'Zugelassen'
+        WAITLISTED = 'waitlisted', 'Nachrückliste'
+        REJECTED = 'rejected', 'Abgelehnt'
+        ENROLLED = 'enrolled', 'Immatrikuliert'
+        GUEST = 'guest', 'Gasthörer:in'
+        GRADUATED = 'graduated', 'Abgeschlossen'
+        LEFT = 'left', 'Ausgeschieden'
+
+    APPLICATION = [Status.APPLIED, Status.ADMITTED, Status.WAITLISTED, Status.REJECTED]
+
+    person = models.ForeignKey(Person, models.CASCADE, related_name='studies', verbose_name='Person')
+    program = models.ForeignKey(Program, models.PROTECT, related_name='studies', verbose_name='Studiengang')
+    subject = models.ForeignKey(Subject, models.PROTECT, related_name='studies', verbose_name='Hauptfach')
+    focus = models.ForeignKey(
+        'curriculum.Module', models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Schwerpunkt',
+        help_text='Der gewählte Bereich des Studienplans, wo die Ordnung Schwerpunkte vorsieht.',
+    )
+    start_term = models.ForeignKey(Term, models.PROTECT, related_name='intake', verbose_name='Studienbeginn')
+    status = models.CharField('Status', max_length=10, choices=Status, default=Status.APPLIED)
+    since = models.DateField('Status seit', default=timezone.localdate)
+    teacher = models.ForeignKey(
+        Person, models.SET_NULL, null=True, blank=True, related_name='class_studies',
+        verbose_name='Hauptfachlehrer:in', help_text='Bis zur Zulassung der Wunsch aus der Bewerbung.',
+    )
+    prior_terms = models.PositiveSmallIntegerField('Angerechnete Semester', default=0)
+
+    class Meta:
+        ordering = ['-start_term__start', 'person__last_name']
+        verbose_name = 'Studium'
+        verbose_name_plural = 'Studien'
+        constraints = [models.UniqueConstraint(fields=['person', 'program', 'subject', 'start_term'], name='unique_study')]
+
+    def __str__(self):
+        return f'{self.person} · {self.subject} · {self.program}'
+
+    def get_absolute_url(self):
+        if self.status in self.APPLICATION:
+            return reverse('admissions:application', args=[self.pk])
+        return reverse('students:study', args=[self.pk])
+
+    @classmethod
+    def find(cls, text):
+        """Enrolled studies and guest auditors meant by a name, e-mail or Matrikelnummer, however it is typed; at most five."""
+        studies = cls.objects.filter(status__in=[cls.Status.ENROLLED, cls.Status.GUEST]).select_related('person', 'program')
+        if number := re.search(r'\d{5,}', text):
+            if exact := list(studies.filter(person__matriculation=number.group())):
+                return exact
+        return list(matching(studies, text, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__email')[:5])
+
+    def set_status(self, status):
+        self.status, self.since = status, timezone.localdate()
+        self.save(update_fields=['status', 'since'])
+
+    def notify(self, title, text, link='', appeal=False):
+        """Issue a Bescheid: it goes to the Postfach and stays in the student file as a printable letter."""
+        message = Message.send(self.person, title, f'{text}\n\n{APPEAL}' if appeal else text, link)
+        Document.objects.create(person=self.person, study=self, kind=Document.Kind.NOTICE, title=title, message=message)
+
+    def missing(self):
+        """What still blocks the enrolment of an admitted applicant."""
+        reasons = self.person.missing()
+        if not self.terms.filter(term=self.start_term).exists():
+            reasons.insert(0, 'Studienplatz noch nicht angenommen')
+        if not self.person.entrance:
+            reasons.append('Hochschulzugangsberechtigung nicht erfasst')
+        return reasons
+
+    @property
+    def semester(self):
+        """Fachsemester: credited prior terms plus registered terms so far, leave excluded."""
+        return self.prior_terms + self.terms.filter(leave=False, term__start__lte=timezone.localdate()).count()
+
+    @property
+    def university_semester(self):
+        """Hochschulsemester: every term the person has been registered here, leave included, plus semesters elsewhere."""
+        here = StudyTerm.objects.filter(study__person=self.person_id, term__start__lte=timezone.localdate()).values('term').distinct().count()
+        return self.person.external_terms + here
+
+    def record(self):
+        """Credited participations, one per module, a graded one where there is one. Exams count once released."""
+        best = {}
+        rows = (
+            self.participations.filter(passed=True, module__isnull=False)
+            .exclude(course__kind='exam', course__released=None)
+            .select_related('module', 'course__term')
+        )
+        for p in rows:
+            if p.grade is not None or p.module_id not in best:
+                best[p.module_id] = p
+        return sorted(best.values(), key=lambda p: p.module.code)
+
+    def progress(self):
+        """(curriculum tree with earned credits and grades, final grade so far)."""
+        tree = self.program.curriculum({p.module_id: p.grade for p in self.record()})
+        return tree, weighted(tree)
+
+
+class StudyTerm(Tracked, models.Model):
+    """A study registered for one term (Rückmeldung), possibly as leave (Urlaubssemester).
+
+    The fee is paid per person: one paid registration covers all of a person's studies that term.
+    """
+
+    owner = 'study.person_id'
+    offices = ('ASA',)
+
+    study = models.ForeignKey(Study, models.CASCADE, related_name='terms', verbose_name='Studium')
+    term = models.ForeignKey(Term, models.PROTECT, related_name='registrations', verbose_name='Semester')
+    leave = models.BooleanField('Urlaubssemester', default=False)
+    paid = models.DateField('Beitrag bezahlt am', null=True, blank=True)
+
+    class Meta:
+        ordering = ['term__start']
+        verbose_name = 'Rückmeldung'
+        verbose_name_plural = 'Rückmeldungen'
+        constraints = [models.UniqueConstraint(fields=['study', 'term'], name='unique_study_term')]
+
+    def __str__(self):
+        return f'{self.study} · {self.term}'
+
+
+class Document(Tracked, models.Model):
+    """A file or link a person handed in or received: CV, certificates, audition video, attests, Bescheide."""
+
+    owner = 'person_id'
+    offices = ('ASA',)
+
+    class Kind(models.TextChoices):  # what a complete application holds, as the HfM lists it
+        VIDEO = 'video', 'Video'
+        CV = 'cv', 'Lebenslauf'
+        SCHOOL = 'school', 'Abitur- oder letztes Schulzeugnis'
+        DEGREE = 'degree', 'Bachelor- oder Masterzeugnis, Transcript'
+        FEE = 'fee', 'Einzahlungsbeleg Eignungsprüfungsgebühr'
+        CONSENT = 'consent', 'Einwilligung der Erziehungsberechtigten'
+        VOICE = 'voice', 'Phoniatrisches Gutachten'
+        LANGUAGE = 'language', 'Sprachnachweis Deutsch'
+        NOTICE = 'notice', 'Bescheid'
+        OTHER = 'other', 'Sonstiges'
+
+    VIDEO_FILES = ('.mp4', '.m4v', '.mov', '.webm', '.ogv', '.ogg')  # what browsers play
+
+    person = models.ForeignKey(Person, models.CASCADE, related_name='documents', verbose_name='Person')
+    study = models.ForeignKey(Study, models.CASCADE, null=True, blank=True, related_name='documents', verbose_name='Studium')
+    kind = models.CharField('Art', max_length=10, choices=Kind, default=Kind.OTHER)
+    title = models.CharField('Titel', max_length=120)
+    file = models.FileField('Datei', upload_to='dokumente/%Y/%m/', blank=True)
+    url = models.URLField('Link', blank=True)
+    message = models.ForeignKey(Message, models.CASCADE, null=True, blank=True, related_name='+', verbose_name='Bescheid')
+    created = models.DateTimeField('Eingegangen', default=timezone.now)
+
+    class Meta:
+        ordering = ['created']
+        verbose_name = 'Dokument'
+        verbose_name_plural = 'Dokumente'
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def href(self):
+        if self.message_id:
+            return reverse('letter', args=[self.message_id])
+        return self.file.url if self.file else self.url
+
+    @property
+    def playable(self):
+        """A video the browser plays right here: an upload, or a link straight to a video file."""
+        return self.kind == self.Kind.VIDEO and self.href.lower().split('?')[0].endswith(self.VIDEO_FILES)

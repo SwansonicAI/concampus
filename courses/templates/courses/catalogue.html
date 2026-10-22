@@ -1,0 +1,33 @@
+{% extends base %}
+{% block title %}Vorlesungsverzeichnis{% endblock %}
+{% block subnav %}{% include "courses/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Vorlesungsverzeichnis</h1>
+  {% if office %}<div class="actions"><a class="btn" href="{% url 'courses:new' %}?semester={{ term.pk }}">Neue Veranstaltung</a></div>{% endif %}
+</div>
+<p class="lead">{{ term }} · {{ courses|length }} Veranstaltungen</p>
+<form class="toolbar">
+  <div class="inline">
+    <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    <label>Studiengang<select name="studiengang" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for p in programs %}<option value="{{ p.pk }}"{% if p.pk|stringformat:'s' == program %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Titel oder Lehrende"></label>
+  </div>
+</form>
+<table data-panel>
+  <thead><tr><th>Veranstaltung</th><th>Lehrende</th><th class="num">SWS</th><th class="num">Teilnahmen</th><th>Nächster Termin</th></tr></thead>
+  <tbody>
+    {% for c in courses %}
+    <tr>
+      <td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a><br><small class="muted">{{ c.get_kind_display }}{% if c.subject %} · {{ c.subject }}{% endif %}</small></td>
+      <td>{% for s in c.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+      <td class="num">{{ c.hours|default_if_none:"" }}</td>
+      <td class="num">{{ c.size }}{% if c.capacity %} / {{ c.capacity }}{% endif %}</td>
+      <td>{% if c.next_start %}{{ c.next_start|date:"D j.n., H:i" }}<br><small class="muted">{{ c.next_room }}</small>{% endif %}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="empty">Keine Veranstaltungen.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

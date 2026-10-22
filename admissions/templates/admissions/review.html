@@ -1,0 +1,35 @@
+{% extends base %}
+{% load l10n %}
+{% block title %}Sichtung {{ course.title }}{% endblock %}
+{% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
+{% block content %}
+<p class="eyebrow">{{ course.title }} · Bewerbung {{ position }} von {{ count }}{% if juror %} · {{ done }} von Ihnen gewertet{% endif %}</p>
+<h1>{{ p.study.person.first_name }} {{ p.study.person.last_name }}</h1>
+<p class="lead">{{ p.study.program.degree }} {{ p.study.program.name }} · {{ p.study.subject }}{% if p.study.teacher %} · Wunsch: {{ p.study.teacher }}{% endif %}</p>
+
+<div class="review">
+  <div>{% for d in videos %}{% include "admissions/_document.html" %}{% empty %}<p class="fail">Kein Video eingereicht.</p>{% endfor %}</div>
+  <div>
+    {% if juror and not course.released %}
+    <form method="post" class="panel">
+      {% csrf_token %}
+      <h3>Ihre Wertung</h3>
+      <div class="inline">
+        <label>Punkte (0–25)<input class="cell" type="text" inputmode="decimal" name="score-{{ p.pk }}-{{ user.pk }}" value="{{ mine|default_if_none:''|unlocalize }}"></label>
+        <button class="btn">Speichern und weiter</button>
+      </div>
+      <p class="muted" style="margin: 12px 0 0"><small>Bestanden ab {{ course.pass_mark }} Punkten im Mittel der Kommission. Weiter geht es zur nächsten Bewerbung ohne Ihre Wertung.</small></p>
+    </form>
+    {% elif mine is not None %}
+    <p>Ihre Wertung: <b>{{ mine }}</b></p>
+    {% endif %}
+    <h3 style="margin-top: 24px">Prüfungsprogramm</h3>
+    <p>{{ p.note|linebreaksbr|default:"–" }}</p>
+    <nav class="actions">
+      {% if prev %}<a class="btn ghost small" href="?bewerbung={{ prev.pk }}">← Vorherige</a>{% endif %}
+      {% if next %}<a class="btn ghost small" href="?bewerbung={{ next.pk }}">Nächste →</a>{% endif %}
+      <a class="more" href="{% url 'admissions:audition' course.pk %}">Alle Wertungen</a>
+    </nav>
+  </div>
+</div>
+{% endblock %}

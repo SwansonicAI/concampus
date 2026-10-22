@@ -1,0 +1,46 @@
+{% extends base %}
+{% block title %}Studierende{% endblock %}
+{% block subnav %}{% include "students/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Studierende</h1>
+  <div class="actions"><a class="btn ghost" href="{% querystring format='csv' %}">Als CSV exportieren</a></div>
+</div>
+<p class="lead">{{ studies|length }} Studien</p>
+<form class="toolbar">
+  <div class="inline">
+    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name, E-Mail, Matrikel"></label>
+    <label>Status<select name="status" onchange="this.form.requestSubmit()">{% for value, label in statuses %}<option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Studiengang<select name="studiengang" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for p in programs %}<option value="{{ p.pk }}"{% if p.pk|stringformat:'s' == studiengang %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+    <label>Hauptfach<select name="fach" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for s in subjects %}<option value="{{ s.pk }}"{% if s.pk|stringformat:'s' == fach %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+    <label>Fachsemester<select name="fs" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for n in semesters %}<option value="{{ n }}"{% if n|stringformat:'s' == fs %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+    <label>Studienbeginn<select name="beginn" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for t in terms %}<option value="{{ t.pk }}"{% if t.pk|stringformat:'s' == beginn %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+  </div>
+</form>
+<form>
+  <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <div class="actions picked">
+    <small class="muted">Angekreuzte:</small>
+    <button class="btn ghost small" formaction="{% url 'students:compose' %}">Nachricht schreiben</button>
+    <button class="btn ghost small" formaction="{% url 'students:letters' %}">Bescheide drucken</button>
+  </div>
+  <table data-panel>
+    <thead><tr><th><input type="checkbox" onchange="this.form.querySelectorAll('[name=study]').forEach(box => box.checked = this.checked)" aria-label="Alle ankreuzen"></th><th>Matrikel</th><th>Name</th><th>Studiengang</th><th>Hauptfach</th><th>Klasse</th><th class="num">FS</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for s in studies %}
+      <tr>
+        <td><input type="checkbox" name="study" value="{{ s.pk }}" aria-label="{{ s.person.name }}"></td>
+        <td>{{ s.person.matriculation|default:"–" }}</td>
+        <td><a href="{% url 'students:study' s.pk %}"><b>{{ s.person.name }}</b></a>{% if s.person.hold %} <span class="badge hold">Sperre</span>{% endif %}</td>
+        <td>{{ s.program.degree }} {{ s.program.name }}</td>
+        <td>{{ s.subject }}</td>
+        <td>{{ s.teacher.last_name|default:"–" }}</td>
+        <td class="num">{{ s.fs }}</td>
+        <td><span class="badge {{ s.status }}">{{ s.get_status_display }}</span></td>
+      </tr>
+      {% empty %}<tr><td colspan="8" class="empty">Keine Treffer.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</form>
+{% endblock %}

@@ -1,0 +1,45 @@
+<div class="scroll">
+  <table class="svpp" data-panel>
+    <thead>
+      <tr>
+        <th>Modul · Lehrveranstaltung · Prüfung</th>
+        <th>Form</th>
+        {% for s in semesters %}<th class="num">{{ s }}.</th>{% endfor %}
+        <th class="num">CP</th>
+        <th class="num" title="Anteil an der Note des Moduls bzw. an der Gesamtnote">Gewicht</th>
+        {% if progress %}<th class="num">Note</th>{% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      {% if r.kind == 'part' %}
+      <tr class="part{% if r.exam %} exam{% endif %}">
+        <td style="padding-left: calc(10px + {{ r.depth }} * 16px)">
+          {% if r.exam %}<span class="tag-exam">Prüfung</span> {% endif %}{{ r.title }}
+          {% for c in r.offers %}<br><small><a href="{{ c.get_absolute_url }}">{{ c.title }}</a></small>{% endfor %}
+        </td>
+        <td class="muted"><small>{{ r.form }}</small></td>
+        {% for cell in r.cells %}
+        <td class="num{% for i in cell %}{% if progress %}{% if i.done %} done{% elif i.semester == now %} now{% endif %}{% endif %}{% endfor %}">{% for i in cell %}{% if i.exam %}<span title="{{ i.title }}">●</span>{% elif i.credits %}{{ i.credits }}{% else %}<span title="Testat, ohne eigene CP">T</span>{% endif %}{% endfor %}</td>
+        {% endfor %}
+        <td class="num muted">{% if r.open %}{{ r.open.0.credits }}{% endif %}</td>
+        <td class="num muted">{% if r.weight %}{{ r.weight|floatformat:"-2" }}{% endif %}</td>
+        {% if progress %}<td class="num">{% for i in r.items %}{% if i.grade %}{{ i.grade|floatformat:1 }}{% endif %}{% endfor %}</td>{% endif %}
+      </tr>
+      {% else %}
+      <tr class="{{ r.kind }}{% if progress and r.node.done %} complete{% endif %}">
+        <td colspan="2" style="padding-left: calc(10px + {{ r.depth }} * 16px)">
+          <b>{{ r.node.code }}</b> {{ r.node.title }}
+          {% if r.node.offered > r.node.credits %}<span class="badge">Wahl: {{ r.node.credits }} von {{ r.node.offered }} CP</span>{% endif %}
+          {% if r.node.description %}<br><small class="muted">{{ r.node.description }}</small>{% endif %}
+        </td>
+        {% for s in semesters %}<td></td>{% endfor %}
+        <td class="num"><b>{% if progress %}{{ r.node.earned }}/{% endif %}{{ r.node.credits }}</b></td>
+        <td class="num">{% if r.node.weight %}{{ r.node.weight|floatformat:"-2" }}{% endif %}</td>
+        {% if progress %}<td class="num"><b>{% if r.node.done and r.node.grade %}{{ r.node.grade }}{% endif %}</b></td>{% endif %}
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

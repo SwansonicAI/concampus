@@ -1,0 +1,52 @@
+{% extends base %}
+{% block title %}Bewerbungen{% endblock %}
+{% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Bewerbungen</h1>
+  <form class="actions">
+    <select name="semester" onchange="this.form.requestSubmit()" aria-label="Studienbeginn">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>Studienbeginn {{ t }}</option>{% endfor %}</select>
+    <select name="fach" onchange="this.form.requestSubmit()" aria-label="Hauptfach"><option value="">Alle Hauptfächer</option>{% for s in subjects %}<option value="{{ s.pk }}"{% if s.pk|stringformat:'s' == subject %} selected{% endif %}>{{ s }}</option>{% endfor %}</select>
+  </form>
+</div>
+
+<h2>Eignungsprüfungen</h2>
+<table>
+  <thead><tr><th>Datum</th><th>Prüfung</th><th>Bewerbungsfrist</th><th class="num">Teilnahmen</th><th>Stand</th></tr></thead>
+  <tbody>
+    {% for c in auditions %}
+    <tr>
+      <td>{% if c.date %}{{ c.date|date:"D j.n.Y" }}{% elif c.program %}online{% else %}–{% endif %}</td>
+      <td><a href="{% url 'admissions:audition' c.pk %}"><b>{{ c.title }}</b></a>{% if c.program %}<br><small class="muted">Bewerbung für {{ c.program.degree }} {{ c.program.name }}</small>{% endif %}</td>
+      <td>{{ c.deadline|date:"j.n.Y"|default:"" }}</td>
+      <td class="num">{{ c.size }}</td>
+      <td>{% if c.released %}<span class="badge green">abgeschlossen</span>{% else %}<span class="badge open">offen</span>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty">Keine Eignungsprüfungen.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<section>
+  <h2>Stand der Bewerbungen</h2>
+  <p class="lead">Sortiert nach Punkten im Hauptfach.</p>
+  <div class="board" data-panel>
+    {% for status, studies in columns %}
+    <div>
+      <h3>{{ status.label }} <span>{{ studies|length }}</span></h3>
+      <div class="tickets">
+        {% for s in studies %}
+        <a class="ticket" href="{% url 'admissions:application' s.pk %}">
+          <b>{{ s.person.name }}</b>
+          {{ s.subject }} · {{ s.program.degree }}<br>
+          {% if s.slot %}<small class="muted">Nächster Termin {{ s.slot|date:"j.n. H:i" }}</small>{% endif %}
+          {% if s.accepted and s.status == 'admitted' %}<small class="muted">Platz angenommen</small>{% endif %}
+          <span class="chips">{% for p in s.stages %}<span class="chip{% if p.passed %} yes{% elif p.passed is False %} no{% endif %}" title="{{ p.course.title }}">{{ p.course.stage }}{% if p.grade is not None and p.course.stage != 'Video' %} {{ p.grade|floatformat:1 }}{% endif %}</span>{% endfor %}{% if s.incomplete %}<span class="chip no" title="Fehlt: {{ s.incomplete|join:', ' }}">unvollständig</span>{% endif %}</span>
+        </a>
+        {% empty %}<p class="empty">–</p>{% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

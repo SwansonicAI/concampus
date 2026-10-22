@@ -1,0 +1,11 @@
+<div class="scroll" data-panel>
+  <div class="week">
+    {% for d in dates %}<div class="dayhead{% if d == today %} today{% endif %}" style="grid-column: {{ forloop.counter|add:1 }}">{{ d|date:"D j.n." }}</div>{% endfor %}
+    {% for rows, hour in ticks %}<span class="tick" style="grid-row: {{ rows }}">{{ hour }}:00</span><span class="line" style="grid-row: {{ rows }}"></span>{% endfor %}
+    {% for b in placed %}
+    <a class="booking {{ b.tone }}{% if b.clash %} split lane-{{ b.lane }}{% if clashes %} clash{% endif %}{% endif %}" style="grid-area: {{ b.place }}" href="{% if b.course %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}" title="{{ b.start|time:'H:i' }}–{{ b.end|time:'H:i' }} · {{ b.label }} · {{ b.room }}">
+      {{ b.start|time:"H:i" }} {{ b.label }}<br><small>{{ b.room }}</small>
+    </a>
+    {% endfor %}
+  </div>
+</div>

@@ -1,0 +1,22 @@
+{% extends base %}
+{% block title %}Meine Kommissionen{% endblock %}
+{% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Meine Kommissionen</h1>
+<p class="lead">Eignungsprüfungen, in denen Sie werten.</p>
+<table>
+  <thead><tr><th>Datum</th><th>Prüfung</th><th>Studienbeginn</th><th class="num">Bewerbende</th><th>Stand</th></tr></thead>
+  <tbody>
+    {% for c in auditions %}
+    <tr>
+      <td>{% if c.date %}{{ c.date|date:"D j.n.Y" }}{% elif c.program %}online{% else %}–{% endif %}</td>
+      <td><a href="{% url 'admissions:audition' c.pk %}"><b>{{ c.title }}</b></a></td>
+      <td>{{ c.term }}</td>
+      <td class="num">{{ c.size }}</td>
+      <td>{% if c.released %}<span class="badge green">abgeschlossen</span>{% else %}<span class="badge open">offen</span>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty">Keine Kommissionen.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

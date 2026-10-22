@@ -1,0 +1,80 @@
+{% extends base %}
+{% block title %}Bewerbung {{ study.person.name }}{% endblock %}
+{% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>{{ study.person.first_name }} {{ study.person.last_name }}</h1>
+  <div class="actions">
+    {% if office %}<a class="btn ghost" href="{% url 'history' 'core.person' study.person.pk %}" data-panel>Verlauf</a>{% endif %}
+    <span class="badge {{ study.status }}">{{ study.get_status_display }} seit {{ study.since|date:"j.n.Y" }}</span>
+  </div>
+</div>
+<p class="lead">Bewerbung {{ study.program }} · {{ study.subject }} · ab {{ study.start_term }}</p>
+
+<div class="cols">
+  {% with p=study.person %}
+  <dl class="facts">
+    <dt>E-Mail</dt><dd>{{ p.email }}</dd>
+    <dt>Geschlecht</dt><dd>{{ p.get_gender_display|default:"–" }}</dd>
+    <dt>Geboren</dt><dd>{{ p.birth_date|date:"j. F Y" }}{% if p.birth_place %} in {{ p.birth_place }}{% endif %}</dd>
+    <dt>Staatsangehörigkeit</dt><dd>{{ p.nationality|default:"–" }}{% if p.second_nationality %}, {{ p.second_nationality }}{% endif %}</dd>
+    <dt>Hochschulzugang</dt><dd>{{ p.get_entrance_display|default:"–" }}{% if p.entrance_date %}, {{ p.entrance_date|date:"j.n.Y" }}{% endif %}{% if p.entrance_place %}, {{ p.entrance_place }}{% endif %}</dd>
+    {% if p.insurer %}<dt>Krankenversicherung</dt><dd>{{ p.insurer }}{% if p.insurance %} · {{ p.get_insurance_display }}{% endif %}</dd>{% endif %}
+    <dt>Wunschlehrer:in</dt><dd>{{ study.teacher|default:"–" }}</dd>
+    {% if documents %}<dt>Bescheide</dt><dd>{% for d in documents %}<a href="{{ d.href }}">{{ d.title }}</a> <small class="muted">{{ d.created|date:"j.n.Y" }}</small><br>{% endfor %}</dd>{% endif %}
+    {% if accepted %}<dt>Annahme</dt><dd>Studienplatz angenommen{% if accepted.paid %}, Beitrag bezahlt am {{ accepted.paid|date:"j.n.Y" }}{% endif %}</dd>{% endif %}
+  </dl>
+  {% endwith %}
+  {% if office %}
+  <div class="panel">
+    <h3>Entscheidung</h3>
+    {% if recommendation %}<p>Nach den Prüfungsergebnissen: <b>{% if recommendation == 'admitted' %}zulassen{% else %}ablehnen{% endif %}</b>.</p>{% else %}<p class="muted">Noch nicht alle Prüfungsstufen bewertet.</p>{% endif %}
+    <form method="post" action="{% url 'admissions:decide' study.pk %}" class="actions">
+      {% csrf_token %}
+      {% for status in decisions %}<button class="btn{% if status != recommendation %} ghost{% endif %}" name="status" value="{{ status }}"{% if study.status == status %} disabled{% endif %}>{{ status.label }}</button>{% endfor %}
+    </form>
+    <p class="muted" style="margin-top: 12px"><small>Der Bescheid geht sofort ins Postfach der Person.</small></p>
+    {% if study.status == 'admitted' %}
+    <h3 style="margin-top: 24px">Immatrikulation</h3>
+    {% if missing %}
+    <p>Es fehlt noch:</p>
+    <ul>{% for reason in missing %}<li class="fail">{{ reason }}</li>{% endfor %}</ul>
+    <div class="actions">
+      {% if not study.person.insurance_confirmed %}<form method="post" action="{% url 'students:insured' study.pk %}">{% csrf_token %}<button class="btn ghost small">Versicherungsmeldung verbuchen</button></form>{% endif %}
+      {% if not study.person.entrance %}<a class="btn ghost small" href="{% url 'admin:core_person_change' study.person.pk %}">Hochschulzugang erfassen</a>{% endif %}
+    </div>
+    {% else %}
+    <form method="post" action="{% url 'students:enrol' study.pk %}">{% csrf_token %}<button class="btn">Immatrikulieren</button></form>
+    <p class="muted"><small>Vergibt die Matrikelnummer, verbucht den Semesterbeitrag und versendet den Immatrikulationsbescheid.</small></p>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<section>
+  <h2>Video und Unterlagen</h2>
+  {% include "admissions/_checklist.html" with upload=False %}
+</section>
+
+<section>
+  <h2>Prüfungsstufen</h2>
+  <table>
+    <thead><tr><th>Stufe</th><th>Termin</th><th>Programm</th>{% if show_results %}<th class="num">Ergebnis</th><th>Bestanden</th>{% endif %}</tr></thead>
+    <tbody>
+      {% for p in stages %}
+      <tr>
+        <td>{% if show_results %}<a href="{% url 'admissions:audition' p.course.pk %}">{{ p.course.title }}</a>{% else %}{{ p.course.title }}{% endif %}</td>
+        <td>{{ p.slot|date:"D j.n.Y, H:i"|default:"–" }}</td>
+        <td><small>{{ p.note|linebreaksbr }}</small></td>
+        {% if show_results %}
+        <td class="num">{{ p.grade|default_if_none:"" }}</td>
+        <td>{% if p.passed %}<span class="badge yes">ja</span>{% elif p.passed is False %}<span class="badge no">nein</span>{% endif %}</td>
+        {% endif %}
+      </tr>
+      {% empty %}<tr><td colspan="5" class="empty">Noch keiner Prüfung zugeordnet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

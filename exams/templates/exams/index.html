@@ -1,0 +1,81 @@
+{% extends base %}
+{% block title %}Prüfungen{% endblock %}
+{% block subnav %}{% include "exams/_nav.html" %}{% endblock %}
+{% block content %}
+{% if exams is not None %}
+<div class="head">
+  <h1>Prüfungen</h1>
+  <form class="actions">
+    <select name="semester" onchange="this.form.requestSubmit()" aria-label="Semester">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select>
+    {% if 'Prüfungsamt' in user.roles %}<a class="btn" href="{% url 'exams:new' %}?semester={{ term.pk }}">Prüfung anlegen</a>{% endif %}
+  </form>
+</div>
+<p class="lead">{{ term }} · {{ exams|length }} Prüfungen{% if 'Prüfungsamt' not in user.roles %}, in denen Sie prüfen{% endif %}</p>
+<table data-panel>
+  <thead><tr><th>Datum</th><th>Prüfung</th><th>Kommission</th><th class="num">Anmeldungen</th><th>Stand</th></tr></thead>
+  <tbody>
+    {% for c in exams %}
+    <tr>
+      <td>{{ c.date|date:"D j.n.Y"|default:"–" }}</td>
+      <td><a href="{% url 'exams:exam' c.pk %}"><b>{{ c.title }}</b></a>{% if c.subject and c.subject.name not in c.title %}<br><small class="muted">{{ c.subject }}</small>{% endif %}</td>
+      <td>{% for s in c.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+      <td class="num">{{ c.size }}</td>
+      <td>{% if c.released %}<span class="badge green">freigegeben</span>{% elif c.graded %}<span class="badge wait">{{ c.graded }} von {{ c.size }} bewertet</span>{% else %}<span class="badge open">offen</span>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty">Keine Prüfungen.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if mine is not None %}
+{% if exams is not None %}<section>{% endif %}
+<h1>Meine Prüfungen</h1>
+<p class="lead">{% for s in studies %}<a class="more" href="{% url 'exams:transcript' s.pk %}">Leistungsübersicht {{ s.subject }} · {{ s.program.degree }}</a>{% if not forloop.last %} &nbsp; {% endif %}{% endfor %}</p>
+
+<h2>Anmeldung möglich</h2>
+<table>
+  <thead><tr><th>Datum</th><th>Prüfung</th><th>Anmeldeschluss</th><th></th></tr></thead>
+  <tbody>
+    {% for c in offered %}
+    <tr>
+      <td>{{ c.date|date:"D j.n.Y"|default:"–" }}</td>
+      <td><b>{{ c.title }}</b></td>
+      <td>{{ c.deadline|date:"j. F Y"|default:"–" }}</td>
+      <td class="num">
+        {% if c.is_open %}
+        <form method="post" action="{% url 'exams:register' c.pk %}">{% csrf_token %}<input type="hidden" name="study" value="{{ studies.0.pk }}"><button class="btn small">Anmelden</button></form>
+        {% else %}<span class="muted">Frist abgelaufen</span>{% endif %}
+      </td>
+    </tr>
+    {% empty %}<tr><td colspan="4" class="empty">Zurzeit keine Prüfungen zur Anmeldung.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<section>
+  <h2>Angemeldet und abgelegt</h2>
+  <table>
+    <thead><tr><th>Semester</th><th>Prüfung</th><th>Modul</th><th>Termin</th><th class="num">Note</th><th>Ergebnis</th></tr></thead>
+    <tbody>
+      {% for p in mine %}
+      <tr>
+        <td>{{ p.course.term }}</td>
+        <td><b>{{ p.course.title }}</b></td>
+        <td>{{ p.module.code|default:"" }}</td>
+        <td>{{ p.slot|date:"D j.n., H:i"|default:"–" }}</td>
+        <td class="num">{% if p.course.released and p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</td>
+        <td>
+          {% if p.course.released %}{% if p.passed %}<span class="badge yes">bestanden</span>{% else %}<span class="badge no">nicht bestanden</span>{% endif %}
+          {% elif p.course.is_open %}<form method="post" action="{% url 'exams:withdraw' p.pk %}">{% csrf_token %}<button class="btn ghost small">Rücktritt</button></form>
+          {% else %}<span class="badge open">angemeldet</span>{% endif %}
+        </td>
+      </tr>
+      {% empty %}<tr><td colspan="6" class="empty">Noch keine Prüfungen.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% if exams is not None %}</section>{% endif %}
+{% endif %}
+{% endblock %}

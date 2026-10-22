@@ -1,0 +1,67 @@
+{% extends base %}
+{% block title %}{{ course.title }}{% endblock %}
+{% block subnav %}{% include "courses/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>{{ course.title }}</h1>
+  {% if staffed %}<div class="actions"><a class="btn ghost" href="{% url 'courses:edit' course.pk %}">Bearbeiten</a></div>{% endif %}
+</div>
+<p class="lead">{{ course.get_kind_display }} · {{ course.term }}{% if course.subject %} · {{ course.subject }}{% endif %}</p>
+
+<div class="cols">
+  <div>
+    <dl class="facts">
+      <dt>Lehrende</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
+      <dt>Umfang</dt><dd>{{ course.hours|default_if_none:"–" }} SWS{% if course.kind == 'lesson' %} je Teilnahme{% endif %}</dd>
+      <dt>Teilnahmen</dt><dd>{{ count }}{% if course.capacity %} von {{ course.capacity }} Plätzen{% endif %}</dd>
+      <dt>Anmeldeschluss</dt><dd>{{ course.deadline|date:"j. F Y"|default:"–" }}</dd>
+      <dt>Anrechenbar für</dt><dd>{% for m in modules %}<a href="{{ m.program.get_absolute_url }}">{{ m.code }} {{ m.title }}</a> <small class="muted">{{ m.program.degree }} {{ m.program.name }}</small><br>{% empty %}–{% endfor %}</dd>
+    </dl>
+    {% if course.description %}<p style="margin-top: 24px">{{ course.description|linebreaksbr }}</p>{% endif %}
+  </div>
+  <div>
+    <h3>Nächste Termine</h3>
+    <table>
+      {% for b in bookings %}<tr><td>{{ b.start|date:"D j.n." }}</td><td>{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</td><td><a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a></td></tr>{% empty %}<tr><td class="empty">Noch keine Termine.</td></tr>{% endfor %}
+    </table>
+    {% if plan %}
+    <form method="post" action="{% url 'courses:plan' course.pk %}" class="panel" style="margin-top: 24px">
+      {% csrf_token %}
+      <h3>Wöchentlich planen</h3>
+      <div class="inline">{% for field in plan %}<label>{{ field.label }}{{ field }}</label>{% endfor %}</div>
+      <p class="muted" style="margin: 12px 0"><small>Bucht den Raum über die ganze Vorlesungszeit ({{ course.term.lectures_start|date:"j.n." }}–{{ course.term.lectures_end|date:"j.n.Y" }}), nur wenn alle Termine frei sind.</small></p>
+      <button class="btn">Termine buchen</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+
+{% if eligible or own %}
+<section>
+  <h2>Meine Anmeldung</h2>
+  {% for p in own %}
+  <form method="post" action="{% url 'courses:withdraw' p.pk %}" class="actions">
+    {% csrf_token %}
+    <span>Angemeldet seit {{ p.created|date:"j. F Y" }}{% if p.module %} für {{ p.module.code }}{% endif %}{% if p.waiting %} · <span class="badge wait">Warteliste</span>{% endif %}{% if p.passed %} · <span class="badge yes">bestanden{% if p.grade %} ({{ p.grade|floatformat:1 }}){% endif %}</span>{% endif %}</span>
+    {% if course.is_open %}<button class="btn ghost small">Abmelden</button>{% endif %}
+  </form>
+  {% empty %}
+  {% if course.is_open %}
+  <form method="post" action="{% url 'courses:register' course.pk %}" class="actions">
+    {% csrf_token %}
+    <select name="study">{% for s in eligible %}<option value="{{ s.pk }}">{{ s.subject }} · {{ s.program }}</option>{% endfor %}</select>
+    <button class="btn">Anmelden</button>
+  </form>
+  {% else %}<p class="empty">Anmeldeschluss vorbei.</p>{% endif %}
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if staffed %}
+<section>
+  <h2>Teilnehmende</h2>
+  {% include "courses/_sheet.html" with panel=False decide=True columns=None %}
+  {% include "courses/_add.html" %}
+</section>
+{% endif %}
+{% endblock %}

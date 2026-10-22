@@ -1,0 +1,20 @@
+{% extends base %}
+{% block title %}Nachricht{% endblock %}
+{% block subnav %}{% include "students/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Nachricht an {{ people|length }} Person{{ people|length|pluralize:"en" }}</h1>
+{% if people %}
+<p class="lead">{% for p in people %}{{ p.first_name }} {{ p.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+<form method="post" class="form">
+  {% csrf_token %}
+  {% for s in studies %}<input type="hidden" name="study" value="{{ s.pk }}">{% endfor %}
+  <input type="hidden" name="next" value="{{ back }}">
+  {{ form }}
+  <p class="muted"><small>Geht ins Postfach jeder Person und per E-Mail.</small></p>
+  {% url 'students:list' as roster %}
+  <div class="actions"><button class="btn">Senden</button><a class="btn ghost" href="{{ back|default:roster }}">Abbrechen</a></div>
+</form>
+{% else %}
+<p class="empty">Niemand ausgewählt. In der Liste Personen ankreuzen, dann „Nachricht schreiben“.</p>
+{% endif %}
+{% endblock %}

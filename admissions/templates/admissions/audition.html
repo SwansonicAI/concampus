@@ -1,0 +1,49 @@
+{% extends base %}
+{% block title %}{{ course.title }}{% endblock %}
+{% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>{{ course.title }}</h1>
+  <div class="actions">
+    {% if course.video %}<a class="btn" href="{% url 'admissions:review' course.pk %}" data-panel>Videos sichten</a>{% endif %}
+    <a class="btn ghost" href="{% if request.GET.sortierung %}?{% else %}?sortierung=punkte{% endif %}">{% if request.GET.sortierung %}Nach Termin{% else %}Rangliste{% endif %}</a>
+    {% if office %}<a class="btn ghost" href="{% url 'history' 'courses.course' course.pk %}" data-panel>Verlauf</a>{% endif %}
+    {% if office %}<form method="post" action="{% url 'admissions:close' course.pk %}">{% csrf_token %}<button class="btn{% if course.released %} ghost{% endif %}">{% if course.released %}Wieder öffnen{% else %}Abschließen{% endif %}</button></form>{% endif %}
+  </div>
+</div>
+<p class="lead">Studienbeginn {{ course.term }}{% if course.subject %} · {{ course.subject }}{% endif %}{% if course.released %} · <span class="badge green">abgeschlossen, gesperrt</span>{% endif %}</p>
+
+<div class="cols">
+  <dl class="facts">
+    <dt>Kommission</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
+    <dt>Bewertung</dt><dd>{% if course.points %}0–25 Punkte je Mitglied, bestanden ab {{ course.pass_mark }}{% else %}bestanden / nicht bestanden{% endif %}</dd>
+    {% if course.program %}<dt>Bewerbung für</dt><dd>{{ course.program }}, Frist {{ course.deadline|date:"j. F Y" }}</dd>{% endif %}
+    {% if course.capacity %}<dt>Studienplätze</dt><dd>{{ course.capacity }}</dd>{% endif %}
+    <dt>Räume</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, {{ b.room }}<br>{% empty %}online{% endfor %}</dd>
+  </dl>
+  {% if office and not course.released %}
+  <div>
+    <form method="post" action="{% url 'admissions:plan' course.pk %}" class="panel">
+      {% csrf_token %}
+      <h3>Termine vergeben</h3>
+      <div class="inline">{% for field in slots %}<label>{{ field.label }}{{ field }}</label>{% endfor %}</div>
+      <p style="margin: 12px 0"><button class="btn">Termine vergeben und einladen</button></p>
+    </form>
+    {% if stages %}
+    <form method="post" action="{% url 'admissions:advance' course.pk %}" class="panel" style="margin-top: 16px">
+      {% csrf_token %}
+      <h3>Nächste Stufe</h3>
+      <p>{% for s in stages %}<a href="{% url 'admissions:audition' s.pk %}">{{ s.title }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+      <button class="btn"{% if not ready %} disabled{% endif %}>{{ ready }} mit „bestanden“ einladen</button>
+    </form>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<section>
+  <h2>Bewerbende</h2>
+  {% if not office %}<p class="lead">Sie tragen nur Ihre eigene Wertung ein. Die Entscheidung trifft die ASA nach der Sitzung.</p>{% endif %}
+  <div data-panel>{% include "courses/_sheet.html" with panel=True decide=office review=course.video %}</div>
+</section>
+{% endblock %}

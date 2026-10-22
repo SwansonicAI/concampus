@@ -1,0 +1,29 @@
+{% extends base %}
+{% block title %}Verlauf{% endblock %}
+{% block content %}
+<h1>Verlauf</h1>
+{% if record %}<p class="lead">{{ record }}</p>{% endif %}
+<table>
+  <tbody>
+    {% for c in changes %}
+    <tr>
+      <td class="muted">{{ c.at|date:"j.n.Y, H:i" }}<br><small>{{ c.by|default:"System" }}</small></td>
+      <td>
+        {{ c.record }} <span class="muted">{{ c.get_action_display }}</span>
+        {% for label, before, after in c.lines %}<br><small>{{ label }}: {% if before %}<span class="muted">{{ before }}</span> → {% endif %}{{ after }}</small>{% endfor %}
+      </td>
+      <td class="num">
+        {% if c.restorable %}
+        <form method="post" action="{% url 'undo' c.pk %}">
+          {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+          <button class="link"><small>{% if c.action == 'deleted' %}wiederherstellen{% else %}zurücksetzen{% endif %}</small></button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="3" class="empty">Noch keine Änderungen.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}
