@@ -6,7 +6,7 @@ const fold = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
   .replace(/ß/g, 'ss').replace(/ae/g, 'a').replace(/oe/g, 'o').replace(/ue/g, 'u');
 
 function init(root) {
-  root.querySelectorAll('.form #id_modules, .form #id_staff, .form #id_participants').forEach(filterable);
+  root.querySelectorAll('.form div[id^="id_"]').forEach(list => list.querySelectorAll('input[type=checkbox]').length > 8 && filterable(list));
   root.querySelectorAll('[data-day], [data-moment]').forEach(dated);
 }
 

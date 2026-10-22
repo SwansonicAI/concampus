@@ -12,5 +12,6 @@ urlpatterns = [
     path('pruefungen/', include('exams.urls')),
     path('aufnahme/', include('admissions.urls')),
     path('raeume/', include('rooms.urls')),
+    path('einstellungen/', include('setup.urls')),
     path('', include('core.urls')),
 ] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

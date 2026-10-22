@@ -1,6 +1,7 @@
 from collections import defaultdict
 from decimal import ROUND_HALF_UP, Decimal
 
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
 
@@ -119,3 +120,13 @@ class Module(Tracked, models.Model):
 
     def __str__(self):
         return f'{self.code} {self.title}'.strip()
+
+    def clean(self):
+        """A module stays in its programme's tree and never ends up under itself."""
+        node = self.parent
+        while node:
+            if node.program_id != self.program_id:
+                raise ValidationError({'parent': 'Gehört zu einem anderen Studiengang.'})
+            if node.pk == self.pk:
+                raise ValidationError({'parent': 'Ein Modul kann nicht unter sich selbst stehen.'})
+            node = node.parent

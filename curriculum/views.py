@@ -59,6 +59,6 @@ def program(request, pk):
         if row['kind'] == 'part':
             row['offers'] = sorted({c for i in row['items'] for c in offers[i.pk]}, key=lambda c: c.title)
     return render(request, 'curriculum/program.html', {
-        'program': program, 'rows': rows, 'semesters': range(1, program.semesters + 1), 'term': term,
+        'program': program, 'rows': rows, 'semesters': range(1, program.semesters + 1), 'term': term, 'edit': 'edit_curriculum' in request.user.roles,
         'total': sum(m.credits for m in tree), 'students': program.studies.filter(status='enrolled').count(),
     })

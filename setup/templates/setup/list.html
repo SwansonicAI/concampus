@@ -1,0 +1,23 @@
+{% extends base %}
+{% block title %}{{ editor.title }}{% endblock %}
+{% block content %}
+<p class="eyebrow"><a href="{% url 'setup:index' %}">Einstellungen</a></p>
+<div class="head">
+  <h1>{{ editor.title }}</h1>
+  <div class="actions"><a class="btn" href="{% url 'setup:new' editor.key %}" data-panel>Neu anlegen</a></div>
+</div>
+<p class="lead">{{ count }} Einträge{% if q %} passen zu „{{ q }}“{% endif %}</p>
+<form class="toolbar">
+  <div class="inline"><label>Suche<input type="search" name="q" value="{{ q }}"></label></div>
+</form>
+<table data-panel>
+  <thead><tr>{% for heading, _ in editor.columns %}<th>{{ heading }}</th>{% endfor %}</tr></thead>
+  <tbody>
+    {% for obj, cells in rows %}
+    <tr>{% for value in cells %}<td>{% if forloop.first %}<a href="{% url 'setup:edit' editor.key obj.pk %}">{{ value }}</a>{% else %}{{ value|default_if_none:"–" }}{% endif %}</td>{% endfor %}</tr>
+    {% empty %}
+    <tr><td colspan="{{ editor.columns|length }}" class="empty">Nichts gefunden.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

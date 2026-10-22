@@ -122,9 +122,9 @@ select.cell { padding: 4px 6px; }
 .form .helptext { color: var(--muted); font-size: 13px; }
 .form textarea { min-height: 120px; }
 .form input.filter { margin-bottom: 6px; }
-.form #id_staff, .form #id_modules, .form #id_participants { max-height: 300px; overflow-y: auto; padding: 8px 12px; border: 1px solid #8a8a8a; }
-.form #id_staff label, .form #id_modules label, .form #id_participants label { display: flex; gap: 8px; align-items: center; font-weight: 400; }
-.form #id_modules > div > label:first-child { margin-top: 10px; font-weight: 700; }
+.form div[id^="id_"]:has(input[type=checkbox]) { max-height: 300px; overflow-y: auto; padding: 8px 12px; border: 1px solid #8a8a8a; }
+.form div[id^="id_"] label:has(input[type=checkbox]) { display: flex; gap: 8px; align-items: center; font-weight: 400; }
+.form div[id^="id_"] > div > label:not(:has(input)) { margin-top: 10px; font-weight: 700; }
 .errorlist { margin: 0; padding: 0; color: var(--red); list-style: none; font-weight: 600; }
 .inline { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; }
 .inline > div, .inline label { display: grid; gap: 4px; font-size: 14px; font-weight: 600; }

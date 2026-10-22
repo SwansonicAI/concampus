@@ -63,8 +63,9 @@ class CourseForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         if 'kind' in self.fields:
             self.fields['kind'].choices = [(k.value, k.label) for k in (Course.Kind.COURSE, Course.Kind.LESSON)]
-        self.fields['staff'].queryset = Person.objects.filter(teaching__isnull=False).distinct()
-        self.fields['modules'].choices = leaf_modules()
+        self.fields['staff'].queryset = Person.teachers()
+        if 'modules' in self.fields:
+            self.fields['modules'].choices = leaf_modules()
         if 'subject' in self.fields:
             self.fields['subject'].empty_label = 'Keines'
 
@@ -73,6 +74,17 @@ class ExamForm(CourseForm):
     class Meta(CourseForm.Meta):
         fields = ['title', 'staff', 'modules', 'deadline', 'pass_mark', 'description']
         labels = {'staff': 'Kommission', 'modules': 'Prüft das Modul'}
+
+
+class AuditionForm(CourseForm):
+    """One stage of an Eignungsprüfung. The first stage, with its programme, is what applicants apply for."""
+
+    deadline = DayField(label='Bewerbungsschluss', required=False, help_text='Bis dahin laden Bewerbende Video und Unterlagen hoch.')
+
+    class Meta(CourseForm.Meta):
+        fields = ['title', 'term', 'program', 'subject', 'video', 'staff', 'deadline', 'capacity', 'pass_mark', 'description']
+        labels = {'staff': 'Kommission', 'capacity': 'Studienplätze'}
+        help_texts = {'program': 'Nur bei der ersten Stufe: der Studiengang, für den man sich hier bewirbt.'}
 
 
 class AddForm(forms.Form):

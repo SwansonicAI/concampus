@@ -1,0 +1,21 @@
+{% extends base %}
+{% block title %}{% if object.pk %}{{ object }}{% else %}{{ editor.title }}{% endif %}{% endblock %}
+{% block content %}
+<p class="eyebrow">{% if editor.section %}<a href="{% url 'setup:list' editor.key %}">{{ editor.title }}</a>{% else %}{{ editor.title }}{% endif %}</p>
+<h1>{% if object.pk %}{{ object }}{% else %}Neu anlegen{% endif %}</h1>
+{% if form.note %}<p class="lead">{{ form.note }}</p>{% endif %}
+<form method="post" class="form">
+  {% csrf_token %}
+  {{ form }}
+  <div class="actions">
+    <button class="btn">Speichern</button>
+    <a class="btn ghost" href="{{ back }}">Abbrechen</a>
+    {% if history %}<a href="{% url 'history' table object.pk %}">Verlauf</a>{% endif %}
+  </div>
+</form>
+{% if object.pk and editor.deletable %}
+<form method="post" action="{% url 'setup:delete' editor.key object.pk %}?next={{ back|urlencode }}" style="margin-top: 32px">
+  {% csrf_token %}<button class="link"><small>Löschen</small></button>
+</form>
+{% endif %}
+{% endblock %}

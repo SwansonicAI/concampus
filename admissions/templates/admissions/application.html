@@ -43,7 +43,7 @@
     <ul>{% for reason in missing %}<li class="fail">{{ reason }}</li>{% endfor %}</ul>
     <div class="actions">
       {% if not study.person.insurance_confirmed %}<form method="post" action="{% url 'students:insured' study.pk %}">{% csrf_token %}<button class="btn ghost small">Versicherungsmeldung verbuchen</button></form>{% endif %}
-      {% if not study.person.entrance %}<a class="btn ghost small" href="{% url 'admin:core_person_change' study.person.pk %}">Hochschulzugang erfassen</a>{% endif %}
+      {% if not study.person.entrance %}<a class="btn ghost small" href="{% url 'setup:edit' 'personen' study.person.pk %}?next={{ request.path|urlencode }}" data-panel>Hochschulzugang erfassen</a>{% endif %}
     </div>
     {% else %}
     <form method="post" action="{% url 'students:enrol' study.pk %}">{% csrf_token %}<button class="btn">Immatrikulieren</button></form>

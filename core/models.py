@@ -1,4 +1,5 @@
 from django.contrib.auth.models import AbstractUser, Group, Permission
+from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
@@ -37,8 +38,10 @@ class Tracked:
         return bool(roles & set(cls.capabilities))
 
 
-class Institute(models.Model):
+class Institute(Tracked, models.Model):
     """An Institut of the Hochschule: its teachers, its Hauptfächer and the rooms both may book."""
+
+    capabilities = ('manage_institution',)
 
     name = models.CharField('Name', max_length=80, unique=True)
 
@@ -138,6 +141,11 @@ class Person(Tracked, AbstractUser):
         """Everything about the person: their own record, studies, terms, documents, results, bookings."""
         return models.Q(person=pk)
 
+    @classmethod
+    def teachers(cls):
+        """Who can teach or examine: whoever belongs to an Institut or already teaches."""
+        return cls.objects.filter(models.Q(institute__isnull=False) | models.Q(teaching__isnull=False)).distinct()
+
     @cached_property
     def roles(self):
         """The capabilities of the person's offices (all for superusers), plus 'student', 'applicant' and 'teacher' as
@@ -207,6 +215,14 @@ class Term(Tracked, models.Model):
     @classmethod
     def upcoming(cls):
         return cls.objects.filter(start__gt=timezone.localdate()).first()
+
+    def clean(self):
+        if self.start and self.end and self.start >= self.end:
+            raise ValidationError({'end': 'Das Semester endet nach seinem Beginn.'})
+        if self.lectures_start and self.lectures_end and self.lectures_start >= self.lectures_end:
+            raise ValidationError({'lectures_end': 'Die Vorlesungszeit endet nach ihrem Beginn.'})
+        if self.reregistration_start and self.deadline and self.reregistration_start > self.deadline:
+            raise ValidationError({'deadline': 'Die Rückmeldefrist endet nach dem Beginn der Rückmeldung.'})
 
     @classmethod
     def pick(cls, pk):

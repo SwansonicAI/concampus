@@ -1,0 +1,14 @@
+{% extends base %}
+{% block title %}Einstellungen{% endblock %}
+{% block content %}
+<h1>Einstellungen</h1>
+<p class="lead">Was die Hochschule selbst pflegt. Jede Änderung steht im Verlauf und lässt sich zurücksetzen.</p>
+{% for section, editors in sections.items %}
+<section>
+  <h2>{{ section }}</h2>
+  <ul class="todo">
+    {% for e, size in editors %}<li><a href="{% url 'setup:list' e.key %}"><span class="what">{{ e.title }}</span><span class="where"></span><span class="due">{{ size }}</span></a></li>{% endfor %}
+  </ul>
+</section>
+{% endfor %}
+{% endblock %}

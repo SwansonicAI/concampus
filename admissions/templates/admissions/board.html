@@ -5,6 +5,7 @@
 <div class="head">
   <h1>Bewerbungen</h1>
   <form class="actions">
+    {% if 'run_auditions' in user.roles %}<a class="btn ghost" href="{% url 'setup:list' 'eignungspruefungen' %}">Eignungsprüfungen</a>{% endif %}
     <select name="semester" onchange="this.form.requestSubmit()" aria-label="Studienbeginn">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>Studienbeginn {{ t }}</option>{% endfor %}</select>
     <select name="fach" onchange="this.form.requestSubmit()" aria-label="Hauptfach"><option value="">Alle Hauptfächer</option>{% for s in subjects %}<option value="{{ s.pk }}"{% if s.pk|stringformat:'s' == subject %} selected{% endif %}>{{ s }}</option>{% endfor %}</select>
   </form>
