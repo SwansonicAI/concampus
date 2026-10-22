@@ -3,6 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.contrib.auth.models import Permission
+from django.core import mail
 from django.core.exceptions import ValidationError
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -15,9 +16,9 @@ from students.models import Document, Study
 from .access import CODENAMES
 from .apps import tile_apps, tiles
 from .history import acting, restore
-from .models import Change, Message, Office, Person, Text
+from .models import Change, Message, Office, Person, Term, Text
 from .testing import Seeded, flashes
-from .texts import TEXTS, render
+from .texts import TEXTS, render, send
 from .views import found
 
 PANEL = {'X-Panel': '1'}
@@ -183,6 +184,15 @@ class TextTest(Seeded):
         campus.post('/einstellungen/texte/zulassung/', {'standard': '1'})
         self.assertFalse(Text.objects.filter(key='zulassung').exists())
 
+    def test_mail_goes_out_once_saved(self):
+        mei = Person.objects.get(username='student')
+        with self.captureOnCommitCallbacks() as pending:
+            send('willkommen', mei)
+        self.assertEqual(len(mail.outbox), 0)  # rolled back, nothing would go out
+        for callback in pending:
+            callback()
+        self.assertEqual(mail.outbox[0].subject, 'Willkommen')
+
     def test_refusals_carry_the_appeal(self):
         study = Study.objects.filter(status='applied').exclude(person__username='bewerbung').first()
         self.login('asa').post(f'/aufnahme/bewerbung/{study.pk}/entscheidung/', {'status': 'rejected'})
@@ -269,3 +279,33 @@ class HistoryFlowTest(Seeded):
         total, theirs = Change.objects.count(), Change.objects.filter(person=person).count()
         person.delete()
         self.assertEqual(Change.objects.count(), total - theirs)
+
+
+class FreshInstallTest(TestCase):
+    """A Hochschule starting out: no semesters yet, then only the current one. Nothing may fail."""
+
+    PAGES = [
+        '/', '/postfach/', '/suche/?q=a', '/studierende/liste/', '/studierende/rueckmeldung/', '/studiengaenge/', '/lehre/verzeichnis/',
+        '/lehre/meine/', '/lehre/stundenplan/', '/lehre/deputat/', '/lehre/semesterwechsel/', '/lehre/neu/', '/pruefungen/', '/pruefungen/neu/',
+        '/pruefungen/anerkennung/', '/aufnahme/bewerbungen/', '/aufnahme/kommissionen/', '/aufnahme/meine/', '/aufnahme/bewerben/',
+        '/raeume/', '/raeume/finden/', '/raeume/buchen/', '/raeume/meine/', '/raeume/veranstaltungen/', '/einstellungen/',
+        '/einstellungen/texte/', '/einstellungen/semester/', '/einstellungen/semester/neu/', '/einstellungen/eignungspruefungen/neu/',
+    ]
+
+    def visit(self):
+        client = Client()
+        client.force_login(Person.objects.create(username='it', is_superuser=True))
+        for page in self.PAGES:
+            with self.subTest(page=page):
+                self.assertIn(client.get(page, follow=True).status_code, (200, 403))
+
+    def test_without_semesters(self):
+        self.visit()
+
+    def test_with_only_the_current_semester(self):
+        today = timezone.localdate()
+        Term.objects.create(
+            name='Jetzt', start=today - timedelta(days=30), end=today + timedelta(days=30), lectures_start=today - timedelta(days=20),
+            lectures_end=today + timedelta(days=20), reregistration_start=today, deadline=today + timedelta(days=10), fee=100,
+        )
+        self.visit()

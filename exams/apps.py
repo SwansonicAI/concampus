@@ -22,6 +22,8 @@ class ExamsConfig(Tile, AppConfig):
         from courses.models import Course, Participation
 
         term = Term.current()
+        if not term:
+            return ''
         if person.roles & {'manage_exams', 'decide_results'}:
             return f'{plural(term.courses.filter(kind=Course.Kind.EXAM).count(), "Prüfung", "Prüfungen")} im {term}'
         if 'teacher' in person.roles:

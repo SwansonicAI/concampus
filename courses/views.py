@@ -17,6 +17,7 @@ from core.access import require
 from core.dates import day as understood
 from core.models import Term
 from core.text import matching
+from core.views import without_term
 from curriculum.models import Program
 from rooms.models import Booking, BookingCategory
 from rooms.views import agenda, week
@@ -58,6 +59,8 @@ def index(request):
 def catalogue(request):
     person = request.user
     term = Term.pick(request.GET.get('semester'))
+    if term is None:
+        return without_term(request, 'ein Semester mit Veranstaltungen')
     studies = person.studies.filter(status=Study.Status.ENROLLED)
     program = request.GET.get('studiengang', str(studies[0].program_id) if studies else '')
     upcoming = Booking.objects.filter(course=OuterRef('pk'), start__gte=timezone.now()).order_by('start')
@@ -240,6 +243,8 @@ def timetable(request):
 def load(request):
     person = request.user
     term = Term.pick(request.GET.get('semester'))
+    if term is None:
+        return without_term(request, 'ein Semester mit Veranstaltungen')
     courses = term.courses.filter(kind__in=TEACHING).prefetch_related('staff').annotate(size=Count('participations'))
     everyone = 'view_teaching_load' in person.roles
     if not everyone:
@@ -267,6 +272,8 @@ def missing(target):
 def rollover(request):
     """Copy the missing courses to the next term, with staff and modules; lesson classes keep their students."""
     target = Term.upcoming()
+    if target is None:
+        return without_term(request, 'das nächste Semester, in das die Veranstaltungen übernommen werden')
     pending = missing(target)
     if request.method == 'POST':
         with transaction.atomic():

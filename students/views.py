@@ -17,6 +17,7 @@ from core.history import tables
 from core.apps import plural
 from core.models import Institution, Message, Person, Term
 from core.text import matching
+from core.views import without_term
 from curriculum.models import Program, Subject
 from curriculum.views import plan
 from .models import Document, Study, StudyTerm
@@ -230,6 +231,8 @@ def hold(request, pk):
 def reregistration(request):
     """Rückmeldung for the upcoming term: book payments; after the deadline, exmatriculate whoever has not paid."""
     term, today = Term.upcoming(), timezone.localdate()
+    if term is None:
+        return without_term(request, 'das nächste Semester, für das sich Studierende zurückmelden')
     enrolled = Study.objects.filter(status=Study.Status.ENROLLED).select_related('person', 'program', 'subject').order_by('person__last_name')
     registrations = {r.study_id: r for r in StudyTerm.objects.filter(term=term)}
     paid = {r.study.person_id for r in StudyTerm.objects.filter(term=term, paid__isnull=False).select_related('study')}

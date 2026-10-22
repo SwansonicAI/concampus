@@ -26,6 +26,8 @@ class CoursesConfig(Tile, AppConfig):
         from .views import TEACHING, deputat
 
         term = Term.current()
+        if not term:
+            return ''
         if 'manage_courses' in person.roles:
             return f'{term.courses.filter(kind__in=TEACHING).count()} Veranstaltungen im {term}'
         if 'teacher' in person.roles:
@@ -62,6 +64,6 @@ class CoursesConfig(Tile, AppConfig):
             from .views import missing
 
             upcoming = Term.upcoming()
-            if count := missing(upcoming).count():
+            if upcoming and (count := missing(upcoming).count()):
                 found.append(task(f'Semesterwechsel: {plural(count, "Veranstaltung", "Veranstaltungen")} für {upcoming} übernehmen', reverse('courses:rollover'), upcoming.start))
         return found

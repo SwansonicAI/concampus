@@ -12,7 +12,7 @@
       <div><label for="id_username">Benutzername oder E-Mail-Adresse</label>{{ form.username }}</div>
       <div><label for="id_password">Passwort</label>{{ form.password }}</div>
       <input type="hidden" name="next" value="{{ next }}">
-      <div class="actions"><button class="btn">Anmelden</button></div>
+      <div class="actions"><button class="btn">Anmelden</button><a href="{% url 'password_reset' %}">Passwort vergessen?</a></div>
     </form>
   </div>
   {% if institution.signup %}<div>

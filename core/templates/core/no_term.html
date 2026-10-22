@@ -1,0 +1,8 @@
+{% extends base %}
+{% block title %}Semester fehlt{% endblock %}
+{% block content %}
+<h1>Semester fehlt</h1>
+<p class="lead">Hierfür braucht es {{ what }}.</p>
+{% if 'manage_terms' in user.roles %}<p><a class="btn" href="{% url 'setup:new' 'semester' %}">Semester anlegen</a></p>
+{% else %}<p>Semester legt an, wer Semester pflegen darf.</p>{% endif %}
+{% endblock %}

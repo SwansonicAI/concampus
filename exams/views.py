@@ -13,6 +13,7 @@ from core import texts
 from core.access import require
 from core.models import Term
 from core.text import matching
+from core.views import without_term
 from courses import panel
 from courses.forms import AddForm, ExamForm, SlotForm
 from courses.views import enrolled
@@ -214,6 +215,8 @@ class RecognitionForm(forms.Form):
 @require('recognise')
 def recognition(request):
     term = Term.current()
+    if term is None:
+        return without_term(request, 'ein Semester, in dem Anerkennungen verbucht werden')
     course, _ = Course.objects.get_or_create(term=term, kind=Course.Kind.RECOGNITION, defaults={'title': f'Anerkennungen {term}'})
     form = RecognitionForm(request.POST or None)
     if form.is_valid():

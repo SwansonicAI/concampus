@@ -1,5 +1,3 @@
-from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
 from django.urls import include, path
 
@@ -14,4 +12,4 @@ urlpatterns = [
     path('raeume/', include('rooms.urls')),
     path('einstellungen/', include('setup.urls')),
     path('', include('core.urls')),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+]  # uploads are not served as files: admissions:document checks who may see each

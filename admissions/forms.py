@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import BaseUserCreationForm
+from django.db import models
 from django.utils import timezone
 
 from core.dates import DayField
@@ -21,7 +22,7 @@ class SignupForm(BaseUserCreationForm):
 
     def clean_email(self):
         email = self.cleaned_data['email'].lower()
-        if Person.objects.filter(username=email).exists():
+        if Person.objects.filter(models.Q(username=email) | models.Q(email__iexact=email)).exists():
             raise forms.ValidationError('Mit dieser Adresse gibt es schon ein Konto. Bitte melden Sie sich an.')
         return email
 

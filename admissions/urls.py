@@ -14,6 +14,7 @@ urlpatterns = [
     path('bewerbung/<int:pk>/', views.application, name='application'),
     path('bewerbung/<int:pk>/entscheidung/', views.decide, name='decide'),
     path('bewerbung/<int:pk>/unterlagen/', views.upload, name='upload'),
+    path('unterlagen/<int:pk>/', views.document, name='document'),
     path('unterlagen/<int:pk>/entfernen/', views.discard, name='discard'),
     path('pruefung/<int:pk>/', views.audition, name='audition'),
     path('pruefung/<int:pk>/sichtung/', views.review, name='review'),

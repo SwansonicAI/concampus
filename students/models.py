@@ -1,4 +1,6 @@
 import re
+import uuid
+from pathlib import Path
 
 from django.db import models
 from django.utils.formats import number_format
@@ -194,6 +196,11 @@ class DocumentType(Tracked, Keyed):
         return f'{number_format(self.max_mb / 1024, 1)} GB' if self.max_mb >= 1024 else f'{self.max_mb} MB'
 
 
+def stored(document, filename):
+    """A random name: nobody finds a file by guessing its address. The title keeps what it was called."""
+    return f'dokumente/{timezone.now():%Y/%m}/{uuid.uuid4().hex}{Path(filename).suffix.lower()}'
+
+
 class Document(Tracked, models.Model):
     """A file or link a person handed in or received: CV, certificates, audition video, attests, Bescheide."""
 
@@ -206,7 +213,7 @@ class Document(Tracked, models.Model):
     study = models.ForeignKey(Study, models.CASCADE, null=True, blank=True, related_name='documents', verbose_name='Studium')
     kind = models.ForeignKey(DocumentType, models.PROTECT, to_field='key', related_name='documents', verbose_name='Art')
     title = models.CharField('Titel', max_length=120)
-    file = models.FileField('Datei', upload_to='dokumente/%Y/%m/', blank=True)
+    file = models.FileField('Datei', upload_to=stored, blank=True)
     url = models.URLField('Link', blank=True)
     message = models.ForeignKey(Message, models.CASCADE, null=True, blank=True, related_name='+', verbose_name='Bescheid')
     created = models.DateTimeField('Eingegangen', default=timezone.now)
@@ -223,9 +230,9 @@ class Document(Tracked, models.Model):
     def href(self):
         if self.message_id:
             return reverse('letter', args=[self.message_id])
-        return self.file.url if self.file else self.url
+        return reverse('admissions:document', args=[self.pk]) if self.file else self.url
 
     @property
     def playable(self):
         """A video the browser plays right here: an upload, or a link straight to a video file."""
-        return self.href.lower().split('?')[0].endswith(self.VIDEO_FILES)
+        return (self.file.name if self.file else self.url).lower().split('?')[0].endswith(self.VIDEO_FILES)

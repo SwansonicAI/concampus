@@ -1,3 +1,4 @@
+from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
 
@@ -139,3 +140,38 @@ class ChecklistTest(Seeded):
         self.assertIn('Sprachnachweis Deutsch', incomplete(cello))
         DocumentType.objects.filter(key='cv').update(condition='never')
         self.assertNotIn('Lebenslauf', [i['label'] for i in checklist(cello)])
+
+
+class DocumentAccessTest(Seeded):
+    """Uploads are no public files: each is opened through a check of who may see it."""
+
+    def test_who_may_open_a_document(self):
+        study = Study.objects.filter(status='applied', participations__course__video=True, participations__course__released=None).select_related('person').first()
+        juror = Course.objects.filter(video=True, participations__study=study).first().staff.first()
+        owner = Client()
+        owner.force_login(study.person)
+        with self.captureOnCommitCallbacks(execute=True):
+            document = Document.objects.create(person=study.person, study=study, kind_id='cv', title='lebenslauf.pdf', file=SimpleUploadedFile('lebenslauf.pdf', b'%PDF-1.4'))
+        self.assertNotIn('lebenslauf', document.file.name)
+        self.assertEqual(owner.get(document.href).status_code, 200)
+        juror_client = Client()
+        juror_client.force_login(juror)
+        self.assertEqual(juror_client.get(document.href).status_code, 200)
+        self.assertEqual(self.login('student').get(document.href).status_code, 403)
+        self.assertEqual(self.login('student').get(f'/media/{document.file.name}').status_code, 404)
+
+
+class SignupTest(Seeded):
+    def test_one_account_per_address(self):
+        taken = Person.objects.get(username='student').email
+        r = Client().post('/aufnahme/konto/', {
+            'first_name': 'Zweit', 'last_name': 'Konto', 'email': taken.upper(), 'gender': 'w', 'birth_date': '01.01.2000',
+            'password1': 'Geige-Weimar-2026', 'password2': 'Geige-Weimar-2026',
+        })
+        self.assertIn('email', r.context['form'].errors)
+
+    def test_password_reset(self):
+        person = Person.objects.get(username='student')
+        Client().post('/konto/password_reset/', {'email': person.email})
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn('/konto/reset/', mail.outbox[0].body)

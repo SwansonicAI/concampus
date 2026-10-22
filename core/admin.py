@@ -25,5 +25,16 @@ class TermAdmin(admin.ModelAdmin):
 
 @admin.register(Message)
 class MessageAdmin(admin.ModelAdmin):
+    """Sent is sent: Bescheide stay as they went out."""
+
     list_display = ['created', 'person', 'subject', 'read']
     search_fields = ['subject', 'person__last_name']
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False

@@ -27,10 +27,12 @@ class StudentsConfig(Tile, AppConfig):
         paid = StudyTerm.objects.filter(term=term, paid__isnull=False).values('study__person')
         if 'view_students' in person.roles:
             enrolled = Study.objects.filter(status=Study.Status.ENROLLED)
-            if not term.reregistration_open:
+            if not (term and term.reregistration_open):
                 return f'{enrolled.count()} immatrikuliert'
             unpaid = enrolled.exclude(person__in=paid).values('person').distinct().count()
             return f'{enrolled.count()} immatrikuliert · {unpaid} ohne Rückmeldung'
+        if not term:
+            return ''
         if not term.reregistration_open:
             return f'Rückmeldung {term} ab {date_format(term.reregistration_start, "j.n.Y")}'
         return f'Rückmeldung {term}: {"erledigt" if paid.filter(study__person=person).exists() else "offen"}'
@@ -67,9 +69,9 @@ class StudentsConfig(Tile, AppConfig):
                 found.append(task(f'{plural(accepted, "angenommenen Studienplatz", "angenommene Studienplätze")} immatrikulieren', reverse('admissions:board')))
         if 'manage_reregistration' in person.roles:
             unpaid = enrolled.exclude(person__in=paid).values('person').distinct().count()
-            if unpaid and term.reregistration_open:
+            if unpaid and term and term.reregistration_open:
                 found.append(task(f'Rückmeldung {term}: {plural(unpaid, "Zahlung", "Zahlungen")} ausstehend', reverse('students:reregistration'), term.deadline))
         study = enrolled.filter(person=person).first()
-        if study and term.reregistration_open and not paid.filter(study__person=person).exists():
+        if study and term and term.reregistration_open and not paid.filter(study__person=person).exists():
             found.append(task(f'Rückmeldung {term}: Semesterbeitrag {number_format(term.fee, 2)} € überweisen', study.get_absolute_url(), term.deadline))
         return found

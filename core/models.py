@@ -2,7 +2,7 @@ from django.contrib.auth.models import AbstractUser, Group, Permission
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.core.serializers.json import DjangoJSONEncoder
-from django.db import models
+from django.db import models, transaction
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
@@ -264,8 +264,8 @@ class Term(Tracked, models.Model):
 
     @classmethod
     def current(cls):
-        today = timezone.localdate()
-        return cls.objects.filter(start__lte=today, end__gte=today).first()
+        """The term under way; between terms the last one, before the first term the first."""
+        return cls.objects.filter(start__lte=timezone.localdate()).order_by('-start').first() or cls.objects.first()
 
     @classmethod
     def upcoming(cls):
@@ -339,8 +339,9 @@ class Message(models.Model):
     @classmethod
     def send(cls, person, subject, body, link='', sender=''):
         message = cls.objects.create(person=person, subject=subject, body=body, link=link, sender=sender)
-        if person.email:
-            send_mail(subject, body, Institution.get().email or None, [person.email])
+        if person.email:  # once saved, so no mail goes out for what was rolled back; the Postfach has it either way
+            sender = Institution.get().email or None
+            transaction.on_commit(lambda: send_mail(subject, body, sender, [person.email], fail_silently=True))
         return message
 
 

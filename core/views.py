@@ -69,6 +69,11 @@ def letter(request, pk):
     return render(request, 'core/letter.html', {'letters': [letter]})
 
 
+def without_term(request, what):
+    """Where work needs a semester nobody has created yet."""
+    return render(request, 'core/no_term.html', {'what': what})
+
+
 def history(request, table, row):
     """A record's history, for the panel; a person's is everything about them. Each office sees the changes to the
     records it looks after, and may undo them."""

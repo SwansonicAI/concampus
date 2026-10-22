@@ -8,6 +8,7 @@ from django.contrib.auth.decorators import login_not_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Avg, Count, Exists, F, Min, OuterRef, Prefetch, Q
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -308,8 +309,10 @@ def apply(request):
 
 def mine(request):
     person = request.user
+    current = Term.current()
+    newly = Q(status=Study.Status.ENROLLED, start_term__start__gte=current.start) if current else Q(pk=None)  # just enrolled from an application
     studies = (
-        person.studies.filter(Q(status__in=Study.APPLICATION) | Q(status=Study.Status.ENROLLED, start_term__start__gte=Term.current().start))
+        person.studies.filter(Q(status__in=Study.APPLICATION) | newly)
         .select_related('person', 'program', 'subject', 'start_term').prefetch_related('documents')
     )
     types = document_types()
@@ -357,6 +360,21 @@ def upload(request, pk):
     Document.objects.create(person=study.person, study=study, kind=kind, title=title, file=file)
     messages.success(request, f'„{title}“ hochgeladen.')
     return back
+
+
+def document(request, pk):
+    """A handed-in file: for its owner, whoever sees all files or applications, and the candidate's examiners."""
+    d = get_object_or_404(Document.objects.select_related('study'), pk=pk)
+    person, roles = request.user, request.user.roles
+    applying = d.study_id and d.study.status in Study.APPLICATION
+    if not (
+        d.person_id == person.pk or 'view_files' in roles or applying and 'view_applications' in roles
+        or applying and Course.objects.filter(kind=Course.Kind.AUDITION, staff=person, participations__study=d.study_id).exists()
+    ):
+        raise PermissionDenied
+    if not d.file:
+        raise Http404
+    return FileResponse(d.file.open('rb'), filename=d.title)
 
 
 @require_POST

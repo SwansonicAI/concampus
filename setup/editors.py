@@ -95,6 +95,12 @@ class AccountForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         self.fields['groups'].queryset = Office.objects.all()
 
+    def clean_email(self):
+        email = self.cleaned_data['email']
+        if email and Person.objects.filter(email__iexact=email).exclude(pk=self.instance.pk).exists():
+            raise forms.ValidationError('Diese Adresse hat schon ein anderes Konto.')
+        return email
+
     def save(self, commit=True):
         person = super().save(commit=False)
         if not person.pk:
