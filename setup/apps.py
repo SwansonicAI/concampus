@@ -14,7 +14,7 @@ class SetupConfig(Tile, AppConfig):
     def title(self, roles):
         from .editors import EDITORS
 
-        if any(e.section and e.capability in roles for e in EDITORS.values()):
+        if 'manage_institution' in roles or any(e.section and e.capability in roles for e in EDITORS.values()):
             return 'Einstellungen'
 
     def figure(self, person):
@@ -25,7 +25,10 @@ class SetupConfig(Tile, AppConfig):
     def features(self, person):
         from .views import usable
 
-        return [feature(e.title, reverse('setup:list', args=[e.key]), f'einstellungen pflegen anlegen {e.words}') for e in usable(person)]
+        found = [feature(e.title, reverse('setup:list', args=[e.key]), f'einstellungen pflegen anlegen {e.words}') for e in usable(person)]
+        if 'manage_institution' in person.roles:
+            found.append(feature('Texte', reverse('setup:texts'), 'einstellungen bescheide nachrichten briefe vorlagen formulierung rechtsbehelfsbelehrung'))
+        return found
 
     def tasks(self, person):
         from core.models import Term

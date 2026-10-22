@@ -15,8 +15,9 @@ from students.models import Document, Study
 from .access import CODENAMES
 from .apps import tile_apps, tiles
 from .history import acting, restore
-from .models import Change, Office, Person
+from .models import Change, Message, Office, Person, Text
 from .testing import Seeded, flashes
+from .texts import TEXTS, render
 from .views import found
 
 PANEL = {'X-Panel': '1'}
@@ -139,14 +140,53 @@ class CapabilityTest(Seeded):
                 with self.subTest(username=username, url=url):
                     self.assertEqual(client.get(url, follow=True).status_code, 200)
 
-    def test_office_names_are_data_not_code(self):
+    def test_the_hochschule_is_data_not_code(self):
+        """Neither its offices nor its name and address are written into the code; the demo data brings them."""
         root = Path(__file__).resolve().parent.parent
-        names = re.compile(r"\b(ASA|Prüfungsamt|Dekanat|Veranstaltungsbüro)\b")
-        letters = {'letter.html', 'certificate.html', 'transcript.html'}  # their sender becomes a text (phase 4)
+        names = re.compile(r'\b(ASA|Prüfungsamt|Dekanat|Veranstaltungsbüro|HfM|Weimar|Liszt|LISZT|hfm-weimar|Platz der Demokratie|99423)\b')
+        branding = {'hfm.css', 'base.html', '_letterhead.html', 'settings.py'}  # the design and the deployment, done separately
         for path in root.glob('*/**/*'):
-            if path.suffix in ('.py', '.html') and not {'.venv', 'migrations', 'management'} & set(path.parts) and path.name not in letters and 'tests' not in path.name:
+            if path.suffix in ('.py', '.html', '.js', '.css') and not {'.venv', 'migrations', 'management'} & set(path.parts) and path.name not in branding and 'test' not in path.name:
                 with self.subTest(path=str(path.relative_to(root))):
                     self.assertIsNone(names.search(path.read_text(encoding='utf-8')))
+
+
+class TextTest(Seeded):
+    """Letters and messages say what the Hochschule words; sent ones keep their wording."""
+
+    def test_every_text_renders(self):
+        for key, spec in TEXTS.items():
+            with self.subTest(key=key):
+                subject, body = render(key, **{name: f'<{name}>' for name in spec.allowed})
+                self.assertNotIn('[', subject + body)
+
+    def test_placeholders_are_checked(self):
+        campus = self.login('campus')
+        for wrong in ['Hallo {vorname.__class__}', 'Hallo {passwort}', 'Hallo {vorname', 'Hallo {vorname!r}']:
+            with self.subTest(wrong=wrong):
+                r = campus.post('/einstellungen/texte/willkommen/', {'subject': 'Willkommen', 'body': wrong})
+                self.assertTrue(r.context['form'].errors)
+        self.assertEqual(self.login('student').get('/einstellungen/texte/').status_code, 403)
+
+    def test_own_wording_then_back_to_standard(self):
+        campus = self.login('campus')
+        old = Message.objects.filter(subject='Zulassungsbescheid').first()
+        before = old.body
+        campus.post('/einstellungen/texte/zulassung/', {'subject': 'Ihre Zulassung', 'body': 'Willkommen, {vorname}, zum {semester}.'})
+        study = Study.objects.filter(status='applied').exclude(person__username='bewerbung').select_related('person').first()
+        self.login('asa').post(f'/aufnahme/bewerbung/{study.pk}/entscheidung/', {'status': 'admitted'})
+        letter = Message.objects.filter(person=study.person).first()
+        self.assertEqual((letter.subject, letter.body), ('Ihre Zulassung', f'Willkommen, {study.person.first_name}, zum {study.start_term}.'))
+        self.assertEqual(letter.sender, 'Akademische und Studentische Angelegenheiten')
+        old.refresh_from_db()
+        self.assertEqual(old.body, before)
+        campus.post('/einstellungen/texte/zulassung/', {'standard': '1'})
+        self.assertFalse(Text.objects.filter(key='zulassung').exists())
+
+    def test_refusals_carry_the_appeal(self):
+        study = Study.objects.filter(status='applied').exclude(person__username='bewerbung').first()
+        self.login('asa').post(f'/aufnahme/bewerbung/{study.pk}/entscheidung/', {'status': 'rejected'})
+        self.assertIn('Rechtsbehelfsbelehrung', Message.objects.filter(person=study.person).first().body)
 
 
 class SearchTest(Seeded):

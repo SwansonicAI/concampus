@@ -9,8 +9,9 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
+from core import texts
 from core.access import require
-from core.models import Message, Term
+from core.models import Term
 from core.text import matching
 from courses import panel
 from courses.forms import AddForm, ExamForm, SlotForm
@@ -153,7 +154,7 @@ def release(request, pk):
             return redirect(course)
         course.released = timezone.now()
         for p in course.participations.select_related('study__person'):
-            Message.send(p.study.person, f'Ergebnis: {course.title}', 'Ihr Prüfungsergebnis ist freigegeben.', reverse('exams:index'))
+            texts.send('ergebnis', p.study.person, reverse('exams:index'), pruefung=course.title)
         messages.success(request, 'Ergebnisse freigegeben und gesperrt.')
     course.save(update_fields=['released'])
     return redirect(course)
@@ -174,7 +175,7 @@ def register(request, pk):
         messages.error(request, f'Sie haben alle {study.program.attempts} Versuche für {module.code} ausgeschöpft.')
     else:
         Participation.objects.get_or_create(course=course, study=study, module=module)
-        Message.send(request.user, f'Prüfungsanmeldung: {course.title}', f'Sie sind zur Prüfung {course.title} ({module}) angemeldet.', reverse('exams:index'))
+        texts.send('pruefungsanmeldung', request.user, reverse('exams:index'), pruefung=course.title, modul=module)
         messages.success(request, 'Angemeldet. Die Bestätigung liegt in Ihrem Postfach.')
     return redirect('exams:index')
 
@@ -221,7 +222,7 @@ def recognition(request):
             course=course, study=data['study'], module=data['module'],
             defaults={'grade': data['grade'], 'passed': True, 'note': data['note']},
         )
-        Message.send(data['study'].person, f'Anerkennung: {data["module"]}', f'Anerkannt: {data["module"]}.\nHerkunft: {data["note"]}')
+        texts.send('anerkennung', data['study'].person, modul=data['module'], herkunft=data['note'])
         messages.success(request, f'{data["module"]} für {data["study"].person} anerkannt.')
         return redirect('exams:recognition')
     return render(request, 'exams/recognition.html', {
@@ -242,4 +243,5 @@ def transcript(request, pk):
         'study': study, 'rows': rows, 'earned': earned, 'total': total, 'average': average, 'honours': None not in (average, study.program.honours) and average <= study.program.honours,
         'complete': earned >= total and 'decide_results' in request.user.roles,  # a Zeugnis comes from the office
         'verbal': verbal(average) if average else '', 'today': timezone.localdate(),
+        'sender': texts.block('absender_leistungen'), 'signature': texts.block('unterschrift_zeugnisse'),
     })

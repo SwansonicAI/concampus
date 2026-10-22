@@ -7,13 +7,13 @@
 </p>
 {% for letter in letters %}
 <div class="document letter">
-  {% include "core/_letterhead.html" with office="Akademische und Studentische Angelegenheiten" %}
+  {% include "core/_letterhead.html" with office=letter.sender|default:institution.name %}
   <p class="address">{{ letter.person.legal_name }}<br>{{ letter.person.address|linebreaksbr }}</p>
   <p class="dated">{% if institution.place %}{{ institution.place }}, {% endif %}{{ letter.created|date:"j. F Y" }}</p>
   <h2>{{ letter.subject }}</h2>
   <p>Guten Tag {{ letter.person.first_name }} {{ letter.person.last_name }},</p>
   {{ letter.body|linebreaks }}
-  <p>Mit freundlichen Grüßen<br>Akademische und Studentische Angelegenheiten</p>
+  <p>Mit freundlichen Grüßen<br>{{ letter.sender|default:institution.name }}</p>
   <p class="muted"><small>Dieser Bescheid wurde maschinell erstellt und ist ohne Unterschrift gültig.</small></p>
 </div>
 {% empty %}

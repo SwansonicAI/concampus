@@ -1,10 +1,11 @@
 {% extends base %}
+{% load texts %}
 {% block title %}Anmelden{% endblock %}
 {% block content %}
 <div class="cols">
   <div>
     <h1>Anmelden</h1>
-    <p class="lead">Campus ist die Verwaltung von Studium, Lehre, Prüfungen, Aufnahme und Räumen der {{ institution.short_name|default:institution.name }}.</p>
+    <p class="lead">{% text 'anmeldung' %}</p>
     <form method="post" class="form">
       {% csrf_token %}
       {{ form.non_field_errors }}

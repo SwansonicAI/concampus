@@ -5,16 +5,10 @@ from django.utils.formats import number_format
 from django.urls import reverse
 from django.utils import timezone
 
+from core import texts
 from core.models import Keyed, Message, Person, Term, Tracked
 from core.text import matching
 from curriculum.models import Program, Subject, weighted
-
-APPEAL = (  # part of every Bescheid that turns someone down
-    'Rechtsbehelfsbelehrung: Gegen diesen Bescheid kann innerhalb eines Monats nach seiner Bekanntgabe Widerspruch erhoben '
-    'werden. Der Widerspruch ist schriftlich oder zur Niederschrift bei der Hochschule für Musik FRANZ LISZT Weimar, '
-    'Platz der Demokratie 2/3, 99423 Weimar, einzulegen.'
-)
-
 
 class Study(Tracked, models.Model):
     """One person's path through one programme, from application to graduation."""
@@ -77,10 +71,18 @@ class Study(Tracked, models.Model):
         self.status, self.since = status, timezone.localdate()
         self.save(update_fields=['status', 'since'])
 
-    def notify(self, title, text, link='', appeal=False):
+    def wording(self, key, **values):
+        """(subject, body) of a text about this study, its placeholders filled in (core.texts)."""
+        return texts.render(
+            key, vorname=self.person.first_name, nachname=self.person.last_name, studiengang=f'{self.program.degree} {self.program.name}',
+            hauptfach=self.subject, semester=self.start_term, matrikelnummer=self.person.matriculation or '', **values,
+        )
+
+    def notify(self, key, link='', **values):
         """Issue a Bescheid: it goes to the Postfach and stays in the student file as a printable letter."""
-        message = Message.send(self.person, title, f'{text}\n\n{APPEAL}' if appeal else text, link)
-        Document.objects.create(person=self.person, study=self, kind=DocumentType.system('notice'), title=title, message=message)
+        subject, body = self.wording(key, **values)
+        message = Message.send(self.person, subject, body, link, sender=texts.block('absender_bescheide'))
+        Document.objects.create(person=self.person, study=self, kind=DocumentType.system('notice'), title=subject, message=message)
 
     def missing(self):
         """What still blocks the enrolment of an admitted applicant."""

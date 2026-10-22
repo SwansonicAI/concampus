@@ -7,7 +7,7 @@
 <section>
   <h2>{{ section }}</h2>
   <ul class="todo">
-    {% for e, size in editors %}<li><a href="{% url 'setup:list' e.key %}"><span class="what">{{ e.title }}</span><span class="where"></span><span class="due">{{ size }}</span></a></li>{% endfor %}
+    {% for title, url, size in editors %}<li><a href="{{ url }}"><span class="what">{{ title }}</span><span class="where"></span><span class="due">{{ size }}</span></a></li>{% endfor %}
   </ul>
 </section>
 {% endfor %}

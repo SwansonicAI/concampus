@@ -1,0 +1,15 @@
+{% extends base %}
+{% block title %}Texte{% endblock %}
+{% block content %}
+<p class="eyebrow"><a href="{% url 'setup:index' %}">Einstellungen</a></p>
+<h1>Texte</h1>
+<p class="lead">Was die Hochschule schreibt: Bescheide, Nachrichten und die Bausteine auf ihren Dokumenten. Gesendete Bescheide behalten ihren Wortlaut.</p>
+{% for group, entries in groups.items %}
+<section>
+  <h2>{{ group }}</h2>
+  <ul class="todo" data-panel>
+    {% for key, spec, own in entries %}<li><a href="{% url 'setup:text' key %}"><span class="what">{{ spec.title }}</span><span class="where">{{ spec.subject }}</span><span class="due">{% if own %}eigener Wortlaut{% else %}Standard{% endif %}</span></a></li>{% endfor %}
+  </ul>
+</section>
+{% endfor %}
+{% endblock %}

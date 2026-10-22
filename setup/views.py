@@ -1,3 +1,4 @@
+from django import forms
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db.models import ProtectedError, RestrictedError
@@ -8,13 +9,24 @@ from django.urls import reverse
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
+from core.access import require
+from core.models import Text
 from core.text import matching
+from core.texts import TEXTS, Values, basics, wording
 from .editors import EDITORS, formfield
 
 
 def usable(person):
     """The settings lists a person keeps up, for the start page and the tile."""
     return [e for e in EDITORS.values() if e.section and e.capability in person.roles]
+
+
+def places(person):
+    """(section, title, url, count) of everything under Einstellungen the person keeps up."""
+    found = [(e.section, e.title, reverse('setup:list', args=[e.key]), e.objects().count()) for e in usable(person)]
+    if 'manage_institution' in person.roles:
+        found.append(('Verwaltung', 'Texte', reverse('setup:texts'), len(TEXTS)))
+    return found
 
 
 def editor(request, key):
@@ -44,12 +56,11 @@ def cell(obj, name):
 
 
 def index(request):
-    editors = usable(request.user)
-    if not editors:
-        raise PermissionDenied
     sections = {}
-    for e in editors:
-        sections.setdefault(e.section, []).append((e, e.objects().count()))
+    for section, *place in places(request.user):
+        sections.setdefault(section, []).append(place)
+    if not sections:
+        raise PermissionDenied
     return render(request, 'setup/index.html', {'sections': sections})
 
 
@@ -78,6 +89,49 @@ def edit(request, key, pk=None):
     return render(request, 'setup/form.html', {
         'editor': e, 'form': form, 'object': obj, 'back': back(request, e),
         'history': pk and e.model.visible_to(request.user.roles), 'table': e.model._meta.label_lower,
+    })
+
+
+class TextForm(forms.ModelForm):
+    class Meta:
+        model = Text
+        fields = ['subject', 'body']
+        widgets = {'body': forms.Textarea(attrs={'rows': 10})}
+
+
+@require('manage_institution')
+def texts(request):
+    """Every letter, message and text block, marked where the Hochschule has its own wording."""
+    own = set(Text.objects.values_list('key', flat=True))
+    groups = {}
+    for key, spec in TEXTS.items():
+        groups.setdefault(spec.group, []).append((key, spec, key in own))
+    return render(request, 'setup/texts.html', {'groups': groups})
+
+
+@require('manage_institution')
+def text(request, key):
+    spec = TEXTS.get(key)
+    if spec is None:
+        raise Http404
+    record = Text.objects.filter(key=key).first() or Text(key=key, subject=spec.subject, body=spec.body)
+    if request.method == 'POST' and 'standard' in request.POST:
+        if record.pk:
+            record.delete()
+        messages.success(request, f'„{spec.title}“ steht wieder auf dem Standard.')
+        return redirect('setup:texts')
+    form = TextForm(request.POST or None, instance=record)
+    if not spec.subject:
+        del form.fields['subject']
+    form.fields['body'].help_text = 'Platzhalter: ' + ', '.join('{' + name + '}' for name in spec.allowed)
+    if form.is_valid():
+        form.save()
+        messages.success(request, f'„{spec.title}“ gespeichert.')
+        return redirect('setup:texts')
+    sample = Values(basics(), vorname='Mei Lin', nachname='Chen')  # the Hochschule's own data; other placeholders stay visible
+    return render(request, 'setup/text.html', {
+        'spec': spec, 'form': form, 'record': record, 'own': bool(record.pk),
+        'preview': [part.format_map(sample) for part in wording(key)],  # as saved: the form may hold a broken draft
     })
 
 

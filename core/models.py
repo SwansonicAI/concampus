@@ -63,7 +63,7 @@ class Institution(Tracked, models.Model):
     capabilities = ('manage_institution',)
 
     name = models.CharField('Name', max_length=120, default='Hochschule')
-    short_name = models.CharField('Kurzname', max_length=40, blank=True, help_text='Im Fenstertitel und in kurzen Sätzen, z. B. „HfM Weimar“.')
+    short_name = models.CharField('Kurzname', max_length=40, blank=True, help_text='Im Fenstertitel und in kurzen Sätzen.')
     address = models.TextField('Anschrift', blank=True)
     place = models.CharField('Ort', max_length=60, blank=True, help_text='Für Datumszeilen in Briefen.')
     email = models.EmailField('E-Mail', blank=True)
@@ -285,6 +285,35 @@ class Term(Tracked, models.Model):
         return (pk and pk.isdigit() and cls.objects.filter(pk=pk).first()) or cls.current()
 
 
+class Text(Tracked, models.Model):
+    """A letter, message or text block as the Hochschule words it (core.texts); without one, the default applies."""
+
+    capabilities = ('manage_institution',)
+
+    key = models.CharField('Text', max_length=40, unique=True)
+    subject = models.CharField('Betreff', max_length=200, blank=True)
+    body = models.TextField('Text')
+
+    class Meta:
+        ordering = ['key']
+        verbose_name = 'Text'
+        verbose_name_plural = 'Texte'
+
+    def __str__(self):
+        from .texts import TEXTS
+
+        return TEXTS[self.key].title if self.key in TEXTS else self.key
+
+    def clean(self):
+        from .texts import TEXTS, check
+
+        for field in ('subject', 'body'):
+            try:
+                check(getattr(self, field), TEXTS[self.key].allowed)
+            except ValidationError as error:
+                raise ValidationError({field: error.messages})
+
+
 class Message(models.Model):
     """The portal Postfach. Everything sent to a person lands here and goes out by e-mail."""
 
@@ -294,6 +323,7 @@ class Message(models.Model):
     link = models.CharField('Link', max_length=200, blank=True)
     created = models.DateTimeField('Gesendet', default=timezone.now)
     read = models.DateTimeField('Gelesen', null=True, blank=True)
+    sender = models.CharField('Absender', max_length=200, blank=True, help_text='Bei Bescheiden: wer sie erlassen hat, wie es im Brief steht.')
 
     class Meta:
         ordering = ['-created']
@@ -307,8 +337,8 @@ class Message(models.Model):
         return reverse('message', args=[self.pk])
 
     @classmethod
-    def send(cls, person, subject, body, link=''):
-        message = cls.objects.create(person=person, subject=subject, body=body, link=link)
+    def send(cls, person, subject, body, link='', sender=''):
+        message = cls.objects.create(person=person, subject=subject, body=body, link=link, sender=sender)
         if person.email:
             send_mail(subject, body, Institution.get().email or None, [person.email])
         return message

@@ -20,13 +20,13 @@ from django.db import models, transaction
 from django.utils import timezone
 
 from admissions.views import DECISIONS
-from core import history
-from core.models import Change, Institute, Institution, Message, Office, Person, Term
+from core import history, texts
+from core.models import Change, Institute, Institution, Message, Office, Person, Term, Text
 from courses.models import Course, Participation, Score
 from courses.panel import mean
 from curriculum.models import Module, Program, Subject
 from rooms.models import Booking, BookingCategory, Room, RoomFunction
-from students.models import APPEAL, Document, DocumentType, Study, StudyTerm
+from students.models import Document, DocumentType, Study, StudyTerm
 from ..plans import HF, JENA, PIANO, PROGRAMS, RESEARCH, SPEECH, STRINGS, WINDS, WS
 
 FEE = Decimal('341.30')  # Semesterbeitrag WiSe 2026/27: Studierendenwerk 95,00 + Deutschlandsemesterticket 226,80 + Studierendenrat 19,50
@@ -260,6 +260,23 @@ DOCUMENTS = [  # key, name, condition, settings: what a complete application hol
     ('notice', 'Bescheid', 'never', {}),
     ('other', 'Sonstiges', 'never', {}),
 ]
+TEXTS = {  # where the HfM words things its own way (core.texts has the defaults)
+    'absender_bescheide': 'Akademische und Studentische Angelegenheiten',
+    'absender_bescheinigungen': 'Akademische und Studentische Angelegenheiten',
+    'absender_leistungen': 'Prüfungsamt',
+    'einladung': 'Ihr Termin: {termin} Uhr, {raum}.\n\nBitte erscheinen Sie 30 Minuten vorher. Einspielräume stehen bereit.',
+    'bewerbung_hinweise': (
+        'Pro Studiengang und Hauptfach ist eine Bewerbung möglich. Nach dem Absenden laden Sie unter „Meine Bewerbung“ Ihr Video und Ihre '
+        'Unterlagen hoch: Lebenslauf, Schulzeugnis, Einzahlungsbeleg der Prüfungsgebühr (50 €), für einen Master auch Ihr Bachelorzeugnis. '
+        'Bis zur Frist können Sie alles ändern.\n\n'
+        'Wo eine Videostufe vorgesehen ist, ist sie die erste Prüfungsstufe: ein ungeschnittenes Video von 10–15 Minuten in einer Datei, '
+        'beginnend mit einer kurzen Vorstellung, nicht älter als ein Jahr, höchstens 1,5 GB. Eine professionelle Aufnahme ist nicht nötig.\n\n'
+        'Ihr Ergebnis erhalten Sie spätestens drei Wochen nach der Prüfung im Portal.\n\n'
+        'Die Kommission besteht aus mindestens drei Lehrenden des Hauptfachs. Jedes Mitglied wertet mit 0 bis 25 Punkten; bestanden ist '
+        'das Hauptfach ab 16,1 Punkten, die übrigen Teile ab 11,6.\n\n'
+        'Einladungen und Bescheide erhalten Sie in Ihr Postfach.'
+    ),
+}
 INSURERS = ['Techniker Krankenkasse', 'AOK PLUS', 'BARMER', 'DAK-Gesundheit', 'IKK classic', 'KKH Kaufmännische Krankenkasse', 'hkk Krankenkasse']
 FUNCTIONS = [  # key, name, given out centrally: the room functions Asimut lists
     ('uebung', 'Übungsraum', False), ('unterricht', 'Unterrichtsraum', False), ('kammermusik', 'Kammermusik', False), ('orgel', 'Orgel', False),
@@ -451,6 +468,7 @@ class Command(BaseCommand):
             privacy='https://www.hfm-weimar.de/footer/datenschutz', accessibility='https://www.hfm-weimar.de/footer/barrierefreiheit',
             insurers='\n'.join(INSURERS),
         )
+        Text.objects.bulk_create(Text(key=key, subject=texts.TEXTS[key].subject, body=body) for key, body in TEXTS.items())
         RoomFunction.objects.bulk_create(RoomFunction(key=key, name=name, central=central, order=n) for n, (key, name, central) in enumerate(FUNCTIONS))
         BookingCategory.objects.bulk_create(
             BookingCategory(key=key, name=name, tone=tone, order=n, **settings) for n, (key, name, tone, settings) in enumerate(CATEGORIES)
@@ -1146,16 +1164,12 @@ class Command(BaseCommand):
         ])
         notices = []  # the Bescheide already issued: decisions on applications, and the enrolment of this term's newcomers
         for study in Study.objects.filter(status__in=list(DECISIONS)).select_related('person', 'program', 'subject', 'start_term'):
-            title, text = DECISIONS[study.status]
-            text = text.format(
-                program=f'{study.program.degree} {study.program.name}', subject=study.subject, term=study.start_term,
-                deadline=f'{study.since + timedelta(days=Institution.get().accept_days):%d.%m.%Y}',
-            )
-            notices.append((study, title, f'{text}\n\n{APPEAL}' if study.status == Study.Status.REJECTED else text, at(study.since, hour=10)))
+            deadline = study.since + timedelta(days=Institution.get().accept_days)
+            notices.append((study, *study.wording(DECISIONS[study.status], frist=f'{deadline:%d.%m.%Y}', datum=f'{study.since:%d.%m.%Y}'), at(study.since, hour=10)))
         for study in (s for s in self.enrolled if s.fs == 1):
-            notices.append((study, 'Immatrikulationsbescheid', (
-                f'Willkommen an der Hochschule für Musik FRANZ LISZT Weimar. Sie sind ab dem {study.start_term} im Studiengang '
-                f'{study.program.degree} {study.program.name}, Hauptfach {study.subject}, immatrikuliert.\n\nIhre Matrikelnummer: {study.person.matriculation}'
-            ), at(study.start_term.start - timedelta(days=10), hour=10)))
-        sent = Message.objects.bulk_create(Message(person=s.person, subject=title, body=text, created=when, read=when) for s, title, text, when in notices)
+            notices.append((study, *study.wording('immatrikulation'), at(study.start_term.start - timedelta(days=10), hour=10)))
+        sender = texts.block('absender_bescheide')
+        sent = Message.objects.bulk_create(
+            Message(person=s.person, subject=title, body=text, sender=sender, created=when, read=when) for s, title, text, when in notices
+        )
         Document.objects.bulk_create(Document(person=s.person, study=s, kind_id='notice', title=title, message=m, created=when) for (s, title, _, when), m in zip(notices, sent))

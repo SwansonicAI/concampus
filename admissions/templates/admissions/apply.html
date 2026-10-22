@@ -1,4 +1,5 @@
 {% extends base %}
+{% load texts %}
 {% block title %}Bewerbung{% endblock %}
 {% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
 {% block content %}
@@ -12,11 +13,7 @@
   </form>
   <div class="panel">
     <h3>Gut zu wissen</h3>
-    <p>Pro Studiengang und Hauptfach ist eine Bewerbung möglich. Nach dem Absenden laden Sie unter „Meine Bewerbung“ Ihr Video und Ihre Unterlagen hoch: Lebenslauf, Schulzeugnis, Einzahlungsbeleg der Prüfungsgebühr (50 €), für einen Master auch Ihr Bachelorzeugnis. Bis zur Frist können Sie alles ändern.</p>
-    <p>Wo eine Videostufe vorgesehen ist, ist sie die erste Prüfungsstufe: ein ungeschnittenes Video von 10–15 Minuten in einer Datei, beginnend mit einer kurzen Vorstellung, nicht älter als ein Jahr, höchstens 1,5 GB. Eine professionelle Aufnahme ist nicht nötig.</p>
-    <p>Ihr Ergebnis erhalten Sie spätestens drei Wochen nach der Prüfung im Portal.</p>
-    <p>Die Kommission besteht aus mindestens drei Lehrenden des Hauptfachs. Jedes Mitglied wertet mit 0 bis 25 Punkten; bestanden ist das Hauptfach ab 16,1 Punkten, die übrigen Teile ab 11,6.</p>
-    <p>Einladungen und Bescheide erhalten Sie in Ihr Postfach.</p>
+    {% text 'bewerbung_hinweise' as hints %}{{ hints|linebreaks }}
   </div>
 </div>
 {% endblock %}

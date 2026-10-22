@@ -12,10 +12,10 @@ from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from core import history
+from core import history, texts
 from core.access import require
 from core.dates import day as understood
-from core.models import Message, Term
+from core.models import Term
 from core.text import matching
 from curriculum.models import Program
 from rooms.models import Booking, BookingCategory
@@ -150,7 +150,7 @@ def add(request, pk):
     module = course.modules.filter(program=study.program).order_by('semester').first()
     _, created = Participation.objects.get_or_create(course=course, study=study, module=module)
     if created:
-        Message.send(study.person, f'Eingetragen: {course.title}', f'Sie wurden für „{course.title}“ im {course.term} eingetragen.', course.get_absolute_url())
+        texts.send('eingetragen', study.person, course.get_absolute_url(), veranstaltung=course.title, semester=course.term)
     messages.success(request, f'{study.person} eingetragen.' if created else f'{study.person} ist bereits eingetragen.')
     return redirect(course)
 

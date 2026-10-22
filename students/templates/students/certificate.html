@@ -3,7 +3,7 @@
 {% block content %}
 <div class="document">
   <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
-  {% include "core/_letterhead.html" with office="Akademische und Studentische Angelegenheiten" %}
+  {% include "core/_letterhead.html" with office=sender %}
   <h1>Immatrikulations&shy;bescheinigung</h1>
   <p>Hiermit wird bescheinigt, dass</p>
   <dl class="facts">
@@ -18,7 +18,7 @@
     <dt>Fachsemester</dt><dd>{{ study.semester }}</dd>
     <dt>Hochschulsemester</dt><dd>{{ study.university_semester }}</dd>
   </dl>
-  <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ today|date:"j. F Y" }}</span><span>Akademische und Studentische Angelegenheiten</span></div>
+  <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ today|date:"j. F Y" }}</span><span>{{ sender }}</span></div>
   <p class="muted" style="margin-top: 48px"><small>Diese Bescheinigung wurde maschinell erstellt und ist ohne Unterschrift gültig.</small></p>
 </div>
 {% endblock %}

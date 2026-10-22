@@ -14,7 +14,8 @@ from django.views.decorators.http import require_POST
 
 from core.dates import day as understood
 from core.days import busy, strip
-from core.models import Institute, Institution, Message, Office, Person
+from core import texts
+from core.models import Institute, Institution, Office, Person
 from core.text import matching
 from courses.models import Course
 from .forms import BookingForm, FindForm, bookable, quota
@@ -191,11 +192,9 @@ def booking(request, pk=None):
     if form.is_valid():
         booking = form.save()
         if booking.person_id != person.pk:
-            Message.send(
-                booking.person, f'Buchung geändert: {booking.label}',
-                f'{person} hat Ihre Buchung geändert: {booking.room}, '
-                f'{timezone.localtime(booking.start):%d.%m.%Y %H:%M}–{timezone.localtime(booking.end):%H:%M}.',
-                reverse('rooms:booking', args=[booking.pk]),
+            texts.send(
+                'buchung_geaendert', booking.person, reverse('rooms:booking', args=[booking.pk]), buchung=booking.label, von=person, raum=booking.room,
+                termin=f'{timezone.localtime(booking.start):%d.%m.%Y %H:%M}–{timezone.localtime(booking.end):%H:%M}',
             )
         messages.success(request, 'Buchung gespeichert.')
         return redirect(f"{reverse('rooms:index')}?tag={timezone.localtime(booking.start):%Y-%m-%d}")
@@ -217,9 +216,9 @@ def delete(request, pk):
     if request.POST.get('serie') and booking.series:
         doomed = Booking.objects.filter(series=booking.series, start__gte=booking.start)
     if booking.person_id != request.user.pk:
-        Message.send(
-            booking.person, f'Buchung storniert: {booking.label}',
-            f'{request.user} hat {doomed.count()} Termin(e) ab {timezone.localtime(booking.start):%d.%m.%Y %H:%M} in {booking.room} storniert.',
+        texts.send(
+            'buchung_storniert', booking.person, buchung=booking.label, von=request.user, anzahl=doomed.count(),
+            termin=f'{timezone.localtime(booking.start):%d.%m.%Y %H:%M}', raum=booking.room,
         )
     doomed.delete()
     messages.success(request, 'Buchung gelöscht.')

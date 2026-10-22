@@ -11,6 +11,7 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
+from core import texts
 from core.access import require
 from core.history import tables
 from core.apps import plural
@@ -152,12 +153,7 @@ def enrol(request, pk):
         registration.paid = registration.paid or timezone.localdate()
         registration.save(update_fields=['paid'])
         study.set_status(Study.Status.ENROLLED)
-    study.notify(
-        'Immatrikulationsbescheid',
-        f'Willkommen an der Hochschule für Musik FRANZ LISZT Weimar. Sie sind ab dem {study.start_term} im Studiengang '
-        f'{study.program.degree} {study.program.name}, Hauptfach {study.subject}, immatrikuliert.\n\nIhre Matrikelnummer: {person.matriculation}',
-        study.get_absolute_url(),
-    )
+    study.notify('immatrikulation', study.get_absolute_url())
     messages.success(request, f'{person} immatrikuliert, Matrikelnummer {person.matriculation}. Bescheid versandt.')
     return redirect(study.get_absolute_url())
 
@@ -194,11 +190,7 @@ def exmatriculate(request, pk):
     status = Study.Status.GRADUATED if request.POST.get('reason') == 'graduated' else Study.Status.LEFT
     study.set_status(status)
     reason = 'Abschluss des Studiums' if status == Study.Status.GRADUATED else 'Abbruch oder Wechsel des Studiums'
-    study.notify(
-        'Exmatrikulationsbescheid',
-        f'Sie sind zum {timezone.localdate():%d.%m.%Y} aus dem Studiengang {study.program.degree} {study.program.name}, '
-        f'Hauptfach {study.subject}, exmatrikuliert. Grund: {reason}.',
-    )
+    study.notify('exmatrikulation', grund=reason)
     messages.success(request, f'{study.person} exmatrikuliert. Bescheid versandt.')
     return redirect(study.get_absolute_url())
 
@@ -249,20 +241,15 @@ def reregistration(request):
                     StudyTerm.objects.update_or_create(study=s, term=term, defaults={'paid': today})
             for p in {s.person for s in enrolled.filter(person__in=people)}:
                 if missing := p.missing():
-                    Message.send(p, f'Rückmeldung {term}', f'Ihr Semesterbeitrag ist eingegangen. Für die Rückmeldung fehlt noch: {", ".join(missing)}.')
+                    texts.send('rueckmeldung_offen', p, rueckmeldesemester=term, fehlt=', '.join(missing))
                 else:
-                    Message.send(p, f'Rückmeldung {term}', f'Ihr Semesterbeitrag ist eingegangen. Sie sind für das {term} zurückgemeldet.')
+                    texts.send('rueckmeldung', p, rueckmeldesemester=term)
             messages.success(request, f'Zahlung für {plural(len(people), "Person", "Personen")} verbucht.')
         elif 'exmatriculate' in request.POST and today > term.deadline:
             unpaid = list(enrolled.exclude(person__in=paid))
             for s in unpaid:
                 s.set_status(Study.Status.LEFT)
-                s.notify(
-                    'Exmatrikulationsbescheid',
-                    f'Sie haben sich nicht fristgerecht zum {term} zurückgemeldet und sind daher zum {today:%d.%m.%Y} aus dem '
-                    f'Studiengang {s.program.degree} {s.program.name}, Hauptfach {s.subject}, exmatrikuliert.',
-                    appeal=True,
-                )
+                s.notify('exmatrikulation_rueckmeldung', rueckmeldesemester=term)
             messages.success(request, f'{len(unpaid)} Studien wegen fehlender Rückmeldung beendet. Bescheide versandt.')
         return redirect('students:reregistration')
     rows = [(s, registrations.get(s.pk), s.person_id in paid, s.person.missing()) for s in enrolled]
@@ -280,4 +267,5 @@ def certificate(request, pk):
     term = Term.current()
     return render(request, 'students/certificate.html', {
         'study': study, 'term': term, 'registration': study.terms.filter(term=term).first(), 'today': timezone.localdate(),
+        'sender': texts.block('absender_bescheinigungen'),
     })

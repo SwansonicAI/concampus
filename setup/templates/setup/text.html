@@ -1,0 +1,21 @@
+{% extends base %}
+{% block title %}{{ spec.title }}{% endblock %}
+{% block content %}
+<p class="eyebrow"><a href="{% url 'setup:texts' %}">Texte</a> · {{ spec.group }}</p>
+<h1>{{ spec.title }}</h1>
+{% if spec.appeal %}<p class="lead">Lehnt ab: die Rechtsbehelfsbelehrung folgt.</p>{% endif %}
+<form method="post" class="form">
+  {% csrf_token %}
+  {{ form }}
+  <div class="actions">
+    <button class="btn">Speichern</button>
+    <a class="btn ghost" href="{% url 'setup:texts' %}">Abbrechen</a>
+    {% if own %}<button class="link" name="standard" value="1"><small>Auf Standard zurücksetzen</small></button>{% endif %}
+    {% if own %}<a href="{% url 'history' 'core.text' record.pk %}">Verlauf</a>{% endif %}
+  </div>
+</form>
+<section>
+  <h2>So liest es sich</h2>
+  <div class="panel">{% if preview.0 %}<p><b>{{ preview.0 }}</b></p>{% endif %}{{ preview.1|linebreaks }}</div>
+</section>
+{% endblock %}

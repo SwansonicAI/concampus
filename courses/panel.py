@@ -6,8 +6,7 @@ from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
 
-from core import history
-from core.models import Message
+from core import history, texts
 from curriculum.models import rounded
 from rooms.models import Booking, BookingCategory
 from .models import Course, Participation, Score
@@ -101,9 +100,7 @@ def schedule(course, rows, start, minutes, room, person):
         Participation.objects.bulk_update(rows, ['slot'])
         history.saved(rows)
     for p in rows:
-        Message.send(
-            p.study.person, f'Einladung: {course.title}',
-            f'Ihr Termin: {timezone.localtime(p.slot):%d.%m.%Y, %H:%M} Uhr, {room} ({room.building}).\n\n'
-            'Bitte erscheinen Sie 30 Minuten vorher. Einspielräume stehen bereit.',
-            reverse('admissions:mine') if course.kind == course.Kind.AUDITION else reverse('exams:index'),
+        texts.send(
+            'einladung', p.study.person, reverse('admissions:mine') if course.kind == course.Kind.AUDITION else reverse('exams:index'),
+            pruefung=course.title, termin=f'{timezone.localtime(p.slot):%d.%m.%Y, %H:%M}', raum=f'{room} ({room.building})',
         )

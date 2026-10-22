@@ -11,11 +11,13 @@ from django.db.models import Avg, Count, Exists, F, Min, OuterRef, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import number_format
 from django.views.decorators.http import require_POST
 
+from core import texts
 from core.access import require
 from core.history import tables
-from core.models import Institution, Message, Term
+from core.models import Institution, Term
 from courses import panel
 from courses.forms import SlotForm
 from courses.models import Course, Participation
@@ -24,23 +26,7 @@ from .forms import AcceptForm, ApplicationForm, SignupForm
 
 BOARD = [Study.Status.APPLIED, Study.Status.ADMITTED, Study.Status.WAITLISTED, Study.Status.REJECTED, Study.Status.ENROLLED]
 Condition = DocumentType.Condition
-DECISIONS = {
-    Study.Status.ADMITTED: (
-        'Zulassungsbescheid',
-        'Sie haben die Eignungsprüfung bestanden. Wir freuen uns, Ihnen einen Studienplatz im Studiengang {program}, '
-        'Hauptfach {subject}, ab dem {term} anzubieten.\n\nBitte nehmen Sie den Studienplatz bis zum {deadline} im Portal an.',
-    ),
-    Study.Status.WAITLISTED: (
-        'Bescheid: Nachrückliste',
-        'Sie haben die Eignungsprüfung bestanden. Alle Studienplätze im Hauptfach {subject} sind derzeit vergeben; '
-        'Sie stehen auf der Nachrückliste. Wird ein Platz frei, erhalten Sie umgehend Nachricht.',
-    ),
-    Study.Status.REJECTED: (
-        'Bescheid zur Eignungsprüfung',
-        'Leider können wir Ihnen für den Studiengang {program}, Hauptfach {subject}, keinen Studienplatz anbieten. '
-        'Wir danken Ihnen für Ihre Bewerbung und wünschen Ihnen für Ihren weiteren Weg alles Gute.',
-    ),
-}
+DECISIONS = {Study.Status.ADMITTED: 'zulassung', Study.Status.WAITLISTED: 'nachrueckliste', Study.Status.REJECTED: 'ablehnung'}  # their Bescheide
 
 
 def index(request):
@@ -218,7 +204,7 @@ def advance(request, pk):
             if Participation.objects.get_or_create(course=target, study=p.study, defaults={'note': p.note})[1]:
                 moved.add(p.study)
     for study in moved:
-        Message.send(study.person, 'Einladung zur nächsten Prüfungsstufe', f'Sie haben „{course.title}“ bestanden und sind zu {names} eingeladen. Den Termin erhalten Sie gesondert.', reverse('admissions:mine'))
+        texts.send('naechste_stufe', study.person, reverse('admissions:mine'), pruefung=course.title, stufen=names)
     messages.success(request, f'{len(moved)} Bewerbende zu {names} eingeladen.')
     return redirect(course)
 
@@ -269,13 +255,8 @@ def decide(request, pk):
     if status not in DECISIONS:
         raise PermissionDenied
     study.set_status(status)
-    subject, body = DECISIONS[status]
     deadline = timezone.localdate() + timedelta(days=Institution.get().accept_days)
-    study.notify(
-        subject,
-        body.format(program=f'{study.program.degree} {study.program.name}', subject=study.subject, term=study.start_term, deadline=f'{deadline:%d.%m.%Y}'),
-        reverse('admissions:mine'), appeal=status == Study.Status.REJECTED,
-    )
+    study.notify(DECISIONS[status], reverse('admissions:mine'), frist=f'{deadline:%d.%m.%Y}')
     messages.success(request, f'{study.person}: {study.get_status_display()}. Bescheid versandt.')
     return redirect(study.get_absolute_url())
 
@@ -291,7 +272,7 @@ def signup(request):
     if form.is_valid():
         person = form.save()
         login(request, person, backend='core.backends.Login')
-        Message.send(person, 'Willkommen', 'Ihr Konto ist angelegt. Sie können sich jetzt für die Eignungsprüfung bewerben.', reverse('admissions:apply'))
+        texts.send('willkommen', person, reverse('admissions:apply'))
         return redirect('admissions:apply')
     return render(request, 'admissions/signup.html', {'form': form})
 
@@ -316,11 +297,9 @@ def apply(request):
             Participation.objects.create(course=audition, study=study, note=data['repertoire'])
             if data['accompanist'] and audition.accompaniment:
                 Participation.objects.create(course=audition.accompaniment, study=study)
-        Message.send(
-            person, 'Bewerbung eingegangen',
-            f'Ihre Bewerbung für {audition.program.degree} {audition.program.name}, Hauptfach {audition.subject}, ist eingegangen. '
-            f'Laden Sie bis zum {audition.deadline:%d.%m.%Y} Ihr Video und Ihre Unterlagen unter „Meine Bewerbung“ hoch.',
-            reverse('admissions:mine'),
+        texts.send(
+            'bewerbung', person, reverse('admissions:mine'), studiengang=f'{audition.program.degree} {audition.program.name}',
+            hauptfach=audition.subject, frist=f'{audition.deadline:%d.%m.%Y}',
         )
         messages.success(request, f'Bewerbung angelegt. Laden Sie jetzt bis zum {audition.deadline:%d.%m.%Y} Ihr Video und Ihre Unterlagen hoch.')
         return redirect('admissions:mine')
@@ -448,11 +427,6 @@ def accept(request, pk):
     person.insurer, person.insurance = form.cleaned_data['insurer'], form.cleaned_data['insurance']
     person.save(update_fields=['insurer', 'insurance'])
     StudyTerm.objects.get_or_create(study=study, term=study.start_term)
-    Message.send(
-        person, 'Studienplatz angenommen',
-        f'Sie haben den Studienplatz angenommen. Bitte überweisen Sie den Semesterbeitrag von {study.start_term.fee} € bis zum '
-        f'{study.start_term.deadline:%d.%m.%Y}, und bitten Sie Ihre Krankenkasse, Ihren Versicherungsstatus elektronisch an die '
-        'Hochschule zu melden. Sobald beides da ist, werden Sie immatrikuliert und erhalten Ihre Matrikelnummer.',
-    )
+    texts.send('studienplatz_angenommen', person, beitrag=number_format(study.start_term.fee, 2), frist=f'{study.start_term.deadline:%d.%m.%Y}')
     messages.success(request, 'Studienplatz angenommen.')
     return redirect('admissions:mine')
