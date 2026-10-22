@@ -6,6 +6,7 @@ from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
+from django.utils.text import slugify
 
 from .access import CAPABILITIES, CODENAMES
 
@@ -36,6 +37,60 @@ class Tracked:
     @classmethod
     def visible_to(cls, roles):
         return bool(roles & set(cls.capabilities))
+
+
+class Keyed(models.Model):
+    """A list entry that code, links and other records refer to by a short key, made once from its name."""
+
+    key = models.SlugField('Schlüssel', max_length=40, unique=True, editable=False)
+
+    class Meta:
+        abstract = True
+
+    def save(self, *args, **kwargs):
+        if not self.key:
+            base = slugify(self.name)[:36] or 'eintrag'
+            self.key, n = base, 1
+            while type(self).objects.filter(key=self.key).exists():
+                n += 1
+                self.key = f'{base}-{n}'
+        super().save(*args, **kwargs)
+
+
+class Institution(Tracked, models.Model):
+    """The Hochschule itself: its name and address for letters, and the rules it sets. One record."""
+
+    capabilities = ('manage_institution',)
+
+    name = models.CharField('Name', max_length=120, default='Hochschule')
+    short_name = models.CharField('Kurzname', max_length=40, blank=True, help_text='Im Fenstertitel und in kurzen Sätzen, z. B. „HfM Weimar“.')
+    address = models.TextField('Anschrift', blank=True)
+    place = models.CharField('Ort', max_length=60, blank=True, help_text='Für Datumszeilen in Briefen.')
+    email = models.EmailField('E-Mail', blank=True)
+    website = models.URLField('Website', blank=True)
+    imprint = models.URLField('Impressum', blank=True)
+    privacy = models.URLField('Datenschutz', blank=True)
+    accessibility = models.URLField('Barrierefreiheit', blank=True)
+    matriculation_start = models.PositiveIntegerField('Erste Matrikelnummer', default=100001, help_text='Danach fortlaufend.')
+    accept_days = models.PositiveSmallIntegerField('Frist zur Annahme eines Studienplatzes (Tage)', default=14)
+    signup = models.BooleanField('Neue Bewerbungskonten', default=True, help_text='Ohne Haken legt niemand ein neues Bewerbungskonto an.')
+    insurers = models.TextField('Krankenkassen', blank=True, help_text='Vorschläge beim Annehmen des Studienplatzes, eine je Zeile.')
+    student_daily_hours = models.PositiveSmallIntegerField('Übezeit am Tag (Std.)', default=4, help_text='So viele Stunden buchen Studierende am Tag.')
+    student_ahead_hours = models.PositiveSmallIntegerField('Vorlauf für Studierende (Std.)', default=24, help_text='So weit im Voraus buchen Studierende.')
+    last_minute_hours = models.PositiveSmallIntegerField('Kurzfristig ohne Kontingent (Std.)', default=3, help_text='Was so bald beginnt, zählt nicht zum Tageskontingent.')
+    teacher_ahead_days = models.PositiveSmallIntegerField('Vorlauf für Lehrende (Tage)', default=183)
+
+    class Meta:
+        verbose_name = 'Hochschule'
+        verbose_name_plural = 'Hochschule'
+
+    def __str__(self):
+        return self.name
+
+    @classmethod
+    def get(cls):
+        """The record, or its defaults until someone fills it in."""
+        return cls.objects.first() or cls()
 
 
 class Institute(Tracked, models.Model):
@@ -255,7 +310,7 @@ class Message(models.Model):
     def send(cls, person, subject, body, link=''):
         message = cls.objects.create(person=person, subject=subject, body=body, link=link)
         if person.email:
-            send_mail(subject, body, None, [person.email])
+            send_mail(subject, body, Institution.get().email or None, [person.email])
         return message
 
 

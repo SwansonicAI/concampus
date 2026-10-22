@@ -38,6 +38,6 @@
   {% if complete %}
   <p style="margin-top: 24px">Gesamtnote: <b>{{ average }} ({{ verbal }}){% if honours %}, mit Auszeichnung{% endif %}</b></p>
   {% endif %}
-  <div class="sign"><span>Weimar, {{ today|date:"j. F Y" }}</span><span>Vorsitz Prüfungsausschuss</span></div>
+  <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ today|date:"j. F Y" }}</span><span>Vorsitz Prüfungsausschuss</span></div>
 </div>
 {% endblock %}

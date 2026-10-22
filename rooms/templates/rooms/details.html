@@ -2,9 +2,9 @@
 {% block title %}{{ booking.label }}{% endblock %}
 {% block subnav %}{% include "rooms/_nav.html" %}{% endblock %}
 {% block content %}
-<p class="eyebrow">{{ booking.get_category_display }}</p>
+<p class="eyebrow">{{ booking.category }}</p>
 <h1>{{ booking.label }}</h1>
-<p class="lead">{{ booking.start|date:"l, j. F Y" }}, {{ booking.start|time:"H:i" }}–{{ booking.end|time:"H:i" }} Uhr{% if booking.category == 'abgesagt' %} · <span class="badge no">abgesagt</span>{% endif %}</p>
+<p class="lead">{{ booking.start|date:"l, j. F Y" }}, {{ booking.start|time:"H:i" }}–{{ booking.end|time:"H:i" }} Uhr{% if not booking.category.blocks %} · <span class="badge no">{{ booking.category }}</span>{% endif %}</p>
 <dl class="facts">
   <dt>Ort</dt><dd><a href="{% url 'rooms:room' booking.room.pk %}?tag={{ booking.start|date:'Y-m-d' }}">{{ booking.room }}</a> {{ booking.room.purpose }}, {{ booking.room.building }}</dd>
   {% if booking.course %}<dt>Veranstaltung</dt><dd><a href="{{ booking.course.get_absolute_url }}">{{ booking.course.title }}</a></dd>{% endif %}

@@ -4,7 +4,7 @@
 <p class="eyebrow"><a href="{% url 'setup:index' %}">Einstellungen</a></p>
 <div class="head">
   <h1>{{ editor.title }}</h1>
-  <div class="actions"><a class="btn" href="{% url 'setup:new' editor.key %}" data-panel>Neu anlegen</a></div>
+  {% if editor.creatable %}<div class="actions"><a class="btn" href="{% url 'setup:new' editor.key %}" data-panel>Neu anlegen</a></div>{% endif %}
 </div>
 <p class="lead">{{ count }} Einträge{% if q %} passen zu „{{ q }}“{% endif %}</p>
 <form class="toolbar">

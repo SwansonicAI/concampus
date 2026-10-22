@@ -1,3 +1,4 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
@@ -41,6 +42,11 @@ class Course(Tracked, models.Model):
         'Bestehensgrenze', max_digits=4, decimal_places=1, null=True, blank=True,
         help_text='Gesetzt: Punkte, bestanden ab dieser Grenze. Leer: Noten, bestanden bis 4,0.',
     )
+    max_points = models.PositiveSmallIntegerField('Höchstpunktzahl', null=True, blank=True, help_text='Bei Punkten: so viele gibt jedes Mitglied höchstens.')
+    accompaniment = models.ForeignKey(
+        'self', models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Korrepetition',
+        help_text='Bei Eignungsprüfungen: die Veranstaltung, in die eingetragen wird, wer eine Begleitung wünscht.',
+    )
     released = models.DateTimeField('Ergebnisse freigegeben', null=True, blank=True)
     video = models.BooleanField('Videostufe', default=False, help_text='Nur bei Eignungsprüfungen: Bewerbende reichen ein Video ein, die Kommission wertet online.')
     description = models.TextField('Beschreibung', blank=True)
@@ -82,6 +88,12 @@ class Course(Tracked, models.Model):
         if self.subject_id:
             return 'Hauptfach'
         return self.title.removeprefix('Eignungsprüfung ').split(' und ')[0]
+
+    def clean(self):
+        if self.pass_mark is not None and self.max_points is None:
+            raise ValidationError({'max_points': 'Bei einer Bestehensgrenze in Punkten bitte die Höchstpunktzahl angeben.'})
+        if self.pass_mark is not None and self.pass_mark > self.max_points:
+            raise ValidationError({'pass_mark': 'Die Bestehensgrenze liegt über der Höchstpunktzahl.'})
 
     def passes(self, grade):
         return grade >= self.pass_mark if self.points else grade <= 4

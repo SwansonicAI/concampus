@@ -4,8 +4,8 @@ from django.test import Client
 from core.models import Message, Person
 from core.testing import Seeded, flashes
 from courses.models import Course, Participation, Score
-from students.models import Document, Study, StudyTerm
-from .views import checklist
+from students.models import Document, DocumentType, Study, StudyTerm
+from .views import checklist, incomplete
 
 PANEL = {'X-Panel': '1'}
 
@@ -81,8 +81,8 @@ class VideoTest(Seeded):
     def test_upload_replace_discard(self):
         r = self.applicant.post(self.url, upload('take.mp4'), headers=PANEL)
         self.assertEqual(r.headers['X-Location'], '/aufnahme/meine/')
-        self.assertIn('Bitte das Video als Datei hochladen', flashes(self.applicant.post(self.url, upload('cv.pdf'), follow=True))[-1])
-        self.assertIn('Bitte das Video als Datei hochladen', flashes(self.applicant.post(self.url, {'kind': 'video', 'url': 'https://youtu.be/x'}, follow=True))[-1])
+        self.assertIn('Video bitte als .mp4', flashes(self.applicant.post(self.url, upload('cv.pdf'), follow=True))[-1])
+        self.assertIn('Bitte eine Datei wählen.', flashes(self.applicant.post(self.url, {'kind': 'video', 'url': 'https://youtu.be/x'}, follow=True))[-1])
         self.applicant.post(self.url, upload('take2.webm'))
         video = Document.objects.get(study=self.study, kind='video')
         self.assertEqual(video.title, 'take2.webm')
@@ -90,6 +90,13 @@ class VideoTest(Seeded):
         self.assertIn('<video controls', self.applicant.get('/aufnahme/meine/').text)
         self.applicant.post(f'/aufnahme/unterlagen/{video.pk}/entfernen/')
         self.assertFalse(Document.objects.filter(pk=video.pk).exists())
+
+    def test_upload_limits_come_from_the_type(self):
+        DocumentType.objects.filter(key='cv').update(file_types='.pdf', single=True)
+        self.assertIn('Lebenslauf bitte als .pdf hochladen.', flashes(self.applicant.post(self.url, upload('cv.docx', 'cv'), follow=True)))
+        self.applicant.post(self.url, upload('cv.pdf', 'cv'))
+        self.applicant.post(self.url, upload('cv2.pdf', 'cv'))
+        self.assertEqual(list(self.study.documents.filter(kind='cv').values_list('title', flat=True)), ['cv2.pdf'])
 
     def test_others_cannot_upload(self):
         self.assertEqual(self.login('student').post(self.url, {'kind': 'cv', 'url': 'https://x.org/a.pdf'}).status_code, 403)
@@ -116,3 +123,19 @@ class JuryTest(Seeded):
     def test_students_find_how_to_apply_for_a_master(self):
         r = self.login('student').get('/suche/', {'q': 'master'}, headers={'X-Fragment': '1'})
         self.assertIn('Bewerbung für ein weiteres Studium', r.text)
+
+
+class ChecklistTest(Seeded):
+    """The checklist asks for what the document types say, for whom they say it."""
+
+    def test_conditions(self):
+        violin = Study.objects.filter(status='applied', subject__name='Violine').select_related('person', 'program', 'subject').first()
+        cello = Study.objects.filter(status='applied', subject__name='Violoncello').select_related('person', 'program', 'subject').first()
+        kind = DocumentType.objects.create(name='Probespielliste', condition='subjects', required=True)
+        kind.subjects.set([violin.subject])
+        self.assertIn('Probespielliste', incomplete(violin))
+        self.assertNotIn('Probespielliste', [i['label'] for i in checklist(cello)])
+        DocumentType.objects.filter(key='language').update(condition='always', required=True)
+        self.assertIn('Sprachnachweis Deutsch', incomplete(cello))
+        DocumentType.objects.filter(key='cv').update(condition='never')
+        self.assertNotIn('Lebenslauf', [i['label'] for i in checklist(cello)])

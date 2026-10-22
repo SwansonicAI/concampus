@@ -64,6 +64,8 @@ class CourseForm(forms.ModelForm):
         if 'kind' in self.fields:
             self.fields['kind'].choices = [(k.value, k.label) for k in (Course.Kind.COURSE, Course.Kind.LESSON)]
         self.fields['staff'].queryset = Person.teachers()
+        if 'accompaniment' in self.fields:
+            self.fields['accompaniment'].queryset = Course.objects.filter(kind=Course.Kind.LESSON, term=self.instance.term_id).order_by('title')
         if 'modules' in self.fields:
             self.fields['modules'].choices = leaf_modules()
         if 'subject' in self.fields:
@@ -72,7 +74,7 @@ class CourseForm(forms.ModelForm):
 
 class ExamForm(CourseForm):
     class Meta(CourseForm.Meta):
-        fields = ['title', 'staff', 'modules', 'deadline', 'pass_mark', 'description']
+        fields = ['title', 'staff', 'modules', 'deadline', 'pass_mark', 'max_points', 'description']
         labels = {'staff': 'Kommission', 'modules': 'Prüft das Modul'}
 
 
@@ -82,7 +84,7 @@ class AuditionForm(CourseForm):
     deadline = DayField(label='Bewerbungsschluss', required=False, help_text='Bis dahin laden Bewerbende Video und Unterlagen hoch.')
 
     class Meta(CourseForm.Meta):
-        fields = ['title', 'term', 'program', 'subject', 'video', 'staff', 'deadline', 'capacity', 'pass_mark', 'description']
+        fields = ['title', 'term', 'program', 'subject', 'video', 'staff', 'deadline', 'capacity', 'pass_mark', 'max_points', 'accompaniment', 'description']
         labels = {'staff': 'Kommission', 'capacity': 'Studienplätze'}
         help_texts = {'program': 'Nur bei der ersten Stufe: der Studiengang, für den man sich hier bewirbt.'}
 

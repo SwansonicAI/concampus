@@ -38,6 +38,8 @@ def cell(obj, name):
     value = getattr(obj, f'get_{name}_display', None) or getattr(obj, name)
     if hasattr(value, 'all'):
         return ', '.join(map(str, value.all())) or '–'
+    if isinstance(value, bool):
+        return 'ja' if value else ''
     return value() if callable(value) else value
 
 

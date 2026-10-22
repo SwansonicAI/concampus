@@ -49,6 +49,7 @@ class AdmissionsConfig(Tile, AppConfig):
         return found
 
     def tasks(self, person):
+        from core.models import Institution
         from courses.models import Course
         from students.models import Study
 
@@ -70,14 +71,16 @@ class AdmissionsConfig(Tile, AppConfig):
             ]
             if ready:
                 found.append(task(f'{plural(len(ready), "Bewerbung", "Bewerbungen")} entscheiden', reverse('admissions:board')))
-        from .views import incomplete, uploads_open
+        from .views import document_types, incomplete, uploads_open
 
+        types = document_types()
         for study in person.studies.filter(status=Study.Status.APPLIED).select_related('person', 'program', 'subject').prefetch_related('documents'):
-            if uploads_open(study) and (missing := incomplete(study)):
+            if uploads_open(study) and (missing := incomplete(study, types)):
                 deadline = study.participations.filter(course__program__isnull=False).values_list('course__deadline', flat=True).first()
                 found.append(task(f'Für die Bewerbung {study.subject} fehlt noch: {", ".join(missing)}', reverse('admissions:mine'), deadline))
+        days = Institution.get().accept_days
         for study in person.studies.filter(status=Study.Status.ADMITTED, terms=None):
-            found.append(task(f'Studienplatz {study.subject} annehmen oder ablehnen', reverse('admissions:mine'), study.since + timedelta(days=14)))
+            found.append(task(f'Studienplatz {study.subject} annehmen oder ablehnen', reverse('admissions:mine'), study.since + timedelta(days=days)))
         for p in person.studies.filter(status=Study.Status.APPLIED).values_list('participations__course__title', 'participations__slot'):
             if p[1] and p[1] > timezone.now():
                 found.append(task(f'{p[0]} am {timezone.localtime(p[1]):%d.%m. um %H:%M} Uhr', reverse('admissions:mine'), timezone.localdate(p[1])))

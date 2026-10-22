@@ -14,11 +14,11 @@ from django.views.decorators.http import require_POST
 
 from core.dates import day as understood
 from core.days import busy, strip
-from core.models import Institute, Message, Office, Person
+from core.models import Institute, Institution, Message, Office, Person
 from core.text import matching
 from courses.models import Course
-from .forms import STUDENT_DAILY, BookingForm, FindForm, bookable, quota
-from .models import Booking, Room
+from .forms import BookingForm, FindForm, bookable, quota
+from .models import Booking, BookingCategory, Room, RoomFunction
 
 OPEN, CLOSE, STEP = 8, 22, 5  # hours shown, minutes per grid line
 PER_HOUR = 60 // STEP
@@ -36,13 +36,13 @@ def agenda(person):
     return Booking.objects.filter(
         Q(person=person) | Q(participants=person) | Q(course__staff=person)
         | Q(course__kind=Course.Kind.COURSE, course__participations__study__person=person)
-    ).exclude(category=Booking.Category.CANCELLED).distinct()
+    ).filter(category__blocks=True).distinct()
 
 
 def week(bookings, day):
     """Context for the week grid: the Monday-to-Sunday dates around `day` and the bookings placed on them."""
     monday = day - timedelta(days=day.weekday())
-    placed = list(bookings.filter(start__date__range=(monday, monday + timedelta(days=6))).select_related('room', 'course'))
+    placed = list(bookings.filter(start__date__range=(monday, monday + timedelta(days=6))).select_related('room', 'course', 'category'))
     for n, b in enumerate(placed):
         column = 2 + timezone.localtime(b.start).weekday()
         b.place = f'{line(b.start)} / {column} / {line(b.end)} / {column + 1}'
@@ -68,27 +68,33 @@ def private(person):
     return not person.roles & {'teacher', 'view_bookings'}
 
 
+def legend():
+    """The colours in use on the plans, in their order."""
+    used = set(BookingCategory.objects.filter(blocks=True).values_list('tone', flat=True))
+    return [(tone.value, tone.label) for tone in BookingCategory.Tone if tone in used]
+
+
 def groups():
     """The ways to look at the rooms, as in Asimut: everyone's own, by building, by Institut, by function."""
     return [
-        ('', [('meine', 'Meine Räume'), ('alle', 'Alle Räume')]),
+        ('', [('meine', 'Meine Räume'), ('zentral', 'Zentral vergebene Räume'), ('alle', 'Alle Räume')]),
         ('Gebäude', [(f'haus:{b}', b) for b in Room.objects.order_by('building').values_list('building', flat=True).distinct()]),
         ('Institut', [(f'institut:{i.pk}', i.name) for i in Institute.objects.all()]),
-        ('Funktion', [(f'funktion:{value}', label) for value, label in Room.Function.choices]),
+        ('Funktion', [(f'funktion:{f.key}', f.name) for f in RoomFunction.objects.all()]),
     ]
 
 
 def index(request):
     person, today = request.user, timezone.localdate()
     day = understood(request.GET.get('tag', '')) or today
-    group = request.GET.get('raeume') or ('funktion:veranstaltung' if 'book_any_room' in person.roles else 'meine')
+    group = request.GET.get('raeume') or ('zentral' if 'book_any_room' in person.roles else 'meine')
     kind, _, key = group.partition(':')
     rooms = Room.objects.prefetch_related(Prefetch(
-        'bookings', Booking.objects.filter(start__date=day).select_related('course', 'person').prefetch_related('participants'), to_attr='day',
+        'bookings', Booking.objects.filter(start__date=day).select_related('course', 'person', 'category').prefetch_related('participants'), to_attr='day',
     ))
     allowed = set(bookable(person).values_list('pk', flat=True))
     rooms = {
-        'meine': rooms.filter(pk__in=allowed), 'haus': rooms.filter(building=key), 'funktion': rooms.filter(function=key),
+        'meine': rooms.filter(pk__in=allowed), 'zentral': rooms.filter(function__central=True), 'haus': rooms.filter(building=key), 'funktion': rooms.filter(function=key),
         'institut': rooms.filter(institutes=key) if key.isdigit() else rooms,
     }.get(kind, rooms)
     hidden = private(person)
@@ -97,7 +103,7 @@ def index(request):
         for b in room.day:
             b.columns = f'{line(b.start)} / {line(b.end)}'
             b.editable = editable(b, person)
-            b.hidden = hidden and not b.editable and b.category not in Booking.PUBLIC and person not in b.participants.all()
+            b.hidden = hidden and not b.editable and not b.category.public and person not in b.participants.all()
     monday = day - timedelta(days=day.weekday())
     now = timezone.localtime()
     return render(request, 'rooms/index.html', {
@@ -114,8 +120,8 @@ def index(request):
             for i in range((CLOSE - OPEN) * 2)
         ],
         'now': line(now) if day == now.date() and OPEN <= now.hour < CLOSE else None,
-        'tones': [('teach', 'Unterricht und Probe'), ('practice', 'Üben'), ('exam', 'Prüfung'), ('event', 'Veranstaltung'), ('service', 'Service'), ('blocked', 'Blockiert')],
-        'left': None if 'student' not in person.roles else STUDENT_DAILY - quota(person, day),
+        'tones': legend(),
+        'left': None if 'student' not in person.roles else Institution.get().student_daily_hours - quota(person, day),
     })
 
 
@@ -129,7 +135,7 @@ def find(request):
         data = form.cleaned_data
         start = timezone.make_aware(datetime.combine(data['day'], data['start']))
         end = timezone.make_aware(datetime.combine(data['day'], data['end']))
-        taken = Booking.objects.filter(start__lt=end, end__gt=start).exclude(category=Booking.Category.CANCELLED).values('room')
+        taken = Booking.objects.filter(start__lt=end, end__gt=start, category__blocks=True).values('room')
         rooms = bookable(request.user).exclude(pk__in=taken).filter(capacity__gte=data['seats'] or 1)
         rooms = matching(rooms, data['equipment'], 'equipment', 'name', 'purpose', 'building')
         rooms = rooms.order_by('capacity', 'building', 'name')
@@ -153,29 +159,28 @@ def mine(request):
         'feed': feed(request),
     }
     if 'student' in person.roles:
-        context['used'], context['daily'] = quota(person, today), STUDENT_DAILY
+        context['used'], context['daily'] = quota(person, today), Institution.get().student_daily_hours
     return render(request, 'rooms/mine.html', context)
 
 
 def events(request):
     """What the Hochschule puts on: concerts, class evenings, master classes, lectures, from today on."""
     picked = request.GET.get('kategorie', '')
-    shown = [picked] if picked in Booking.PUBLIC else Booking.PUBLIC
     found = (
-        Booking.objects.filter(category__in=shown, end__gte=timezone.now(), start__lt=timezone.now() + timedelta(days=120))
-        .select_related('room', 'person', 'course')
+        Booking.objects.filter(category__public=True, end__gte=timezone.now(), start__lt=timezone.now() + timedelta(days=120))
+        .select_related('room', 'person', 'course', 'category')
     )
     return render(request, 'rooms/events.html', {
-        'events': found, 'picked': picked,
-        'categories': [(value, label) for value, label in Booking.Category.choices if value in Booking.PUBLIC],
+        'events': found.filter(category=picked) if picked else found, 'picked': picked,
+        'categories': BookingCategory.objects.filter(public=True),
     })
 
 
 def booking(request, pk=None):
     person = request.user
-    booking = get_object_or_404(Booking.objects.select_related('course', 'person', 'room'), pk=pk) if pk else Booking()
+    booking = get_object_or_404(Booking.objects.select_related('course', 'person', 'room', 'category'), pk=pk) if pk else Booking()
     if pk and not editable(booking, person):
-        if private(person) and booking.category not in Booking.PUBLIC and person not in booking.participants.all():
+        if private(person) and not booking.category.public and person not in booking.participants.all():
             raise PermissionDenied
         return render(request, 'rooms/details.html', {'booking': booking, 'participants': booking.participants.all()})
     initial = {}
@@ -197,8 +202,9 @@ def booking(request, pk=None):
     series = Booking.objects.filter(series=booking.series).count() if booking.series else 0
     return render(request, 'rooms/booking.html', {
         'form': form, 'booking': booking, 'series': series, 'central': Office.holding('book_any_room'),
+        'rules': Institution.get(), 'special': BookingCategory.objects.filter(students=True).exclude(ahead_hours=None, participants=0),
         'history': booking.pk and Booking.visible_to(person.roles),
-        'left': STUDENT_DAILY - quota(person, timezone.localdate()) if form.student else None,
+        'left': Institution.get().student_daily_hours - quota(person, timezone.localdate()) if form.student else None,
     })
 
 
@@ -240,10 +246,11 @@ def calendar(request, token):
     def stamp(moment):
         return moment.astimezone(UTC).strftime('%Y%m%dT%H%M%SZ')
 
-    lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//HfM Weimar//Campus//DE', 'X-WR-CALNAME:Campus HfM Weimar']
-    for b in agenda(person).filter(start__gte=now - timedelta(days=7), start__lte=now + timedelta(days=183)).select_related('room', 'course'):
+    name, host = Institution.get().name, request.get_host().split(':')[0]
+    lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', f'PRODID:-//{text(name)}//Campus//DE', f'X-WR-CALNAME:{text(name)}']
+    for b in agenda(person).filter(start__gte=now - timedelta(days=7), start__lte=now + timedelta(days=183)).select_related('room', 'course', 'category'):
         lines += [
-            'BEGIN:VEVENT', f'UID:buchung-{b.pk}@campus.hfm-weimar.de', f'DTSTAMP:{stamp(now)}', f'DTSTART:{stamp(b.start)}', f'DTEND:{stamp(b.end)}',
+            'BEGIN:VEVENT', f'UID:buchung-{b.pk}@{host}', f'DTSTAMP:{stamp(now)}', f'DTSTART:{stamp(b.start)}', f'DTEND:{stamp(b.end)}',
             f'SUMMARY:{text(b.label)}', f'LOCATION:{text(f"{b.room} {b.room.purpose}, {b.room.building}".strip())}', 'END:VEVENT',
         ]
     lines.append('END:VCALENDAR')

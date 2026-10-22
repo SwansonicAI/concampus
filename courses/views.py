@@ -18,7 +18,7 @@ from core.dates import day as understood
 from core.models import Message, Term
 from core.text import matching
 from curriculum.models import Program
-from rooms.models import Booking
+from rooms.models import Booking, BookingCategory
 from rooms.views import agenda, week
 from students.models import Study
 from . import panel
@@ -197,12 +197,12 @@ def plan(request, pk):
         return redirect(course)
     term, data, series = course.term, form.cleaned_data, uuid.uuid4()
     first = term.lectures_start + timedelta(days=(data['weekday'] - term.lectures_start.weekday()) % 7)
-    bookings = []
+    bookings, lesson = [], BookingCategory.system('unterricht')
     for n in range((term.lectures_end - first).days // 7 + 1):
         start = timezone.make_aware(datetime.combine(first + timedelta(weeks=n), data['time']))
         bookings.append(Booking(
             room=data['room'], start=start, end=start + timedelta(minutes=data['minutes']),
-            person=request.user, course=course, series=series, category=Booking.Category.LESSON,
+            person=request.user, course=course, series=series, category=lesson,
         ))
     if taken := [b for b in bookings if b.clashes().exists()]:
         messages.error(request, 'Nicht gebucht, belegt am ' + ', '.join(f'{b.start:%d.%m.}' for b in taken) + '.')

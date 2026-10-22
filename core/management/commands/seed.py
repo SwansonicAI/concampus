@@ -19,15 +19,14 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import models, transaction
 from django.utils import timezone
 
-from admissions.forms import INSURERS
-from admissions.views import ACCEPT_DAYS, DECISIONS
+from admissions.views import DECISIONS
 from core import history
-from core.models import Change, Institute, Message, Office, Person, Term
+from core.models import Change, Institute, Institution, Message, Office, Person, Term
 from courses.models import Course, Participation, Score
 from courses.panel import mean
 from curriculum.models import Module, Program, Subject
-from rooms.models import Booking, Room
-from students.models import APPEAL, Document, Study, StudyTerm
+from rooms.models import Booking, BookingCategory, Room, RoomFunction
+from students.models import APPEAL, Document, DocumentType, Study, StudyTerm
 from ..plans import HF, JENA, PIANO, PROGRAMS, RESEARCH, SPEECH, STRINGS, WINDS, WS
 
 FEE = Decimal('341.30')  # Semesterbeitrag WiSe 2026/27: Studierendenwerk 95,00 + Deutschlandsemesterticket 226,80 + Studierendenrat 19,50
@@ -159,27 +158,27 @@ VENUES = {  # seats and instruments of the halls; Asimut lists neither, these ar
 def furnish(name, purpose):
     """(function, seats, equipment) of a room, from what Asimut calls it."""
     if name in VENUES and name not in ('HzH 313', 'FH 115', 'FH 022'):
-        return Room.Function.ORGAN if name == 'Herz Jesu' else Room.Function.EVENT, *VENUES[name]
+        return 'orgel' if name == 'Herz Jesu' else 'veranstaltung', *VENUES[name]
     p = purpose.lower()
     if 'sitzung' in p or 'senat' in p:
-        return Room.Function.MEETING, *VENUES[name]
+        return 'sitzung', *VENUES[name]
     if 'hörsaal' in p:
-        return Room.Function.SEMINAR, *VENUES[name]
+        return 'seminar', *VENUES[name]
     if 'seminar' in p or 'konferenz' in p:
-        return Room.Function.SEMINAR, 24, 'Klavier, Beamer'
+        return 'seminar', 24, 'Klavier, Beamer'
     if 'werkstatt' in p:
-        return Room.Function.WORKSHOP, 2, 'Werkbank'
+        return 'werkstatt', 2, 'Werkbank'
     if 'studio' in p or 'hörlabor' in p:
-        return Room.Function.STUDIO, 8, 'Aufnahmetechnik' if 'studio' in p else 'Kopfhörerplätze'
+        return 'studio', 8, 'Aufnahmetechnik' if 'studio' in p else 'Kopfhörerplätze'
     if name in ORGAN_ROOMS:
-        return Room.Function.ORGAN, 8, 'Orgel'
+        return 'orgel', 8, 'Orgel'
     if name in CHAMBER_ROOMS or 'ensemble' in p or 'projekt' in p or 'band' in p:
-        return Room.Function.CHAMBER, 16, 'Flügel, Notenpulte' if 'jazz' not in p and 'band' not in p else 'Flügel, Schlagzeug, Verstärker'
+        return 'kammermusik', 16, 'Flügel, Notenpulte' if 'jazz' not in p and 'band' not in p else 'Flügel, Schlagzeug, Verstärker'
     equipment = ('Marimba, Pauken' if 'schlagwerk' in p else 'Flügel, Spiegel' if 'gesang' in p or 'lied' in p or 'oper' in p
                  else 'Zwei Flügel' if 'dirig' in p or 'klavier' in p else 'Cembalo' if 'alte musik' in p else 'Flügel, Verstärker' if 'jazz' in p else 'Klavier')
     if 'übungsraum' in p or 'überaum' in p:
-        return Room.Function.PRACTICE, 3, equipment
-    return Room.Function.TEACHING, 6, equipment
+        return 'uebung', 3, equipment
+    return 'unterricht', 6, equipment
 
 
 LESSON_ROOMS = {  # where each Hauptfach is taught, as the rooms are named
@@ -243,6 +242,46 @@ TEACHERS = [  # key, title, first, last, Hauptfach taught
     ('bellini', 'Dr.', 'Paola', 'Bellini', None), ('hagen', 'Prof.', 'Ulrike', 'Hagen', None),
     ('brueck', 'Prof.', 'Johannes', 'Brück', None), ('sander', 'Prof.', 'Christoph', 'Sander', 'Orgel'),
     ('okafor', 'Prof.', 'Ada', 'Okafor', 'Jazz-Gesang'), ('wiegand', 'KMD', 'Peter', 'Wiegand', None), ('hausmann', 'Prof. Dr.', 'Eva', 'Hausmann', None),
+]
+POSTGRADUATE = ['M.Mus.', 'M.Ed.', 'Konzertdiplom', 'Zertifikat', 'Dr. phil.']
+VIDEO_NOTE = (
+    'Eine Datei, ungeschnitten, 10–15 Minuten, beginnend mit einer kurzen Vorstellung; die Kamera 3–5 m entfernt, '
+    'eine professionelle Aufnahme ist nicht nötig. Nicht älter als ein Jahr. Höchstens 1,5 GB als .mp4, .mov, .webm, .m4v, .ogg, .ogv oder .qt.'
+)
+DOCUMENTS = [  # key, name, condition, settings: what a complete application holds, as the HfM lists it
+    ('video', 'Video', 'video', {'note': VIDEO_NOTE, 'file_types': '.mp4, .mov, .webm, .m4v, .ogg, .ogv, .qt', 'max_mb': 1536, 'single': True}),
+    ('cv', 'Lebenslauf', 'always', {}),
+    ('school', 'Abitur- oder letztes Schulzeugnis', 'always', {}),
+    ('degree', 'Bachelor- oder Masterzeugnis, Transcript', 'degree', {}),
+    ('fee', 'Einzahlungsbeleg Eignungsprüfungsgebühr', 'always', {'note': '50 €, Verwendungszweck: Eignungsprüfung, Name, Hauptfach.'}),
+    ('consent', 'Einwilligung der Erziehungsberechtigten', 'minor', {'note': 'Sie sind noch nicht volljährig.'}),
+    ('voice', 'Phoniatrisches Gutachten', 'subjects', {'required': False}),
+    ('language', 'Sprachnachweis Deutsch', 'foreign', {'required': False, 'note': 'Niveau B2.'}),
+    ('notice', 'Bescheid', 'never', {}),
+    ('other', 'Sonstiges', 'never', {}),
+]
+INSURERS = ['Techniker Krankenkasse', 'AOK PLUS', 'BARMER', 'DAK-Gesundheit', 'IKK classic', 'KKH Kaufmännische Krankenkasse', 'hkk Krankenkasse']
+FUNCTIONS = [  # key, name, given out centrally: the room functions Asimut lists
+    ('uebung', 'Übungsraum', False), ('unterricht', 'Unterrichtsraum', False), ('kammermusik', 'Kammermusik', False), ('orgel', 'Orgel', False),
+    ('seminar', 'Hörsaal und Seminarraum', False), ('studio', 'Studio und Labor', False), ('sitzung', 'Sitzungsraum', True),
+    ('veranstaltung', 'Veranstaltungsraum', True), ('werkstatt', 'Werkstatt', False),
+]
+BY_STUDENTS, BY_TEACHERS, COUNTED = {'students': True}, {'teachers': True}, {'quota': True}
+PUBLIC = {'public': True}
+CATEGORIES = [  # key, name, colour, settings: the HfM's booking categories as its Asimut has them
+    ('unterricht', 'Unterricht', 'teach', BY_TEACHERS), ('uebung', 'Übebuchung', 'practice', BY_STUDENTS | BY_TEACHERS | COUNTED),
+    ('kammermusik', 'Kammermusik-Probe', 'practice', BY_STUDENTS | COUNTED | {'ahead_hours': 240, 'participants': 1}),
+    ('probe', 'Probe', 'teach', BY_TEACHERS), ('orchesterprobe', 'Orchesterprobe', 'teach', {}), ('registerprobe', 'Registerprobe', 'teach', BY_TEACHERS),
+    ('pruefung', 'Prüfung', 'exam', BY_TEACHERS), ('eignungspruefung', 'Eignungsprüfung', 'exam', {}), ('vorspiel', 'Vorspiel', 'exam', BY_TEACHERS | PUBLIC),
+    ('klassenabend', 'Klassenabend', 'event', BY_TEACHERS | PUBLIC), ('konzert', 'Konzert', 'event', PUBLIC), ('veranstaltung', 'Veranstaltung', 'event', PUBLIC),
+    ('meisterkurs', 'Meisterkurs', 'event', BY_TEACHERS | PUBLIC), ('weimarer-meisterkurse', 'Weimarer Meisterkurse', 'event', PUBLIC),
+    ('wettbewerb', 'Wettbewerb', 'exam', PUBLIC), ('workshop', 'Workshop', 'event', BY_TEACHERS | PUBLIC), ('vortrag', 'Vortrag', 'event', BY_TEACHERS | PUBLIC),
+    ('tagung', 'Tagung', 'event', PUBLIC), ('sitzung', 'Sitzung', 'event', BY_TEACHERS), ('vorstellung', 'Vorstellungsgespräche', 'exam', {}),
+    ('aufnahme', 'Aufnahme', 'teach', BY_TEACHERS), ('projekt', 'Studentisches Projekt', 'teach', {}), ('vermietung', 'Vermietung', 'event', {}),
+    ('option', 'freie Konzert-Option', 'event', {}), ('konzertbetreuung', 'Konzertbetreuung', 'event', {}), ('organisation', 'Organisation', 'event', {}),
+    ('stimmung', 'Stimmung', 'service', {}), ('klavierstimmer', 'Reparaturarbeiten Klavierstimmer', 'service', {}), ('hausmeister', 'Hausmeister', 'service', {}),
+    ('technik', 'Technik', 'service', {}), ('transport', 'Transport', 'service', {}), ('persoenlich', 'Persönliche Buchung', 'practice', BY_TEACHERS),
+    ('allgemein', 'Allgemeine Buchung', 'practice', {}), ('blockiert', 'Blockiert', 'blocked', {}), ('abgesagt', 'Abgesagt', 'cancelled', {'blocks': False}),
 ]
 OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
     'ASA': [  # Akademische und Studentische Angelegenheiten
@@ -406,6 +445,16 @@ class Command(BaseCommand):
         self.current, self.next = self.calendar[self.now], self.calendar[self.now + 1]
 
     def structure(self):
+        Institution.objects.create(
+            name='Hochschule für Musik FRANZ LISZT Weimar', short_name='HfM Weimar', address='Platz der Demokratie 2/3\n99423 Weimar', place='Weimar',
+            email='campus@hfm-weimar.de', website='https://www.hfm-weimar.de', imprint='https://www.hfm-weimar.de/footer/impressum',
+            privacy='https://www.hfm-weimar.de/footer/datenschutz', accessibility='https://www.hfm-weimar.de/footer/barrierefreiheit',
+            insurers='\n'.join(INSURERS),
+        )
+        RoomFunction.objects.bulk_create(RoomFunction(key=key, name=name, central=central, order=n) for n, (key, name, central) in enumerate(FUNCTIONS))
+        BookingCategory.objects.bulk_create(
+            BookingCategory(key=key, name=name, tone=tone, order=n, **settings) for n, (key, name, tone, settings) in enumerate(CATEGORIES)
+        )
         self.institutes = {key: Institute.objects.create(name=name) for key, name in INSTITUTES.items()}
         self.subjects = {
             name: Subject.objects.create(name=name, institute=self.institutes[SUBJECT_INSTITUTE[name]])
@@ -413,11 +462,15 @@ class Command(BaseCommand):
         }
         self.programs, self.teach, self.first_course = {}, {}, {}
         for name, degree, version, semesters, subjects, plan in PROGRAMS:
-            program = Program.objects.create(name=name, degree=degree, version=version, semesters=semesters)
+            program = Program.objects.create(name=name, degree=degree, version=version, semesters=semesters, postgraduate=degree in POSTGRADUATE, honours=Decimal('1.0'))
             program.subjects.set(self.subjects[s] for s in subjects)
             self.build(program, plan)
             self.programs[(degree, name)] = program
         self.titles = dict(Module.objects.values_list('pk', 'title'))
+        for n, (key, name, condition, settings) in enumerate(DOCUMENTS):
+            kind = DocumentType.objects.create(key=key, name=name, condition=condition, order=n, **settings)
+            if condition == 'subjects':
+                kind.subjects.set([self.subjects['Gesang'], self.subjects['Jazz-Gesang']])
         self.bmsh = self.programs[('B.Mus.', 'Streichinstrumente und Harfe')]
         self.bmbs = self.programs[('B.Mus.', 'Blasinstrumente und Schlagwerk')]
         self.bmgm = self.programs[('B.Mus.', 'Gesang | Musiktheater')]
@@ -429,7 +482,7 @@ class Command(BaseCommand):
             for entry in entries.split('; '):
                 name, purpose = entry.split(':')
                 function, capacity, equipment = furnish(name, purpose)
-                self.rooms[name] = Room.objects.create(building=building, name=name, purpose=purpose, function=function, capacity=capacity, equipment=equipment)
+                self.rooms[name] = Room.objects.create(building=building, name=name, purpose=purpose, function_id=function, capacity=capacity, equipment=equipment)
         for key, names in ROOM_INSTITUTES.items():
             self.institutes[key].rooms.set(self.rooms[name] for name in names.split(', '))
 
@@ -744,7 +797,7 @@ class Command(BaseCommand):
                 room, first, days, start, minutes = PHASES[course.title]
                 bookings += [
                     Booking(room=self.rooms[room], start=at(first + timedelta(days=n), clock(start)), end=at(first + timedelta(days=n), clock(start) + minutes),
-                            person=teacher, course=course, category=Booking.Category.ORCHESTRA)
+                            person=teacher, course=course, category_id='orchesterprobe')
                     for n in range(days)
                 ]
                 continue
@@ -764,12 +817,12 @@ class Command(BaseCommand):
             series, d = uuid.uuid4(), first + timedelta(days=(day - first.weekday()) % 7)
             while d <= self.current.lectures_end:
                 if d not in FREE_DAYS:
-                    category = Booking.Category.REHEARSAL if course.title == 'Hochschulchor' else Booking.Category.LESSON
-                    bookings.append(Booking(room=self.rooms[room], start=at(d, start), end=at(d, start + minutes), person=person, course=course, series=series, category=category))
+                    category = 'probe' if course.title == 'Hochschulchor' else 'unterricht'
+                    bookings.append(Booking(room=self.rooms[room], start=at(d, start), end=at(d, start + minutes), person=person, course=course, series=series, category_id=category))
                 d += timedelta(weeks=1)
         Booking.objects.bulk_create(bookings)
         meeting = timezone.localdate()
-        Booking.objects.create(room=self.rooms['FH 115'], start=at(meeting, hour=14), end=at(meeting, 15 * 60 + 30), person=self.staff['dekanat'], title='Prüfungsausschuss', category=Booking.Category.MEETING)
+        Booking.objects.create(room=self.rooms['FH 115'], start=at(meeting, hour=14), end=at(meeting, 15 * 60 + 30), person=self.staff['dekanat'], title='Prüfungsausschuss', category_id='sitzung')
 
     # This term's exams: registration 01.–15.11.2026, exam period 08.–26.02.2027
 
@@ -795,7 +848,7 @@ class Command(BaseCommand):
             minutes = 30 * len(entries) if subject else 120
             room = self.rooms[(stages if subject else written)[n % 3]]
             if not Booking(room=room, start=start, end=start + timedelta(minutes=minutes)).clashes().exists():
-                Booking.objects.create(room=room, start=start, end=start + timedelta(minutes=minutes), person=self.staff['pruefungsamt'], course=course, category=Booking.Category.EXAM)
+                Booking.objects.create(room=room, start=start, end=start + timedelta(minutes=minutes), person=self.staff['pruefungsamt'], course=course, category_id='pruefung')
             Participation.objects.bulk_create(
                 Participation(
                     course=course, study=study, module=leaf, slot=start + timedelta(minutes=30 * k if subject else 0),
@@ -810,7 +863,7 @@ class Command(BaseCommand):
             course.staff.set([self.teachers['voss']])
             course.modules.set(Module.objects.filter(parent__code='BM-XX-MW-01', exam=True))
             start = at(date(2027, 2, 10), hour=10)
-            Booking.objects.create(room=self.rooms['HzH 316'], start=start, end=start + timedelta(hours=3), person=self.staff['pruefungsamt'], course=course, category=Booking.Category.EXAM)
+            Booking.objects.create(room=self.rooms['HzH 316'], start=start, end=start + timedelta(hours=3), person=self.staff['pruefungsamt'], course=course, category_id='pruefung')
         # a resit held last week: two of three marks entered, results not yet released
         failed = list(Participation.objects.filter(
             course__kind=Course.Kind.EXAM, module__parent__code='BM-BS-01', module__semester=4, study__in=[s for s in self.enrolled if s.fs == 5],
@@ -821,7 +874,7 @@ class Command(BaseCommand):
             resit.staff.set(examiners)
             resit.modules.set({p.module for p in failed})
             start = at(date(2026, 10, 14), hour=10)
-            Booking.objects.create(room=self.rooms['FH 106'], start=start, end=start + timedelta(hours=1), person=self.staff['pruefungsamt'], course=resit, category=Booking.Category.EXAM)
+            Booking.objects.create(room=self.rooms['FH 106'], start=start, end=start + timedelta(hours=1), person=self.staff['pruefungsamt'], course=resit, category_id='pruefung')
             for k, p in enumerate(failed):
                 p.grade, p.passed = Decimal('5.0'), False
                 p.save(update_fields=['grade', 'passed'])
@@ -878,13 +931,14 @@ class Command(BaseCommand):
             ('Eignungsprüfung Klavier', ['schulte', 'engel'], 'FH 213', 15),
             ('Eignungsprüfung Musiktheorie und Gehörbildung', ['brandauer', 'roth'], 'HzH 313', 0),
         ]:
-            course = Course.objects.create(term=term, kind=Course.Kind.AUDITION, title=title, pass_mark=Decimal('11.6'), released=closed)
+            course = Course.objects.create(term=term, kind=Course.Kind.AUDITION, title=title, pass_mark=Decimal('11.6'), max_points=25, released=closed)
             course.staff.set(self.teachers[k] for k in keys)
             course.plan = (written, self.rooms[room], step)
             shared.append(course)
         accompanist = Course.objects.create(term=term, kind=Course.Kind.LESSON, title=f'Korrepetition Eignungsprüfung {term}', hours=Decimal('0.5'))
         accompanist.staff.set([self.teachers['popescu'], self.teachers['hein']])
         rounds, rows, scores, documents = {}, [], [], []
+        names = dict(DocumentType.objects.values_list('key', 'name'))
 
         def sit(study, course, level, jury, note):
             marks = [Decimal(str(round(max(0, min(25, level + rng.gauss(0, 0.9))), 1))) for _ in jury]
@@ -896,7 +950,7 @@ class Command(BaseCommand):
                 marked = []
             p = Participation(course=course, study=study, note=note, created=at(study.since, hour=12))
             if marked and len(marked) == len(jury):
-                p.grade = mean(marks)
+                p.grade = mean(marks, study.program.mean_rounding)
                 p.passed = course.passes(p.grade)
             if hasattr(course, 'plan'):
                 begin, _, step = course.plan
@@ -911,14 +965,14 @@ class Command(BaseCommand):
             if key not in rounds:
                 level, n = (' (Master)' if master else ''), len(rounds)
                 decided = finished or subject == 'Violoncello'
-                intake = {'program': study.program, 'deadline': video_deadline, 'capacity': 2 if master else 4}  # the course one applies to
+                intake = {'program': study.program, 'deadline': video_deadline, 'capacity': 2 if master else 4, 'accompaniment': accompanist}  # the course one applies to
                 video = Course.objects.create(
-                    term=term, kind=Course.Kind.AUDITION, title=f'Videostufe {subject}{level}', subject=study.subject, video=True, pass_mark=Decimal('16.1'),
+                    term=term, kind=Course.Kind.AUDITION, title=f'Videostufe {subject}{level}', subject=study.subject, video=True, pass_mark=Decimal('16.1'), max_points=25,
                     released=at(video_deadline + timedelta(days=30) if finished else date(2026, 10, 20), hour=12) if decided else None, **intake,
                 ) if subject in VIDEO_SUBJECTS else None
                 hall = Course.objects.create(
                     term=term, kind=Course.Kind.AUDITION, title=f'Eignungsprüfung Hauptfach {subject}{level}', subject=study.subject,
-                    pass_mark=Decimal('19.1' if master else '16.1'), released=closed, **({} if video else intake),
+                    pass_mark=Decimal('19.1' if master else '16.1'), max_points=25, released=closed, **({} if video else intake),
                 )
                 panel = self.panel(subject)
                 hall.staff.set(panel)
@@ -934,15 +988,15 @@ class Command(BaseCommand):
             else:
                 talent = rng.uniform(20.5 if master else 18.5, 23.5)
             note = self.repertoire(subject)
-            handed = [Document.Kind.CV, Document.Kind.SCHOOL] + [Document.Kind.DEGREE] * master
+            handed = ['cv', 'school'] + ['degree'] * master
             if finished or study.since.day < 15 or study.person == applicant:  # the latest applicants still owe the fee receipt
-                handed.append(Document.Kind.FEE)
+                handed.append('fee')
             if study.person.nationality != 'deutsch' and rng.random() < 0.5:
-                handed.append(Document.Kind.LANGUAGE)
+                handed.append('language')
             if video:
-                documents.append(Document(person=study.person, study=study, kind=Document.Kind.VIDEO, title=DEMO_VIDEO[0], url=DEMO_VIDEO[1], created=at(study.since, hour=11)))
+                documents.append(Document(person=study.person, study=study, kind_id='video', title=DEMO_VIDEO[0], url=DEMO_VIDEO[1], created=at(study.since, hour=11)))
             documents += [
-                Document(person=study.person, study=study, kind=kind, title=kind.label, url=f'https://upload.hfm-weimar.de/{uuid.uuid4().hex[:10]}.pdf', created=at(study.since, hour=11))
+                Document(person=study.person, study=study, kind_id=kind, title=names[kind], url=f'https://upload.hfm-weimar.de/{uuid.uuid4().hex[:10]}.pdf', created=at(study.since, hour=11))
                 for kind in handed
             ]
             if not video or (sit(study, video, talent + 1.5, panel, note).passed and video.released):  # videos are judged more kindly
@@ -960,7 +1014,7 @@ class Command(BaseCommand):
                 begin, room, step = course.plan
                 end = begin + timedelta(minutes=step * count or 120)
                 if not Booking(room=room, start=begin, end=end).clashes().exists():
-                    Booking.objects.create(room=room, start=begin, end=end, person=self.staff['asa'], course=course, category=Booking.Category.AUDITION)
+                    Booking.objects.create(room=room, start=begin, end=end, person=self.staff['asa'], course=course, category_id='eignungspruefung')
         if not finished:
             failed = Study.objects.filter(start_term=term, participations__course__released__isnull=False, participations__passed=False)
             Study.objects.filter(pk__in=failed.values('pk')).update(status=Study.Status.REJECTED, since=date(2026, 10, 21))
@@ -981,7 +1035,7 @@ class Command(BaseCommand):
                 return True
             return False
 
-        usable = [Room.Function.PRACTICE, Room.Function.TEACHING, Room.Function.ORGAN]
+        usable = ['uebung', 'unterricht', 'orgel']
         rooms = defaultdict(list)
         for room in Room.objects.filter(function__in=usable).prefetch_related('institutes'):
             for institute in room.institutes.all():
@@ -991,7 +1045,7 @@ class Command(BaseCommand):
         demo = self.rooms['FH 310']
         start = at(today, 16 * 60)
         if free(demo, start, start + timedelta(minutes=90)):
-            bookings.append(Booking(room=demo, start=start, end=start + timedelta(minutes=90), person=self.demo, category=Booking.Category.PRACTICE, created=at(today, 9 * 60 + 12)))
+            bookings.append(Booking(room=demo, start=start, end=start + timedelta(minutes=90), person=self.demo, category_id='uebung', created=at(today, 9 * 60 + 12)))
         for offset in range(-6, 2):
             day = today + timedelta(days=offset)
             for study in rng.sample(practising, len(practising) // 2):
@@ -1004,7 +1058,7 @@ class Command(BaseCommand):
                     continue
                 room = rng.choice(rooms[study.subject.institute_id])
                 if free(room, begin, end):
-                    bookings.append(Booking(room=room, start=begin, end=end, person=study.person, category=Booking.Category.PRACTICE, created=booked))
+                    bookings.append(Booking(room=room, start=begin, end=end, person=study.person, category_id='uebung', created=booked))
                     used[(study.person_id, day)] += 0 if last else minutes / 60
         Booking.objects.bulk_create(bookings)
         ensembles = [s for s in self.enrolled if s.subject.institute_id in {self.institutes['SH'].pk, self.institutes['KL'].pk} and s.person != self.demo]
@@ -1017,40 +1071,40 @@ class Command(BaseCommand):
                 continue
             members = rng.sample(ensembles, 3) if n else [mei, *rng.sample(ensembles, 2)]
             rehearsal = Booking.objects.create(
-                room=room, start=begin, end=begin + timedelta(hours=2), person=members[0].person, category=Booking.Category.CHAMBER,
+                room=room, start=begin, end=begin + timedelta(hours=2), person=members[0].person, category_id='kammermusik',
                 title='Kammermusikprobe Klaviertrio' if n % 2 else 'Kammermusikprobe Streichquartett', created=at(today - timedelta(days=rng.randint(0, 3)), hour=10),
             )
             rehearsal.participants.set(m.person for m in members[1:])
 
     def events(self):
         """What is on in the coming weeks, and what it takes behind the scenes."""
-        C, today, vb, t = Booking.Category, timezone.localdate(), self.staff['veranstaltungsbuero'], self.teachers
+        today, vb, t = timezone.localdate(), self.staff['veranstaltungsbuero'], self.teachers
         plan = [  # days from today, room, start, minutes, category, title, booked for
-            (1, 'Festsaal', '08:00', 90, C.TUNING, 'Stimmung Steinway D', vb),
-            (2, 'FH 108', '19:30', 120, C.CLASS_CONCERT, 'Klassenabend Violine · Klasse Prof. Wendt', t['wendt']),
-            (3, 'Jenny-Fleischer-Alt-Saal', '19:30', 120, C.CONCERT, 'Liederabend der Gesangsklassen', t['lindner']),
-            (4, 'Herz Jesu', '18:00', 60, C.CONCERT, 'Orgelvesper', t['sander']),
-            (5, 'HzH 304', '20:00', 150, C.CONCERT, 'Jazz-Session', t['weber']),
-            (6, 'FH 108', '10:00', 360, C.MASTERCLASS, 'Meisterkurs Violoncello', t['reinholdt']),
-            (7, 'HzH 313', '19:00', 90, C.LECTURE, 'Vortrag: Liszt und die Neudeutsche Schule', t['voss']),
-            (8, 'Studiotheater', '19:00', 150, C.CANCELLED, 'Opernszenen', t['falk']),
-            (9, 'Festsaal', '19:30', 120, C.CONCERT, 'Kammermusikabend', t['reinholdt']),
-            (10, 'Saal Am Palais', '08:00', 480, C.BLOCKED, 'Wartung der Jehmlich-Orgel', vb),
-            (12, 'Saal Am Palais', '15:00', 180, C.OPTION, 'Chorkonzert des Hochschulchors', t['hagen']),
-            (16, 'Weimarhalle großer Saal', '09:00', 180, C.TRANSPORT, 'Instrumente Festsaal → Weimarhalle', vb),
-            (16, 'Weimarhalle großer Saal', '14:00', 180, C.ORCHESTRA, 'Generalprobe Hochschulorchester', t['ferreira']),
-            (16, 'Weimarhalle großer Saal', '19:30', 150, C.CONCERT, 'Sinfoniekonzert des Hochschulorchesters', t['ferreira']),
-            (16, 'Weimarhalle großer Saal', '18:30', 240, C.CONCERT_SUPPORT, 'Abenddienst Sinfoniekonzert', vb),
-            (21, 'Festsaal', '10:00', 360, C.RENTAL, 'Vermietung: Festakt der Stadt Weimar', vb),
-            (23, 'Stadtschloss neuer Veranstaltungssaal', '17:00', 90, C.CONCERT, 'Musik im Schloss', t['brueck']),
+            (1, 'Festsaal', '08:00', 90, 'stimmung', 'Stimmung Steinway D', vb),
+            (2, 'FH 108', '19:30', 120, 'klassenabend', 'Klassenabend Violine · Klasse Prof. Wendt', t['wendt']),
+            (3, 'Jenny-Fleischer-Alt-Saal', '19:30', 120, 'konzert', 'Liederabend der Gesangsklassen', t['lindner']),
+            (4, 'Herz Jesu', '18:00', 60, 'konzert', 'Orgelvesper', t['sander']),
+            (5, 'HzH 304', '20:00', 150, 'konzert', 'Jazz-Session', t['weber']),
+            (6, 'FH 108', '10:00', 360, 'meisterkurs', 'Meisterkurs Violoncello', t['reinholdt']),
+            (7, 'HzH 313', '19:00', 90, 'vortrag', 'Vortrag: Liszt und die Neudeutsche Schule', t['voss']),
+            (8, 'Studiotheater', '19:00', 150, 'abgesagt', 'Opernszenen', t['falk']),
+            (9, 'Festsaal', '19:30', 120, 'konzert', 'Kammermusikabend', t['reinholdt']),
+            (10, 'Saal Am Palais', '08:00', 480, 'blockiert', 'Wartung der Jehmlich-Orgel', vb),
+            (12, 'Saal Am Palais', '15:00', 180, 'option', 'Chorkonzert des Hochschulchors', t['hagen']),
+            (16, 'Weimarhalle großer Saal', '09:00', 180, 'transport', 'Instrumente Festsaal → Weimarhalle', vb),
+            (16, 'Weimarhalle großer Saal', '14:00', 180, 'orchesterprobe', 'Generalprobe Hochschulorchester', t['ferreira']),
+            (16, 'Weimarhalle großer Saal', '19:30', 150, 'konzert', 'Sinfoniekonzert des Hochschulorchesters', t['ferreira']),
+            (16, 'Weimarhalle großer Saal', '18:30', 240, 'konzertbetreuung', 'Abenddienst Sinfoniekonzert', vb),
+            (21, 'Festsaal', '10:00', 360, 'vermietung', 'Vermietung: Festakt der Stadt Weimar', vb),
+            (23, 'Stadtschloss neuer Veranstaltungssaal', '17:00', 90, 'konzert', 'Musik im Schloss', t['brueck']),
         ]
         for offset, name, begin, minutes, category, title, person in plan:
             for day in (today + timedelta(days=offset + k) for k in range(4)):  # the first free day
-                booking = Booking(room=self.rooms[name], start=at(day, clock(begin)), end=at(day, clock(begin) + minutes), person=person, category=category, title=title)
-                if category == C.CONCERT_SUPPORT or not booking.clashes().exists():
+                booking = Booking(room=self.rooms[name], start=at(day, clock(begin)), end=at(day, clock(begin) + minutes), person=person, category_id=category, title=title)
+                if category == 'konzertbetreuung' or not booking.clashes().exists():
                     booking.save()
                     break
-            if category == C.CLASS_CONCERT:
+            if category == 'klassenabend':
                 booking.participants.set(s.person for s in Study.objects.filter(teacher=person, status=Study.Status.ENROLLED))
 
     def amend(self, by, when, obj, **values):
@@ -1070,7 +1124,7 @@ class Command(BaseCommand):
         self.amend(office, exam.course.released + timedelta(days=9), exam, grade=corrected[exam.grade])  # after the Einsichtnahme
         score = Score.objects.filter(participation__study__person=self.applicant, participation__course__video=True).select_related('examiner').first()
         self.amend(score.examiner, at(date(2026, 10, 18), hour=21), score, value=min(score.value + 1, 25))
-        concert = Booking.objects.filter(category=Booking.Category.CONCERT, start__gte=timezone.now()).first()
+        concert = Booking.objects.filter(category='konzert', start__gte=timezone.now()).first()
         self.amend(events, timezone.now() - timedelta(days=2), concert, end=concert.end + timedelta(minutes=30))
 
     def letters(self):
@@ -1095,7 +1149,7 @@ class Command(BaseCommand):
             title, text = DECISIONS[study.status]
             text = text.format(
                 program=f'{study.program.degree} {study.program.name}', subject=study.subject, term=study.start_term,
-                deadline=f'{study.since + timedelta(days=ACCEPT_DAYS):%d.%m.%Y}',
+                deadline=f'{study.since + timedelta(days=Institution.get().accept_days):%d.%m.%Y}',
             )
             notices.append((study, title, f'{text}\n\n{APPEAL}' if study.status == Study.Status.REJECTED else text, at(study.since, hour=10)))
         for study in (s for s in self.enrolled if s.fs == 1):
@@ -1104,4 +1158,4 @@ class Command(BaseCommand):
                 f'{study.program.degree} {study.program.name}, Hauptfach {study.subject}, immatrikuliert.\n\nIhre Matrikelnummer: {study.person.matriculation}'
             ), at(study.start_term.start - timedelta(days=10), hour=10)))
         sent = Message.objects.bulk_create(Message(person=s.person, subject=title, body=text, created=when, read=when) for s, title, text, when in notices)
-        Document.objects.bulk_create(Document(person=s.person, study=s, kind=Document.Kind.NOTICE, title=title, message=m, created=when) for (s, title, _, when), m in zip(notices, sent))
+        Document.objects.bulk_create(Document(person=s.person, study=s, kind_id='notice', title=title, message=m, created=when) for (s, title, _, when), m in zip(notices, sent))

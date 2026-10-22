@@ -31,7 +31,8 @@ class RoomsConfig(Tile, AppConfig):
     def figure(self, person):
         from django.utils import timezone
 
-        from .forms import STUDENT_DAILY, quota
+        from core.models import Institution
+        from .forms import quota
         from .models import Booking
         from .views import agenda
 
@@ -39,5 +40,6 @@ class RoomsConfig(Tile, AppConfig):
         if 'manage_bookings' in person.roles:
             return f'{Booking.objects.filter(start__date=today).count()} Buchungen heute'
         if 'student' in person.roles:
-            return f'Heute noch {number_format(STUDENT_DAILY - quota(person, today))} von {STUDENT_DAILY} Std. Übezeit'
+            daily = Institution.get().student_daily_hours
+            return f'Heute noch {number_format(daily - quota(person, today))} von {daily} Std. Übezeit'
         return f'{agenda(person).filter(start__date=today).count()} Termine heute'

@@ -4,7 +4,7 @@
 <div class="cols">
   <div>
     <h1>Anmelden</h1>
-    <p class="lead">Campus ist die Verwaltung von Studium, Lehre, Prüfungen, Aufnahme und Räumen der HfM Weimar.</p>
+    <p class="lead">Campus ist die Verwaltung von Studium, Lehre, Prüfungen, Aufnahme und Räumen der {{ institution.short_name|default:institution.name }}.</p>
     <form method="post" class="form">
       {% csrf_token %}
       {{ form.non_field_errors }}
@@ -14,10 +14,10 @@
       <div class="actions"><button class="btn">Anmelden</button></div>
     </form>
   </div>
-  <div>
+  {% if institution.signup %}<div>
     <h2>Bewerben</h2>
-    <p>Sie möchten an der Hochschule für Musik FRANZ LISZT Weimar studieren? Legen Sie ein Konto an und bewerben Sie sich für die Eignungsprüfung.</p>
+    <p>Sie möchten an der {{ institution.name }} studieren? Legen Sie ein Konto an und bewerben Sie sich für die Eignungsprüfung.</p>
     <p><a class="more" href="{% url 'admissions:signup' %}">Konto anlegen</a></p>
-  </div>
+  </div>{% endif %}
 </div>
 {% endblock %}

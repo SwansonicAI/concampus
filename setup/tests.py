@@ -19,10 +19,13 @@ class EditorTest(Seeded):
                 'reregistration_start': '01.06.2027', 'deadline': '15.07.2027', 'fee': '250',
             }, {'fee': '260'}),
             'institute': ({'name': 'Instrumentenbau'}, {'name': 'Instrumentenbau und Akustik'}),
-            'studiengaenge': ({'degree': 'M.Mus.', 'name': 'Alte Musik', 'version': '2027', 'semesters': '4'}, {'semesters': '5'}),
+            'studiengaenge': ({'degree': 'M.Mus.', 'name': 'Alte Musik', 'version': '2027', 'semesters': '4', 'attempts': '3', 'rounding': 'half_up', 'mean_rounding': 'cut'}, {'semesters': '5'}),
             'hauptfaecher': ({'name': 'Laute'}, {'name': 'Laute und Theorbe'}),
-            'eignungspruefungen': ({'title': 'Videostufe Laute', 'term': Term.upcoming().pk, 'video': 'on', 'deadline': '01.12.2026', 'pass_mark': '16.1'}, {'capacity': '2'}),
+            'eignungspruefungen': ({'title': 'Videostufe Laute', 'term': Term.upcoming().pk, 'video': 'on', 'deadline': '01.12.2026', 'pass_mark': '16.1', 'max_points': '25'}, {'capacity': '2'}),
             'raeume': ({'name': 'FH 999', 'building': 'Fürstenhaus', 'function': 'uebung', 'capacity': '2'}, {'capacity': '3'}),
+            'unterlagen': ({'name': 'Repertoireliste', 'condition': 'always', 'required': 'on', 'order': '9'}, {'note': 'Werke mit Satzangaben.'}),
+            'raumfunktionen': ({'name': 'Tonstudio', 'order': '9'}, {'central': 'on'}),
+            'kategorien': ({'name': 'Generalprobe', 'tone': 'teach', 'teachers': 'on', 'participants': '0', 'blocks': 'on', 'order': '9'}, {'public': 'on'}),
         }
 
     def test_each_list_needs_its_right(self):

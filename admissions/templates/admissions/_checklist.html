@@ -14,14 +14,9 @@
       {% if upload %}
       <form method="post" enctype="multipart/form-data" action="{% url 'admissions:upload' study.pk %}" class="inline handed" data-upload>
         {% csrf_token %}
-        <input type="hidden" name="kind" value="{{ item.kind }}">
-        {% if item.kind == 'video' %}
-        <input type="file" name="file" accept=".mp4,.mov,.webm,.m4v,.ogg,.ogv,.qt" data-max="1610612736" data-too-big="Höchstens 1,5 GB. Bitte das Video komprimieren." aria-label="Videodatei">
-        <button class="btn ghost small">{% if item.documents %}Video ersetzen{% else %}Video hochladen{% endif %}</button>
-        {% else %}
-        <input type="file" name="file" accept=".pdf,image/*" aria-label="{{ item.label }}">
-        <button class="btn ghost small">{% if item.documents %}Weitere hochladen{% else %}Hochladen{% endif %}</button>
-        {% endif %}
+        <input type="hidden" name="kind" value="{{ item.kind.key }}">
+        <input type="file" name="file" accept="{{ item.kind.file_types|cut:' '|default:'.pdf,image/*' }}"{% if item.kind.max_mb %} data-max="{% widthratio item.kind.max_mb 1 1048576 %}" data-too-big="Höchstens {{ item.kind.limit }}. Bitte verkleinern."{% endif %} aria-label="{{ item.label }}">
+        <button class="btn ghost small">{% if item.documents and item.kind.single %}Ersetzen{% elif item.documents %}Weitere hochladen{% else %}Hochladen{% endif %}</button>
       </form>
       {% endif %}
     </div>

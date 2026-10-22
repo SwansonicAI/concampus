@@ -183,9 +183,12 @@ def describe(changes):
         if c.action != Change.Action.DELETED:
             for name, pair in c.fields.items():
                 if (field := c.model._meta.get_field(name)).is_relation:
-                    linked[field.related_model] |= {pk for v in pair for pk in (v if isinstance(v, list) else [v]) if pk is not None}
+                    linked[field.related_model, target(field)] |= {pk for v in pair for pk in (v if isinstance(v, list) else [v]) if pk is not None}
     records = {model: model.objects.select_related().in_bulk(pks) for model, pks in rows.items()}
-    names = {model: {pk: str(o) for pk, o in model.objects.select_related().in_bulk(pks).items()} for model, pks in linked.items()}
+    names = {
+        (model, to): {getattr(o, to): str(o) for o in model.objects.select_related().filter(**{f'{to}__in': pks})}
+        for (model, to), pks in linked.items()
+    }
     labels = {(c.model, c.row): gone(c) for c in changes if c.action == Change.Action.DELETED and c.row not in records[c.model]}
     for c in changes:
         exists = c.row in records[c.model]
@@ -197,6 +200,11 @@ def describe(changes):
         else:
             c.restorable = exists and c.action != Change.Action.CREATED and bool(c.fields.keys() - SECRET)
     return changes
+
+
+def target(field):
+    """What a relation stores of the record it points to: its key for lists referred to by key, else its id."""
+    return 'pk' if field.many_to_many else field.target_field.attname
 
 
 def gone(change):
@@ -217,7 +225,7 @@ def show(field, value, names):
     """A kept value as people read it."""
     if field.is_relation:
         pks = value if isinstance(value, list) else [value]
-        return ', '.join(names[field.related_model].get(pk, f'Nr. {pk} (gelöscht)') for pk in pks if pk is not None) or '–'
+        return ', '.join(names[field.related_model, target(field)].get(pk, f'Nr. {pk} (gelöscht)') for pk in pks if pk is not None) or '–'
     if value in (None, ''):
         return '–'
     if field.choices:

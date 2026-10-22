@@ -7,15 +7,9 @@ from django.utils.formats import number_format
 
 from core import history
 from core.dates import ClockField, DayField
-from core.models import Person
-from .models import Booking, Room, later
-
-# The HfM's booking rules (Buchungsinformationen in Asimut)
-STUDENT_AHEAD = timedelta(hours=24)  # students book at most a day ahead,
-STUDENT_DAILY = 4  # at most four hours per calendar day,
-LAST_MINUTE = timedelta(hours=3)  # but whatever starts within three hours does not count;
-CHAMBER_AHEAD = timedelta(days=10)  # chamber music rehearsals ten days ahead, with at least one more student
-TEACHER_AHEAD = timedelta(days=183)  # teachers six months ahead, without a quota
+from core.apps import plural
+from core.models import Institution, Person
+from .models import Booking, BookingCategory, Room, later, span
 
 
 def bookable(person):
@@ -25,14 +19,14 @@ def bookable(person):
         return Room.objects.all()
     if not person.roles & {'teacher', 'student'}:
         return Room.objects.none()
-    return Room.objects.filter(institutes__in=person.institutes()).exclude(function__in=Room.OFFICE_ONLY).distinct()
+    return Room.objects.filter(institutes__in=person.institutes()).exclude(function__central=True).distinct()
 
 
 def quota(person, day, exclude=None):
-    """Hours a student has booked on `day` that count against the four a day: their practice and chamber music,
-    last-minute bookings excepted."""
-    counted = person.bookings.filter(category__in=Booking.STUDENT, start__date=day).exclude(pk=exclude)
-    return round(sum((b.end - b.start).total_seconds() for b in counted if b.start - b.created > LAST_MINUTE) / 3600, 1)
+    """Hours a student has booked on `day` that count against their daily hours, last-minute bookings excepted."""
+    counted = person.bookings.filter(category__quota=True, start__date=day).exclude(pk=exclude)
+    last_minute = timedelta(hours=Institution.get().last_minute_hours)
+    return round(sum((b.end - b.start).total_seconds() for b in counted if b.start - b.created > last_minute) / 3600, 1)
 
 
 class Participants(forms.ModelMultipleChoiceField):
@@ -66,10 +60,11 @@ class BookingForm(forms.ModelForm):
         self.student = not (self.office or 'teacher' in roles)
         self.fields['room'].queryset = bookable(person)
         self.fields['room'].empty_label = 'Bitte wählen'
-        allowed = Booking.Category.values if self.office else Booking.TEACHER if 'teacher' in roles else Booking.STUDENT
-        self.fields['category'].choices = [(value, label) for value, label in Booking.Category.choices if value in allowed]
-        if not self.instance.pk:
-            self.initial.setdefault('category', allowed[0])
+        allowed = BookingCategory.objects.all()
+        if not self.office:
+            allowed = allowed.filter(teachers=True) if 'teacher' in roles else allowed.filter(students=True)
+        self.fields['category'].queryset = allowed
+        self.fields['category'].empty_label = None
         self.fields['title'].required = False
         self.fields['title'].help_text = 'Leer: die Kategorie, z. B. „Übebuchung“.'
         self.fields['participants'].queryset = Person.objects.filter(studies__status='enrolled').distinct().order_by('last_name', 'first_name').exclude(pk=person.pk)
@@ -87,8 +82,8 @@ class BookingForm(forms.ModelForm):
             raise forms.ValidationError('„Bis“ muss nach „Von“ liegen.')
         start = self.instance.start = timezone.make_aware(datetime.combine(day, begin))
         end = self.instance.end = timezone.make_aware(datetime.combine(day, until))
-        if not self.office:
-            self.check_rules(data.get('category'), start, end, data.get('participants') or [])
+        if not self.office and data.get('category'):
+            self.check_rules(data['category'], start, end, data.get('participants') or [])
         if not room:
             return data
         if until := data.get('repeat_until'):
@@ -100,27 +95,26 @@ class BookingForm(forms.ModelForm):
         return data
 
     def check_rules(self, category, start, end, participants):
-        now = timezone.now()
+        """The Hochschule's booking rules (Institution) and those of the category."""
+        now, rules = timezone.now(), Institution.get()
         if start < now - timedelta(minutes=15):
             raise forms.ValidationError('Der Termin liegt in der Vergangenheit.')
         if not self.student:
-            if start > now + TEACHER_AHEAD:
-                raise forms.ValidationError('Lehrende buchen höchstens sechs Monate im Voraus.')
+            if start > now + timedelta(days=rules.teacher_ahead_days):
+                raise forms.ValidationError(f'Lehrende buchen höchstens {rules.teacher_ahead_days} Tage im Voraus.')
             return
-        if category == Booking.Category.CHAMBER:
-            if start > now + CHAMBER_AHEAD:
-                raise forms.ValidationError('Kammermusikproben lassen sich höchstens 10 Tage im Voraus buchen.')
-            if not participants:
-                raise forms.ValidationError('Für eine Kammermusikprobe bitte mindestens eine weitere Person aus dem Ensemble eintragen.')
-        elif start > now + STUDENT_AHEAD:
-            raise forms.ValidationError('Studierende buchen höchstens 24 Stunden im Voraus. Kammermusikproben gehen bis 10 Tage.')
-        if start - now <= LAST_MINUTE:
+        ahead = category.ahead_hours or rules.student_ahead_hours
+        if start > now + timedelta(hours=ahead):
+            raise forms.ValidationError(f'„{category}“ buchen Studierende höchstens {span(ahead)} im Voraus.')
+        if len(participants) < category.participants:
+            raise forms.ValidationError(f'Für „{category}“ bitte mindestens {plural(category.participants, "weitere Person", "weitere Personen")} eintragen.')
+        if not category.quota or start - now <= timedelta(hours=rules.last_minute_hours):
             return  # last-minute: free of the quota
         used = quota(self.person, timezone.localtime(start).date(), exclude=self.instance.pk)
-        if used + (end - start).total_seconds() / 3600 > STUDENT_DAILY:
+        if used + (end - start).total_seconds() / 3600 > rules.student_daily_hours:
             raise forms.ValidationError(
-                f'Ihr Kontingent von {STUDENT_DAILY} Stunden am Tag reicht dafür nicht (gebucht: {number_format(used)} Std.). '
-                'Was in den nächsten 3 Stunden beginnt, geht als Last-Minute-Buchung ohne Kontingent.'
+                f'Ihr Kontingent von {rules.student_daily_hours} Stunden am Tag reicht dafür nicht (gebucht: {number_format(used)} Std.). '
+                f'Was in den nächsten {rules.last_minute_hours} Stunden beginnt, zählt nicht zum Kontingent.'
             )
 
     def save(self):

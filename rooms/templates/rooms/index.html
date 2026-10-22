@@ -12,7 +12,7 @@
     <a class="btn ghost" href="{% querystring tag=None %}" data-key="h" title="Heute (H)">Heute</a>
   </form>
 </div>
-<p class="lead">{{ day|date:"l, j. F Y" }}{% if left is not None %} · Ihr Kontingent heute: noch {{ left|floatformat:"-1" }} von 4 Std.{% endif %}</p>
+<p class="lead">{{ day|date:"l, j. F Y" }}{% if left is not None %} · Ihr Kontingent heute: noch {{ left|floatformat:"-1" }} von {{ institution.student_daily_hours }} Std.{% endif %}</p>
 {% include "core/_days.html" %}
 <form class="toolbar">
   <input type="hidden" name="tag" value="{{ day|date:'Y-m-d' }}">

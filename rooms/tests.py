@@ -5,9 +5,9 @@ from django.test import Client
 from django.utils import timezone
 
 from core import history
-from core.models import Institute, Person
+from core.models import Institute, Institution, Person
 from core.testing import Seeded, flashes
-from .models import Booking, Room
+from .models import Booking, BookingCategory, Room
 
 
 def slot(hours, minutes=60):
@@ -63,7 +63,7 @@ class BookingRulesTest(Seeded):
 
     def test_chamber_music_needs_a_partner_and_may_book_ten_days_ahead(self):
         chamber = {'room': Room.objects.get(name='FH 324').pk, 'category': 'kammermusik', 'title': 'Probe Quartett', **times(slot(72, 120), 120)}
-        self.refused(self.book(**chamber), 'mindestens eine weitere Person')
+        self.refused(self.book(**chamber), 'mindestens 1 weitere Person')
         partner = Person.objects.filter(studies__status='enrolled', studies__subject__name='Viola').first()
         self.assertEqual(flashes(self.book(**chamber, participants=[partner.pk], follow=True)), ['Buchung gespeichert.'])
         rehearsal = Booking.objects.get(title='Probe Quartett')
@@ -77,7 +77,7 @@ class BookingRulesTest(Seeded):
         self.book(teacher, **lesson, **times(slot(48, 50), 50), repeat_until='in 4 wochen', participants=[self.mei.pk])
         self.assertGreaterEqual(Booking.objects.filter(title='Zusatzunterricht').count(), 4)
         self.assertEqual(self.mei.attending.filter(title='Zusatzunterricht').count(), Booking.objects.filter(title='Zusatzunterricht').count())
-        self.refused(self.book(teacher, **lesson, **times(slot(24 * 200))), 'sechs Monate')
+        self.refused(self.book(teacher, **lesson, **times(slot(24 * 200))), '183 Tage')
 
 
 class PlansTest(Seeded):
@@ -88,7 +88,7 @@ class PlansTest(Seeded):
         r = student.get('/raeume/', {'raeume': f'institut:{piano.pk}'})
         self.assertTrue(r.context['rooms'])
         self.assertIn('belegt', r.text)
-        self.assertEqual(self.login('veranstaltungsbuero').get('/raeume/').context['group'], 'funktion:veranstaltung')
+        self.assertEqual(self.login('veranstaltungsbuero').get('/raeume/').context['group'], 'zentral')
 
     def test_events_search_and_cancellations(self):
         student = self.login('student')
@@ -104,3 +104,21 @@ class PlansTest(Seeded):
         self.assertEqual(r['Content-Type'], 'text/calendar; charset=utf-8')
         self.assertIn('BEGIN:VEVENT', r.text)
         self.assertEqual(Client().get('/raeume/kalender/falsch.ics').status_code, 404)
+
+
+class RulesAreDataTest(BookingRulesTest):
+    """What the Hochschule and its categories set is what the form enforces."""
+
+    def test_the_hochschule_sets_the_horizon_and_the_quota(self):
+        Institution.objects.update(student_ahead_hours=48, student_daily_hours=1)
+        self.assertEqual(flashes(self.book(**times(slot(30)), follow=True)), ['Buchung gespeichert.'])
+        self.refused(self.book(**times(slot(5), 120)), 'Kontingent von 1 Stunden')
+
+    def test_a_category_sets_its_own_rules(self):
+        BookingCategory.objects.filter(key='kammermusik').update(participants=2, ahead_hours=24)
+        partner = Person.objects.filter(studies__status='enrolled', studies__subject__name='Viola').first()
+        chamber = {'room': Room.objects.get(name='FH 324').pk, 'category': 'kammermusik'}
+        self.refused(self.book(**chamber, **times(slot(5)), participants=[partner.pk]), 'mindestens 2 weitere Personen')
+        self.refused(self.book(**chamber, **times(slot(30)), participants=[partner.pk]), 'höchstens 24 Stunden')
+        BookingCategory.objects.filter(key='uebung').update(students=False)
+        self.refused(self.book(**times(slot(5))), 'gültige Auswahl')

@@ -6,7 +6,7 @@
 {% if booking.pk %}
 <p class="lead">Gebucht für {{ booking.person }} am {{ booking.created|date:"j.n.Y, H:i" }}{% if booking.course %} · <a href="{{ booking.course.get_absolute_url }}">{{ booking.course.title }}</a>{% endif %}{% if series %} · Teil einer Serie mit {{ series }} Terminen{% endif %}{% if history %} · <a href="{% url 'history' 'rooms.booking' booking.pk %}" data-panel>Verlauf</a>{% endif %}</p>
 {% elif left is not None %}
-<p class="lead">Ihr Kontingent heute: noch {{ left|floatformat:"-1" }} von 4 Stunden.</p>
+<p class="lead">Ihr Kontingent heute: noch {{ left|floatformat:"-1" }} von {{ rules.student_daily_hours }} Stunden.</p>
 {% endif %}
 <div class="cols">
   <form method="post" class="form">
@@ -26,14 +26,14 @@
         <button class="btn danger">Diesen Termin</button>
         {% if series %}<button class="btn danger" name="serie" value="1">Diesen und alle folgenden</button>{% endif %}
       </form>
-      <p class="muted" style="margin: 12px 0 0"><small>Eine Veranstaltung, die sichtbar bleiben soll, lieber auf „Abgesagt“ setzen.</small></p>
+      <p class="muted" style="margin: 12px 0 0"><small>Eine Veranstaltung, die sichtbar bleiben soll, lieber auf eine Kategorie setzen, die den Raum nicht belegt, etwa „Abgesagt“.</small></p>
     </div>
     {% else %}
     <div class="panel">
       <h3>Regeln</h3>
       <p>Lehrende und Studierende buchen die Räume ihres Instituts. Veranstaltungs- und Sitzungsräume werden zentral vergeben{% if central %}: {{ central }}{% endif %}.</p>
-      <p>Studierende buchen bis 24 Stunden im Voraus und höchstens 4 Stunden am Tag. Was in den nächsten 3 Stunden beginnt, ist eine Last-Minute-Buchung und zählt nicht. Kammermusikproben gehen bis 10 Tage im Voraus, mit mindestens einer weiteren Person aus dem Ensemble.</p>
-      <p>Lehrende buchen bis sechs Monate im Voraus, ohne Kontingent. Wiederkehrende Buchungen werden nur gespeichert, wenn alle Termine frei sind.</p>
+      <p>Studierende buchen bis {{ rules.student_ahead_hours }} Stunden im Voraus und höchstens {{ rules.student_daily_hours }} Stunden am Tag. Was in den nächsten {{ rules.last_minute_hours }} Stunden beginnt, zählt nicht zum Kontingent.{% for c in special %} {{ c }}: {% if c.ahead %}bis {{ c.ahead }} im Voraus{% endif %}{% if c.ahead and c.participants %}, {% endif %}{% if c.participants %}mit mindestens {{ c.participants }} weiteren Teilnehmenden{% endif %}.{% endfor %}</p>
+      <p>Lehrende buchen bis {{ rules.teacher_ahead_days }} Tage im Voraus, ohne Kontingent. Wiederkehrende Buchungen werden nur gespeichert, wenn alle Termine frei sind.</p>
     </div>
     {% endif %}
   </div>

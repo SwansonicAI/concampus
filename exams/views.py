@@ -21,7 +21,6 @@ from curriculum.views import plan as study_plan
 from students.models import Study
 
 EXAMS = [Course.Kind.EXAM, Course.Kind.RECOGNITION]
-ATTEMPTS = 3
 
 
 def verbal(grade):
@@ -171,8 +170,8 @@ def register(request, pk):
         messages.error(request, 'Diese Prüfung gehört nicht zu Ihrem Studiengang.')
     elif (module.semester or 0) > study.semester:
         messages.error(request, f'{module.code} ist erst ab dem {module.semester}. Fachsemester vorgesehen.')
-    elif attempts(request.user, module) >= ATTEMPTS:
-        messages.error(request, f'Sie haben alle {ATTEMPTS} Versuche für {module.code} ausgeschöpft.')
+    elif attempts(request.user, module) >= study.program.attempts:
+        messages.error(request, f'Sie haben alle {study.program.attempts} Versuche für {module.code} ausgeschöpft.')
     else:
         Participation.objects.get_or_create(course=course, study=study, module=module)
         Message.send(request.user, f'Prüfungsanmeldung: {course.title}', f'Sie sind zur Prüfung {course.title} ({module}) angemeldet.', reverse('exams:index'))
@@ -240,6 +239,7 @@ def transcript(request, pk):
     earned, total = sum(m.earned for m in tree), sum(m.credits for m in tree)
     rows = [r for r in study_plan(tree, study.program.semesters) if r['kind'] != 'part' and r['node'].earned or r['kind'] == 'part' and r['exam'] and any(i.done for i in r['items'])]
     return render(request, 'exams/transcript.html', {
-        'study': study, 'rows': rows, 'earned': earned, 'total': total, 'average': average, 'honours': average is not None and average <= 1,
-        'complete': earned >= total and 'decide_results' in request.user.roles,  # a Zeugnis comes from the office 'verbal': verbal(average) if average else '', 'today': timezone.localdate(),
+        'study': study, 'rows': rows, 'earned': earned, 'total': total, 'average': average, 'honours': None not in (average, study.program.honours) and average <= study.program.honours,
+        'complete': earned >= total and 'decide_results' in request.user.roles,  # a Zeugnis comes from the office
+        'verbal': verbal(average) if average else '', 'today': timezone.localdate(),
     })

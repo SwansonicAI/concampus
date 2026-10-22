@@ -6,7 +6,6 @@ from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_not_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.validators import URLValidator
 from django.db import transaction
 from django.db.models import Avg, Count, Exists, F, Min, OuterRef, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
@@ -16,26 +15,15 @@ from django.views.decorators.http import require_POST
 
 from core.access import require
 from core.history import tables
-from core.models import Message, Term
+from core.models import Institution, Message, Term
 from courses import panel
 from courses.forms import SlotForm
 from courses.models import Course, Participation
-from students.models import Document, Study, StudyTerm
-from .forms import INSURERS, AcceptForm, ApplicationForm, SignupForm
+from students.models import Document, DocumentType, Study, StudyTerm
+from .forms import AcceptForm, ApplicationForm, SignupForm
 
 BOARD = [Study.Status.APPLIED, Study.Status.ADMITTED, Study.Status.WAITLISTED, Study.Status.REJECTED, Study.Status.ENROLLED]
-ACCEPT_DAYS = 14
-POSTGRADUATE = ['M.Mus.', 'M.Ed.', 'Konzertdiplom', 'Zertifikat', 'Dr. phil.']
-Kind = Document.Kind
-VIDEO_TYPES = ('.mp4', '.mov', '.webm', '.m4v', '.ogg', '.ogv', '.qt')
-VIDEO_SIZE = 1536 * 1024 * 1024  # 1.5 GB
-NOTES = {
-    Kind.VIDEO: 'Eine Datei, ungeschnitten, 10–15 Minuten, beginnend mit einer kurzen Vorstellung; die Kamera 3–5 m entfernt, '
-                'eine professionelle Aufnahme ist nicht nötig. Nicht älter als ein Jahr. Höchstens 1,5 GB als .mp4, .mov, .webm, .m4v, .ogg, .ogv oder .qt.',
-    Kind.FEE: '50 €, Verwendungszweck: Eignungsprüfung, Name, Hauptfach.',
-    Kind.CONSENT: 'Sie sind noch nicht volljährig.',
-    Kind.LANGUAGE: 'Niveau B2.',
-}
+Condition = DocumentType.Condition
 DECISIONS = {
     Study.Status.ADMITTED: (
         'Zulassungsbescheid',
@@ -72,29 +60,35 @@ def stages():
     )
 
 
-def checklist(study):
-    """What a complete application holds, as the HfM lists it: [{kind, label, note, required, documents}].
+def document_types():
+    """The kinds of documents an application can ask for, each with its Hauptfächer; fetch once for many studies."""
+    return list(DocumentType.objects.exclude(condition=Condition.NEVER).prefetch_related('subjects'))
+
+
+def checklist(study, types=None):
+    """What a complete application holds, as the document types say: [{kind, label, note, required, documents}].
     Reads `study.documents.all()`; prefetch them for many studies."""
     person, handed, today = study.person, defaultdict(list), timezone.localdate()
     for d in study.documents.all():
-        handed[d.kind].append(d)
+        handed[d.kind_id].append(d)
     steps = getattr(study, 'stages', None)
     video = any(p.course.video for p in steps) if steps is not None else Participation.objects.filter(study=study, course__video=True).exists()
-    items = [(Kind.VIDEO, True)] * video + [(Kind.CV, True), (Kind.SCHOOL, True)]
-    if study.program.degree in POSTGRADUATE:
-        items.append((Kind.DEGREE, True))
-    items.append((Kind.FEE, True))
-    if person.birth_date and (today - person.birth_date).days < 18 * 365.25:
-        items.append((Kind.CONSENT, True))
-    if study.subject.name in ('Gesang', 'Jazz-Gesang'):
-        items.append((Kind.VOICE, False))
-    if person.nationality != 'deutsch':
-        items.append((Kind.LANGUAGE, False))
-    return [{'kind': kind, 'label': kind.label, 'note': NOTES.get(kind, ''), 'required': required, 'documents': handed[kind]} for kind, required in items]
+    applies = {
+        Condition.ALWAYS: True,
+        Condition.VIDEO: video,
+        Condition.DEGREE: study.program.postgraduate,
+        Condition.MINOR: bool(person.birth_date) and (today - person.birth_date).days < 18 * 365.25,
+        Condition.FOREIGN: person.nationality != 'deutsch',
+    }
+    return [
+        {'kind': t, 'label': t.name, 'note': t.note, 'required': t.required, 'documents': handed[t.key]}
+        for t in (document_types() if types is None else types)
+        if applies.get(t.condition) or t.condition == Condition.SUBJECTS and study.subject in t.subjects.all()
+    ]
 
 
-def incomplete(study):
-    return [item['label'] for item in checklist(study) if item['required'] and not item['documents']]
+def incomplete(study, types=None):
+    return [item['label'] for item in checklist(study, types) if item['required'] and not item['documents']]
 
 
 def uploads_open(study):
@@ -122,8 +116,9 @@ def board(request):
     subject = request.GET.get('fach', '')
     if subject.isdigit():
         studies = studies.filter(subject=subject)
+    types = document_types()
     for study in studies:
-        study.incomplete = incomplete(study) if study.status == Study.Status.APPLIED else []
+        study.incomplete = incomplete(study, types) if study.status == Study.Status.APPLIED else []
     auditions = (
         Course.objects.filter(term=term, kind=Course.Kind.AUDITION).select_related('program', 'subject')
         .annotate(date=Min('bookings__start'), size=Count('participations', distinct=True))
@@ -172,7 +167,7 @@ def audition(request, pk):
         try:
             panel.save(request.POST, rows, columns, decide=office)
         except InvalidOperation:
-            messages.error(request, 'Bitte nur Punkte zwischen 0 und 25 eintragen.')
+            messages.error(request, f'Bitte nur Punkte zwischen 0 und {course.max_points} eintragen.')
         else:
             messages.success(request, 'Wertungen gespeichert.')
         return redirect(course)
@@ -256,7 +251,7 @@ def application(request, pk):
         'recommendation': recommendation,
         'show_results': office or juror,
         'checklist': checklist(study),
-        'documents': study.documents.filter(kind__in=[Kind.NOTICE, Kind.OTHER]),
+        'documents': study.documents.filter(kind__condition=Condition.NEVER),
         'decide': 'decide_applications' in person.roles,
         'enrol': 'manage_students' in person.roles,
         'history': bool(tables(person.roles)),
@@ -275,7 +270,7 @@ def decide(request, pk):
         raise PermissionDenied
     study.set_status(status)
     subject, body = DECISIONS[status]
-    deadline = timezone.localdate() + timedelta(days=ACCEPT_DAYS)
+    deadline = timezone.localdate() + timedelta(days=Institution.get().accept_days)
     study.notify(
         subject,
         body.format(program=f'{study.program.degree} {study.program.name}', subject=study.subject, term=study.start_term, deadline=f'{deadline:%d.%m.%Y}'),
@@ -289,6 +284,9 @@ def decide(request, pk):
 def signup(request):
     if request.user.is_authenticated:
         return redirect('admissions:apply')
+    if not Institution.get().signup:
+        messages.error(request, 'Neue Bewerbungskonten sind derzeit nicht möglich.')
+        return redirect('login')
     form = SignupForm(request.POST or None)
     if form.is_valid():
         person = form.save()
@@ -316,9 +314,8 @@ def apply(request):
                 setattr(person, field, data[field] or getattr(person, field))
             person.save(update_fields=entrance)
             Participation.objects.create(course=audition, study=study, note=data['repertoire'])
-            accompanist = Course.objects.filter(term=audition.term, kind=Course.Kind.LESSON, title__startswith='Korrepetition').first()
-            if data['accompanist'] and accompanist:
-                Participation.objects.create(course=accompanist, study=study)
+            if data['accompanist'] and audition.accompaniment:
+                Participation.objects.create(course=audition.accompaniment, study=study)
         Message.send(
             person, 'Bewerbung eingegangen',
             f'Ihre Bewerbung für {audition.program.degree} {audition.program.name}, Hauptfach {audition.subject}, ist eingegangen. '
@@ -336,16 +333,18 @@ def mine(request):
         person.studies.filter(Q(status__in=Study.APPLICATION) | Q(status=Study.Status.ENROLLED, start_term__start__gte=Term.current().start))
         .select_related('person', 'program', 'subject', 'start_term').prefetch_related('documents')
     )
+    types = document_types()
     for study in studies:
         study.stages = stages().filter(study=study)
         study.accepted = study.terms.filter(term=study.start_term).exists()
         study.waiting = study.missing() if study.status == Study.Status.ADMITTED and study.accepted else []
-        study.checklist = checklist(study) if study.status == Study.Status.APPLIED else []
+        study.checklist = checklist(study, types) if study.status == Study.Status.APPLIED else []
         study.open = uploads_open(study)
         study.deadline = next((p.course.deadline for p in study.stages if p.course.program_id), None)
         study.stages = list(study.stages)
     return render(request, 'admissions/mine.html', {
-        'studies': studies, 'documents': person.documents.filter(kind__in=[Kind.NOTICE, Kind.OTHER]), 'accept': AcceptForm(), 'insurers': INSURERS,
+        'studies': studies, 'documents': person.documents.filter(kind__condition=Condition.NEVER), 'accept': AcceptForm(),
+        'insurers': Institution.get().insurers.splitlines(),
     })
 
 
@@ -357,31 +356,26 @@ def upload(request, pk):
     if not (office or study.person == request.user):
         raise PermissionDenied
     back = redirect('admissions:mine' if study.person == request.user else study.get_absolute_url())
-    kind, file, url = request.POST.get('kind'), request.FILES.get('file'), request.POST.get('url', '').strip()
+    kind = DocumentType.objects.exclude(condition=Condition.NEVER).filter(key=request.POST.get('kind')).first()
+    file = request.FILES.get('file')
     if not (office or uploads_open(study)):
         messages.error(request, 'Die Frist für Unterlagen ist abgelaufen.')
         return back
-    if kind not in Kind.values or kind == Kind.NOTICE or not (file or url):
-        messages.error(request, 'Bitte eine Datei wählen oder einen Link angeben.' if kind == Kind.VIDEO else 'Bitte eine Datei wählen.')
+    if not (kind and file):
+        messages.error(request, 'Bitte eine Datei wählen.')
         return back
-    if kind == Kind.VIDEO:  # one uncut file, as the HfM asks; a new one replaces the old
-        if not file or not file.name.lower().endswith(VIDEO_TYPES):
-            messages.error(request, 'Bitte das Video als Datei hochladen: .mp4, .mov, .webm, .m4v, .ogg, .ogv oder .qt.')
-            return back
-        if file.size > VIDEO_SIZE:
-            messages.error(request, 'Das Video ist größer als 1,5 GB. Bitte komprimieren und erneut hochladen.')
-            return back
-        for old in study.documents.filter(kind=Kind.VIDEO):
+    if kind.extensions and not file.name.lower().endswith(kind.extensions):
+        messages.error(request, f'{kind} bitte als {kind.file_types} hochladen.')
+        return back
+    if kind.max_mb and file.size > kind.max_mb * 2 ** 20:
+        messages.error(request, f'Die Datei ist größer als {kind.limit}. Bitte verkleinern und erneut hochladen.')
+        return back
+    if kind.single:  # a new one replaces the old
+        for old in study.documents.filter(kind=kind):
             old.file.delete(save=False)
             old.delete()
-    if url and not file:
-        try:
-            URLValidator(schemes=['https', 'http'])(url)
-        except ValidationError:
-            messages.error(request, 'Der Link ist ungültig.')
-            return back
-    title = (file.name if kind == Kind.VIDEO else request.POST.get('title', '').strip())[:120] or Kind(kind).label
-    Document.objects.create(person=study.person, study=study, kind=kind, title=title, file=file or '', url='' if file else url)
+    title = file.name[:120]
+    Document.objects.create(person=study.person, study=study, kind=kind, title=title, file=file)
     messages.success(request, f'„{title}“ hochgeladen.')
     return back
 
@@ -420,7 +414,7 @@ def review(request, pk):
         try:
             panel.save(request.POST, [current], [person], decide=False)
         except InvalidOperation:
-            messages.error(request, 'Bitte Punkte zwischen 0 und 25 eintragen.')
+            messages.error(request, f'Bitte Punkte zwischen 0 und {course.max_points} eintragen.')
             return redirect(f'{here}?bewerbung={current.pk}')
         messages.success(request, f'Wertung für {current.study.person.first_name} {current.study.person.last_name} gespeichert.')
         following = next((p for p in rows[at + 1:] + rows[:at] if mine[p.pk] is None), None)
@@ -430,7 +424,7 @@ def review(request, pk):
         'p': current,
         'juror': juror,
         'mine': mine[current.pk],
-        'videos': current.study.documents.filter(kind=Kind.VIDEO),
+        'videos': current.study.documents.filter(kind__condition=Condition.VIDEO),
         'position': at + 1,
         'count': len(rows),
         'done': sum(1 for value in mine.values() if value is not None),

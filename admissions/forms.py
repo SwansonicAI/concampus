@@ -60,7 +60,6 @@ class ApplicationForm(forms.Form):
         self.fields['teacher'].queryset = Person.objects.filter(teaching__kind=Course.Kind.LESSON, teaching__subject__isnull=False).distinct()
 
 
-INSURERS = ['Techniker Krankenkasse', 'AOK PLUS', 'BARMER', 'DAK-Gesundheit', 'IKK classic', 'KKH Kaufmännische Krankenkasse', 'hkk Krankenkasse']
 
 
 class AcceptForm(forms.Form):

@@ -14,7 +14,7 @@ from django.views.decorators.http import require_POST
 
 from courses.models import Course
 from curriculum.models import Module, Program
-from rooms.models import Booking, Room
+from rooms.models import Booking, BookingCategory, Room
 from rooms.views import agenda
 from students.models import Study
 from . import dates
@@ -44,7 +44,7 @@ def home(request):
         'day': day,
         'calendar': bool(marked),
         'days': strip(today, day, marked),
-        'agenda': bookings.filter(start__date=day).select_related('room', 'course'),
+        'agenda': bookings.filter(start__date=day).select_related('room', 'course', 'category'),
         'letters': person.messages.filter(read=None)[:3],
     })
 
@@ -170,13 +170,13 @@ def found(person, q, limit):
             for r in matching(Room.objects.all(), q, 'name', 'purpose', 'building', 'equipment')[:limit]
         ]))
         # bookings by title or category: concerts for everyone, one's own dates, everything for the offices
-        shown = Booking.objects.filter(end__gte=timezone.now()).select_related('room', 'course')
+        shown = Booking.objects.filter(end__gte=timezone.now()).select_related('room', 'course', 'category')
         if 'view_bookings' not in roles:
-            shown = shown.filter(Q(category__in=Booking.PUBLIC) | Q(pk__in=agenda(person).values('pk')))
-        named = [value for value, label in Booking.Category.choices if all(w in fold(label) for w in words)]
+            shown = shown.filter(Q(category__public=True) | Q(pk__in=agenda(person).values('pk')))
+        named = [c.key for c in BookingCategory.objects.all() if all(w in fold(c.name) for w in words)]
         events = shown.filter(Q(pk__in=matching(shown, q, 'title', 'description', 'course__title').values('pk')) | Q(category__in=named))
         groups.append(('Termine', [
-            hit(b.label, reverse('rooms:booking', args=[b.pk]), f'{date_format(timezone.localtime(b.start), "D j.n., H:i")} · {b.room} · {b.get_category_display()}')
+            hit(b.label, reverse('rooms:booking', args=[b.pk]), f'{date_format(timezone.localtime(b.start), "D j.n., H:i")} · {b.room} · {b.category}')
             for b in events[:limit]
         ]))
     groups.append(('Postfach', [hit(m.subject, m.get_absolute_url(), date_format(m.created, 'j.n.Y')) for m in matching(person.messages.all(), q, 'subject', 'body')[:limit]]))

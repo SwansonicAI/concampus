@@ -11,7 +11,7 @@
     {% if bookable %}<a class="btn" href="{% url 'rooms:new' %}?raum={{ room.pk }}">Buchen</a>{% endif %}
   </div>
 </div>
-<p class="lead">{{ room.purpose|default:room.get_function_display }} · {{ room.building }} · {{ room.capacity }} Plätze{% if room.equipment %} · {{ room.equipment }}{% endif %}</p>
-<p class="muted">{% if room.function in 'veranstaltung sitzung' or not room.institutes.all %}Zentral vergeben{% if central %}: {{ central }}{% endif %}.{% else %}Buchbar für {% for i in room.institutes.all %}{% if not forloop.first %}, {% endif %}Institut {{ i }}{% endfor %}.{% endif %}</p>
+<p class="lead">{{ room.purpose|default:room.function }} · {{ room.building }} · {{ room.capacity }} Plätze{% if room.equipment %} · {{ room.equipment }}{% endif %}</p>
+<p class="muted">{% if room.function.central or not room.institutes.all %}Zentral vergeben{% if central %}: {{ central }}{% endif %}.{% else %}Buchbar für {% for i in room.institutes.all %}{% if not forloop.first %}, {% endif %}Institut {{ i }}{% endfor %}.{% endif %}</p>
 {% include "rooms/_week.html" %}
 {% endblock %}

@@ -1,5 +1,5 @@
 from collections import defaultdict
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -8,13 +8,22 @@ from django.urls import reverse
 from core.models import Tracked
 
 
-def weighted(nodes):
-    """Mean of the nodes' grades by their weights, to one decimal rounded half up (RPSO § 15); None if nothing counts."""
+class Rounding(models.TextChoices):  # what Prüfungsordnungen say about one decimal
+    HALF_UP = 'half_up', 'auf eine Nachkommastelle runden'
+    CUT = 'cut', 'nach der ersten Nachkommastelle abschneiden'
+
+
+def rounded(value, rounding):
+    return value.quantize(Decimal('0.1'), ROUND_DOWN if rounding == Rounding.CUT else ROUND_HALF_UP)
+
+
+def weighted(nodes, rounding=Rounding.HALF_UP):
+    """Mean of the nodes' grades by their weights, to one decimal; None if nothing counts."""
     graded = [(node.weight, node.grade) for node in nodes if node.weight and node.grade is not None]
     total = sum(weight for weight, _ in graded)
     if not total:
         return None
-    return (sum(weight * grade for weight, grade in graded) / total).quantize(Decimal('0.1'), ROUND_HALF_UP)
+    return rounded(sum(weight * grade for weight, grade in graded) / total, rounding)
 
 
 class Subject(Tracked, models.Model):
@@ -44,6 +53,14 @@ class Program(Tracked, models.Model):
     version = models.PositiveSmallIntegerField('PO-Version')
     semesters = models.PositiveSmallIntegerField('Regelstudienzeit')
     subjects = models.ManyToManyField(Subject, blank=True, related_name='programs', verbose_name='Hauptfächer')
+    postgraduate = models.BooleanField('Setzt einen Abschluss voraus', default=False, help_text='Bewerbende reichen ihr Abschlusszeugnis ein.')
+    attempts = models.PositiveSmallIntegerField('Prüfungsversuche', default=3)
+    rounding = models.CharField('Modul- und Gesamtnoten', max_length=8, choices=Rounding, default=Rounding.HALF_UP)
+    mean_rounding = models.CharField('Mittel der Prüfenden', max_length=8, choices=Rounding, default=Rounding.CUT)
+    honours = models.DecimalField(
+        'Mit Auszeichnung bis', max_digits=2, decimal_places=1, null=True, blank=True,
+        help_text='Gesamtnote, bis zu der „mit Auszeichnung“ vergeben wird; leer: nie.',
+    )
 
     class Meta:
         ordering = ['-degree', 'name', '-version']
@@ -75,7 +92,7 @@ class Program(Tracked, models.Model):
                 module.first, module.last = (min(semesters), max(semesters)) if semesters else (None, None)
                 module.earned = min(module.credits, sum(node.earned for node in module.nodes))
                 module.done = module.earned >= module.credits and all(node.done for node in module.nodes if not node.credits)
-                module.grade = weighted(module.nodes)
+                module.grade = weighted(module.nodes, self.rounding)
             else:
                 module.first = module.last = module.semester
                 module.done = module.pk in results

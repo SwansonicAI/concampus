@@ -15,7 +15,7 @@
       {% csrf_token %}
       <h3>Ihre Wertung</h3>
       <div class="inline">
-        <label>Punkte (0–25)<input class="cell" type="text" inputmode="decimal" name="score-{{ p.pk }}-{{ user.pk }}" value="{{ mine|default_if_none:''|unlocalize }}"></label>
+        <label>Punkte (0–{{ course.max_points }})<input class="cell" type="text" inputmode="decimal" name="score-{{ p.pk }}-{{ user.pk }}" value="{{ mine|default_if_none:''|unlocalize }}"></label>
         <button class="btn">Speichern und weiter</button>
       </div>
       <p class="muted" style="margin: 12px 0 0"><small>Bestanden ab {{ course.pass_mark }} Punkten im Mittel der Kommission. Weiter geht es zur nächsten Bewerbung ohne Ihre Wertung.</small></p>

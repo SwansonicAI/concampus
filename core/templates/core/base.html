@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}{% endblock %} · Campus HfM Weimar</title>
+<title>{% block title %}{% endblock %} · Campus {{ institution.short_name|default:institution.name }}</title>
 <link rel="stylesheet" href="{% static 'core/hfm.css' %}">
 <script src="{% static 'core/app.js' %}" defer></script>
 </head>
@@ -43,12 +43,12 @@
 </main>
 <footer class="foot">
   <div class="wrap">
-    <span>Campus · Hochschule für Musik FRANZ LISZT Weimar</span>
-    <a href="mailto:campus@hfm-weimar.de">Hilfe und Rückmeldung</a>
-    <a href="https://www.hfm-weimar.de">Website der Hochschule</a>
-    <a href="https://www.hfm-weimar.de/footer/impressum">Impressum</a>
-    <a href="https://www.hfm-weimar.de/footer/datenschutz">Datenschutz</a>
-    <a href="https://www.hfm-weimar.de/footer/barrierefreiheit">Barrierefreiheit</a>
+    <span>Campus · {{ institution.name }}</span>
+    {% if institution.email %}<a href="mailto:{{ institution.email }}">Hilfe und Rückmeldung</a>{% endif %}
+    {% if institution.website %}<a href="{{ institution.website }}">Website der Hochschule</a>{% endif %}
+    {% if institution.imprint %}<a href="{{ institution.imprint }}">Impressum</a>{% endif %}
+    {% if institution.privacy %}<a href="{{ institution.privacy }}">Datenschutz</a>{% endif %}
+    {% if institution.accessibility %}<a href="{{ institution.accessibility }}">Barrierefreiheit</a>{% endif %}
   </div>
 </footer>
 {% if user.is_authenticated %}

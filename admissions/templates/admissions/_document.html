@@ -1,2 +1,2 @@
 {% if d.playable %}<figure class="video"><video controls preload="metadata" src="{{ d.href }}"></video><figcaption>{{ d.title }} <small class="muted">{{ d.created|date:"j.n.Y" }}</small></figcaption></figure>
-{% else %}<a href="{{ d.href }}"{% if d.kind == 'video' %} target="_blank" rel="noopener"{% endif %}>{{ d.title }}</a> <small class="muted">{{ d.created|date:"j.n.Y" }}</small>{% endif %}
+{% else %}<a href="{{ d.href }}" target="_blank" rel="noopener">{{ d.title }}</a> <small class="muted">{{ d.created|date:"j.n.Y" }}</small>{% endif %}

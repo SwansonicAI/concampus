@@ -7,7 +7,7 @@
   <form class="actions">
     <select name="kategorie" onchange="this.form.requestSubmit()" aria-label="Kategorie">
       <option value="">Alle Kategorien</option>
-      {% for value, label in categories %}<option value="{{ value }}"{% if value == picked %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      {% for c in categories %}<option value="{{ c.key }}"{% if c.key == picked %} selected{% endif %}>{{ c }}</option>{% endfor %}
     </select>
   </form>
 </div>
@@ -21,7 +21,7 @@
       <td class="mid">{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</td>
       <td class="mid"><a href="{% url 'rooms:booking' b.pk %}"><b>{{ b.label }}</b></a></td>
       <td class="mid">{{ b.room }} <small class="muted">{{ b.room.building }}</small></td>
-      <td class="mid"><span class="booking {{ b.tone }}">{{ b.get_category_display }}</span></td>
+      <td class="mid"><span class="booking {{ b.tone }}">{{ b.category }}</span></td>
     </tr>
     {% empty %}
     <tr><td colspan="4" class="empty">Keine Veranstaltungen.</td></tr>

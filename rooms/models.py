@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
-from core.models import Institute, Person, Tracked
+from core.models import Institute, Keyed, Person, Tracked
 from courses.models import Course
 
 
@@ -13,29 +13,40 @@ def later(moment, weeks):
     return timezone.make_aware(timezone.localtime(moment).replace(tzinfo=None) + timedelta(weeks=weeks))
 
 
-class Room(Tracked, models.Model):
-    """A room of the Hochschule or a venue it uses. Institutes book their own rooms; event and meeting rooms are
-    given out centrally."""
+def span(hours):
+    return f'{hours // 24} Tage' if hours > 24 and hours % 24 == 0 else f'{hours} Stunden'
+
+
+class RoomFunction(Tracked, Keyed):
+    """What a room is for: Übungsraum, Unterrichtsraum, Veranstaltungsraum."""
 
     capabilities = ('manage_rooms',)
 
-    class Function(models.TextChoices):
-        PRACTICE = 'uebung', 'Übungsraum'
-        TEACHING = 'unterricht', 'Unterrichtsraum'
-        CHAMBER = 'kammermusik', 'Kammermusik'
-        ORGAN = 'orgel', 'Orgel'
-        SEMINAR = 'seminar', 'Hörsaal und Seminarraum'
-        STUDIO = 'studio', 'Studio und Labor'
-        MEETING = 'sitzung', 'Sitzungsraum'
-        EVENT = 'veranstaltung', 'Veranstaltungsraum'
-        WORKSHOP = 'werkstatt', 'Werkstatt'
+    name = models.CharField('Name', max_length=60, unique=True)
+    central = models.BooleanField(
+        'Zentral vergeben', default=False,
+        help_text='Nur bucht, wer alle Räume buchen darf, z. B. Veranstaltungs- und Sitzungsräume. Sonst buchen Lehrende und Studierende die Räume ihres Instituts.',
+    )
+    order = models.PositiveSmallIntegerField('Reihenfolge', default=0)
 
-    OFFICE_ONLY = [Function.EVENT, Function.MEETING]
+    class Meta:
+        ordering = ['order', 'name']
+        verbose_name = 'Raumfunktion'
+        verbose_name_plural = 'Raumfunktionen'
+
+    def __str__(self):
+        return self.name
+
+
+class Room(Tracked, models.Model):
+    """A room of the Hochschule or a venue it uses. Institutes book their own rooms; others are given out centrally."""
+
+    capabilities = ('manage_rooms',)
 
     name = models.CharField('Name', max_length=60, unique=True, help_text='Raumnummer oder Name, z. B. „FH 214“ oder „Festsaal“.')
     purpose = models.CharField('Bezeichnung', max_length=80, blank=True, help_text='Wie an der Tür, z. B. „Unterrichtsraum Klavier“.')
     building = models.CharField('Gebäude', max_length=40)
-    function = models.CharField('Funktion', max_length=16, choices=Function, default=Function.TEACHING)
+    function = models.ForeignKey(RoomFunction, models.PROTECT, to_field='key', related_name='rooms', verbose_name='Funktion')
     institutes = models.ManyToManyField(Institute, blank=True, related_name='rooms', verbose_name='Institute')
     capacity = models.PositiveSmallIntegerField('Plätze')
     equipment = models.CharField('Ausstattung', max_length=200, blank=True)
@@ -49,6 +60,57 @@ class Room(Tracked, models.Model):
         return self.name
 
 
+class BookingCategory(Tracked, Keyed):
+    """What a booking is for. Its settings decide who books it, how it shows on the plans and which rules apply."""
+
+    class Tone(models.TextChoices):  # colour family on the plans
+        TEACH = 'teach', 'Unterricht und Probe'
+        PRACTICE = 'practice', 'Üben'
+        EXAM = 'exam', 'Prüfung'
+        EVENT = 'event', 'Veranstaltung'
+        SERVICE = 'service', 'Service'
+        BLOCKED = 'blocked', 'Blockiert'
+        CANCELLED = 'cancelled', 'Abgesagt'
+
+    SYSTEM = {  # what the code books itself, created on first use
+        'unterricht': {'name': 'Unterricht', 'tone': Tone.TEACH, 'teachers': True},
+        'pruefung': {'name': 'Prüfung', 'tone': Tone.EXAM, 'teachers': True},
+        'eignungspruefung': {'name': 'Eignungsprüfung', 'tone': Tone.EXAM},
+    }
+
+    capabilities = ('manage_rooms',)
+
+    name = models.CharField('Name', max_length=60, unique=True)
+    tone = models.CharField('Farbe', max_length=10, choices=Tone, default=Tone.PRACTICE)
+    students = models.BooleanField('Studierende buchen sie', default=False)
+    teachers = models.BooleanField('Lehrende buchen sie', default=False)
+    quota = models.BooleanField('Zählt zum Tageskontingent', default=False, help_text='Die Stunden, die Studierende am Tag buchen dürfen.')
+    ahead_hours = models.PositiveSmallIntegerField(
+        'Eigener Vorlauf (Std.)', null=True, blank=True,
+        help_text='Wie weit im Voraus Studierende sie buchen; leer: wie in den Hochschuldaten.',
+    )
+    participants = models.PositiveSmallIntegerField('Mindestens weitere Teilnehmende', default=0, help_text='Für Studierende, z. B. 1 bei Kammermusik.')
+    public = models.BooleanField('Öffentlich', default=False, help_text='Steht unter Veranstaltungen; alle sehen die Einzelheiten.')
+    blocks = models.BooleanField('Belegt den Raum', default=True, help_text='Ohne Haken, wie bei „Abgesagt“: der Raum bleibt frei, der Termin fällt aus den Kalendern.')
+    order = models.PositiveSmallIntegerField('Reihenfolge', default=0)
+
+    class Meta:
+        ordering = ['order', 'name']
+        verbose_name = 'Buchungskategorie'
+        verbose_name_plural = 'Buchungskategorien'
+
+    def __str__(self):
+        return self.name
+
+    @classmethod
+    def system(cls, key):
+        return cls.objects.get_or_create(key=key, defaults=cls.SYSTEM[key])[0]
+
+    @property
+    def ahead(self):
+        return span(self.ahead_hours) if self.ahead_hours else ''
+
+
 class Booking(Tracked, models.Model):
     """A room taken for a time. Lessons, exams, rehearsals, concerts, practice and closures are all bookings,
     told apart by their category."""
@@ -57,62 +119,10 @@ class Booking(Tracked, models.Model):
     capabilities = ('manage_bookings',)
     keep = timedelta(days=730)
 
-    class Category(models.TextChoices):  # as the HfM's Asimut has them
-        PRACTICE = 'uebung', 'Übebuchung'
-        CHAMBER = 'kammermusik', 'Kammermusik-Probe'
-        LESSON = 'unterricht', 'Unterricht'
-        REHEARSAL = 'probe', 'Probe'
-        ORCHESTRA = 'orchesterprobe', 'Orchesterprobe'
-        SECTION = 'registerprobe', 'Registerprobe'
-        EXAM = 'pruefung', 'Prüfung'
-        AUDITION = 'eignungspruefung', 'Eignungsprüfung'
-        RECITAL = 'vorspiel', 'Vorspiel'
-        CLASS_CONCERT = 'klassenabend', 'Klassenabend'
-        CONCERT = 'konzert', 'Konzert'
-        EVENT = 'veranstaltung', 'Veranstaltung'
-        MASTERCLASS = 'meisterkurs', 'Meisterkurs'
-        WEIMAR_MASTERCLASSES = 'weimarer-meisterkurse', 'Weimarer Meisterkurse'
-        COMPETITION = 'wettbewerb', 'Wettbewerb'
-        WORKSHOP = 'workshop', 'Workshop'
-        LECTURE = 'vortrag', 'Vortrag'
-        CONFERENCE = 'tagung', 'Tagung'
-        MEETING = 'sitzung', 'Sitzung'
-        INTERVIEW = 'vorstellung', 'Vorstellungsgespräche'
-        RECORDING = 'aufnahme', 'Aufnahme'
-        STUDENT_PROJECT = 'projekt', 'Studentisches Projekt'
-        RENTAL = 'vermietung', 'Vermietung'
-        OPTION = 'option', 'freie Konzert-Option'
-        CONCERT_SUPPORT = 'konzertbetreuung', 'Konzertbetreuung'
-        ORGANISATION = 'organisation', 'Organisation VB'
-        TUNING = 'stimmung', 'Stimmung'
-        PIANO_REPAIR = 'klavierstimmer', 'Reparaturarbeiten Klavierstimmer'
-        CARETAKER = 'hausmeister', 'Hausmeister'
-        TECHNICS = 'technik', 'Technik'
-        TRANSPORT = 'transport', 'Transport'
-        PERSONAL = 'persoenlich', 'Persönliche Buchung'
-        GENERAL = 'allgemein', 'Allgemeine Buchung'
-        BLOCKED = 'blockiert', 'Blockiert'
-        CANCELLED = 'abgesagt', 'Abgesagt'
-
-    C = Category
-    TONES = {  # colour family on the plans
-        'teach': [C.LESSON, C.REHEARSAL, C.ORCHESTRA, C.SECTION, C.RECORDING, C.STUDENT_PROJECT],
-        'exam': [C.EXAM, C.AUDITION, C.RECITAL, C.COMPETITION, C.INTERVIEW],
-        'event': [C.CLASS_CONCERT, C.CONCERT, C.EVENT, C.MASTERCLASS, C.WEIMAR_MASTERCLASSES, C.WORKSHOP, C.LECTURE, C.CONFERENCE,
-                  C.MEETING, C.RENTAL, C.OPTION, C.CONCERT_SUPPORT, C.ORGANISATION],
-        'service': [C.TUNING, C.PIANO_REPAIR, C.CARETAKER, C.TECHNICS, C.TRANSPORT],
-        'blocked': [C.BLOCKED],
-        'cancelled': [C.CANCELLED],
-    }
-    TONE = {category: tone for tone, categories in TONES.items() for category in categories}
-    PUBLIC = [C.CLASS_CONCERT, C.CONCERT, C.EVENT, C.MASTERCLASS, C.WEIMAR_MASTERCLASSES, C.WORKSHOP, C.LECTURE, C.CONFERENCE, C.RECITAL, C.COMPETITION]
-    STUDENT = [C.PRACTICE, C.CHAMBER]  # what students book themselves
-    TEACHER = [C.LESSON, C.REHEARSAL, C.SECTION, C.EXAM, C.RECITAL, C.CLASS_CONCERT, C.MASTERCLASS, C.WORKSHOP, C.LECTURE, C.MEETING, C.RECORDING, C.PERSONAL, C.PRACTICE]
-
     room = models.ForeignKey(Room, models.CASCADE, related_name='bookings', verbose_name='Raum')
     start = models.DateTimeField('Beginn')
     end = models.DateTimeField('Ende')
-    category = models.CharField('Kategorie', max_length=24, choices=Category, default=Category.GENERAL)
+    category = models.ForeignKey(BookingCategory, models.PROTECT, to_field='key', related_name='bookings', verbose_name='Kategorie')
     person = models.ForeignKey(Person, models.CASCADE, related_name='bookings', verbose_name='Gebucht für')
     participants = models.ManyToManyField(Person, blank=True, related_name='attending', verbose_name='Teilnehmende')
     course = models.ForeignKey(Course, models.CASCADE, null=True, blank=True, related_name='bookings', verbose_name='Veranstaltung')
@@ -132,19 +142,19 @@ class Booking(Tracked, models.Model):
 
     @property
     def label(self):
-        return self.title or (self.course.title if self.course_id else self.get_category_display())
+        return self.title or (self.course.title if self.course_id else self.category.name)
 
     @property
     def tone(self):
-        return self.TONE.get(self.category, 'practice')
+        return self.category.tone
 
     def clashes(self):
         """Bookings that overlap in the same room. Cancelled ones stay visible but no longer block it."""
         return (
-            Booking.objects.filter(room=self.room_id, start__lt=self.end, end__gt=self.start)
-            .exclude(pk=self.pk).exclude(category=self.Category.CANCELLED)
+            Booking.objects.filter(room=self.room_id, start__lt=self.end, end__gt=self.start, category__blocks=True)
+            .exclude(pk=self.pk)
         )
 
     def clean(self):
-        if self.room_id and self.start and self.end and self.category != self.Category.CANCELLED and self.clashes().exists():
+        if self.room_id and self.start and self.end and self.category_id and self.category.blocks and self.clashes().exists():
             raise ValidationError('Der Raum ist in diesem Zeitraum bereits belegt.')

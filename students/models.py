@@ -1,10 +1,11 @@
 import re
 
 from django.db import models
+from django.utils.formats import number_format
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Message, Person, Term, Tracked
+from core.models import Keyed, Message, Person, Term, Tracked
 from core.text import matching
 from curriculum.models import Program, Subject, weighted
 
@@ -79,7 +80,7 @@ class Study(Tracked, models.Model):
     def notify(self, title, text, link='', appeal=False):
         """Issue a Bescheid: it goes to the Postfach and stays in the student file as a printable letter."""
         message = Message.send(self.person, title, f'{text}\n\n{APPEAL}' if appeal else text, link)
-        Document.objects.create(person=self.person, study=self, kind=Document.Kind.NOTICE, title=title, message=message)
+        Document.objects.create(person=self.person, study=self, kind=DocumentType.system('notice'), title=title, message=message)
 
     def missing(self):
         """What still blocks the enrolment of an admitted applicant."""
@@ -117,7 +118,7 @@ class Study(Tracked, models.Model):
     def progress(self):
         """(curriculum tree with earned credits and grades, final grade so far)."""
         tree = self.program.curriculum({p.module_id: p.grade for p in self.record()})
-        return tree, weighted(tree)
+        return tree, weighted(tree, self.program.rounding)
 
 
 class StudyTerm(Tracked, models.Model):
@@ -144,29 +145,64 @@ class StudyTerm(Tracked, models.Model):
         return f'{self.study} · {self.term}'
 
 
+class DocumentType(Tracked, Keyed):
+    """A kind of document: what applicants hand in, and the Bescheide the Hochschule issues. When the application
+    checklist asks for it and what an upload may be are its settings."""
+
+    class Condition(models.TextChoices):
+        ALWAYS = 'always', 'immer'
+        VIDEO = 'video', 'wenn es eine Videostufe gibt; die Kommission sichtet es'
+        DEGREE = 'degree', 'wenn der Studiengang einen Abschluss voraussetzt'
+        MINOR = 'minor', 'bei Minderjährigen'
+        SUBJECTS = 'subjects', 'bei den gewählten Hauptfächern'
+        FOREIGN = 'foreign', 'bei ausländischer Staatsangehörigkeit'
+        NEVER = 'never', 'nicht in der Checkliste'
+
+    SYSTEM = {'notice': {'name': 'Bescheid', 'condition': Condition.NEVER}}  # what the code files itself
+    capabilities = ('run_auditions',)
+
+    name = models.CharField('Name', max_length=80, unique=True)
+    condition = models.CharField('In der Checkliste', max_length=10, choices=Condition, default=Condition.ALWAYS)
+    subjects = models.ManyToManyField(Subject, blank=True, related_name='+', verbose_name='Hauptfächer', help_text='Nur für „bei den gewählten Hauptfächern“.')
+    required = models.BooleanField('Pflicht', default=True, help_text='Ohne Haken freiwillig: die Bewerbung ist auch ohne vollständig.')
+    note = models.TextField('Hinweis für Bewerbende', blank=True)
+    file_types = models.CharField('Dateitypen', max_length=120, blank=True, help_text='Endungen, z. B. „.pdf, .jpg“; leer: PDF und Bilder.')
+    max_mb = models.PositiveIntegerField('Höchstens (MB)', null=True, blank=True)
+    single = models.BooleanField('Nur eine Datei', default=False, help_text='Eine neue ersetzt die alte.')
+    order = models.PositiveSmallIntegerField('Reihenfolge', default=0)
+
+    class Meta:
+        ordering = ['order', 'name']
+        verbose_name = 'Unterlagenart'
+        verbose_name_plural = 'Unterlagenarten'
+
+    def __str__(self):
+        return self.name
+
+    @classmethod
+    def system(cls, key):
+        return cls.objects.get_or_create(key=key, defaults=cls.SYSTEM[key])[0]
+
+    @property
+    def extensions(self):
+        return tuple(e.strip().lower() for e in self.file_types.replace(';', ',').split(',') if e.strip())
+
+    @property
+    def limit(self):
+        return f'{number_format(self.max_mb / 1024, 1)} GB' if self.max_mb >= 1024 else f'{self.max_mb} MB'
+
+
 class Document(Tracked, models.Model):
     """A file or link a person handed in or received: CV, certificates, audition video, attests, Bescheide."""
 
     owner = 'person_id'
     capabilities = ('manage_students',)
 
-    class Kind(models.TextChoices):  # what a complete application holds, as the HfM lists it
-        VIDEO = 'video', 'Video'
-        CV = 'cv', 'Lebenslauf'
-        SCHOOL = 'school', 'Abitur- oder letztes Schulzeugnis'
-        DEGREE = 'degree', 'Bachelor- oder Masterzeugnis, Transcript'
-        FEE = 'fee', 'Einzahlungsbeleg Eignungsprüfungsgebühr'
-        CONSENT = 'consent', 'Einwilligung der Erziehungsberechtigten'
-        VOICE = 'voice', 'Phoniatrisches Gutachten'
-        LANGUAGE = 'language', 'Sprachnachweis Deutsch'
-        NOTICE = 'notice', 'Bescheid'
-        OTHER = 'other', 'Sonstiges'
-
     VIDEO_FILES = ('.mp4', '.m4v', '.mov', '.webm', '.ogv', '.ogg')  # what browsers play
 
     person = models.ForeignKey(Person, models.CASCADE, related_name='documents', verbose_name='Person')
     study = models.ForeignKey(Study, models.CASCADE, null=True, blank=True, related_name='documents', verbose_name='Studium')
-    kind = models.CharField('Art', max_length=10, choices=Kind, default=Kind.OTHER)
+    kind = models.ForeignKey(DocumentType, models.PROTECT, to_field='key', related_name='documents', verbose_name='Art')
     title = models.CharField('Titel', max_length=120)
     file = models.FileField('Datei', upload_to='dokumente/%Y/%m/', blank=True)
     url = models.URLField('Link', blank=True)
@@ -190,4 +226,4 @@ class Document(Tracked, models.Model):
     @property
     def playable(self):
         """A video the browser plays right here: an upload, or a link straight to a video file."""
-        return self.kind == self.Kind.VIDEO and self.href.lower().split('?')[0].endswith(self.VIDEO_FILES)
+        return self.href.lower().split('?')[0].endswith(self.VIDEO_FILES)

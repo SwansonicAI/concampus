@@ -9,14 +9,14 @@ from django.shortcuts import get_object_or_404
 
 from core.access import CAPABILITIES
 from core.dates import DayField
-from core.models import Institute, Office, Person, Term
+from core.models import Institute, Institution, Office, Person, Term
 from courses.forms import AuditionForm
 from courses.models import Course
 from curriculum.forms import ModuleForm
 from curriculum.models import Module, Program, Subject
-from rooms.models import Room
+from rooms.models import BookingCategory, Room, RoomFunction
 from students.forms import StudyForm
-from students.models import Study
+from students.models import DocumentType, Study
 
 
 @dataclass
@@ -34,13 +34,14 @@ class Editor:
     queryset: Callable = None
     new: Callable = None  # request → the unsaved record a new form starts from
     deletable: bool = True  # people are deactivated, not deleted: their records hang on them
+    single: bool = False  # one record only, like the Hochschule's own data
 
     def objects(self):
         return self.queryset() if self.queryset else self.model.objects.all()
 
     @property
     def creatable(self):
-        return bool(self.section or self.new)
+        return bool(self.section or self.new) and not (self.single and self.model.objects.exists())
 
     def start(self, request):
         return self.new(request) if self.new else self.model()
@@ -110,14 +111,27 @@ def new_module(request):
 
 EDITORS = {e.key: e for e in [
     Editor(
+        'hochschule', Institution, 'Hochschule', 'manage_institution', 'Verwaltung', single=True, deletable=False,
+        fields=[
+            'name', 'short_name', 'address', 'place', 'email', 'website', 'imprint', 'privacy', 'accessibility',
+            'matriculation_start', 'accept_days', 'signup', 'insurers',
+            'student_daily_hours', 'student_ahead_hours', 'last_minute_hours', 'teacher_ahead_days',
+        ],
+        columns=[('Name', 'name'), ('Ort', 'place')], words='hochschuldaten anschrift regeln buchungsregeln matrikelnummer fristen',
+    ),
+    Editor(
         'aemter', Office, 'Ämter und Rechte', 'manage_accounts', 'Verwaltung', form=OfficeForm,
         columns=[('Amt', 'name'), ('Mitglieder', 'user_set')], search=['name'], words='rollen rechte gruppen berechtigungen',
+        queryset=lambda: Office.objects.prefetch_related('user_set'),
     ),
     Editor(
         'konten', Person, 'Konten', 'manage_accounts', 'Verwaltung', form=AccountForm,
         columns=[('Name', 'name'), ('E-Mail', 'email'), ('Ämter', 'groups'), ('Institut', 'institute')],
         search=['first_name', 'last_name', 'email', 'username'], words='mitarbeitende lehrende zugang benutzer',
-        queryset=lambda: Person.objects.filter(models.Q(groups__isnull=False) | models.Q(institute__isnull=False) | models.Q(studies=None)).distinct(),
+        queryset=lambda: (
+            Person.objects.filter(models.Q(groups__isnull=False) | models.Q(institute__isnull=False) | models.Q(studies=None)).distinct()
+            .select_related('institute').prefetch_related('groups')
+        ),
         deletable=False,
     ),
     Editor(
@@ -137,18 +151,21 @@ EDITORS = {e.key: e for e in [
     ),
     Editor(
         'studiengaenge', Program, 'Studiengänge', 'edit_curriculum', 'Studium und Lehre',
-        fields=['degree', 'name', 'version', 'semesters', 'subjects'],
+        fields=['degree', 'name', 'version', 'semesters', 'subjects', 'postgraduate', 'attempts', 'rounding', 'mean_rounding', 'honours'],
         columns=[('Abschluss', 'degree'), ('Studiengang', 'name'), ('PO-Version', 'version'), ('Regelstudienzeit', 'semesters')],
         search=['degree', 'name'], words='prüfungsordnung po fpso',
     ),
     Editor('module', Module, 'Module', 'edit_curriculum', form=ModuleForm, new=new_module),
-    Editor('hauptfaecher', Subject, 'Hauptfächer', 'edit_curriculum', 'Studium und Lehre', fields=['name', 'institute'], columns=[('Hauptfach', 'name'), ('Institut', 'institute')], search=['name']),
+    Editor(
+        'hauptfaecher', Subject, 'Hauptfächer', 'edit_curriculum', 'Studium und Lehre', fields=['name', 'institute'],
+        columns=[('Hauptfach', 'name'), ('Institut', 'institute')], search=['name'], queryset=lambda: Subject.objects.select_related('institute'),
+    ),
     Editor('studien', Study, 'Studium', 'manage_students', form=StudyForm, deletable=False),
     Editor(
         'eignungspruefungen', Course, 'Eignungsprüfungen', 'run_auditions', 'Aufnahme', form=AuditionForm,
         columns=[('Prüfung', 'title'), ('Semester', 'term'), ('Studiengang', 'program'), ('Bewerbungsschluss', 'deadline'), ('Plätze', 'capacity')],
         search=['title', 'subject__name'], words='aufnahmeprüfung videostufe kommission bewerbungsfrist',
-        queryset=lambda: Course.objects.filter(kind=Course.Kind.AUDITION).order_by('-term__start', 'title'),
+        queryset=lambda: Course.objects.filter(kind=Course.Kind.AUDITION).select_related('term', 'program').order_by('-term__start', 'title'),
         new=lambda request: Course(kind=Course.Kind.AUDITION, term=Term.upcoming() or Term.current()),
     ),
     Editor(
@@ -156,5 +173,22 @@ EDITORS = {e.key: e for e in [
         fields=['name', 'purpose', 'building', 'function', 'institutes', 'capacity', 'equipment'],
         columns=[('Raum', 'name'), ('Bezeichnung', 'purpose'), ('Gebäude', 'building'), ('Funktion', 'function'), ('Plätze', 'capacity')],
         search=['name', 'purpose', 'building', 'equipment'], words='ausstattung flügel gebäude',
+        queryset=lambda: Room.objects.select_related('function'),
+    ),
+    Editor(
+        'unterlagen', DocumentType, 'Unterlagenarten', 'run_auditions', 'Aufnahme',
+        fields=['name', 'condition', 'subjects', 'required', 'note', 'file_types', 'max_mb', 'single', 'order'],
+        columns=[('Unterlagen', 'name'), ('In der Checkliste', 'condition'), ('Pflicht', 'required')],
+        search=['name'], words='checkliste bewerbung video zeugnis nachweis hochladen',
+    ),
+    Editor(
+        'raumfunktionen', RoomFunction, 'Raumfunktionen', 'manage_rooms', 'Räume', fields=['name', 'central', 'order'],
+        columns=[('Funktion', 'name'), ('Zentral vergeben', 'central')], search=['name'],
+    ),
+    Editor(
+        'kategorien', BookingCategory, 'Buchungskategorien', 'manage_rooms', 'Räume',
+        fields=['name', 'tone', 'students', 'teachers', 'quota', 'ahead_hours', 'participants', 'public', 'blocks', 'order'],
+        columns=[('Kategorie', 'name'), ('Farbe', 'tone'), ('Studierende', 'students'), ('Lehrende', 'teachers'), ('Öffentlich', 'public')],
+        search=['name'], words='buchungsregeln farben kontingent veranstaltungen',
     ),
 ]}

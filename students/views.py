@@ -14,7 +14,7 @@ from django.views.decorators.http import require_POST
 from core.access import require
 from core.history import tables
 from core.apps import plural
-from core.models import Message, Term
+from core.models import Institution, Message, Person, Term
 from core.text import matching
 from curriculum.models import Program, Subject
 from curriculum.views import plan
@@ -129,6 +129,12 @@ def study(request, pk):
     })
 
 
+def next_matriculation():
+    """The next free Matrikelnummer, counting on from the first the Hochschule set."""
+    numbers = [int(n) for n in Person.objects.exclude(matriculation=None).values_list('matriculation', flat=True) if n.isdigit()]
+    return max(numbers, default=Institution.get().matriculation_start - 1) + 1
+
+
 @require('manage_students')
 @require_POST
 def enrol(request, pk):
@@ -140,7 +146,7 @@ def enrol(request, pk):
         return redirect(study.get_absolute_url())
     with transaction.atomic():
         if not person.matriculation:
-            person.matriculation = str(100000 + person.pk)
+            person.matriculation = str(next_matriculation())
             person.save(update_fields=['matriculation'])
         registration, _ = StudyTerm.objects.get_or_create(study=study, term=study.start_term)
         registration.paid = registration.paid or timezone.localdate()

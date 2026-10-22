@@ -1,6 +1,6 @@
 """Results sheets shared by courses, exams and auditions: marks per examiner, grades, pass decisions, slots."""
 from datetime import timedelta
-from decimal import ROUND_DOWN, Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation
 
 from django.db import transaction
 from django.urls import reverse
@@ -8,11 +8,9 @@ from django.utils import timezone
 
 from core import history
 from core.models import Message
-from rooms.models import Booking
+from curriculum.models import rounded
+from rooms.models import Booking, BookingCategory
 from .models import Course, Participation, Score
-
-POINTS = 25  # the Eignungsprüfung scale: each examiner gives 0 to 25 points
-
 
 def number(value):
     """Decimal from a form field, None if empty. Raises InvalidOperation unless 0 ≤ n < 100."""
@@ -24,9 +22,9 @@ def number(value):
     return value
 
 
-def mean(values):
-    """The examiners' mean, cut off after the first decimal (Eignungsprüfungsordnung)."""
-    return (sum(values) / len(values)).quantize(Decimal('0.1'), ROUND_DOWN) if values else None
+def mean(values, rounding):
+    """The examiners' mean, to one decimal as the candidate's Prüfungsordnung says."""
+    return rounded(sum(values) / len(values), rounding) if values else None
 
 
 def sheet(course):
@@ -41,7 +39,7 @@ def sheet(course):
     for p in rows:
         values = {s.examiner_id: s.value for s in p.scores.all()}
         p.marks = [(e, values.get(e.pk)) for e in staff]
-        p.mean = mean(list(values.values()))
+        p.mean = mean(list(values.values()), p.study.program.mean_rounding)
         p.auto = p.mean if panel and staff and len(values) == len(staff) else None
         p.override = p.grade if p.grade is not None and p.grade != p.auto else None
     return staff, rows
@@ -70,9 +68,9 @@ def save(post, rows, columns, decide):
                     score.value = value
                     changed.append(score)
             values = [v for v in marks.values() if v is not None]
-            if p.course.points and any(v > POINTS for v in values):
+            if p.course.max_points is not None and any(v > p.course.max_points for v in values):
                 raise InvalidOperation
-            auto = mean(values) if marks and len(values) == len(marks) else None
+            auto = mean(values, p.study.program.mean_rounding) if marks and len(values) == len(marks) else None
             override = number(post.get(f'grade-{p.pk}')) if decide else p.override
             p.grade = override if override is not None else auto
             p.passed = p.course.passes(p.grade) if p.grade is not None else None
@@ -93,7 +91,7 @@ def schedule(course, rows, start, minutes, room, person):
 
     Raises ValidationError if the room is taken.
     """
-    category = Booking.Category.AUDITION if course.kind == course.Kind.AUDITION else Booking.Category.EXAM
+    category = BookingCategory.system('eignungspruefung' if course.kind == course.Kind.AUDITION else 'pruefung')
     booking = Booking(room=room, start=start, end=start + timedelta(minutes=minutes * len(rows)), person=person, course=course, category=category)
     booking.full_clean()
     for n, p in enumerate(rows):
