@@ -1,0 +1,47 @@
+{% load l10n %}
+<figure class="chart">
+  <figcaption><span>{{ c.title }}</span>{% if c.query and c.title %}<a href="{{ c.query.url }}">In der Abfrage öffnen</a>{% endif %}</figcaption>
+  {% if c.lines %}
+  <div class="scroll">
+    <table class="heat">
+      <thead><tr><th>{{ c.table.dims.0.title }}</th>{% for h in c.head %}<th class="num">{{ h }}</th>{% endfor %}<th class="num">Gesamt</th></tr></thead>
+      <tbody>
+        {% for line in c.lines %}
+        <tr>
+          <td>{% if line.drill %}<a href="{{ line.drill }}" title="Weiter aufteilen">{{ line.label }}</a>{% else %}{{ line.label }}{% endif %}</td>
+          {% for cell in line.cells %}<td class="num{% if cell.shade > 55 %} dark{% endif %}" style="--v: {{ cell.shade|unlocalize }}%">{% if cell.records %}<a href="{{ cell.records }}" data-panel>{{ cell.shown }}</a>{% else %}{{ cell.shown }}{% endif %}</td>{% endfor %}
+          <td class="num"><b>{{ line.total }}</b></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot><tr class="total"><td>Gesamt</td>{% for f in c.foot %}<td class="num">{{ f }}</td>{% endfor %}<td class="num">{{ c.total }}</td></tr></tfoot>
+    </table>
+  </div>
+  {% elif c.columns %}
+  <div class="columns{% if c.dense %} dense{% endif %}{% if c.timed %} timed{% endif %}">
+    {% for b in c.bars %}
+    <div class="col{% if b.now %} now{% endif %}">
+      <div class="plot">
+        <span class="top">{% if b.now or not c.dense %}{{ b.shown }}{% endif %}</span>
+        {% if b.records %}<a class="bar" href="{{ b.records }}" data-panel data-tip="{{ b.label }}: {{ b.shown }}" style="height: {{ b.width|unlocalize }}%"></a>
+        {% else %}<span class="bar" tabindex="0" data-tip="{{ b.label }}: {{ b.shown }}" style="height: {{ b.width|unlocalize }}%"></span>{% endif %}
+      </div>
+      <span class="tick">{% if b.drill %}<a href="{{ b.drill }}" title="{{ b.label }} aufteilen">{{ b.tick }}</a>{% else %}{{ b.tick }}{% endif %}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% elif c.bars %}
+  <div class="bars">
+    {% for b in c.bars %}
+    <div class="row">
+      <span class="name" title="{{ b.label }}">{% if b.drill %}<a href="{{ b.drill }}" title="Verlauf und weitere Aufteilung">{{ b.label }}</a>{% else %}{{ b.label }}{% endif %}</span>
+      <span class="track"><i style="width: {{ b.width|unlocalize }}%"></i></span>
+      <span class="value">{% if b.records %}<a href="{{ b.records }}" data-panel>{{ b.shown }}</a>{% else %}{{ b.shown }}{% endif %}</span>
+      <span class="extra">{{ b.extra|default:"" }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="empty">Nichts zu zählen.</p>
+  {% endif %}
+</figure>

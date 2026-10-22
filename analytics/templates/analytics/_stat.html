@@ -1,0 +1,5 @@
+<div class="stat">
+  <b>{{ stat.shown }}</b><span>{{ stat.label }}</span>
+  {% if stat.before %}<small class="was">Vorjahr {{ stat.before }}{% if stat.change is not None %} · {{ stat.change|stringformat:"+d" }} %{% endif %}</small>{% endif %}
+  {% if stat.points %}<svg class="spark" viewBox="0 0 100 24" preserveAspectRatio="none" aria-hidden="true"><polyline points="{{ stat.points }}"/></svg>{% endif %}
+</div>

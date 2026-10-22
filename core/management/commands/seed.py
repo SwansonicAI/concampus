@@ -310,15 +310,16 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
     'ASA': [  # Akademische und Studentische Angelegenheiten
         'view_students', 'view_files', 'manage_students', 'manage_reregistration', 'message_students',
         'view_applications', 'decide_applications', 'run_auditions', 'manage_courses', 'view_teaching_load',
-        'view_curriculum', 'book_any_room', 'view_bookings', 'manage_terms',
+        'view_curriculum', 'book_any_room', 'view_bookings', 'manage_terms', 'view_statistics',
     ],
     'Prüfungsamt': [
         'view_files', 'manage_exams', 'decide_results', 'recognise', 'manage_courses', 'view_teaching_load',
         'view_curriculum', 'book_any_room', 'view_bookings',
     ],
-    'Dekanat': ['manage_courses', 'view_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings'],
+    'Dekanat': ['manage_courses', 'view_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings', 'view_statistics'],
     'Veranstaltungsbüro': ['book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms'],
     'Campus-Team': ['manage_accounts', 'manage_institution', 'manage_terms'],
+    'Präsidium': ['view_statistics', 'view_curriculum', 'view_teaching_load'],
 }
 STAFF = [  # username, title, first, last, office
     ('asa', '', 'Sabine', 'Krüger', 'ASA'),
@@ -326,6 +327,7 @@ STAFF = [  # username, title, first, last, office
     ('dekanat', 'Prof. Dr.', 'Johanna', 'Brandt', 'Dekanat'),
     ('veranstaltungsbuero', '', 'Michael', 'Görlitz', 'Veranstaltungsbüro'),
     ('campus', '', 'Lena', 'Hofmann', 'Campus-Team'),
+    ('praesidium', 'Prof. Dr.', 'Andreas', 'Lindemann', 'Präsidium'),
 ]
 LECTURERS = {  # course title (or its start) → teacher key
     'Musikgeschichte im Überblick I': 'brandt', 'Musikgeschichte im Überblick II': 'brandt', 'Musikgeschichte im Überblick III': 'voss',
@@ -377,14 +379,14 @@ INTAKE = {  # applications a year by Hauptfach as of 2026, admission rate, share
         {'Flöte': 45, 'Oboe': 25, 'Klarinette': 35, 'Fagott': 18, 'Horn': 28, 'Trompete': 32, 'Posaune': 22, 'Tuba': 9, 'Schlagwerk': 26}, 0.13, 0.2),
     ('B.Mus.', 'Gesang | Musiktheater'): ({'Gesang': 210}, 0.08, 0),
     ('B.Mus.', 'Klavier'): ({'Klavier': 190}, 0.08, 0),
-    ('M.Mus.', 'Streichinstrumente'): ({'Violine': 45, 'Viola': 15, 'Violoncello': 25, 'Kontrabass': 8}, 0.27, 0.3),
-    ('B.Ed.', 'Musik an Gymnasien (Doppelfach)'): (dict(zip(TEACHING, (22, 18, 10, 10, 6, 6, 5, 4))), 0.4, 0),
-    ('M.Ed.', 'Musik an Gymnasien (Doppelfach)'): (dict(zip(TEACHING, (10, 9, 5, 5, 3, 3, 2, 2))), 0.65, 0),
-    ('Staatsexamen', 'Lehramt an Gymnasien, Studienfach Musik'): (dict(zip(TEACHING, (20, 16, 9, 9, 6, 6, 5, 4))), 0.38, 0),
-    ('Diplom', 'Kirchenmusik A'): ({'Orgel': 7}, 0.5, 0),
-    ('Konzertdiplom', 'Konzertexamen'): ({'Klavier': 20, 'Violine': 18, 'Gesang': 12, 'Violoncello': 8, 'Flöte': 4, 'Klarinette': 3, 'Orgel': 2}, 0.2, 0.3),
-    ('Dr. phil.', 'Promotion'): ({'Musikwissenschaft': 10, 'Musikpädagogik': 6, 'Kulturmanagement': 4}, 0.5, 0.4),
-    ('Zertifikat', 'Thüringer Opernstudio'): ({'Gesang': 60}, 0.15, 0),
+    ('M.Mus.', 'Streichinstrumente'): ({'Violine': 45, 'Viola': 15, 'Violoncello': 25, 'Kontrabass': 8}, 0.29, 0.3),
+    ('B.Ed.', 'Musik an Gymnasien (Doppelfach)'): (dict(zip(TEACHING, (22, 18, 10, 10, 6, 6, 5, 4))), 0.43, 0),
+    ('M.Ed.', 'Musik an Gymnasien (Doppelfach)'): (dict(zip(TEACHING, (10, 9, 5, 5, 3, 3, 2, 2))), 0.7, 0),
+    ('Staatsexamen', 'Lehramt an Gymnasien, Studienfach Musik'): (dict(zip(TEACHING, (20, 16, 9, 9, 6, 6, 5, 4))), 0.41, 0),
+    ('Diplom', 'Kirchenmusik A'): ({'Orgel': 7}, 0.54, 0),
+    ('Konzertdiplom', 'Konzertexamen'): ({'Klavier': 20, 'Violine': 18, 'Gesang': 12, 'Violoncello': 8, 'Flöte': 4, 'Klarinette': 3, 'Orgel': 2}, 0.22, 0.3),
+    ('Dr. phil.', 'Promotion'): ({'Musikwissenschaft': 10, 'Musikpädagogik': 6, 'Kulturmanagement': 4}, 0.54, 0.4),
+    ('Zertifikat', 'Thüringer Opernstudio'): ({'Gesang': 60}, 0.16, 0),
 }
 WINTER_ONLY = {'Horn', 'Posaune', 'Tuba'}  # no summer intake, nor for Gesang and Klavier
 REPERTOIRE = {
@@ -860,10 +862,13 @@ class Command(BaseCommand):
                     course = self.course(term, name, Course.Kind.EXAM, subject=study.subject if artistic else None, released=at(term.end - timedelta(days=45), hour=12))
                     examiners = self.panel(subject) if artistic else [self.teachers[lecturer(self.first_course.get(leaf.parent_id, ''))]]
                     grade, index = self.grade(study), self.calendar.index(term)
-                    if index + 1 < self.now and rng.random() < 0.06:  # failed, passed on retake the term after
+                    if study.person != self.demo and rng.random() < 0.06:  # failed; passed on retake the term after, or retaken this term
                         rows[(course.pk, study.pk, leaf.pk)] = Participation(course=course, study=study, module=leaf, grade=Decimal('5.0'), passed=False, created=at(term.start, hour=9))
                         scores += [(course.pk, study.pk, leaf.pk, examiner, Decimal('5.0')) for examiner in examiners]
                         staff |= {(course.pk, e.pk) for e in examiners}
+                        if index + 1 == self.now:
+                            links.add((course.pk, leaf.pk))
+                            continue
                         term = self.calendar[index + 1]
                         course = self.course(term, name, Course.Kind.EXAM, subject=study.subject if artistic else None, released=at(term.end - timedelta(days=45), hour=12))
                     rows[(course.pk, study.pk, leaf.pk)] = Participation(course=course, study=study, module=leaf, grade=grade, passed=True, created=at(term.start, hour=9))
@@ -1202,16 +1207,17 @@ class Command(BaseCommand):
             bookings.append(Booking(room=demo, start=start, end=start + timedelta(minutes=90), person=self.demo, category_id='uebung', created=at(today, 9 * 60 + 12)))
         for offset in range(-6, 2):
             day = today + timedelta(days=offset)
-            for study in rng.sample(practising, len(practising) // 2):
-                minute = rng.choice(range(8 * 60, 20 * 60, 30))
+            for study in rng.sample(practising, len(practising) * 4 // 5) * 2:  # most practise, many twice a day, most in the afternoon
+                minute = 30 * round(2 * rng.triangular(8, 20.5, 16))
                 minutes = rng.choice([60, 90, 120])
                 begin, end = at(day, minute), at(day, minute + minutes)
                 last = rng.random() < 0.15  # booked within three hours: does not count
                 booked = begin - timedelta(minutes=rng.randint(20, 170) if last else rng.randint(4 * 60, 23 * 60))
                 if booked > now or (not last and used[(study.person_id, day)] + minutes / 60 > 4):
                     continue
-                room = rng.choice(rooms[study.subject.institute_id])
-                if free(room, begin, end):
+                choices = rooms[study.subject.institute_id]
+                room = next((r for r in rng.sample(choices, min(3, len(choices))) if free(r, begin, end)), None)
+                if room:
                     bookings.append(Booking(room=room, start=begin, end=end, person=study.person, category_id='uebung', created=booked))
                     used[(study.person_id, day)] += 0 if last else minutes / 60
         Booking.objects.bulk_create(bookings)

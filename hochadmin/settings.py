@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'exams',
     'admissions',
     'rooms',
+    'analytics',
     'setup',
 ]
 

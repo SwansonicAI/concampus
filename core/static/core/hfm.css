@@ -373,3 +373,43 @@ tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 7
   .drawer.open { position: static; width: auto; overflow: visible; border: 0; }
   .drawer-body { padding: 0; }
 }
+
+/* Auswertungen: one green for what is counted, grey for context; every number also stands as text */
+.figures .stats { margin-bottom: 8px; }
+.stat .was { display: block; color: var(--muted); font-size: 13px; }
+.spark { display: block; width: 100%; height: 24px; margin-top: 8px; overflow: visible; }
+.spark polyline { fill: none; stroke: var(--green); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 40px 48px; }
+.chart { margin: 32px 0 0; }
+.chart figcaption { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 14px; padding-bottom: 8px; border-bottom: 2px solid var(--ink); font-weight: 700; }
+.chart figcaption a { font-size: 14px; font-weight: 600; white-space: nowrap; }
+.bars { display: grid; gap: 6px; font-size: 14px; }
+.bars .row { display: grid; grid-template-columns: minmax(120px, 34%) 1fr minmax(64px, auto) auto; gap: 12px; align-items: center; }
+.bars .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bars .name a, .columns .tick a, .heat td > a { color: var(--ink); }
+.bars .track { height: 10px; background: var(--soft); }
+.bars .track i { display: block; height: 100%; background: var(--green); }
+.bars .value { text-align: right; font-variant-numeric: tabular-nums; }
+.bars .extra { min-width: 120px; color: var(--muted); font-size: 13px; }
+.bars .extra:empty { display: none; }
+.columns { display: flex; gap: 3px; padding-top: 22px; }
+.columns .col { flex: 1; min-width: 0; max-width: 88px; }
+.columns .plot { display: flex; flex-direction: column; justify-content: flex-end; height: 180px; }
+.columns .bar { display: block; min-height: 1px; border-radius: 2px 2px 0 0; background: var(--green); }
+.columns.timed .bar { background: #8a8a8a; }
+.columns.timed .now .bar { background: var(--green); }
+.columns .top { overflow: visible; font-size: 12px; line-height: 20px; text-align: center; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.columns .tick { display: block; margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); overflow: hidden; color: var(--muted); font-size: 12px; text-align: center; white-space: nowrap; }
+.columns.dense .col:nth-child(even):not(.now) .tick { visibility: hidden; }
+[data-tip] { position: relative; }
+[data-tip]:hover::after, [data-tip]:focus-visible::after {
+  content: attr(data-tip); position: absolute; bottom: calc(100% + 6px); left: 50%; z-index: 5; transform: translateX(-50%);
+  padding: 4px 8px; background: var(--ink); color: #fff; font-size: 12px; white-space: nowrap; pointer-events: none;
+}
+.heat td[style] { background: color-mix(in srgb, var(--green) var(--v), #fff); }
+.heat td.dark, .heat td.dark > a { color: #fff; }
+.heat.hours td { padding: 6px 4px; min-width: 34px; font-size: 12px; text-align: center; }
+.heat.hours th { padding: 6px 4px; text-align: center; }
+.filters-on { margin: -8px 0 20px; }
+.filters-on .chip { padding: 2px 8px; color: var(--ink); font-size: 13px; }
+@media (max-width: 1100px) { .charts { grid-template-columns: 1fr; } }

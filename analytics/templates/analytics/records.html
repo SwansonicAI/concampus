@@ -1,0 +1,12 @@
+{% extends base %}
+{% block title %}{{ q.measure.records|default:q.measure.title }}{% endblock %}
+{% block content %}
+<p class="eyebrow">Auswertungen</p>
+<h1>{{ count }} {{ q.measure.records|default:q.measure.title }}</h1>
+<p class="lead">{{ filters|join:" · " }}{% if terms %}{% if filters %} · {% endif %}{{ terms }}{% endif %}</p>
+<ul class="todo">
+  {% for title, detail, url in records %}<li><a href="{{ url }}"><span class="what">{{ title }}</span><span class="where">{{ detail }}</span><span class="due"></span></a></li>
+  {% empty %}<li class="empty">Keine.</li>{% endfor %}
+</ul>
+{% if count > records|length %}<p class="calm">{{ records|length }} von {{ count }}; die Abfrage grenzt weiter ein.</p>{% endif %}
+{% endblock %}

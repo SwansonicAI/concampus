@@ -39,6 +39,7 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
         ('manage_terms', 'Semester anlegen und pflegen'),
         ('manage_institution', 'Hochschuldaten, Institute und Texte pflegen'),
         ('manage_accounts', 'Ämter, Rechte und Konten verwalten'),
+        ('view_statistics', 'Auswertungen aller Bereiche einsehen (Zahlen; Namen nur mit dem Recht des Bereichs)'),
     ]),
 ]
 CODENAMES = [codename for _, group in CAPABILITIES for codename, _ in group]

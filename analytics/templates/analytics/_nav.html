@@ -1,0 +1,6 @@
+{% with here=request.resolver_match.url_name %}
+<nav class="subnav">
+  <a href="{% url 'analytics:index' %}" class="{% if here == 'index' %}on{% endif %}">Überblick</a>
+  <a href="{% url 'analytics:query' %}" class="{% if here == 'query' %}on{% endif %}">Abfrage</a>
+</nav>
+{% endwith %}

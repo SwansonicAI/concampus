@@ -10,6 +10,7 @@ urlpatterns = [
     path('pruefungen/', include('exams.urls')),
     path('aufnahme/', include('admissions.urls')),
     path('raeume/', include('rooms.urls')),
+    path('auswertungen/', include('analytics.urls')),
     path('einstellungen/', include('setup.urls')),
     path('', include('core.urls')),
 ]  # uploads are not served as files: admissions:document checks who may see each

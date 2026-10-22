@@ -108,6 +108,7 @@ class CapabilityTest(Seeded):
             'view_teaching_load': '/lehre/deputat/',
             'roll_over': '/lehre/semesterwechsel/',
             'view_curriculum': '/studiengaenge/',
+            'view_statistics': '/auswertungen/',
         }
 
     def test_each_capability_opens_its_pages_and_nothing_else_does(self):
@@ -131,7 +132,7 @@ class CapabilityTest(Seeded):
 
     def test_no_dead_links(self):
         """Every tile, feature and search hit someone is offered opens for them."""
-        for username in [*DEMO, 'campus']:
+        for username in [*DEMO, 'campus', 'praesidium']:
             person = Person.objects.get(username=username)
             client = self.login(username)
             urls = {app.url and reverse(app.url) for app, _ in tiles(person)}
@@ -290,6 +291,7 @@ class FreshInstallTest(Empty):
         '/pruefungen/anerkennung/', '/aufnahme/bewerbungen/', '/aufnahme/kommissionen/', '/aufnahme/meine/', '/aufnahme/bewerben/',
         '/raeume/', '/raeume/finden/', '/raeume/buchen/', '/raeume/meine/', '/raeume/veranstaltungen/', '/einstellungen/',
         '/einstellungen/texte/', '/einstellungen/semester/', '/einstellungen/semester/neu/', '/einstellungen/eignungspruefungen/neu/',
+        '/auswertungen/', '/auswertungen/abfrage/', '/auswertungen/abfrage/?was=bewerbungen&nach=studienjahr', '/auswertungen/datensaetze/',
     ]
 
     def visit(self):

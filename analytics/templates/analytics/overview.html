@@ -1,0 +1,48 @@
+{% extends base %}
+{% load l10n %}
+{% block title %}Auswertungen{% endblock %}
+{% block subnav %}{% include "analytics/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Auswertungen</h1>
+<p class="lead">Stand {% now "j. F Y" %}. Jede Beschriftung teilt weiter auf, jede Zahl zeigt, wer dahintersteht, sofern Sie es sehen dürfen.</p>
+
+{% if insights %}
+<section style="margin-top: 8px">
+  <h2>Was auffällt</h2>
+  <ul class="todo">
+    {% for i in insights %}<li><a href="{{ i.url }}"><span class="what">{{ i.text }}</span><span class="where"></span><span class="due"></span></a></li>{% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% for s in sections %}
+<section class="figures">
+  <div class="head"><h2>{{ s.title }}</h2><p class="eyebrow">{{ s.when }}</p></div>
+  <div class="stats">{% for stat in s.stats %}{% include "analytics/_stat.html" %}{% endfor %}</div>
+  {% if s.grid %}
+  <figure class="chart">
+    <figcaption><span>Belegung der Instituts- und Übungsräume je Stunde</span></figcaption>
+    <div class="scroll">
+      <table class="heat hours">
+        <thead><tr><th></th>{% for h in s.grid.hours %}<th class="num">{{ h }}</th>{% endfor %}</tr></thead>
+        <tbody>{% for day in s.grid.days %}<tr><td>{{ day.label }}</td>{% for cell in day.cells %}<td class="num{% if cell.shade > 55 %} dark{% endif %}" style="--v: {{ cell.shade|unlocalize }}%" title="{{ cell.tip }}">{{ cell.share }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+      </table>
+    </div>
+  </figure>
+  {% endif %}
+  <div class="charts">
+    {% for c in s.charts %}{% include "analytics/_chart.html" %}{% endfor %}
+    {% if s.funnel %}
+    <figure class="chart">
+      <figcaption><span>Weg durch die Eignungsprüfung, {{ s.when }}</span></figcaption>
+      <div class="bars">
+        {% for f in s.funnel %}
+        <div class="row"><span class="name">{{ f.label }}</span><span class="track"><i style="width: {{ f.width|unlocalize }}%"></i></span><span class="value">{{ f.shown }}</span><span class="extra">{{ f.share }} %</span></div>
+        {% endfor %}
+      </div>
+    </figure>
+    {% endif %}
+  </div>
+</section>
+{% endfor %}
+{% endblock %}
