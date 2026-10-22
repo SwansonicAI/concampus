@@ -19,7 +19,7 @@ class Study(Tracked, models.Model):
     """One person's path through one programme, from application to graduation."""
 
     owner = 'person_id'
-    offices = ('ASA',)
+    capabilities = ('manage_students',)
 
     class Status(models.TextChoices):
         APPLIED = 'applied', 'Beworben'
@@ -127,7 +127,7 @@ class StudyTerm(Tracked, models.Model):
     """
 
     owner = 'study.person_id'
-    offices = ('ASA',)
+    capabilities = ('manage_students',)
 
     study = models.ForeignKey(Study, models.CASCADE, related_name='terms', verbose_name='Studium')
     term = models.ForeignKey(Term, models.PROTECT, related_name='registrations', verbose_name='Semester')
@@ -148,7 +148,7 @@ class Document(Tracked, models.Model):
     """A file or link a person handed in or received: CV, certificates, audition video, attests, Bescheide."""
 
     owner = 'person_id'
-    offices = ('ASA',)
+    capabilities = ('manage_students',)
 
     class Kind(models.TextChoices):  # what a complete application holds, as the HfM lists it
         VIDEO = 'video', 'Video'

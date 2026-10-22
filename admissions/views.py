@@ -15,6 +15,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from core.access import require
+from core.history import tables
 from core.models import Message, Term
 from courses import panel
 from courses.forms import SlotForm
@@ -22,7 +23,6 @@ from courses.models import Course, Participation
 from students.models import Document, Study, StudyTerm
 from .forms import INSURERS, AcceptForm, ApplicationForm, SignupForm
 
-OFFICE = 'ASA'
 BOARD = [Study.Status.APPLIED, Study.Status.ADMITTED, Study.Status.WAITLISTED, Study.Status.REJECTED, Study.Status.ENROLLED]
 ACCEPT_DAYS = 14
 POSTGRADUATE = ['M.Mus.', 'M.Ed.', 'Konzertdiplom', 'Zertifikat', 'Dr. phil.']
@@ -57,7 +57,7 @@ DECISIONS = {
 
 def index(request):
     roles = request.user.roles
-    if OFFICE in roles:
+    if 'view_applications' in roles:
         return redirect('admissions:board')
     if 'teacher' in roles:
         return redirect('admissions:juries')
@@ -104,7 +104,7 @@ def uploads_open(study):
     ).exists()
 
 
-@require(OFFICE)
+@require('view_applications')
 def board(request):
     terms = Term.objects.filter(courses__kind=Course.Kind.AUDITION).distinct()
     picked = request.GET.get('semester', '')
@@ -161,7 +161,7 @@ def next_stages(course):
 def audition(request, pk):
     person = request.user
     course = get_object_or_404(Course.objects.select_related('term', 'program', 'subject'), pk=pk, kind=Course.Kind.AUDITION)
-    office = OFFICE in person.roles
+    office = 'run_auditions' in person.roles
     if not (office or course.staff.filter(pk=person.pk).exists()):
         raise PermissionDenied
     staff, rows = panel.sheet(course)
@@ -184,6 +184,7 @@ def audition(request, pk):
         'rows': rows,
         'columns': [e.pk for e in columns],
         'office': office,
+        'history': Course.visible_to(person.roles),
         'slots': SlotForm(person=person) if office else None,
         'stages': next_stages(course) if office else [],
         'ready': sum(1 for p in rows if p.passed and p.study.status == Study.Status.APPLIED),
@@ -191,7 +192,7 @@ def audition(request, pk):
     })
 
 
-@require(OFFICE)
+@require('run_auditions')
 @require_POST
 def plan(request, pk):
     course = get_object_or_404(Course, pk=pk, kind=Course.Kind.AUDITION)
@@ -209,7 +210,7 @@ def plan(request, pk):
     return redirect(course)
 
 
-@require(OFFICE)
+@require('run_auditions')
 @require_POST
 def advance(request, pk):
     """Invite everyone who passed this stage to the next one."""
@@ -227,7 +228,7 @@ def advance(request, pk):
     return redirect(course)
 
 
-@require(OFFICE)
+@require('run_auditions')
 @require_POST
 def close(request, pk):
     course = get_object_or_404(Course, pk=pk, kind=Course.Kind.AUDITION)
@@ -240,7 +241,7 @@ def close(request, pk):
 def application(request, pk):
     person = request.user
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term', 'teacher'), pk=pk)
-    office = OFFICE in person.roles
+    office = 'view_applications' in person.roles
     juror = Course.objects.filter(kind=Course.Kind.AUDITION, staff=person, participations__study=study).exists()
     if not (office or juror or study.person == person):
         raise PermissionDenied
@@ -256,14 +257,16 @@ def application(request, pk):
         'show_results': office or juror,
         'checklist': checklist(study),
         'documents': study.documents.filter(kind__in=[Kind.NOTICE, Kind.OTHER]),
-        'office': office,
+        'decide': 'decide_applications' in person.roles,
+        'enrol': 'manage_students' in person.roles,
+        'history': bool(tables(person.roles)),
         'accepted': study.terms.filter(term=study.start_term).first(),
         'decisions': [Study.Status(s) for s in DECISIONS],
         'missing': study.missing() if study.status == Study.Status.ADMITTED else [],
     })
 
 
-@require(OFFICE)
+@require('decide_applications')
 @require_POST
 def decide(request, pk):
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term'), pk=pk)
@@ -348,9 +351,9 @@ def mine(request):
 
 @require_POST
 def upload(request, pk):
-    """Hand in a document or a video for an application, until its deadline; the ASA may add one at any time."""
+    """Hand in a document or a video for an application, until its deadline; the office running auditions at any time."""
     study = get_object_or_404(Study.objects.select_related('person'), pk=pk, status=Study.Status.APPLIED)
-    office = OFFICE in request.user.roles
+    office = 'run_auditions' in request.user.roles
     if not (office or study.person == request.user):
         raise PermissionDenied
     back = redirect('admissions:mine' if study.person == request.user else study.get_absolute_url())
@@ -400,7 +403,7 @@ def review(request, pk):
     person = request.user
     course = get_object_or_404(Course.objects.select_related('term', 'subject', 'program'), pk=pk, kind=Course.Kind.AUDITION, video=True)
     juror = course.staff.filter(pk=person.pk).exists()
-    if not (juror or OFFICE in person.roles):
+    if not (juror or 'run_auditions' in person.roles):
         raise PermissionDenied
     _, rows = panel.sheet(course)
     if not rows:

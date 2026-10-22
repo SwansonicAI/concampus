@@ -1,16 +1,23 @@
+import re
 from datetime import timedelta
+from pathlib import Path
 
+from django.contrib.auth.models import Permission
 from django.core.exceptions import ValidationError
 from django.test import Client, TestCase
+from django.urls import reverse
 from django.utils import timezone
 
 from courses.models import Course
 from curriculum.models import Program
 from rooms.models import Booking, Room
 from students.models import Document, Study
+from .access import CODENAMES
+from .apps import tile_apps, tiles
 from .history import acting, restore
-from .models import Change, Person
+from .models import Change, Office, Person
 from .testing import Seeded, flashes
+from .views import found
 
 PANEL = {'X-Panel': '1'}
 DEMO = ['admin', 'asa', 'pruefungsamt', 'dekanat', 'veranstaltungsbuero', 'lehre', 'student', 'bewerbung']
@@ -77,6 +84,69 @@ class SmokeTest(Seeded):
     def test_strangers_are_sent_to_the_login(self):
         self.assertEqual(Client().get('/konto/login/').status_code, 200)
         self.assertEqual(Client().get('/').status_code, 302)
+
+
+class CapabilityTest(Seeded):
+    """Offices are named freely; what someone may do comes only from the capabilities their offices hold."""
+
+    def pages(self):
+        study = Study.objects.filter(status='enrolled').first()
+        return {
+            'view_students': '/studierende/liste/',
+            'view_files': f'/studierende/{study.pk}/',
+            'manage_students': f'/studierende/bescheide/?study={study.pk}',
+            'manage_reregistration': '/studierende/rueckmeldung/',
+            'message_students': f'/studierende/nachricht/?study={study.pk}',
+            'view_applications': '/aufnahme/bewerbungen/',
+            'run_auditions': f'/aufnahme/pruefung/{Course.objects.filter(kind="audition").first().pk}/',
+            'manage_exams': '/pruefungen/neu/',
+            'decide_results': f'/pruefungen/{Course.objects.filter(kind="exam").first().pk}/',
+            'recognise': '/pruefungen/anerkennung/',
+            'manage_courses': '/lehre/neu/',
+            'view_teaching_load': '/lehre/deputat/',
+            'roll_over': '/lehre/semesterwechsel/',
+            'view_curriculum': '/studiengaenge/',
+        }
+
+    def test_each_capability_opens_its_pages_and_nothing_else_does(self):
+        clerk = Person.objects.create(username='clerk', last_name='Neu')
+        office = Office.objects.create(name='Beliebiger Name')
+        clerk.groups.add(office)
+        client = Client()
+        client.force_login(clerk)
+        for capability, page in self.pages().items():
+            with self.subTest(capability=capability):
+                office.permissions.clear()
+                self.assertEqual(client.get(page).status_code, 403)
+                office.permissions.set(Permission.objects.filter(codename=capability))
+                self.assertEqual(client.get(page).status_code, 200)
+
+    def test_superusers_hold_every_capability_and_roles_still_derive(self):
+        self.assertEqual(Person.objects.get(username='admin').roles >= set(CODENAMES), True)
+        self.assertEqual(Person.objects.get(username='student').roles, {'student'})
+        self.assertIn('teacher', Person.objects.get(username='lehre').roles)
+        self.assertEqual(self.login('asa').get('/admin/').status_code, 302)
+
+    def test_no_dead_links(self):
+        """Every tile, feature and search hit someone is offered opens for them."""
+        for username in [*DEMO, 'campus']:
+            person = Person.objects.get(username=username)
+            client = self.login(username)
+            urls = {app.url and reverse(app.url) for app, _ in tiles(person)}
+            urls |= {f['url'] for app in tile_apps() for f in app.features(person)}
+            urls |= {h['url'] for q in ['Chen', 'Violine', 'Konzert', 'Klausur', 'FH'] for _, hits in found(person, q, 5) for h in hits}
+            for url in urls - {None, reverse('admin:index')}:
+                with self.subTest(username=username, url=url):
+                    self.assertEqual(client.get(url, follow=True).status_code, 200)
+
+    def test_office_names_are_data_not_code(self):
+        root = Path(__file__).resolve().parent.parent
+        names = re.compile(r"\b(ASA|Prüfungsamt|Dekanat|Veranstaltungsbüro)\b")
+        letters = {'letter.html', 'certificate.html', 'transcript.html'}  # their sender becomes a text (phase 4)
+        for path in root.glob('*/**/*'):
+            if path.suffix in ('.py', '.html') and not {'.venv', 'migrations', 'management'} & set(path.parts) and path.name not in letters and 'tests' not in path.name:
+                with self.subTest(path=str(path.relative_to(root))):
+                    self.assertIsNone(names.search(path.read_text(encoding='utf-8')))
 
 
 class SearchTest(Seeded):

@@ -14,7 +14,7 @@ class ExamsConfig(Tile, AppConfig):
     url = 'exams:index'
 
     def title(self, roles):
-        if roles & {'Prüfungsamt', 'teacher', 'student'}:
+        if roles & {'manage_exams', 'decide_results', 'recognise', 'teacher', 'student'}:
             return 'Prüfungen'
 
     def figure(self, person):
@@ -22,7 +22,7 @@ class ExamsConfig(Tile, AppConfig):
         from courses.models import Course, Participation
 
         term = Term.current()
-        if 'Prüfungsamt' in person.roles:
+        if person.roles & {'manage_exams', 'decide_results'}:
             return f'{plural(term.courses.filter(kind=Course.Kind.EXAM).count(), "Prüfung", "Prüfungen")} im {term}'
         if 'teacher' in person.roles:
             return f'{plural(person.teaching.filter(term=term, kind=Course.Kind.EXAM).count(), "Kommission", "Kommissionen")} im {term}'
@@ -31,13 +31,12 @@ class ExamsConfig(Tile, AppConfig):
 
     def features(self, person):
         roles, found = person.roles, []
-        if roles & {'Prüfungsamt', 'teacher'}:
+        if roles & {'manage_exams', 'decide_results', 'teacher'}:
             found.append(feature('Prüfungen', reverse('exams:index'), 'prüfungsplan kommission noten eintragen bewerten freigabe'))
-        if 'Prüfungsamt' in roles:
-            found += [
-                feature('Prüfung anlegen', reverse('exams:new'), 'neue prüfung erstellen'),
-                feature('Anerkennung', reverse('exams:recognition'), 'anrechnung externe leistungen hochschulwechsel'),
-            ]
+        if 'manage_exams' in roles:
+            found.append(feature('Prüfung anlegen', reverse('exams:new'), 'neue prüfung erstellen'))
+        if 'recognise' in roles:
+            found.append(feature('Anerkennung', reverse('exams:recognition'), 'anrechnung externe leistungen hochschulwechsel'))
         if 'student' in roles:
             found.append(feature('Prüfungsanmeldung', reverse('exams:index'), 'prüfungen anmelden abmelden meine prüfungen'))
             for study in person.studies.filter(status='enrolled').select_related('subject'):
@@ -52,7 +51,7 @@ class ExamsConfig(Tile, AppConfig):
             held=Min('bookings__start'), size=Count('participations', distinct=True),
             open=Count('participations', filter=Q(participations__passed=None), distinct=True),
         ).filter(size__gt=0)
-        if 'Prüfungsamt' in person.roles:
+        if 'decide_results' in person.roles:
             for exam in exams.filter(open=0):
                 found.append(task(f'Ergebnisse freigeben: {exam.title}', exam.get_absolute_url()))
         if 'teacher' in person.roles:

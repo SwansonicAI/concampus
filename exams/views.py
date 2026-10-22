@@ -58,7 +58,7 @@ def index(request):
         .annotate(graded=Count('participations', filter=Q(participations__passed__isnull=False), distinct=True))
         .order_by('date', 'title')
     )
-    if 'Prüfungsamt' in person.roles:
+    if person.roles & {'manage_exams', 'decide_results'}:
         context['exams'] = exams
     elif 'teacher' in person.roles:
         context['exams'] = exams.filter(staff=person)
@@ -72,17 +72,16 @@ def index(request):
 def exam(request, pk):
     person = request.user
     course = get_object_or_404(Course.objects.select_related('term', 'subject'), pk=pk, kind__in=EXAMS)
-    office = 'Prüfungsamt' in person.roles
-    examiner = course.staff.filter(pk=person.pk).exists()
-    if not (office or examiner):
+    office, decide = 'manage_exams' in person.roles, 'decide_results' in person.roles
+    if not (office or decide or course.staff.filter(pk=person.pk).exists()):
         raise PermissionDenied
     staff, rows = panel.sheet(course)
-    columns = staff if office else [person]
+    columns = staff if decide else [person]
     if request.method == 'POST':
         if course.released:
             raise PermissionDenied
         try:
-            panel.save(request.POST, rows, columns, decide=office)
+            panel.save(request.POST, rows, columns, decide=decide)
         except InvalidOperation:
             messages.error(request, 'Bitte nur Zahlen zwischen 0 und 99 eintragen.')
         else:
@@ -96,6 +95,8 @@ def exam(request, pk):
         'columns': [e.pk for e in columns],
         'panel': course.kind in Course.PANEL,
         'office': office,
+        'decide': decide,
+        'history': Course.visible_to(person.roles),
         'slots': slots,
         'modules': course.modules.select_related('program'),
         'bookings': course.bookings.select_related('room'),
@@ -105,7 +106,7 @@ def exam(request, pk):
     })
 
 
-@require('Prüfungsamt')
+@require('manage_exams')
 def edit(request, pk=None):
     course = get_object_or_404(Course, pk=pk, kind=Course.Kind.EXAM) if pk else Course(term=Term.pick(request.GET.get('semester')), kind=Course.Kind.EXAM)
     form = ExamForm(request.POST or None, instance=course)
@@ -117,7 +118,7 @@ def edit(request, pk=None):
     return render(request, 'courses/form.html', {'form': form, 'course': course, 'menu': 'exams/_nav.html', 'heading': 'Neue Prüfung', 'back': back})
 
 
-@require('Prüfungsamt')
+@require('manage_exams')
 @require_POST
 def plan(request, pk):
     course = get_object_or_404(Course, pk=pk, kind=Course.Kind.EXAM)
@@ -137,9 +138,9 @@ def plan(request, pk):
 
 @require_POST
 def release(request, pk):
-    """Release results to the candidates and lock them; only the Prüfungsamt can reopen."""
+    """Release results to the candidates and lock them; only whoever decides results can reopen."""
     course = get_object_or_404(Course, pk=pk, kind__in=EXAMS)
-    office = 'Prüfungsamt' in request.user.roles
+    office = 'decide_results' in request.user.roles
     if not (office or course.staff.filter(pk=request.user.pk).exists()):
         raise PermissionDenied
     if course.released:
@@ -210,7 +211,7 @@ class RecognitionForm(forms.Form):
         return data
 
 
-@require('Prüfungsamt')
+@require('recognise')
 def recognition(request):
     term = Term.current()
     course, _ = Course.objects.get_or_create(term=term, kind=Course.Kind.RECOGNITION, defaults={'title': f'Anerkennungen {term}'})
@@ -233,12 +234,12 @@ def recognition(request):
 def transcript(request, pk):
     """Leistungsübersicht or, once all credits are earned, Zeugnis."""
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject'), pk=pk)
-    if study.person != request.user and not request.user.roles & {'Prüfungsamt', 'ASA'}:
+    if study.person != request.user and 'view_files' not in request.user.roles:
         raise PermissionDenied
     tree, average = study.progress()
     earned, total = sum(m.earned for m in tree), sum(m.credits for m in tree)
     rows = [r for r in study_plan(tree, study.program.semesters) if r['kind'] != 'part' and r['node'].earned or r['kind'] == 'part' and r['exam'] and any(i.done for i in r['items'])]
     return render(request, 'exams/transcript.html', {
         'study': study, 'rows': rows, 'earned': earned, 'total': total, 'average': average, 'honours': average is not None and average <= 1,
-        'complete': earned >= total, 'verbal': verbal(average) if average else '', 'today': timezone.localdate(),
+        'complete': earned >= total and 'decide_results' in request.user.roles,  # a Zeugnis comes from the office 'verbal': verbal(average) if average else '', 'today': timezone.localdate(),
     })

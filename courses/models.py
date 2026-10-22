@@ -13,7 +13,7 @@ class Course(Tracked, models.Model):
     They share staff, participations, rooms and results; the kind decides which app shows them and how.
     """
 
-    offices = ('ASA', 'Prüfungsamt', 'Dekanat')
+    capabilities = ('manage_courses', 'manage_exams', 'run_auditions')
 
     class Kind(models.TextChoices):
         COURSE = 'course', 'Lehrveranstaltung'
@@ -91,7 +91,7 @@ class Participation(Tracked, models.Model):
     """A study taking part in a course. Passed, it credits `module`, one of the course's modules."""
 
     owner = 'study.person_id'
-    offices = ('ASA', 'Prüfungsamt')
+    capabilities = ('decide_results', 'run_auditions')
 
     course = models.ForeignKey(Course, models.CASCADE, related_name='participations', verbose_name='Veranstaltung')
     study = models.ForeignKey(Study, models.CASCADE, related_name='participations', verbose_name='Studium')
@@ -119,7 +119,7 @@ class Score(Tracked, models.Model):
     """One examiner's mark. The participation's grade is the panel's decision, usually the mean."""
 
     owner = 'participation.study.person_id'
-    offices = ('ASA', 'Prüfungsamt')
+    capabilities = ('decide_results', 'run_auditions')
 
     participation = models.ForeignKey(Participation, models.CASCADE, related_name='scores', verbose_name='Teilnahme')
     examiner = models.ForeignKey(Person, models.CASCADE, related_name='scores', verbose_name='Prüfer:in')

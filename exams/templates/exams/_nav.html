@@ -1,6 +1,6 @@
 {% with here=request.resolver_match.url_name roles=user.roles %}
 <nav class="subnav">
-  <a href="{% url 'exams:index' %}" class="{% if here == 'index' or here == 'exam' %}on{% endif %}">{% if 'student' in roles and 'Prüfungsamt' not in roles and 'teacher' not in roles %}Meine Prüfungen{% else %}Prüfungen{% endif %}</a>
-  {% if 'Prüfungsamt' in roles %}<a href="{% url 'exams:recognition' %}" class="{% if here == 'recognition' %}on{% endif %}">Anerkennung</a>{% endif %}
+  <a href="{% url 'exams:index' %}" class="{% if here == 'index' or here == 'exam' %}on{% endif %}">{% if 'student' in roles and 'manage_exams' not in roles and 'teacher' not in roles %}Meine Prüfungen{% else %}Prüfungen{% endif %}</a>
+  {% if 'recognise' in roles %}<a href="{% url 'exams:recognition' %}" class="{% if here == 'recognition' %}on{% endif %}">Anerkennung</a>{% endif %}
 </nav>
 {% endwith %}

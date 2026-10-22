@@ -28,7 +28,7 @@
         <div>
           <b>{{ user }}</b>
           <small class="muted">{{ user.email }}</small>
-          {% if user.is_staff %}<a href="{% url 'admin:index' %}">Datenpflege</a>{% endif %}
+          {% if user.is_superuser %}<a href="{% url 'admin:index' %}">Datenpflege</a>{% endif %}
           <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link">Abmelden</button></form>
         </div>
       </details>

@@ -14,7 +14,7 @@ from django.views.decorators.http import require_POST
 
 from core.dates import day as understood
 from core.days import busy, strip
-from core.models import OFFICES, Institute, Message, Person
+from core.models import Institute, Message, Office, Person
 from core.text import matching
 from courses.models import Course
 from .forms import STUDENT_DAILY, BookingForm, FindForm, bookable, quota
@@ -60,12 +60,12 @@ def week(bookings, day):
 
 
 def editable(booking, person):
-    return 'Veranstaltungsbüro' in person.roles or booking.person_id == person.pk
+    return 'manage_bookings' in person.roles or booking.person_id == person.pk
 
 
 def private(person):
     """Students see that a room is taken, not by whom or for what, unless it is a public event."""
-    return not person.roles & {'teacher', *OFFICES}
+    return not person.roles & {'teacher', 'view_bookings'}
 
 
 def groups():
@@ -81,7 +81,7 @@ def groups():
 def index(request):
     person, today = request.user, timezone.localdate()
     day = understood(request.GET.get('tag', '')) or today
-    group = request.GET.get('raeume') or ('funktion:veranstaltung' if person.roles & set(OFFICES) else 'meine')
+    group = request.GET.get('raeume') or ('funktion:veranstaltung' if 'book_any_room' in person.roles else 'meine')
     kind, _, key = group.partition(':')
     rooms = Room.objects.prefetch_related(Prefetch(
         'bookings', Booking.objects.filter(start__date=day).select_related('course', 'person').prefetch_related('participants'), to_attr='day',
@@ -140,7 +140,8 @@ def room(request, pk):
     room = get_object_or_404(Room.objects.prefetch_related('institutes'), pk=pk)
     day = understood(request.GET.get('tag', '')) or timezone.localdate()
     return render(request, 'rooms/room.html', {
-        'room': room, 'day': day, 'bookable': bookable(request.user).filter(pk=pk).exists(), **week(room.bookings.all(), day),
+        'room': room, 'day': day, 'bookable': bookable(request.user).filter(pk=pk).exists(), 'central': Office.holding('book_any_room'),
+        **week(room.bookings.all(), day),
     })
 
 
@@ -187,7 +188,7 @@ def booking(request, pk=None):
         if booking.person_id != person.pk:
             Message.send(
                 booking.person, f'Buchung geändert: {booking.label}',
-                f'Das Veranstaltungsbüro hat Ihre Buchung geändert: {booking.room}, '
+                f'{person} hat Ihre Buchung geändert: {booking.room}, '
                 f'{timezone.localtime(booking.start):%d.%m.%Y %H:%M}–{timezone.localtime(booking.end):%H:%M}.',
                 reverse('rooms:booking', args=[booking.pk]),
             )
@@ -195,7 +196,8 @@ def booking(request, pk=None):
         return redirect(f"{reverse('rooms:index')}?tag={timezone.localtime(booking.start):%Y-%m-%d}")
     series = Booking.objects.filter(series=booking.series).count() if booking.series else 0
     return render(request, 'rooms/booking.html', {
-        'form': form, 'booking': booking, 'series': series,
+        'form': form, 'booking': booking, 'series': series, 'central': Office.holding('book_any_room'),
+        'history': booking.pk and Booking.visible_to(person.roles),
         'left': STUDENT_DAILY - quota(person, timezone.localdate()) if form.student else None,
     })
 
@@ -211,7 +213,7 @@ def delete(request, pk):
     if booking.person_id != request.user.pk:
         Message.send(
             booking.person, f'Buchung storniert: {booking.label}',
-            f'Das Veranstaltungsbüro hat {doomed.count()} Termin(e) ab {timezone.localtime(booking.start):%d.%m.%Y %H:%M} in {booking.room} storniert.',
+            f'{request.user} hat {doomed.count()} Termin(e) ab {timezone.localtime(booking.start):%d.%m.%Y %H:%M} in {booking.room} storniert.',
         )
     doomed.delete()
     messages.success(request, 'Buchung gelöscht.')

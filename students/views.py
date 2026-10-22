@@ -12,15 +12,13 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from core.access import require
+from core.history import tables
 from core.apps import plural
 from core.models import Message, Term
 from core.text import matching
 from curriculum.models import Program, Subject
 from curriculum.views import plan
 from .models import Document, Study, StudyTerm
-
-OFFICE = 'ASA'
-
 
 class ChangeForm(forms.Form):
     program = forms.ModelChoiceField(label='Neuer Studiengang', queryset=Program.objects.all(), empty_label='Bitte wählen')
@@ -34,7 +32,7 @@ class ComposeForm(forms.Form):
 
 def index(request):
     roles = request.user.roles
-    if OFFICE in roles:
+    if 'view_students' in roles:
         return redirect('students:list')
     study = request.user.studies.filter(status=Study.Status.ENROLLED).first()
     if study is None:
@@ -42,7 +40,7 @@ def index(request):
     return redirect(study.get_absolute_url())
 
 
-@require(OFFICE)
+@require('view_students')
 def roster(request):
     today = timezone.localdate()
     status = request.GET.get('status', Study.Status.ENROLLED)
@@ -76,7 +74,7 @@ def roster(request):
     })
 
 
-@require(OFFICE)
+@require('manage_students')
 def letters(request):
     """The latest Bescheid of each chosen study, ready to print."""
     studies = Study.objects.filter(pk__in=request.GET.getlist('study')).select_related('person')
@@ -85,7 +83,7 @@ def letters(request):
     return render(request, 'core/letter.html', {'letters': latest.values(), 'missing': [s.person.name for s in studies if s.pk not in latest]})
 
 
-@require(OFFICE)
+@require('message_students')
 def compose(request):
     """One message to the chosen people, e.g. everyone in their first semester."""
     studies = Study.objects.filter(pk__in=request.POST.getlist('study') or request.GET.getlist('study')).select_related('person')
@@ -105,8 +103,8 @@ def compose(request):
 def study(request, pk):
     person = request.user
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term', 'teacher', 'focus'), pk=pk)
-    office = OFFICE in person.roles
-    if not (office or study.person == person or study.teacher == person or 'Prüfungsamt' in person.roles):
+    office = 'manage_students' in person.roles
+    if not ('view_files' in person.roles or study.person == person or study.teacher == person):
         raise PermissionDenied
     tree, average = study.progress()
     upcoming = Term.upcoming()
@@ -127,11 +125,11 @@ def study(request, pk):
         'documents': study.documents.all(),
         'others': study.person.studies.exclude(pk=study.pk).select_related('program', 'subject'),
         'change': ChangeForm() if office else None,
-        'history': office or 'Prüfungsamt' in person.roles,
+        'history': bool(tables(person.roles)),
     })
 
 
-@require(OFFICE)
+@require('manage_students')
 @require_POST
 def enrol(request, pk):
     """Immatrikulation of an admitted applicant: matriculation number and first registered term."""
@@ -158,7 +156,7 @@ def enrol(request, pk):
     return redirect(study.get_absolute_url())
 
 
-@require(OFFICE)
+@require('manage_students')
 @require_POST
 def insured(request, pk):
     """The health insurer's electronic notice (Studierendenmeldeverfahren) has arrived."""
@@ -173,7 +171,7 @@ def insured(request, pk):
 def leave(request, pk):
     """Urlaubssemester for the upcoming term, requested by the student or recorded by the office."""
     study = get_object_or_404(Study, pk=pk, status=Study.Status.ENROLLED)
-    if not (OFFICE in request.user.roles or study.person == request.user):
+    if not ('manage_students' in request.user.roles or study.person == request.user):
         raise PermissionDenied
     term = Term.upcoming()
     registration, _ = StudyTerm.objects.get_or_create(study=study, term=term)
@@ -183,7 +181,7 @@ def leave(request, pk):
     return redirect(study.get_absolute_url())
 
 
-@require(OFFICE)
+@require('manage_students')
 @require_POST
 def exmatriculate(request, pk):
     study = get_object_or_404(Study.objects.select_related('person'), pk=pk, status=Study.Status.ENROLLED)
@@ -199,7 +197,7 @@ def exmatriculate(request, pk):
     return redirect(study.get_absolute_url())
 
 
-@require(OFFICE)
+@require('manage_students')
 @require_POST
 def change(request, pk):
     """Fachwechsel: end this study, start the new one now with the semesters so far credited."""
@@ -216,11 +214,11 @@ def change(request, pk):
         )
         StudyTerm.objects.create(study=new, term=term, paid=timezone.localdate())
         study.set_status(Study.Status.LEFT)
-    messages.success(request, 'Fachwechsel eingetragen. Anrechnungen bitte im Prüfungsamt anstoßen.')
+    messages.success(request, 'Fachwechsel eingetragen. Bereits erbrachte Leistungen werden über eine Anerkennung angerechnet.')
     return redirect(new.get_absolute_url())
 
 
-@require(OFFICE)
+@require('manage_students')
 @require_POST
 def hold(request, pk):
     study = get_object_or_404(Study.objects.select_related('person'), pk=pk)
@@ -230,7 +228,7 @@ def hold(request, pk):
     return redirect(study.get_absolute_url())
 
 
-@require(OFFICE)
+@require('manage_reregistration')
 def reregistration(request):
     """Rückmeldung for the upcoming term: book payments; after the deadline, exmatriculate whoever has not paid."""
     term, today = Term.upcoming(), timezone.localdate()
@@ -271,7 +269,7 @@ def reregistration(request):
 def certificate(request, pk):
     """Immatrikulationsbescheinigung for the current term."""
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject'), pk=pk, status=Study.Status.ENROLLED)
-    if not (OFFICE in request.user.roles or study.person == request.user):
+    if not ('manage_students' in request.user.roles or study.person == request.user):
         raise PermissionDenied
     term = Term.current()
     return render(request, 'students/certificate.html', {

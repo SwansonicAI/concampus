@@ -3,6 +3,8 @@ from django.contrib.auth.admin import UserAdmin
 
 from .models import Message, Person, Term
 
+admin.site.has_permission = lambda request: request.user.is_active and request.user.is_superuser  # staff work in the app
+
 
 @admin.register(Person)
 class PersonAdmin(UserAdmin):

@@ -1,4 +1,4 @@
-from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.models import AbstractUser, Group, Permission
 from django.core.mail import send_mail
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models
@@ -6,14 +6,14 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
 
-OFFICES = ['ASA', 'Prüfungsamt', 'Dekanat', 'Veranstaltungsbüro']  # ASA: Akademische und Studentische Angelegenheiten
+from .access import CAPABILITIES, CODENAMES
 
 
 class Tracked:
     """Mixin for models whose every change is kept as a Change (see core.history)."""
 
     owner = ''  # path to the id of the person the record is about, e.g. 'study.person_id'; their history goes with them
-    offices = ()  # the offices that see its history and may restore it
+    capabilities = ()  # who sees its history and may restore it
     keep = None  # how long its changes are kept (timedelta); None: as long as the person they are about
 
     @classmethod
@@ -31,6 +31,10 @@ class Tracked:
     def history(cls, pk):
         """The changes shown as a record's history: its own."""
         return models.Q(table=cls._meta.label_lower, row=pk)
+
+    @classmethod
+    def visible_to(cls, roles):
+        return bool(roles & set(cls.capabilities))
 
 
 class Institute(models.Model):
@@ -50,11 +54,11 @@ class Institute(models.Model):
 class Person(Tracked, AbstractUser):
     """Everyone: applicants, students, teachers, staff.
 
-    Offices are groups; every other role follows from what a person does (see `roles`).
+    What they may do comes from their offices; everything else follows from what they do (see `roles`).
     """
 
     owner = 'pk'
-    offices = ('ASA',)
+    capabilities = ('manage_students', 'manage_accounts')
 
     class Gender(models.TextChoices):  # as the official student statistics count it
         FEMALE = 'w', 'weiblich'
@@ -136,8 +140,12 @@ class Person(Tracked, AbstractUser):
 
     @cached_property
     def roles(self):
-        """Office names (all for superusers) plus 'student', 'applicant' and 'teacher' as derived from studies and teaching."""
-        roles = set(OFFICES) if self.is_superuser else set(self.groups.values_list('name', flat=True))
+        """The capabilities of the person's offices (all for superusers), plus 'student', 'applicant' and 'teacher' as
+        derived from studies and teaching."""
+        if self.is_superuser:
+            roles = set(CODENAMES)
+        else:
+            roles = set(Permission.objects.filter(group__user=self, codename__in=CODENAMES).values_list('codename', flat=True))
         statuses = set(self.studies.values_list('status', flat=True))
         if 'enrolled' in statuses:
             roles.add('student')
@@ -148,8 +156,27 @@ class Person(Tracked, AbstractUser):
         return roles
 
 
+class Office(Tracked, Group):
+    """An office of the Hochschule, named as it likes: the people in it and what they may do (core.access.CAPABILITIES)."""
+
+    capabilities = ('manage_accounts',)
+
+    class Meta:
+        proxy = True
+        ordering = ['name']
+        verbose_name = 'Amt'
+        verbose_name_plural = 'Ämter'
+        default_permissions = ()
+        permissions = [capability for _, group in CAPABILITIES for capability in group]
+
+    @classmethod
+    def holding(cls, capability):
+        """The offices that hold a capability, for sentences like 'Zentral vergeben: …'."""
+        return ' oder '.join(cls.objects.filter(permissions__codename=capability).values_list('name', flat=True))
+
+
 class Term(Tracked, models.Model):
-    offices = ('ASA',)
+    capabilities = ('manage_terms',)
 
     name = models.CharField('Name', max_length=40, unique=True)
     start = models.DateField('Beginn')

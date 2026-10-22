@@ -16,7 +16,7 @@ class AdmissionsConfig(Tile, AppConfig):
     url = 'admissions:index'
 
     def title(self, roles):
-        if roles & {'ASA', 'teacher'}:
+        if roles & {'view_applications', 'teacher'}:
             return 'Aufnahme'
         if 'applicant' in roles or not roles:
             return 'Meine Bewerbung'
@@ -25,7 +25,7 @@ class AdmissionsConfig(Tile, AppConfig):
         from courses.models import Course
         from students.models import Study
 
-        if 'ASA' in person.roles:
+        if 'view_applications' in person.roles:
             return f'{Study.objects.filter(status=Study.Status.APPLIED).count()} offene Bewerbungen'
         if 'teacher' in person.roles:
             juries = person.teaching.filter(kind=Course.Kind.AUDITION, released=None).count()
@@ -35,7 +35,7 @@ class AdmissionsConfig(Tile, AppConfig):
 
     def features(self, person):
         roles, found = person.roles, []
-        if 'ASA' in roles:
+        if 'view_applications' in roles:
             found.append(feature('Bewerbungen', reverse('admissions:board'), 'eignungsprüfung aufnahmeprüfung zulassung bewerber entscheiden'))
         if 'teacher' in roles:
             found.append(feature('Meine Kommissionen', reverse('admissions:juries'), 'eignungsprüfung aufnahmeprüfung jury bewerten'))
@@ -61,7 +61,7 @@ class AdmissionsConfig(Tile, AppConfig):
                 if missing and started:
                     url = reverse('admissions:review', args=[course.pk]) if course.video else course.get_absolute_url()
                     found.append(task(f'{course.title}: Ihre Wertung fehlt für {plural(missing, "Bewerbung", "Bewerbungen")}', url, course.deadline))
-        if 'ASA' in person.roles:
+        if 'decide_applications' in person.roles:
             ready = [
                 s for s in Study.objects.filter(status=Study.Status.APPLIED).prefetch_related('participations__course')
                 if (stages := [p for p in s.participations.all() if p.course.kind == Course.Kind.AUDITION])

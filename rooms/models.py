@@ -14,10 +14,10 @@ def later(moment, weeks):
 
 
 class Room(Tracked, models.Model):
-    """A room of the Hochschule or a venue it uses. Institutes book their own rooms; event and meeting rooms go
-    through the Veranstaltungsbüro."""
+    """A room of the Hochschule or a venue it uses. Institutes book their own rooms; event and meeting rooms are
+    given out centrally."""
 
-    offices = ('Veranstaltungsbüro',)
+    capabilities = ('manage_rooms',)
 
     class Function(models.TextChoices):
         PRACTICE = 'uebung', 'Übungsraum'
@@ -54,7 +54,7 @@ class Booking(Tracked, models.Model):
     told apart by their category."""
 
     owner = 'person_id'
-    offices = ('Veranstaltungsbüro',)
+    capabilities = ('manage_bookings',)
     keep = timedelta(days=730)
 
     class Category(models.TextChoices):  # as the HfM's Asimut has them

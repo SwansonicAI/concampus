@@ -5,9 +5,6 @@ from django.urls import reverse
 
 from core.apps import Tile, feature, plural, task
 
-OFFICE = {'Dekanat', 'ASA', 'Prüfungsamt'}
-
-
 class CoursesConfig(Tile, AppConfig):
     name = 'courses'
     verbose_name = 'Lehre'
@@ -16,7 +13,7 @@ class CoursesConfig(Tile, AppConfig):
     url = 'courses:index'
 
     def title(self, roles):
-        if roles & OFFICE:
+        if 'manage_courses' in roles:
             return 'Lehre'
         if 'teacher' in roles:
             return 'Meine Lehre'
@@ -29,7 +26,7 @@ class CoursesConfig(Tile, AppConfig):
         from .views import TEACHING, deputat
 
         term = Term.current()
-        if person.roles & OFFICE:
+        if 'manage_courses' in person.roles:
             return f'{term.courses.filter(kind__in=TEACHING).count()} Veranstaltungen im {term}'
         if 'teacher' in person.roles:
             courses = person.teaching.filter(term=term, kind__in=TEACHING)
@@ -45,11 +42,11 @@ class CoursesConfig(Tile, AppConfig):
                 feature('Meine Lehre' if 'teacher' in roles else 'Meine Veranstaltungen', reverse('courses:mine'), 'belegt angemeldet warteliste klasse'),
                 feature('Stundenplan', reverse('courses:timetable'), 'woche kalender termine'),
             ]
-        if roles & OFFICE:
+        if 'manage_courses' in roles:
             found.append(feature('Neue Veranstaltung', reverse('courses:new'), 'anlegen erstellen kurs'))
-        if roles & (OFFICE | {'teacher'}):
+        if roles & {'view_teaching_load', 'teacher'}:
             found.append(feature('Deputat', reverse('courses:load'), 'lehrverpflichtung sws lehrende auslastung'))
-        if 'Dekanat' in roles:
+        if 'roll_over' in roles:
             found.append(feature('Semesterwechsel', reverse('courses:rollover'), 'übernehmen nächstes semester planen kopieren'))
         return found
 
@@ -61,7 +58,7 @@ class CoursesConfig(Tile, AppConfig):
         if 'teacher' in person.roles:
             for course in person.teaching.filter(term=term, kind=TEACHING[0], bookings=None):
                 found.append(task(f'Termine planen: {course.title}', course.get_absolute_url()))
-        if 'Dekanat' in person.roles:
+        if 'roll_over' in person.roles:
             from .views import missing
 
             upcoming = Term.upcoming()

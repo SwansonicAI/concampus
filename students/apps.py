@@ -14,7 +14,7 @@ class StudentsConfig(Tile, AppConfig):
     url = 'students:index'
 
     def title(self, roles):
-        if 'ASA' in roles:
+        if 'view_students' in roles:
             return 'Studierende'
         if 'student' in roles:
             return 'Mein Studium'
@@ -25,7 +25,7 @@ class StudentsConfig(Tile, AppConfig):
 
         term = Term.upcoming()
         paid = StudyTerm.objects.filter(term=term, paid__isnull=False).values('study__person')
-        if 'ASA' in person.roles:
+        if 'view_students' in person.roles:
             enrolled = Study.objects.filter(status=Study.Status.ENROLLED)
             if not term.reregistration_open:
                 return f'{enrolled.count()} immatrikuliert'
@@ -37,10 +37,13 @@ class StudentsConfig(Tile, AppConfig):
 
     def features(self, person):
         found = []
-        if 'ASA' in person.roles:
+        if 'view_students' in person.roles:
             found += [
                 feature('Studierende', reverse('students:list'), 'liste suchen filtern matrikel akte'),
                 feature('Studierende als CSV exportieren', f"{reverse('students:list')}?format=csv", 'export excel tabelle download'),
+            ]
+        if 'manage_reregistration' in person.roles:
+            found += [
                 feature('Rückmeldung', reverse('students:reregistration'), 'semesterbeitrag zahlung bezahlt überweisung exmatrikulieren'),
             ]
         for study in person.studies.filter(status='enrolled'):
@@ -58,10 +61,11 @@ class StudentsConfig(Tile, AppConfig):
         paid = StudyTerm.objects.filter(term=term, paid__isnull=False).values('study__person')
         enrolled = Study.objects.filter(status=Study.Status.ENROLLED)
         found = []
-        if 'ASA' in person.roles:
+        if 'manage_students' in person.roles:
             accepted = Study.objects.filter(status=Study.Status.ADMITTED, terms__isnull=False).distinct().count()
             if accepted:
                 found.append(task(f'{plural(accepted, "angenommenen Studienplatz", "angenommene Studienplätze")} immatrikulieren', reverse('admissions:board')))
+        if 'manage_reregistration' in person.roles:
             unpaid = enrolled.exclude(person__in=paid).values('person').distinct().count()
             if unpaid and term.reregistration_open:
                 found.append(task(f'Rückmeldung {term}: {plural(unpaid, "Zahlung", "Zahlungen")} ausstehend', reverse('students:reregistration'), term.deadline))

@@ -36,7 +36,7 @@ class RoomsConfig(Tile, AppConfig):
         from .views import agenda
 
         today = timezone.localdate()
-        if 'Veranstaltungsbüro' in person.roles:
+        if 'manage_bookings' in person.roles:
             return f'{Booking.objects.filter(start__date=today).count()} Buchungen heute'
         if 'student' in person.roles:
             return f'Heute noch {number_format(STUDENT_DAILY - quota(person, today))} von {STUDENT_DAILY} Std. Übezeit'

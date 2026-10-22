@@ -5,7 +5,7 @@
 <div class="head">
   <h1>{{ study.person.first_name }} {{ study.person.last_name }}</h1>
   <div class="actions">
-    {% if office %}<a class="btn ghost" href="{% url 'history' 'core.person' study.person.pk %}" data-panel>Verlauf</a>{% endif %}
+    {% if history %}<a class="btn ghost" href="{% url 'history' 'core.person' study.person.pk %}" data-panel>Verlauf</a>{% endif %}
     <span class="badge {{ study.status }}">{{ study.get_status_display }} seit {{ study.since|date:"j.n.Y" }}</span>
   </div>
 </div>
@@ -25,8 +25,9 @@
     {% if accepted %}<dt>Annahme</dt><dd>Studienplatz angenommen{% if accepted.paid %}, Beitrag bezahlt am {{ accepted.paid|date:"j.n.Y" }}{% endif %}</dd>{% endif %}
   </dl>
   {% endwith %}
-  {% if office %}
+  {% if decide or enrol and study.status == 'admitted' %}
   <div class="panel">
+    {% if decide %}
     <h3>Entscheidung</h3>
     {% if recommendation %}<p>Nach den Prüfungsergebnissen: <b>{% if recommendation == 'admitted' %}zulassen{% else %}ablehnen{% endif %}</b>.</p>{% else %}<p class="muted">Noch nicht alle Prüfungsstufen bewertet.</p>{% endif %}
     <form method="post" action="{% url 'admissions:decide' study.pk %}" class="actions">
@@ -34,7 +35,8 @@
       {% for status in decisions %}<button class="btn{% if status != recommendation %} ghost{% endif %}" name="status" value="{{ status }}"{% if study.status == status %} disabled{% endif %}>{{ status.label }}</button>{% endfor %}
     </form>
     <p class="muted" style="margin-top: 12px"><small>Der Bescheid geht sofort ins Postfach der Person.</small></p>
-    {% if study.status == 'admitted' %}
+    {% endif %}
+    {% if enrol and study.status == 'admitted' %}
     <h3 style="margin-top: 24px">Immatrikulation</h3>
     {% if missing %}
     <p>Es fehlt noch:</p>

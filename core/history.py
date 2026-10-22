@@ -48,6 +48,11 @@ def tracked():
     return [model for model in apps.get_models() if issubclass(model, Tracked)]
 
 
+def tables(roles):
+    """The tables whose history these roles see."""
+    return [model._meta.label_lower for model in tracked() if model.visible_to(roles)]
+
+
 def fields(model):
     return [f for f in model._meta.concrete_fields if not f.primary_key and f.attname not in SKIP]
 
@@ -121,8 +126,8 @@ def on_delete(sender, instance, origin, **kwargs):
 
 def on_link(sender, instance, action, reverse, pk_set, **kwargs):
     """Links (participants, staff, groups) are kept as the lists before and after."""
-    if silent.get() or reverse or action not in ('pre_add', 'pre_remove', 'pre_clear'):
-        return
+    if silent.get() or reverse or not isinstance(instance, Tracked) or action not in ('pre_add', 'pre_remove', 'pre_clear'):
+        return  # a plain Group shares its permission links with Office
     name = next(f.name for f in instance._meta.many_to_many if f.remote_field.through is sender)
     before = current(instance, name)
     after = sorted(set(before) | pk_set if action == 'pre_add' else set(before) - pk_set if action == 'pre_remove' else [])

@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 
 from django.contrib.auth.hashers import make_password
-from django.contrib.auth.models import Group, Permission
+from django.contrib.auth.models import Permission
 from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import models, transaction
@@ -22,7 +22,7 @@ from django.utils import timezone
 from admissions.forms import INSURERS
 from admissions.views import ACCEPT_DAYS, DECISIONS
 from core import history
-from core.models import OFFICES, Change, Institute, Message, Person, Term
+from core.models import Change, Institute, Message, Office, Person, Term
 from courses.models import Course, Participation, Score
 from courses.panel import mean
 from curriculum.models import Module, Program, Subject
@@ -244,11 +244,26 @@ TEACHERS = [  # key, title, first, last, Hauptfach taught
     ('brueck', 'Prof.', 'Johannes', 'Brück', None), ('sander', 'Prof.', 'Christoph', 'Sander', 'Orgel'),
     ('okafor', 'Prof.', 'Ada', 'Okafor', 'Jazz-Gesang'), ('wiegand', 'KMD', 'Peter', 'Wiegand', None), ('hausmann', 'Prof. Dr.', 'Eva', 'Hausmann', None),
 ]
+OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
+    'ASA': [  # Akademische und Studentische Angelegenheiten
+        'view_students', 'view_files', 'manage_students', 'manage_reregistration', 'message_students',
+        'view_applications', 'decide_applications', 'run_auditions', 'manage_courses', 'view_teaching_load',
+        'view_curriculum', 'book_any_room', 'view_bookings', 'manage_terms',
+    ],
+    'Prüfungsamt': [
+        'view_files', 'manage_exams', 'decide_results', 'recognise', 'manage_courses', 'view_teaching_load',
+        'view_curriculum', 'book_any_room', 'view_bookings',
+    ],
+    'Dekanat': ['manage_courses', 'view_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings'],
+    'Veranstaltungsbüro': ['book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms'],
+    'Campus-Team': ['manage_accounts', 'manage_institution', 'manage_terms'],
+}
 STAFF = [  # username, title, first, last, office
     ('asa', '', 'Sabine', 'Krüger', 'ASA'),
     ('pruefungsamt', '', 'Thomas', 'Albrecht', 'Prüfungsamt'),
     ('dekanat', 'Prof. Dr.', 'Johanna', 'Brandt', 'Dekanat'),
     ('veranstaltungsbuero', '', 'Michael', 'Görlitz', 'Veranstaltungsbüro'),
+    ('campus', '', 'Lena', 'Hofmann', 'Campus-Team'),
 ]
 LECTURERS = {  # course title (or its start) → teacher key
     'Musikgeschichte im Überblick I': 'brandt', 'Musikgeschichte im Überblick II': 'brandt', 'Musikgeschichte im Überblick III': 'voss',
@@ -466,14 +481,13 @@ class Command(BaseCommand):
 
     def people(self):
         Person.objects.create(username='admin', first_name='System', last_name='Administration', email='campus@hfm-weimar.de', password=self.password, is_staff=True, is_superuser=True)
-        self.staff = {}
-        groups = {name: Group.objects.create(name=name) for name in OFFICES}
-        rights = {'ASA': ['core', 'students'], 'Prüfungsamt': ['courses'], 'Dekanat': ['curriculum', 'courses'], 'Veranstaltungsbüro': ['rooms']}
-        for name, labels in rights.items():
-            groups[name].permissions.set(Permission.objects.filter(content_type__app_label__in=labels))
+        self.staff, offices = {}, {}
+        for name, capabilities in OFFICES.items():
+            offices[name] = Office.objects.create(name=name)
+            offices[name].permissions.set(Permission.objects.filter(codename__in=capabilities))
         for username, title, first, last, office in STAFF:
-            self.staff[username] = person = self.person(username, first, last, title, is_staff=True)
-            person.groups.add(groups[office])
+            self.staff[username] = person = self.person(username, first, last, title)
+            person.groups.add(offices[office])
         self.teachers, self.by_subject = {'brandt': self.staff['dekanat']}, defaultdict(list)
         self.staff['dekanat'].institute = self.institutes['MW']
         self.staff['dekanat'].save(update_fields=['institute'])

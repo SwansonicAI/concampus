@@ -7,7 +7,7 @@ from django.utils.formats import number_format
 
 from core import history
 from core.dates import ClockField, DayField
-from core.models import OFFICES, Person
+from core.models import Person
 from .models import Booking, Room, later
 
 # The HfM's booking rules (Buchungsinformationen in Asimut)
@@ -19,9 +19,9 @@ TEACHER_AHEAD = timedelta(days=183)  # teachers six months ahead, without a quot
 
 
 def bookable(person):
-    """Rooms a person may book: the offices all of them; teachers and students the rooms of their Institute,
-    except event and meeting rooms, which go through the Veranstaltungsbüro."""
-    if person.roles & set(OFFICES):
+    """Rooms a person may book: all with the right to; teachers and students the rooms of their Institute, except event
+    and meeting rooms, which are given out centrally."""
+    if 'book_any_room' in person.roles:
         return Room.objects.all()
     if not person.roles & {'teacher', 'student'}:
         return Room.objects.none()
@@ -62,7 +62,7 @@ class BookingForm(forms.ModelForm):
             start, end = timezone.localtime(self.instance.start), timezone.localtime(self.instance.end)
             self.initial.update(day=start.date(), begin=start.time(), until=end.time())
         self.person, roles = person, person.roles
-        self.office = bool(roles & set(OFFICES))
+        self.office = 'book_any_room' in roles
         self.student = not (self.office or 'teacher' in roles)
         self.fields['room'].queryset = bookable(person)
         self.fields['room'].empty_label = 'Bitte wählen'

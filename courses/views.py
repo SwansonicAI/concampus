@@ -22,11 +22,11 @@ from rooms.models import Booking
 from rooms.views import agenda, week
 from students.models import Study
 from . import panel
-from .apps import OFFICE
 from .forms import AddForm, CourseForm, PlanForm
 from .models import Course, Participation
 
 TEACHING = [Course.Kind.COURSE, Course.Kind.LESSON]
+MANAGERS = {Course.Kind.EXAM: 'manage_exams', Course.Kind.RECOGNITION: 'recognise', Course.Kind.AUDITION: 'run_auditions'}
 
 
 def deputat(courses):
@@ -41,7 +41,8 @@ def enrolled():
 
 
 def teaches(person, course):
-    return bool(person.roles & OFFICE) or course.staff.filter(pk=person.pk).exists()
+    """Who runs a course: its staff, and whoever manages courses of its kind."""
+    return MANAGERS.get(course.kind, 'manage_courses') in person.roles or course.staff.filter(pk=person.pk).exists()
 
 
 def ahead():
@@ -51,7 +52,7 @@ def ahead():
 
 
 def index(request):
-    return redirect('courses:catalogue' if request.user.roles & OFFICE else 'courses:mine')
+    return redirect('courses:catalogue' if 'manage_courses' in request.user.roles else 'courses:mine')
 
 
 def catalogue(request):
@@ -79,7 +80,7 @@ def catalogue(request):
         'programs': Program.objects.all(),
         'program': program,
         'q': q,
-        'office': bool(person.roles & OFFICE),
+        'office': 'manage_courses' in person.roles,
     })
 
 
@@ -122,7 +123,7 @@ def course(request, pk):
 def edit(request, pk=None):
     """Create or change a course; the office may do either, staff may change their own."""
     course = get_object_or_404(Course, pk=pk, kind__in=TEACHING) if pk else Course(term=Term.pick(request.GET.get('semester')))
-    if not (request.user.roles & OFFICE or (pk and teaches(request.user, course))):
+    if not ('manage_courses' in request.user.roles or (pk and teaches(request.user, course))):
         raise PermissionDenied
     form = CourseForm(request.POST or None, instance=course)
     if form.is_valid():
@@ -235,18 +236,19 @@ def timetable(request):
     return render(request, 'courses/timetable.html', {'day': day, 'clashes': True, **week(agenda(request.user), day)})
 
 
-@require(*OFFICE, 'teacher')
+@require('view_teaching_load', 'teacher')
 def load(request):
     person = request.user
     term = Term.pick(request.GET.get('semester'))
     courses = term.courses.filter(kind__in=TEACHING).prefetch_related('staff').annotate(size=Count('participations'))
-    if not person.roles & OFFICE:
+    everyone = 'view_teaching_load' in person.roles
+    if not everyone:
         courses = courses.filter(staff=person)
     teachers = defaultdict(list)
     for c in courses:
         c.load = (c.hours or 0) * (c.size if c.kind == Course.Kind.LESSON else 1)
         for s in c.staff.all():
-            if person.roles & OFFICE or s == person:
+            if everyone or s == person:
                 teachers[s].append(c)
     rows = sorted(((t, cs, sum(c.load for c in cs)) for t, cs in teachers.items()), key=lambda row: row[0].last_name)
     return render(request, 'courses/load.html', {'term': term, 'terms': Term.objects.all(), 'rows': rows})
@@ -261,7 +263,7 @@ def missing(target):
     ).exclude(title__in=target.courses.values('title'))
 
 
-@require('Dekanat')
+@require('roll_over')
 def rollover(request):
     """Copy the missing courses to the next term, with staff and modules; lesson classes keep their students."""
     target = Term.upcoming()

@@ -12,7 +12,7 @@ class CurriculumConfig(Tile, AppConfig):
     url = 'curriculum:index'
 
     def title(self, roles):
-        if roles & {'ASA', 'Prüfungsamt', 'Dekanat', 'teacher'}:
+        if roles & {'view_curriculum', 'teacher'}:
             return 'Studiengänge'
 
     def features(self, person):

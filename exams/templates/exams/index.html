@@ -7,10 +7,10 @@
   <h1>Prüfungen</h1>
   <form class="actions">
     <select name="semester" onchange="this.form.requestSubmit()" aria-label="Semester">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select>
-    {% if 'Prüfungsamt' in user.roles %}<a class="btn" href="{% url 'exams:new' %}?semester={{ term.pk }}">Prüfung anlegen</a>{% endif %}
+    {% if 'manage_exams' in user.roles %}<a class="btn" href="{% url 'exams:new' %}?semester={{ term.pk }}">Prüfung anlegen</a>{% endif %}
   </form>
 </div>
-<p class="lead">{{ term }} · {{ exams|length }} Prüfungen{% if 'Prüfungsamt' not in user.roles %}, in denen Sie prüfen{% endif %}</p>
+<p class="lead">{{ term }} · {{ exams|length }} Prüfungen{% if 'manage_exams' not in user.roles and 'decide_results' not in user.roles %}, in denen Sie prüfen{% endif %}</p>
 <table data-panel>
   <thead><tr><th>Datum</th><th>Prüfung</th><th>Kommission</th><th class="num">Anmeldungen</th><th>Stand</th></tr></thead>
   <tbody>

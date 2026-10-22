@@ -4,7 +4,7 @@ from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, render
 
 from core.access import require
-from core.models import OFFICES, Term
+from core.models import Term
 from courses.models import Course
 from .models import Program
 
@@ -36,7 +36,7 @@ def plan(tree, semesters):
     return rows
 
 
-@require(*OFFICES, 'teacher')
+@require('view_curriculum', 'teacher')
 def index(request):
     programs = Program.objects.annotate(
         students=Count('studies', filter=Q(studies__status='enrolled'), distinct=True),
@@ -46,7 +46,7 @@ def index(request):
     return render(request, 'curriculum/index.html', {'programs': programs})
 
 
-@require(*OFFICES, 'teacher')
+@require('view_curriculum', 'teacher')
 def program(request, pk):
     program = get_object_or_404(Program.objects.prefetch_related('subjects'), pk=pk)
     term = Term.current()

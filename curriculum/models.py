@@ -19,7 +19,7 @@ def weighted(nodes):
 class Subject(Tracked, models.Model):
     """Main subject (Hauptfach)."""
 
-    offices = ('Dekanat',)
+    capabilities = ('edit_curriculum',)
 
     name = models.CharField('Name', max_length=80, unique=True)
     institute = models.ForeignKey('core.Institute', models.SET_NULL, null=True, blank=True, related_name='subjects', verbose_name='Institut')
@@ -36,7 +36,7 @@ class Subject(Tracked, models.Model):
 class Program(Tracked, models.Model):
     """A degree programme under one version of its regulations (Studiengang + Prüfungsordnung)."""
 
-    offices = ('Dekanat',)
+    capabilities = ('edit_curriculum',)
 
     name = models.CharField('Name', max_length=120)
     degree = models.CharField('Abschluss', max_length=40)
@@ -96,7 +96,7 @@ class Module(Tracked, models.Model):
     mean of its children's grades; the final grade is that of the root modules. Weight 0 does not count.
     """
 
-    offices = ('Dekanat',)
+    capabilities = ('edit_curriculum',)
 
     program = models.ForeignKey(Program, models.CASCADE, related_name='modules', verbose_name='Studiengang')
     parent = models.ForeignKey('self', models.CASCADE, null=True, blank=True, related_name='children', verbose_name='Übergeordnet')

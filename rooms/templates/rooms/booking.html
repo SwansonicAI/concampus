@@ -4,7 +4,7 @@
 {% block content %}
 <h1>{% if booking.pk %}Buchung bearbeiten{% else %}Raum buchen{% endif %}</h1>
 {% if booking.pk %}
-<p class="lead">Gebucht für {{ booking.person }} am {{ booking.created|date:"j.n.Y, H:i" }}{% if booking.course %} · <a href="{{ booking.course.get_absolute_url }}">{{ booking.course.title }}</a>{% endif %}{% if series %} · Teil einer Serie mit {{ series }} Terminen{% endif %}{% if form.office %} · <a href="{% url 'history' 'rooms.booking' booking.pk %}" data-panel>Verlauf</a>{% endif %}</p>
+<p class="lead">Gebucht für {{ booking.person }} am {{ booking.created|date:"j.n.Y, H:i" }}{% if booking.course %} · <a href="{{ booking.course.get_absolute_url }}">{{ booking.course.title }}</a>{% endif %}{% if series %} · Teil einer Serie mit {{ series }} Terminen{% endif %}{% if history %} · <a href="{% url 'history' 'rooms.booking' booking.pk %}" data-panel>Verlauf</a>{% endif %}</p>
 {% elif left is not None %}
 <p class="lead">Ihr Kontingent heute: noch {{ left|floatformat:"-1" }} von 4 Stunden.</p>
 {% endif %}
@@ -31,7 +31,7 @@
     {% else %}
     <div class="panel">
       <h3>Regeln</h3>
-      <p>Lehrende und Studierende buchen die Räume ihres Instituts. Veranstaltungs- und Sitzungsräume bucht das Veranstaltungsbüro.</p>
+      <p>Lehrende und Studierende buchen die Räume ihres Instituts. Veranstaltungs- und Sitzungsräume werden zentral vergeben{% if central %}: {{ central }}{% endif %}.</p>
       <p>Studierende buchen bis 24 Stunden im Voraus und höchstens 4 Stunden am Tag. Was in den nächsten 3 Stunden beginnt, ist eine Last-Minute-Buchung und zählt nicht. Kammermusikproben gehen bis 10 Tage im Voraus, mit mindestens einer weiteren Person aus dem Ensemble.</p>
       <p>Lehrende buchen bis sechs Monate im Voraus, ohne Kontingent. Wiederkehrende Buchungen werden nur gespeichert, wenn alle Termine frei sind.</p>
     </div>

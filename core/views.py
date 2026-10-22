@@ -20,8 +20,8 @@ from students.models import Study
 from . import dates
 from .apps import feature, tile_apps, tiles
 from .days import busy, strip
-from .history import describe, restore, tracked
-from .models import OFFICES, Change, Message, Term, Tracked
+from .history import describe, restore, tables
+from .models import Change, Message, Term, Tracked
 from .text import fold, matching
 
 
@@ -62,9 +62,9 @@ def message(request, pk):
 
 
 def letter(request, pk):
-    """A Bescheid from the Postfach as a printable letter, for its recipient and the ASA."""
+    """A Bescheid from the Postfach as a printable letter, for its recipient and the office managing students."""
     letter = get_object_or_404(Message.objects.select_related('person'), pk=pk)
-    if not (letter.person == request.user or 'ASA' in request.user.roles):
+    if not (letter.person == request.user or 'manage_students' in request.user.roles):
         raise PermissionDenied
     return render(request, 'core/letter.html', {'letters': [letter]})
 
@@ -72,8 +72,8 @@ def letter(request, pk):
 def history(request, table, row):
     """A record's history, for the panel; a person's is everything about them. Each office sees the changes to the
     records it looks after, and may undo them."""
-    roles = request.user.roles
-    if not roles & set(OFFICES):
+    visible = tables(request.user.roles)
+    if not visible:
         raise PermissionDenied
     try:
         model = apps.get_model(table)
@@ -81,7 +81,6 @@ def history(request, table, row):
         raise Http404
     if not issubclass(model, Tracked):
         raise Http404
-    visible = [m._meta.label_lower for m in tracked() if roles & set(m.offices)]
     changes = Change.objects.filter(model.history(row), table__in=visible).select_related('by')[:200]
     return render(request, 'core/history.html', {'record': model.objects.filter(pk=row).first(), 'changes': describe(changes)})
 
@@ -89,7 +88,7 @@ def history(request, table, row):
 @require_POST
 def undo(request, pk):
     change = get_object_or_404(Change, pk=pk)
-    if not request.user.roles & set(apps.get_model(change.table).offices):
+    if not apps.get_model(change.table).visible_to(request.user.roles):
         raise PermissionDenied
     try:
         restore(change)
@@ -131,18 +130,20 @@ def found(person, q, limit):
     # every app's places, also of apps without a tile for this person: a student applying for a Master
     places = [(f, app.title(roles) or app.verbose_name) for app in tile_apps() for f in app.features(person)]
     places += [(feature('Startseite', reverse('home'), 'aufgaben zu erledigen übersicht'), ''), (feature('Postfach', reverse('inbox'), 'nachrichten bescheide mitteilungen'), '')]
-    if person.is_staff:
+    if person.is_superuser:
         places.append((feature('Datenpflege', reverse('admin:index'), 'admin stammdaten verwaltung'), ''))
     groups.append(('Funktionen', [
         hit(f['title'], f['url'], app) for f, app in places if all(w in fold(f"{f['title']} {f['words']} {app}") for w in words)
     ][:limit if q else None]))  # an empty box lists everything the person can do
     if len(q) < 2:
         return groups
-    if roles & set(OFFICES) or 'teacher' in roles:
-        studies = Study.objects.select_related('person', 'program', 'subject')
-        if not roles & set(OFFICES):
-            studies = studies.filter(teacher=person)
-        studies = matching(studies, q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__matriculation', 'person__email')[:limit]
+    if roles & {'view_files', 'view_applications', 'teacher'}:  # only the files and applications the person may open
+        seen = Q(teacher=person) & ~Q(status__in=Study.APPLICATION) if 'teacher' in roles else Q(pk=None)
+        if 'view_files' in roles:
+            seen |= ~Q(status__in=Study.APPLICATION)
+        if 'view_applications' in roles:
+            seen |= Q(status__in=Study.APPLICATION)
+        studies = matching(Study.objects.filter(seen).select_related('person', 'program', 'subject'), q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__matriculation', 'person__email')[:limit]
         groups.append(('Studierende und Bewerbungen', [
             hit(s.person.name, s.get_absolute_url(), ' · '.join(filter(None, [s.person.matriculation, f'{s.subject} {s.program.degree}', s.get_status_display()])))
             for s in studies
@@ -150,8 +151,14 @@ def found(person, q, limit):
     teaching = [Course.Kind.COURSE, Course.Kind.LESSON]
     courses = matching(Course.objects.filter(term__end__gte=timezone.localdate()).select_related('term'), q, 'title', 'staff__last_name', 'subject__name')
     groups.append(('Lehrveranstaltungen', [hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in courses.filter(kind__in=teaching)[:limit]]))
-    if roles - {'student', 'applicant'}:
-        groups.append(('Prüfungen', [hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in courses.exclude(kind__in=teaching)[:limit]]))
+    papers = Q(staff=person)  # exams and auditions: those the person examines, all for the offices running them
+    if roles & {'manage_exams', 'decide_results', 'recognise'}:
+        papers |= Q(kind__in=[Course.Kind.EXAM, Course.Kind.RECOGNITION])
+    if 'run_auditions' in roles:
+        papers |= Q(kind=Course.Kind.AUDITION)
+    exams = courses.exclude(kind__in=teaching).filter(papers).distinct()
+    groups.append(('Prüfungen', [hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in exams[:limit]]))
+    if roles & {'view_curriculum', 'teacher'}:
         groups.append(('Studiengänge', [hit(str(p), p.get_absolute_url()) for p in matching(Program.objects.all(), q, 'name', 'degree')[:limit]]))
         groups.append(('Module', [
             hit(f'{m.code} {m.title}', m.program.get_absolute_url(), str(m.program))
@@ -164,7 +171,7 @@ def found(person, q, limit):
         ]))
         # bookings by title or category: concerts for everyone, one's own dates, everything for the offices
         shown = Booking.objects.filter(end__gte=timezone.now()).select_related('room', 'course')
-        if not roles & set(OFFICES):
+        if 'view_bookings' not in roles:
             shown = shown.filter(Q(category__in=Booking.PUBLIC) | Q(pk__in=agenda(person).values('pk')))
         named = [value for value, label in Booking.Category.choices if all(w in fold(label) for w in words)]
         events = shown.filter(Q(pk__in=matching(shown, q, 'title', 'description', 'course__title').values('pk')) | Q(category__in=named))
