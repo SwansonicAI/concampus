@@ -18,6 +18,7 @@
     {% empty %}
     <tr><td colspan="{{ editor.columns|length }}" class="empty">Nichts gefunden.</td></tr>
     {% endfor %}
+    {% if count > rows|length %}<tr><td colspan="{{ editor.columns|length }}" class="empty">{{ rows|length }} von {{ count }}: Suche eingrenzen.</td></tr>{% endif %}
   </tbody>
 </table>
 {% endblock %}

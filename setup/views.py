@@ -13,6 +13,7 @@ from core.access import require
 from core.models import Text
 from core.text import matching
 from core.texts import TEXTS, Values, basics, wording
+from core.views import SHOWN
 from .editors import EDITORS, formfield
 
 
@@ -71,7 +72,7 @@ def listing(request, key):
     q = request.GET.get('q', '').strip()
     objects = matching(e.objects(), q, *e.search) if q else e.objects()
     return render(request, 'setup/list.html', {
-        'editor': e, 'q': q, 'rows': [(obj, [cell(obj, name) for _, name in e.columns]) for obj in objects[:500]],
+        'editor': e, 'q': q, 'rows': [(obj, [cell(obj, name) for _, name in e.columns]) for obj in objects[:SHOWN]],
         'count': objects.count(), 'history': e.model.visible_to(request.user.roles),
     })
 

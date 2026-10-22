@@ -69,6 +69,9 @@ def letter(request, pk):
     return render(request, 'core/letter.html', {'letters': [letter]})
 
 
+SHOWN = 300  # rows a long list shows; filters narrow it, exports have all
+
+
 def without_term(request, what):
     """Where work needs a semester nobody has created yet."""
     return render(request, 'core/no_term.html', {'what': what})

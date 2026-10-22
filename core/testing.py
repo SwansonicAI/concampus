@@ -6,19 +6,33 @@ from io import StringIO
 
 from django.core.management import call_command
 from django.test import Client, TestCase, override_settings
+from django.test.runner import DiscoverRunner
 
 from .models import Person
 
 MEDIA = tempfile.mkdtemp(prefix='hochadmin-test-')
 
 
-@override_settings(MEDIA_ROOT=MEDIA)
-class Seeded(TestCase):
-    """Tests against the demo data, fresh for every test class."""
+class Runner(DiscoverRunner):
+    """Seeds the test database once; each test's changes are rolled back after it."""
+
+    def setup_databases(self, **kwargs):
+        databases = super().setup_databases(**kwargs)
+        call_command('seed', stdout=StringIO())
+        return databases
+
+
+class Empty(TestCase):
+    """Tests on a database without the demo data; it is back for the next class."""
 
     @classmethod
     def setUpTestData(cls):
-        call_command('seed', stdout=StringIO())
+        call_command('flush', interactive=False, verbosity=0)
+
+
+@override_settings(MEDIA_ROOT=MEDIA)
+class Seeded(TestCase):
+    """Tests against the demo data."""
 
     @classmethod
     def tearDownClass(cls):

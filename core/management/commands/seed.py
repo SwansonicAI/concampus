@@ -27,7 +27,7 @@ from courses.panel import mean
 from curriculum.models import Module, Program, Subject
 from rooms.models import Booking, BookingCategory, Room, RoomFunction
 from students.models import Document, DocumentType, Study, StudyTerm
-from ..plans import HF, JENA, PIANO, PROGRAMS, RESEARCH, SPEECH, STRINGS, WINDS, WS
+from ..plans import HF, JENA, PIANO, PROGRAMS, RESEARCH, SPEECH, STRINGS, TEACHING, WINDS, WS
 
 FEE = Decimal('341.30')  # Semesterbeitrag WiSe 2026/27: Studierendenwerk 95,00 + Deutschlandsemesterticket 226,80 + Studierendenrat 19,50
 FEES = {  # published Semesterbeiträge from WiSe 2023/24; earlier ones approximated, SoSe 2027 as WiSe 2026/27
@@ -38,6 +38,9 @@ FEES = {  # published Semesterbeiträge from WiSe 2023/24; earlier ones approxim
 FEMALE = {
     'Anna', 'Clara', 'Lea', 'Nora', 'Hannah', 'Ida', 'Greta', 'Svea', 'Maja', 'Frieda', 'Marlene', 'Mei Lin', 'Xinyi', 'Jiayi', 'Seo-yeon', 'Ha-eun',
     'Aiko', 'Haruka', 'Yuki', 'Zofia', 'Marta', 'Aleksandra', 'Chiara', 'Valentina', 'Giulia', 'Sofiia', 'Anastasiia', 'Kateryna',
+    'Mia', 'Emma', 'Sophie', 'Lina', 'Johanna', 'Charlotte', 'Helena', 'Mathilda', 'Paula', 'Luise', 'Ruoxi', 'Shuang', 'Qing', 'Ji-woo', 'Soo-ah', 'Mio',
+    'Julia', 'Katarzyna', 'Francesca', 'Sofia', 'Iryna', 'Yuliia', 'Lena', 'Magdalena', 'Theresa', 'Camille', 'Léa', 'Manon', 'Lucía', 'Carmen', 'Elena',
+    'Emily', 'Sarah', 'Olivia',
 }
 MIDDLE = {'w': ['Sophie', 'Marie', 'Charlotte', 'Luise', 'Elisabeth'], 'm': ['Maximilian', 'Alexander', 'Johannes', 'Friedrich', 'Wilhelm']}
 DEMO_VIDEO = (  # stand-in for every audition video: a real performance under CC BY 3.0, via Wikimedia Commons
@@ -49,14 +52,17 @@ DEMO_VIDEO = (  # stand-in for every audition video: a real performance under CC
 VIDEO_SUBJECTS = {  # where the HfM's Eignungsprüfung starts with a video (Alles über die Eignungsprüfung)
     'Violine', 'Viola', 'Violoncello', 'Flöte', 'Oboe', 'Klarinette', 'Posaune', 'Schlagwerk', 'Gesang', 'Klavier', 'Jazz-Gesang', 'Orgel',
 }
-COUNTRIES = {'chinesisch': 'China', 'südkoreanisch': 'Südkorea', 'japanisch': 'Japan', 'polnisch': 'Polen', 'italienisch': 'Italien', 'ukrainisch': 'Ukraine'}
+COUNTRIES = {
+    'chinesisch': 'China', 'südkoreanisch': 'Südkorea', 'japanisch': 'Japan', 'polnisch': 'Polen', 'italienisch': 'Italien', 'ukrainisch': 'Ukraine',
+    'österreichisch': 'Österreich', 'französisch': 'Frankreich', 'spanisch': 'Spanien', 'US-amerikanisch': 'USA',
+}
 FREE_DAYS = {date(2026, 10, 3), date(2026, 10, 31), *(date(2026, 12, 21) + timedelta(days=n) for n in range(14))}
 EXAM_DAYS = [d for d in (date(2027, 2, 8) + timedelta(days=n) for n in range(19)) if d.weekday() < 5]  # Prüfungszeitraum 08.–26.02.2027
 LECTURES = {  # published lecture periods; other terms are approximated
     'WiSe 2025/26': (date(2025, 10, 8), date(2026, 2, 10)), 'SoSe 2026': (date(2026, 4, 8), date(2026, 7, 14)),
     'WiSe 2026/27': (date(2026, 10, 5), date(2027, 2, 5)), 'SoSe 2027': (date(2027, 4, 7), date(2027, 7, 13)),
 }
-ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII']
+ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII']
 INSTITUTES = {  # the HfM's ten Institute
     'AM': 'Alte Musik', 'BS': 'Blasinstrumente und Schlagwerk', 'DO': 'Dirigieren und Opernkorrepetition', 'GM': 'Gesang und Musiktheater',
     'GI': 'Gitarre', 'KL': 'Klavier', 'MK': 'Musikpädagogik und Kirchenmusik', 'MW': 'Musikwissenschaft, Kulturmanagement, Musiktheorie',
@@ -348,16 +354,39 @@ LECTURERS = {  # course title (or its start) → teacher key
     'Orgelexkursion': 'sander', 'Orchesterleitung': 'ferreira', 'Doktorandenkolloquium': 'voss', 'Proben und Aufführungen': 'falk',
 }
 ORIGINS = [  # weight, first names, last names, nationality, places
-    (11, ['Anna', 'Lukas', 'Clara', 'Jakob', 'Paul', 'Lea', 'Nora', 'Felix', 'Hannah', 'Emil', 'Ida', 'Leon', 'Greta', 'Moritz', 'Svea', 'Oskar', 'Maja', 'Frieda', 'Vincent', 'Marlene'],
-     ['Müller', 'Schmidt', 'Fischer', 'Hoffmann', 'Lehmann', 'Wagner', 'Richter', 'Klein', 'Wolf', 'Schröder', 'Schwarz', 'Zimmermann', 'Braun', 'Hartmann', 'Lange', 'Werner', 'Krause', 'Meier', 'Köhler', 'Herrmann', 'König', 'Fuchs', 'Peters', 'Möller', 'Jung', 'Hahn', 'Vogel', 'Friedrich', 'Günther', 'Winkler', 'Lorenz', 'Baumann', 'Franke', 'Schuster', 'Ludwig', 'Böhm', 'Winter', 'Seidel', 'Haas', 'Dietrich', 'Ziegler', 'Kuhn', 'Pohl', 'Busch', 'Bergmann', 'Voigt', 'Arnold', 'Pfeiffer'],
+    (13, ['Anna', 'Lukas', 'Clara', 'Jakob', 'Paul', 'Lea', 'Nora', 'Felix', 'Hannah', 'Emil', 'Ida', 'Leon', 'Greta', 'Moritz', 'Svea', 'Oskar', 'Maja', 'Frieda', 'Vincent', 'Marlene',
+           'Mia', 'Ben', 'Emma', 'Finn', 'Sophie', 'Elias', 'Lina', 'Noah', 'Johanna', 'Theo', 'Charlotte', 'Anton', 'Helena', 'Karl', 'Mathilda', 'Julius', 'Paula', 'Henri', 'Luise', 'Jonathan'],
+     ['Müller', 'Schmidt', 'Fischer', 'Hoffmann', 'Lehmann', 'Wagner', 'Richter', 'Klein', 'Wolf', 'Schröder', 'Schwarz', 'Zimmermann', 'Braun', 'Hartmann', 'Lange', 'Werner', 'Krause', 'Meier', 'Becker', 'Schulz', 'Koch', 'Bauer', 'Schäfer', 'Schmitt', 'Meyer', 'Walter', 'Graf', 'Kaiser', 'Sommer', 'Ernst', 'Kühn',
+     'Nagel', 'Stein', 'Jäger', 'Otto', 'Simon', 'Berger', 'Frank', 'Thiele', 'Sauerbrey', 'Reinhardt', 'Ullrich', 'Kretschmer', 'Köhler', 'Herrmann', 'König', 'Fuchs', 'Peters', 'Möller', 'Jung', 'Hahn', 'Vogel', 'Friedrich', 'Günther', 'Winkler', 'Lorenz', 'Baumann', 'Franke', 'Schuster', 'Ludwig', 'Böhm', 'Winter', 'Seidel', 'Haas', 'Dietrich', 'Ziegler', 'Kuhn', 'Pohl', 'Busch', 'Bergmann', 'Voigt', 'Arnold', 'Pfeiffer'],
      'deutsch', ['Weimar', 'Erfurt', 'Jena', 'Leipzig', 'Dresden', 'Berlin', 'Hamburg', 'München', 'Köln', 'Halle (Saale)', 'Gotha', 'Kassel', 'Nürnberg']),
-    (2, ['Mei Lin', 'Yuxuan', 'Hao', 'Xinyi', 'Zihan', 'Jiayi'], ['Chen', 'Wang', 'Li', 'Zhang', 'Liu', 'Zhao'], 'chinesisch', ['Shanghai', 'Peking', 'Chengdu', 'Wuhan']),
-    (2, ['Hyun-woo', 'Ji-ho', 'Seo-yeon', 'Min-jun', 'Ha-eun'], ['Park', 'Kim', 'Lee', 'Choi', 'Yoon'], 'südkoreanisch', ['Seoul', 'Busan', 'Daegu']),
-    (1, ['Yuki', 'Aiko', 'Kaito', 'Haruka', 'Ren'], ['Tanaka', 'Sato', 'Suzuki', 'Takahashi', 'Ito'], 'japanisch', ['Tokio', 'Osaka', 'Nagoya']),
-    (1, ['Zofia', 'Tomasz', 'Marta', 'Jakub', 'Aleksandra'], ['Nowak', 'Mazur', 'Krawczyk', 'Kaczmarek', 'Wójcik'], 'polnisch', ['Krakau', 'Warschau', 'Breslau']),
-    (1, ['Chiara', 'Matteo', 'Valentina', 'Lorenzo', 'Giulia'], ['Rossi', 'Bianchi', 'Romano', 'Ricci', 'Marino'], 'italienisch', ['Mailand', 'Rom', 'Turin', 'Bologna']),
-    (1, ['Daniil', 'Sofiia', 'Anastasiia', 'Artem', 'Kateryna'], ['Shevchenko', 'Bondarenko', 'Kovalenko', 'Tkachenko', 'Melnyk'], 'ukrainisch', ['Kyjiw', 'Lwiw', 'Odesa']),
+    (2.5, ['Mei Lin', 'Yuxuan', 'Hao', 'Xinyi', 'Zihan', 'Jiayi', 'Yiming', 'Ruoxi', 'Haoran', 'Shuang', 'Wenjie', 'Qing'],
+     ['Chen', 'Wang', 'Li', 'Zhang', 'Liu', 'Zhao', 'Huang', 'Zhou', 'Wu', 'Xu', 'Sun', 'Ma'], 'chinesisch', ['Shanghai', 'Peking', 'Chengdu', 'Wuhan']),
+    (2, ['Hyun-woo', 'Ji-ho', 'Seo-yeon', 'Min-jun', 'Ha-eun', 'Ji-woo', 'Soo-ah', 'Do-yun'], ['Park', 'Kim', 'Lee', 'Choi', 'Yoon', 'Jung', 'Kang', 'Cho'], 'südkoreanisch', ['Seoul', 'Busan', 'Daegu']),
+    (1, ['Yuki', 'Aiko', 'Kaito', 'Haruka', 'Ren', 'Mio', 'Riku'], ['Tanaka', 'Sato', 'Suzuki', 'Takahashi', 'Ito', 'Yamamoto', 'Nakamura', 'Kobayashi'], 'japanisch', ['Tokio', 'Osaka', 'Nagoya']),
+    (1, ['Zofia', 'Tomasz', 'Marta', 'Jakub', 'Aleksandra', 'Julia', 'Piotr', 'Katarzyna'], ['Nowak', 'Mazur', 'Krawczyk', 'Kaczmarek', 'Wójcik'], 'polnisch', ['Krakau', 'Warschau', 'Breslau']),
+    (1, ['Chiara', 'Matteo', 'Valentina', 'Lorenzo', 'Giulia', 'Francesca', 'Alessandro', 'Sofia'], ['Rossi', 'Bianchi', 'Romano', 'Ricci', 'Marino', 'Colombo', 'Greco', 'Conti'], 'italienisch', ['Mailand', 'Rom', 'Turin', 'Bologna']),
+    (1, ['Daniil', 'Sofiia', 'Anastasiia', 'Artem', 'Kateryna', 'Oleksandr', 'Iryna', 'Yuliia'], ['Shevchenko', 'Bondarenko', 'Kovalenko', 'Tkachenko', 'Melnyk', 'Boyko', 'Kravchenko'], 'ukrainisch', ['Kyjiw', 'Lwiw', 'Odesa']),
+    (1, ['Lena', 'Florian', 'Magdalena', 'Sebastian', 'Theresa', 'Lorenz'], ['Gruber', 'Huber', 'Pichler', 'Steiner', 'Moser', 'Hofer'], 'österreichisch', ['Wien', 'Graz', 'Salzburg', 'Linz']),
+    (0.5, ['Camille', 'Louis', 'Léa', 'Hugo', 'Manon', 'Gabriel'], ['Moreau', 'Laurent', 'Lefebvre', 'Garnier', 'Bernard'], 'französisch', ['Paris', 'Lyon', 'Straßburg']),
+    (0.5, ['Lucía', 'Pablo', 'Carmen', 'Diego', 'Elena', 'Javier'], ['García', 'Fernández', 'López', 'Martínez', 'Sánchez'], 'spanisch', ['Madrid', 'Barcelona', 'Valencia']),
+    (0.5, ['Emily', 'Michael', 'Sarah', 'Daniel', 'Olivia', 'Ethan'], ['Smith', 'Johnson', 'Miller', 'Davis', 'Wilson'], 'US-amerikanisch', ['New York', 'Boston', 'Chicago']),
 ]
+INTAKE = {  # applications a year by Hauptfach as of 2026, admission rate, share of the summer round
+    ('B.Mus.', 'Streichinstrumente und Harfe'): ({'Violine': 150, 'Viola': 50, 'Violoncello': 80, 'Kontrabass': 30, 'Harfe': 18}, 0.11, 0.25),
+    ('B.Mus.', 'Blasinstrumente und Schlagwerk'): (
+        {'Flöte': 45, 'Oboe': 25, 'Klarinette': 35, 'Fagott': 18, 'Horn': 28, 'Trompete': 32, 'Posaune': 22, 'Tuba': 9, 'Schlagwerk': 26}, 0.13, 0.2),
+    ('B.Mus.', 'Gesang | Musiktheater'): ({'Gesang': 210}, 0.08, 0),
+    ('B.Mus.', 'Klavier'): ({'Klavier': 190}, 0.08, 0),
+    ('M.Mus.', 'Streichinstrumente'): ({'Violine': 45, 'Viola': 15, 'Violoncello': 25, 'Kontrabass': 8}, 0.27, 0.3),
+    ('B.Ed.', 'Musik an Gymnasien (Doppelfach)'): (dict(zip(TEACHING, (22, 18, 10, 10, 6, 6, 5, 4))), 0.4, 0),
+    ('M.Ed.', 'Musik an Gymnasien (Doppelfach)'): (dict(zip(TEACHING, (10, 9, 5, 5, 3, 3, 2, 2))), 0.65, 0),
+    ('Staatsexamen', 'Lehramt an Gymnasien, Studienfach Musik'): (dict(zip(TEACHING, (20, 16, 9, 9, 6, 6, 5, 4))), 0.38, 0),
+    ('Diplom', 'Kirchenmusik A'): ({'Orgel': 7}, 0.5, 0),
+    ('Konzertdiplom', 'Konzertexamen'): ({'Klavier': 20, 'Violine': 18, 'Gesang': 12, 'Violoncello': 8, 'Flöte': 4, 'Klarinette': 3, 'Orgel': 2}, 0.2, 0.3),
+    ('Dr. phil.', 'Promotion'): ({'Musikwissenschaft': 10, 'Musikpädagogik': 6, 'Kulturmanagement': 4}, 0.5, 0.4),
+    ('Zertifikat', 'Thüringer Opernstudio'): ({'Gesang': 60}, 0.15, 0),
+}
+WINTER_ONLY = {'Horn', 'Posaune', 'Tuba'}  # no summer intake, nor for Gesang and Klavier
 REPERTOIRE = {
     'strings': ['J. S. Bach: zwei Sätze aus einer Suite oder Partita für {i} solo', 'Ein Konzert der Klassik für {i}, 1. Satz mit Kadenz',
                 'Ein virtuoses Werk der Romantik', 'Ein Werk nach 1950', 'Eine Sonate für {i} und Klavier, ein schneller Satz'],
@@ -375,7 +404,7 @@ ARTISTIC = ('Künstlerisch-praktische', 'Rezital', 'Künstlerische Präsentation
 def handle(first, last):
     """Mail-safe login name: 'Nicolás', 'Ferreira' → 'nicolas.ferreira'."""
     name = f'{first}.{last}'.lower().replace(' ', '-')
-    for a, b in [('ä', 'ae'), ('ö', 'oe'), ('ü', 'ue'), ('ß', 'ss'), ('á', 'a'), ('ó', 'o'), ('ś', 's'), ('ł', 'l')]:
+    for a, b in [('ä', 'ae'), ('ö', 'oe'), ('ü', 'ue'), ('ß', 'ss'), ('á', 'a'), ('é', 'e'), ('í', 'i'), ('ó', 'o'), ('ś', 's'), ('ł', 'l')]:
         name = name.replace(a, b)
     return name
 
@@ -423,7 +452,7 @@ class Command(BaseCommand):
             raise CommandError('The database is not empty. Use --reset to replace everything.')
         self.rng = random.Random(1872)  # the year the Hochschule was founded
         self.password = make_password('demo')
-        self.names = set()
+        self.logins = set()
         with transaction.atomic(), history.quietly():
             self.terms()
             self.structure()
@@ -446,14 +475,16 @@ class Command(BaseCommand):
 
     def terms(self):
         terms = []
-        for year in range(2022, 2028):
+        for year in range(2012, 2028):  # from WiSe 2012/13
             april, name = date(year, 4, 1), f'SoSe {year}'
             lectures = LECTURES.get(name, (april + timedelta(days=(2 - april.weekday()) % 7 + 7), date(year, 7, 13)))
-            terms.append(Term(name=name, start=april, end=date(year, 9, 30), lectures_start=lectures[0], lectures_end=lectures[1], deadline=date(year, 1, 18), fee=FEES.get(name, FEE)))
+            fee = FEES.get(name, FEE if year >= 2022 else Decimal(150 + 5 * (year - 2012)))
+            if year > 2012:
+                terms.append(Term(name=name, start=april, end=date(year, 9, 30), lectures_start=lectures[0], lectures_end=lectures[1], deadline=date(year, 1, 18), fee=fee))
             if year < 2027:
                 october, february, name = date(year, 10, 1), date(year + 1, 2, 1), f'WiSe {year}/{(year + 1) % 100:02d}'
                 lectures = LECTURES.get(name, (october + timedelta(days=-october.weekday() % 7), february + timedelta(days=(4 - february.weekday()) % 7)))
-                terms.append(Term(name=name, start=october, end=date(year + 1, 3, 31), lectures_start=lectures[0], lectures_end=lectures[1], deadline=date(year, 6, 15), fee=FEES.get(name, FEE)))
+                terms.append(Term(name=name, start=october, end=date(year + 1, 3, 31), lectures_start=lectures[0], lectures_end=lectures[1], deadline=date(year, 6, 15), fee=FEES.get(name, fee)))
         for term in terms:
             term.reregistration_start = term.deadline - timedelta(days=14)  # Rückmeldung SoSe 2027: 04.–18.01.2027
         Term.objects.bulk_create(terms)
@@ -567,29 +598,48 @@ class Command(BaseCommand):
             self.teachers[key] = self.person('lehre' if key == 'wendt' else handle(first, last), first, last, title, institute=institute)
             if subject:
                 self.by_subject[subject].append(self.teachers[key])
-        self.names |= {(p.first_name, p.last_name) for p in Person.objects.all()}
+        self.logins |= set(Person.objects.values_list('username', flat=True))
+        self.pools = {  # one-to-one lessons beside the Hauptfach, with Lehrbeauftragte where the plan needs more hours than the staff has
+            WS: [self.teachers[k] for k in ('popescu', 'hein', 'martens')] + [self.lecturer('DO') for _ in range(5)],
+            PIANO: [self.teachers[k] for k in ('schulte', 'engel')] + [self.lecturer('KL') for _ in range(6)],
+            SPEECH: [self.teachers['kessler']] + [self.lecturer('GM') for _ in range(2)],
+        }
 
-    def newcomer(self, username=None, first=None, last=None, origin=None, **fields):
+    def login(self, first, last):
+        """A free login name; namesakes get a number."""
+        name, n = handle(first, last), 1
+        while name in self.logins:
+            n += 1
+            name = f'{handle(first, last)}{n}'
+        self.logins.add(name)
+        return name
+
+    def candidate(self, year, age, origin=None, first=None, last=None, username=None):
+        """An unsaved person, `age` years old in `year`, named and placed by where they come from."""
         rng = self.rng
-        weight, firsts, lasts, nationality, places = origin or rng.choices(ORIGINS, weights=[o[0] for o in ORIGINS])[0]
-        while not first or (first, last) in self.names:
-            first, last = rng.choice(firsts), rng.choice(lasts)
-        self.names.add((first, last))
-        name, gender = handle(first, last), 'w' if first in FEMALE else 'm'
-        born = date(rng.randint(1997, 2007), rng.randint(1, 12), rng.randint(1, 28))
-        german, talent = nationality == 'deutsch', born.year == 2007 and rng.random() < 0.5  # admitted for artistic talent, before the Abitur
-        return self.person(
-            username or name, first, last, email=f'{name}@stud.hfm-weimar.de', gender=gender,
-            given_names=f'{first} {rng.choice(MIDDLE[gender])}' if german and rng.random() < 0.3 else '',
-            birth_name=rng.choice(lasts) if born.year < 2000 and gender == 'w' and rng.random() < 0.5 else '',
+        _, firsts, lasts, nationality, places = origin or rng.choices(ORIGINS, weights=[o[0] for o in ORIGINS])[0]
+        first, last = first or rng.choice(firsts), last or rng.choice(lasts)
+        name = username or self.login(first, last)
+        gender = 'd' if rng.random() < 0.004 else 'w' if first in FEMALE else 'm'
+        born = date(year - age, rng.randint(1, 12), rng.randint(1, 28))
+        german = nationality == 'deutsch'
+        talent = german and age < 19 and rng.random() < 0.5  # admitted for artistic talent, before the Abitur
+        return Person(
+            username=name, first_name=first, last_name=last, password=self.password, email=f'{name}@stud.hfm-weimar.de', gender=gender,
+            given_names=f'{first} {rng.choice(MIDDLE[gender])}' if german and gender in MIDDLE and rng.random() < 0.3 else '',
+            birth_name=rng.choice(lasts) if age > 24 and gender == 'w' and rng.random() < 0.3 else '',
             birth_date=born, birth_place=rng.choice(places), nationality=nationality,
             second_nationality='deutsch' if not german and rng.random() < 0.15 else '',
             entrance=Person.Entrance.TALENT if talent else Person.Entrance.GENERAL if german else Person.Entrance.FOREIGN,
             entrance_date=None if talent else date(born.year + 19, 6, rng.randint(20, 30)),
             entrance_place='' if talent else f'{rng.choice(places)}, Deutschland' if german else COUNTRIES[nationality],
             address=f'{rng.choice(["Marienstraße", "Steubenstraße", "Trierer Straße", "Humboldtstraße", "Bauhausstraße"])} {rng.randint(1, 60)}\n99423 Weimar',
-            **fields,
         )
+
+    def newcomer(self, username=None, first=None, last=None, origin=None):
+        person = self.candidate(2026, self.rng.randint(19, 26), origin, first, last, username)
+        person.save()
+        return person
 
     def panel(self, subject, size=3):
         """Examiners: the subject's teachers first, then colleagues of the same family."""
@@ -600,62 +650,135 @@ class Command(BaseCommand):
     # Students and what they have done
 
     def students(self):
+        """Every application since the first term, and the students they brought. Whoever studies now gets the full record
+        (teaching() adds it); the past keeps what the statistics need: who applied, was admitted, graduated or left."""
         rng = self.rng
-        self.enrolled, self.ability, self.fs = [], {}, {}
-        cohorts = [(self.bmsh, s, n) for s, n in zip(STRINGS, (9, 4, 5, 3, 2))]
-        cohorts += [(self.bmbs, s, n) for s, n in zip(WINDS, (3, 2, 3, 2, 3, 3, 2, 1, 2))]
-        cohorts += [(self.bmgm, 'Gesang', 10), (self.bmkl, 'Klavier', 8), (self.mm, 'Violine', 3), (self.mm, 'Viola', 1), (self.mm, 'Violoncello', 2)]
         chen = next(o for o in ORIGINS if o[3] == 'chinesisch')
-        self.demo = self.newcomer('student', 'Mei Lin', 'Chen', chen)
-        for program, subject, count in cohorts:
-            for n in range(count):
-                if program == self.bmsh and subject == 'Violine' and n == 0:
-                    self.enrol(self.demo, program, subject, 5)
-                else:
-                    self.enrol(self.newcomer(), program, subject, rng.choice([1, 2] if program == self.mm else [1, 1, 2, 3, 3, 4, 5, 5, 6, 7, 7, 8]))
-        # Lehramt, Kirchenmusik and the postgraduate programmes: degree, programme, subject, Fachsemester, focus, supervisor
-        for degree, name, subject, semester, focus, teacher in [
-            ('B.Ed.', 'Musik an Gymnasien (Doppelfach)', 'Klavier', 1, None, None), ('B.Ed.', 'Musik an Gymnasien (Doppelfach)', 'Gesang', 3, None, None),
-            ('B.Ed.', 'Musik an Gymnasien (Doppelfach)', 'Jazz-Gesang', 3, None, None), ('B.Ed.', 'Musik an Gymnasien (Doppelfach)', 'Violine', 1, None, None),
-            ('B.Ed.', 'Musik an Gymnasien (Doppelfach)', 'Trompete', 3, None, None), ('B.Ed.', 'Musik an Gymnasien (Doppelfach)', 'Flöte', 1, None, None),
-            ('M.Ed.', 'Musik an Gymnasien (Doppelfach)', 'Klavier', 2, 'ME-PR-03', None), ('M.Ed.', 'Musik an Gymnasien (Doppelfach)', 'Gesang', 2, 'ME-PR-04', None),
-            ('M.Ed.', 'Musik an Gymnasien (Doppelfach)', 'Jazz-Gesang', 1, 'ME-PR-05', None), ('M.Ed.', 'Musik an Gymnasien (Doppelfach)', 'Violine', 1, 'ME-PR-01', None),
-            *[('Staatsexamen', 'Lehramt an Gymnasien, Studienfach Musik', s, n, None, None) for s, n in [('Gesang', 1), ('Klavier', 3), ('Violoncello', 3), ('Jazz-Gesang', 1)]],
-            ('Diplom', 'Kirchenmusik A', 'Orgel', 3, 'KM-IV-EV', None), ('Diplom', 'Kirchenmusik A', 'Orgel', 5, 'KM-IV-KA', None),
-            ('Konzertdiplom', 'Konzertexamen', 'Klavier', 2, None, None), ('Konzertdiplom', 'Konzertexamen', 'Violine', 3, None, None),
-            ('Dr. phil.', 'Promotion', 'Musikwissenschaft', 3, None, 'voss'), ('Dr. phil.', 'Promotion', 'Musikwissenschaft', 5, None, 'voss'),
-            ('Dr. phil.', 'Promotion', 'Musikpädagogik', 2, None, 'neumann'), ('Dr. phil.', 'Promotion', 'Kulturmanagement', 1, None, 'hausmann'),
-            *[('Zertifikat', 'Thüringer Opernstudio', 'Gesang', 1, None, None)] * 3,
-        ]:
-            program = self.programs[(degree, name)]
-            focus = program.modules.get(code=focus) if focus else None
-            self.enrol(self.newcomer(), program, subject, semester, focus=focus, teacher=self.teachers.get(teacher))
-        organist = self.newcomer()  # studies Kirchenmusik and Klavier side by side
-        self.enrol(organist, self.programs[('Diplom', 'Kirchenmusik A')], 'Orgel', 7, focus=self.programs[('Diplom', 'Kirchenmusik A')].modules.get(code='KM-IV-EV'))
-        self.enrol(organist, self.bmkl, 'Klavier', 5)
+        church = self.programs[('Diplom', 'Kirchenmusik A')]
+        self.demo, organist = self.candidate(2024, 20, chen, 'Mei Lin', 'Chen', 'student'), self.candidate(2023, 20)
+        self.applicant = self.candidate(2027, 19, ORIGINS[0], 'Jonas', 'Becker', 'bewerbung')
+        people, studies = [self.demo, organist, self.applicant], []
+        foci = {program: list(program.modules.filter(code__regex=r'^(ME-PR|KM-IV)-')) for program in self.programs.values()}
 
-    def enrol(self, person, program, subject, semester, focus=None, teacher=None):
-        rng = self.rng
-        start = self.now - semester + 1
-        teacher = teacher or (self.teachers['wendt'] if person == self.demo else rng.choice(self.by_subject[subject]))
-        study = Study.objects.create(
-            person=person, program=program, subject=self.subjects[subject], start_term=self.calendar[start],
-            status=Study.Status.ENROLLED, since=self.calendar[start].start, teacher=teacher, focus=focus,
-        )
-        if not person.matriculation:  # Matrikelnummer and health insurance came with the first enrolment
-            person.matriculation = str(100000 + person.pk)
+        def apply(person, program, subject, start, accepted, outcome=None):
+            """One application; for whoever was admitted and accepted, the terms they were registered and how it ended."""
+            study = Study(person=person, program=program, subject=self.subjects[subject], start_term=self.calendar[start], focus=rng.choice(foci[program] or [None]))
+            study.terms_, study.leave_ = [], None
+            if start > self.now:
+                study.status, study.since = Study.Status.APPLIED, date(2026, 10, rng.randint(1, 20))
+            elif outcome or rng.random() < INTAKE[(program.degree, program.name)][1]:
+                if outcome is None and (rng.random() > 0.8 or id(person) in accepted):
+                    study.status = Study.Status.LEFT  # admitted, and declined the place
+                    study.since = decided(start) + timedelta(days=rng.randint(3, 14))
+                    return studies.append(study)
+                accepted.add(id(person))
+                extra = rng.choices([0, 1, 2, 3, 4], [45, 25, 15, 8, 7])[0] if program.semesters > 2 else 0
+                count = program.semesters + extra if outcome or rng.random() > 0.13 else rng.randint(1, max(1, program.semesters - 1))
+                last = start + count - 1
+                if last + 1 < self.now and count > 2 and rng.random() < 0.05:
+                    study.leave_, last = start + rng.randint(1, count - 2), last + 1  # one Urlaubssemester
+                study.terms_ = list(range(start, min(last, self.now) + 1))
+                if last >= self.now:
+                    study.status, study.since = Study.Status.ENROLLED, self.calendar[start].start
+                else:
+                    study.status = Study.Status.GRADUATED if count >= program.semesters else Study.Status.LEFT
+                    study.since = self.calendar[last].end
+            else:
+                study.status = Study.Status.WAITLISTED if start == self.now and rng.random() < 0.03 else Study.Status.REJECTED
+                study.since = decided(start)
+            studies.append(study)
+
+        def decided(start):
+            term = self.calendar[start]
+            return date(term.start.year, 7, rng.randint(6, 15)) if term.name.startswith('WiSe') else date(term.start.year, 2, rng.randint(1, 10))
+
+        apply(self.demo, self.bmsh, 'Violine', self.now - 4, set(), 'enrolled')
+        apply(organist, church, 'Orgel', self.now - 6, set(), 'enrolled')
+        apply(organist, self.bmkl, 'Klavier', self.now - 4, set(), 'enrolled')  # studies Kirchenmusik and Klavier side by side
+        apply(self.applicant, self.bmsh, 'Violoncello', self.now + 1, set())
+        for start, term in enumerate(self.calendar[:self.now + 2]):
+            summer, back = term.name.startswith('SoSe'), 1 + 0.013 * (2026 - term.start.year)  # a little more each year back
+            wanted = [
+                (program, subject)
+                for (degree, name), (subjects, rate, sose) in INTAKE.items() for program in [self.programs[(degree, name)]]
+                for subject, per_year in subjects.items() if not (summer and subject in WINTER_ONLY)
+                for _ in range(round(per_year * (sose if summer else 1 - sose) * back * rng.gauss(1, 0.12)))
+            ]
+            applied, by_subject, accepted = [], defaultdict(set), set()
+            for program, subject in rng.sample(wanted, len(wanted)):
+                level = program.degree in POSTGRADUATE
+                others = [p for p, l in applied[-30:] if l == level and id(p) not in by_subject[subject]]  # some apply for two places
+                if others and rng.random() < 0.12:
+                    person = rng.choice(others)
+                else:
+                    person = self.candidate(term.start.year, rng.randint(26, 34) if program.degree == 'Dr. phil.' else rng.randint(22, 28) if level else rng.randint(18, 23))
+                    people.append(person)
+                applied.append((person, level))
+                by_subject[subject].add(id(person))
+                apply(person, program, subject, start, accepted)
+        current = [s for s in studies if s.start_term == self.current and s.status == Study.Status.ENROLLED and s.person not in (self.demo, organist)]
+        for study in current[:2]:  # accepted, not enrolled yet
+            study.status, study.terms_ = Study.Status.ADMITTED, []
+
+        # Matrikelnummer and health insurance came with the first enrolment, in the order people came
+        number = Institution.get().matriculation_start
+        for study in sorted((s for s in studies if s.terms_ or s.status == Study.Status.ADMITTED), key=lambda s: s.start_term.start):
+            person = study.person
+            if person.insurer:
+                continue
             person.insurer, person.insurance = rng.choice(INSURERS), Person.Insurance.STATUTORY if rng.random() < 0.9 else Person.Insurance.EXEMPT
-            person.insurance_confirmed = self.calendar[start].start - timedelta(days=rng.randint(20, 50))
-            if program.degree not in ('B.Mus.', 'B.Ed.', 'Staatsexamen', 'Diplom'):
+            person.insurance_confirmed = study.start_term.start - timedelta(days=rng.randint(20, 50))
+            if study.status == Study.Status.ADMITTED:
+                person.insurance_confirmed = date(2026, 9, 28) if study is current[0] else None  # one insurer has reported, the other not yet
+                continue
+            person.matriculation, number = str(number), number + 1
+            if study.program.degree in POSTGRADUATE:
                 person.external_terms = rng.choice([6, 8, 10])  # earlier degree elsewhere
-            person.save(update_fields=['matriculation', 'insurer', 'insurance', 'insurance_confirmed', 'external_terms'])
+        Person.objects.bulk_create(people, batch_size=2000)
+
+        # Hauptfach classes of at most fourteen: Lehrbeauftragte take whoever the professors cannot
+        enrolled = [s for s in studies if s.status in (Study.Status.ENROLLED, Study.Status.ADMITTED)]
+        for subject, teachers in self.by_subject.items():
+            size = sum(1 for s in enrolled if s.subject.name == subject)
+            for _ in range(-(-size // 14) - len(teachers)):
+                teachers.append(self.lecturer(SUBJECT_INSTITUTE[subject]))
+        load = defaultdict(int)
+        supervisors = {'Musikwissenschaft': 'voss', 'Musikpädagogik': 'neumann', 'Kulturmanagement': 'hausmann'}
+        for study in studies:
+            subject = study.subject.name
+            if study.person is self.demo:
+                study.teacher = self.teachers['wendt']
+            elif subject in supervisors:
+                study.teacher = self.teachers[supervisors[subject]]
+            elif study.status in (Study.Status.ENROLLED, Study.Status.ADMITTED):
+                study.teacher = min(self.by_subject[subject], key=lambda t: (load[t.pk], rng.random()))
+                load[study.teacher.pk] += 1
+            else:  # the wish in the application
+                study.teacher = rng.choice(self.by_subject[subject])
+        Study.objects.bulk_create(studies, batch_size=2000)
         StudyTerm.objects.bulk_create(  # paid at enrolment, then within each Rückmeldung period
-            StudyTerm(study=study, term=term, paid=(term.start - timedelta(days=rng.randint(20, 60))) if k == 0 else term.deadline - timedelta(days=rng.randint(0, 14)))
-            for k, term in enumerate(self.calendar[start:start + semester])
+            (StudyTerm(
+                study=study, term=term, leave=k == study.leave_,
+                paid=(term.start - timedelta(days=rng.randint(20, 60))) if k == study.terms_[0] else term.deadline - timedelta(days=rng.randint(0, 14)),
+            ) for study in studies for k in study.terms_ for term in [self.calendar[k]]),
+            batch_size=2000,
         )
-        study.fs = self.fs[study.pk] = semester
-        self.ability[study.pk] = 1.6 if person == self.demo else rng.uniform(1.0, 2.6)
-        self.enrolled.append(study)
+        StudyTerm.objects.bulk_create(StudyTerm(study=study, term=self.current) for study in current[:2])
+        self.enrolled, self.ability, self.rounds = [], {}, defaultdict(list)
+        for study in studies:
+            if study.status == Study.Status.ENROLLED:
+                study.fs = self.now - study.terms_[0] + 1
+                self.ability[study.pk] = 1.6 if study.person is self.demo else rng.uniform(1.0, 2.6)
+                self.enrolled.append(study)
+            if study.start_term in (self.current, self.next):
+                self.rounds[study.start_term].append(study)
+
+    def lecturer(self, institute):
+        """A Lehrbeauftragte:r of an Institut."""
+        _, firsts, lasts, *_ = self.rng.choices(ORIGINS, weights=[o[0] for o in ORIGINS])[0]
+        first, last = self.rng.choice(firsts), self.rng.choice(lasts)
+        login = self.login(first, last)
+        return self.person(login, first, last, email=f'{login}@hfm-weimar.de', institute=self.institutes[institute])
 
     def plan(self, study):
         """The leaves this study takes: everything required, and one pick wherever the plan offers a choice."""
@@ -709,7 +832,7 @@ class Command(BaseCommand):
             course = self.course(term, f'{label} · Klasse {study.teacher.last_name}', Course.Kind.LESSON, subject=study.subject, hours=sws(form))
             return course, study.teacher, LESSON_ROOMS[subject]
         if taught in (WS, PIANO, SPEECH):
-            teacher = self.teachers[{WS: ['popescu', 'hein', 'martens'][study.pk % 3], PIANO: ['schulte', 'engel'][study.pk % 2], SPEECH: 'kessler'}[taught]]
+            teacher = self.pools[taught][study.pk % len(self.pools[taught])]
             label = {WS: 'Werkstudium', PIANO: 'Klavier (Pflichtfach)', SPEECH: 'Bühnensprechen'}[taught]
             return self.course(term, f'{label} · {teacher.last_name}', Course.Kind.LESSON, hours=sws(form)), teacher, LESSON_ROOMS[taught]
         course = self.course(term, title, hours=sws(form) if form else None, deadline=date(2026, 10, 16) if term == self.current else None)
@@ -723,8 +846,9 @@ class Command(BaseCommand):
         self.lessons, booked = [], set()  # weekly one-to-one lessons this term: (person, course, teacher, rooms, minutes)
         for study in self.enrolled:
             subject = study.subject.name
+            behind = study.fs > study.program.semesters and rng.random() < 0.6  # over the Regelstudienzeit: the last semester still open
             for leaf in self.plan(study):
-                if leaf.semester > study.fs:
+                if leaf.semester > study.fs or (behind and leaf.semester == study.program.semesters):
                     continue
                 term = self.calendar[self.now - study.fs + leaf.semester]
                 done = leaf.semester < study.fs
@@ -735,7 +859,13 @@ class Command(BaseCommand):
                     name = f'{self.titles[leaf.parent_id]} · {leaf.title}' + (f' · {subject}' if artistic else '')
                     course = self.course(term, name, Course.Kind.EXAM, subject=study.subject if artistic else None, released=at(term.end - timedelta(days=45), hour=12))
                     examiners = self.panel(subject) if artistic else [self.teachers[lecturer(self.first_course.get(leaf.parent_id, ''))]]
-                    grade = self.grade(study)
+                    grade, index = self.grade(study), self.calendar.index(term)
+                    if index + 1 < self.now and rng.random() < 0.06:  # failed, passed on retake the term after
+                        rows[(course.pk, study.pk, leaf.pk)] = Participation(course=course, study=study, module=leaf, grade=Decimal('5.0'), passed=False, created=at(term.start, hour=9))
+                        scores += [(course.pk, study.pk, leaf.pk, examiner, Decimal('5.0')) for examiner in examiners]
+                        staff |= {(course.pk, e.pk) for e in examiners}
+                        term = self.calendar[index + 1]
+                        course = self.course(term, name, Course.Kind.EXAM, subject=study.subject if artistic else None, released=at(term.end - timedelta(days=45), hour=12))
                     rows[(course.pk, study.pk, leaf.pk)] = Participation(course=course, study=study, module=leaf, grade=grade, passed=True, created=at(term.start, hour=9))
                     for examiner in examiners:
                         target = float(grade) + rng.gauss(0, 0.25)
@@ -801,10 +931,13 @@ class Command(BaseCommand):
 
         for person, course, teacher, rooms, minutes in self.lessons:
             days = [(teacher.pk + k) % 5 for k in range(5)]
-            room, day, start = next(
+            found = next((
                 (room, day, start) for day in days for start in range(9 * 60, 20 * 60 - minutes + 1, 15) for room in rooms
                 if free([(room, day), (teacher.pk, day)], start, start + minutes)
-            )
+            ), None)
+            if found is None:
+                continue
+            room, day, start = found
             take([(room, day), (teacher.pk, day)], start, start + minutes)
             patterns.append((room, day, start, minutes, person, course))
         groups = [c for c in self.courses.values() if c.term_id == self.current.pk and c.kind == Course.Kind.COURSE and c.form[:1] in ('V', 'S', 'Ü', 'G')]
@@ -824,10 +957,13 @@ class Command(BaseCommand):
                 start = clock(start)
             else:
                 minutes = length(course.form)
-                room, day, start = next(
+                found = next((
                     (room, day, start) for day in rng.sample(range(5), 5) for start in (9 * 60 + 15, 11 * 60 + 15, 13 * 60 + 15, 15 * 60 + 15, 17 * 60 + 15)
                     for room in SEMINAR_ROOMS if free([(room, day), (teacher.pk, day)], start, start + minutes)
-                )
+                ), None)
+                if found is None:
+                    continue
+                room, day, start = found
             take([(room, day), (teacher.pk, day)], start, start + minutes)
             patterns.append((room, day, start, minutes, teacher, course))
         for room, day, start, minutes, person, course in patterns:
@@ -855,6 +991,7 @@ class Command(BaseCommand):
                 artistic = leaf.title.startswith(ARTISTIC)
                 due[(self.titles[leaf.parent_id], leaf.title, study.subject.name if artistic else '')].append((study, leaf))
         stages, written = ['Festsaal', 'Saal Am Palais', 'FH 106'], ['HzH 313', 'HzH 316', 'HzH 320']
+        free = defaultdict(int)  # the next free exam day of each stage
         for n, ((module, title, subject), entries) in enumerate(sorted(due.items())):
             course = Course.objects.create(
                 term=now, kind=Course.Kind.EXAM, title=f'{module} · {title}' + (f' · {subject}' if subject else ''),
@@ -862,17 +999,27 @@ class Command(BaseCommand):
             )
             course.staff.set(self.panel(subject) if subject else [self.teachers[lecturer(self.first_course.get(entries[0][1].parent_id, ''))]])
             course.modules.set({leaf for _, leaf in entries})
-            start = at(EXAM_DAYS[(n // 3) % len(EXAM_DAYS)], hour=9 + (n % 3) * 3)
-            minutes = 30 * len(entries) if subject else 120
             room = self.rooms[(stages if subject else written)[n % 3]]
-            if not Booking(room=room, start=start, end=start + timedelta(minutes=minutes)).clashes().exists():
-                Booking.objects.create(room=room, start=start, end=start + timedelta(minutes=minutes), person=self.staff['pruefungsamt'], course=course, category_id='pruefung')
+            if subject:
+                slots = []
+                for k in range(0, len(entries), 12):
+                    start = at(EXAM_DAYS[free[room] % len(EXAM_DAYS)], hour=9)
+                    free[room] += 1
+                    slots += [start + timedelta(minutes=30 * j) for j in range(len(entries[k:k + 12]))]
+                    end = slots[-1] + timedelta(minutes=30)
+                    if not Booking(room=room, start=start, end=end).clashes().exists():
+                        Booking.objects.create(room=room, start=start, end=end, person=self.staff['pruefungsamt'], course=course, category_id='pruefung')
+            else:
+                start = at(EXAM_DAYS[(n // 3) % len(EXAM_DAYS)], hour=9 + (n % 3) * 3)
+                slots = [start] * len(entries)
+                if not Booking(room=room, start=start, end=start + timedelta(minutes=120)).clashes().exists():
+                    Booking.objects.create(room=room, start=start, end=start + timedelta(minutes=120), person=self.staff['pruefungsamt'], course=course, category_id='pruefung')
             Participation.objects.bulk_create(
                 Participation(
-                    course=course, study=study, module=leaf, slot=start + timedelta(minutes=30 * k if subject else 0),
+                    course=course, study=study, module=leaf, slot=slot,
                     note=self.repertoire(study.subject.name) if subject else '', created=at(date(2026, 11, rng.randint(1, 14)), hour=10),
                 )
-                for k, (study, leaf) in enumerate(entries)
+                for slot, (study, leaf) in zip(slots, entries)
             )
         demo_study = next(s for s in self.enrolled if s.person == self.demo)
         owed = Module.objects.get(program=demo_study.program, parent__code='BM-XX-MW-01', exam=True)
@@ -906,57 +1053,33 @@ class Command(BaseCommand):
     # Admissions: the WiSe intake is decided, the SoSe intake is being marked
 
     def admissions(self):
-        rng, now = self.rng, self.current
-        outcomes = [(s, 'enrolled') for s in self.enrolled if s.fs == 1 and s.program.degree in ('B.Mus.', 'M.Mus.')]  # the intakes with an Eignungsprüfung here
-        for status, count in [(Study.Status.REJECTED, 14), (Study.Status.WAITLISTED, 2), (Study.Status.ADMITTED, 2)]:
-            for n in range(count):
-                program = rng.choice([self.bmsh, self.bmsh, self.bmbs, self.bmgm, self.bmkl, self.mm])
-                subject = rng.choice(list(program.subjects.values_list('name', flat=True)))
-                study = Study.objects.create(
-                    person=self.newcomer(), program=program, subject=self.subjects[subject], start_term=now, status=status,
-                    since=date(2026, 6, rng.randint(10, 20)), teacher=rng.choice(self.by_subject[subject]),
-                )
-                if status == Study.Status.ADMITTED:  # accepted; one health insurer has reported, the other not yet
-                    StudyTerm.objects.create(study=study, term=now)
-                    study.person.insurer, study.person.insurance = rng.choice(INSURERS), Person.Insurance.STATUTORY
-                    study.person.insurance_confirmed = date(2026, 9, 28) if n == 0 else None
-                    study.person.save(update_fields=['insurer', 'insurance', 'insurance_confirmed'])
-                outcomes.append((study, status))
-        self.intake(now, outcomes, video_deadline=date(2026, 3, 15), audition_day=date(2026, 5, 29), finished=True)
-        wanted = [(self.bmsh, 'Violine', 4), (self.bmsh, 'Viola', 2), (self.bmsh, 'Violoncello', 4), (self.bmsh, 'Kontrabass', 1),
-                  (self.bmbs, 'Flöte', 3), (self.bmbs, 'Klarinette', 2), (self.bmbs, 'Oboe', 2), (self.bmbs, 'Fagott', 2),
-                  (self.mm, 'Violine', 3), (self.mm, 'Violoncello', 1)]  # no SoSe intake for Gesang, Klavier, Horn and the low brass
-        self.applicant = self.newcomer('bewerbung', 'Jonas', 'Becker', ORIGINS[0])
-        outcomes = []
-        for program, subject, count in wanted:
-            for n in range(count):
-                person = self.applicant if (program, subject, n) == (self.bmsh, 'Violoncello', 0) else self.newcomer()
-                study = Study.objects.create(
-                    person=person, program=program, subject=self.subjects[subject], start_term=self.next,
-                    since=date(2026, 10, rng.randint(1, 20)), teacher=rng.choice(self.by_subject[subject]),
-                )
-                outcomes.append((study, 'running'))
-        self.intake(self.next, outcomes, video_deadline=date(2026, 11, 2), audition_day=date(2027, 1, 13), finished=False)
+        """The WiSe intake is decided, the SoSe intake is being marked; auditions where the Hochschule holds them."""
+        auditioned = ('B.Mus.', 'M.Mus.')
+        for term, video_deadline, audition_day in [(self.current, date(2026, 3, 15), date(2026, 5, 29)), (self.next, date(2026, 11, 2), date(2027, 1, 13))]:
+            outcomes = [(s, 'running' if s.status == Study.Status.APPLIED else s.status) for s in self.rounds[term] if s.program.degree in auditioned]
+            self.intake(term, outcomes, video_deadline, audition_day, finished=term == self.current)
 
     def intake(self, term, outcomes, video_deadline, audition_day, finished):
         """Audition courses of one intake and every applicant's way through them."""
-        rng, applicant = self.rng, getattr(self, 'applicant', None)
-        closed = at(audition_day + timedelta(days=20), hour=12) if finished else None
+        rng, applicant = self.rng, self.applicant
+        closed = at(audition_day + timedelta(days=35), hour=12) if finished else None
         written = audition_day + timedelta(days=2)
-        written = at(written + timedelta(days=(7 - written.weekday()) % 7 if written.weekday() > 4 else 0), hour=9)  # never on a weekend
+        written += timedelta(days=(7 - written.weekday()) % 7 if written.weekday() > 4 else 0)  # never on a weekend
         shared = []
         for title, keys, room, step in [
             ('Eignungsprüfung Klavier', ['schulte', 'engel'], 'FH 213', 15),
             ('Eignungsprüfung Musiktheorie und Gehörbildung', ['brandauer', 'roth'], 'HzH 313', 0),
         ]:
             course = Course.objects.create(term=term, kind=Course.Kind.AUDITION, title=title, pass_mark=Decimal('11.6'), max_points=25, released=closed)
-            course.staff.set(self.teachers[k] for k in keys)
-            course.plan = (written, self.rooms[room], step)
+            course.jury = [self.teachers[k] for k in keys]
+            course.staff.set(course.jury)
+            course.plan = (self.rooms[room], step)
             shared.append(course)
         accompanist = Course.objects.create(term=term, kind=Course.Kind.LESSON, title=f'Korrepetition Eignungsprüfung {term}', hours=Decimal('0.5'))
         accompanist.staff.set([self.teachers['popescu'], self.teachers['hein']])
         rounds, rows, scores, documents = {}, [], [], []
         names = dict(DocumentType.objects.values_list('key', 'name'))
+        summer = term.name.startswith('SoSe')
 
         def sit(study, course, level, jury, note):
             marks = [Decimal(str(round(max(0, min(25, level + rng.gauss(0, 0.9))), 1))) for _ in jury]
@@ -970,9 +1093,6 @@ class Command(BaseCommand):
             if marked and len(marked) == len(jury):
                 p.grade = mean(marks, study.program.mean_rounding)
                 p.passed = course.passes(p.grade)
-            if hasattr(course, 'plan'):
-                begin, _, step = course.plan
-                p.slot = begin + timedelta(minutes=step * sum(1 for r in rows if r.course is course))
             rows.append(p)
             scores.extend((p, e, v) for e, v in zip(marked, marks))
             return p
@@ -983,7 +1103,9 @@ class Command(BaseCommand):
             if key not in rounds:
                 level, n = (' (Master)' if master else ''), len(rounds)
                 decided = finished or subject == 'Violoncello'
-                intake = {'program': study.program, 'deadline': video_deadline, 'capacity': 2 if master else 4, 'accompaniment': accompanist}  # the course one applies to
+                subjects, rate, sose = INTAKE[(study.program.degree, study.program.name)]
+                places = max(1, round(subjects[subject] * rate * (sose if summer else 1 - sose)))
+                intake = {'program': study.program, 'deadline': video_deadline, 'capacity': places, 'accompaniment': accompanist}  # the course one applies to
                 video = Course.objects.create(
                     term=term, kind=Course.Kind.AUDITION, title=f'Videostufe {subject}{level}', subject=study.subject, video=True, pass_mark=Decimal('16.1'), max_points=25,
                     released=at(video_deadline + timedelta(days=30) if finished else date(2026, 10, 20), hour=12) if decided else None, **intake,
@@ -996,7 +1118,7 @@ class Command(BaseCommand):
                 hall.staff.set(panel)
                 if video:
                     video.staff.set(panel)
-                hall.plan = (at(audition_day + timedelta(days=n // 2), hour=9 if n % 2 == 0 else 14), self.rooms['Festsaal' if n % 2 == 0 else 'Saal Am Palais'], 25)
+                hall.plan = (self.rooms['Festsaal' if n % 2 == 0 else 'Saal Am Palais'], 25)
                 rounds[key] = video, hall, panel
             video, hall, panel = rounds[key]
             if outcome == 'running':
@@ -1021,18 +1143,32 @@ class Command(BaseCommand):
                 sit(study, hall, talent, panel, note)
                 if finished and not master:
                     for course in shared:
-                        sit(study, course, rng.uniform(13, 21), list(course.staff.all()), '')
+                        sit(study, course, rng.uniform(13, 21), course.jury, '')
             if rng.random() < 0.3 or study.person == applicant:
                 rows.append(Participation(course=accompanist, study=study, created=at(study.since, hour=12)))
+        sitting = defaultdict(list)
+        for p in rows:
+            sitting[p.course].append(p)
+        free = defaultdict(lambda: audition_day)  # the next free audition day of each hall
+        for course in [hall for _, hall, _ in rounds.values()] + shared:
+            room, step = course.plan
+            day = written if course in shared else free[room]
+            entries = sitting[course]
+            per_day = {25: 16, 15: 24}.get(step) or len(entries) or 1
+            for k in range(0, len(entries), per_day):  # a day at a time, weekdays only, the hall booked for each
+                day += timedelta(days=(7 - day.weekday()) % 7 if day.weekday() > 4 else 0)
+                begin, chunk = at(day, hour=9), entries[k:k + per_day]
+                for j, p in enumerate(chunk):
+                    p.slot = begin + timedelta(minutes=step * j)
+                end = begin + timedelta(minutes=step * len(chunk) or 120)
+                if not Booking(room=room, start=begin, end=end).clashes().exists():
+                    Booking.objects.create(room=room, start=begin, end=end, person=self.staff['asa'], course=course, category_id='eignungspruefung')
+                day += timedelta(days=1)
+            if course not in shared:
+                free[room] = day
         Participation.objects.bulk_create(rows)
         Score.objects.bulk_create(Score(participation=p, examiner=e, value=v) for p, e, v in scores)
         Document.objects.bulk_create(documents)
-        for course in [hall for _, hall, _ in rounds.values()] + shared:
-            if count := sum(1 for r in rows if r.course is course):
-                begin, room, step = course.plan
-                end = begin + timedelta(minutes=step * count or 120)
-                if not Booking(room=room, start=begin, end=end).clashes().exists():
-                    Booking.objects.create(room=room, start=begin, end=end, person=self.staff['asa'], course=course, category_id='eignungspruefung')
         if not finished:
             failed = Study.objects.filter(start_term=term, participations__course__released__isnull=False, participations__passed=False)
             Study.objects.filter(pk__in=failed.values('pk')).update(status=Study.Status.REJECTED, since=date(2026, 10, 21))
@@ -1163,7 +1299,8 @@ class Command(BaseCommand):
                     link='/aufnahme/kommissionen/'),
         ])
         notices = []  # the Bescheide already issued: decisions on applications, and the enrolment of this term's newcomers
-        for study in Study.objects.filter(status__in=list(DECISIONS)).select_related('person', 'program', 'subject', 'start_term'):
+        decided = Study.objects.filter(status__in=list(DECISIONS), start_term__in=[self.current, self.next])
+        for study in decided.select_related('person', 'program', 'subject', 'start_term'):
             deadline = study.since + timedelta(days=Institution.get().accept_days)
             notices.append((study, *study.wording(DECISIONS[study.status], frist=f'{deadline:%d.%m.%Y}', datum=f'{study.since:%d.%m.%Y}'), at(study.since, hour=10)))
         for study in (s for s in self.enrolled if s.fs == 1):

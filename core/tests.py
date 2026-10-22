@@ -17,7 +17,7 @@ from .access import CODENAMES
 from .apps import tile_apps, tiles
 from .history import acting, restore
 from .models import Change, Message, Office, Person, Term, Text
-from .testing import Seeded, flashes
+from .testing import Empty, Seeded, flashes
 from .texts import TEXTS, render, send
 from .views import found
 
@@ -25,7 +25,7 @@ PANEL = {'X-Panel': '1'}
 DEMO = ['admin', 'asa', 'pruefungsamt', 'dekanat', 'veranstaltungsbuero', 'lehre', 'student', 'bewerbung']
 
 
-class HistoryTest(TestCase):
+class HistoryTest(Empty):
     def test_changes_are_kept_as_differences_and_undone_only_while_current(self):
         clerk = Person.objects.create(username='clerk')
         Person.objects.create(username='mei', last_name='Chen', address='Am Horn 1')
@@ -281,7 +281,7 @@ class HistoryFlowTest(Seeded):
         self.assertEqual(Change.objects.count(), total - theirs)
 
 
-class FreshInstallTest(TestCase):
+class FreshInstallTest(Empty):
     """A Hochschule starting out: no semesters yet, then only the current one. Nothing may fail."""
 
     PAGES = [

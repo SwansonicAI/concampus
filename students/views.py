@@ -17,7 +17,7 @@ from core.history import tables
 from core.apps import plural
 from core.models import Institution, Message, Person, Term
 from core.text import matching
-from core.views import without_term
+from core.views import SHOWN, without_term
 from curriculum.models import Program, Subject
 from curriculum.views import plan
 from .models import Document, Study, StudyTerm
@@ -68,8 +68,9 @@ def roster(request):
                 s.person.email, s.program, s.subject, s.fs, s.get_status_display(),
             ])
         return response
+    shown = list(studies[:SHOWN])
     return render(request, 'students/roster.html', {
-        'studies': studies, 'q': q, 'status': status, 'statuses': Study.Status.choices,
+        'studies': shown, 'count': len(shown) if len(shown) < SHOWN else studies.count(), 'q': q, 'status': status, 'statuses': Study.Status.choices,
         'programs': Program.objects.all(), 'subjects': Subject.objects.all(),
         'terms': Term.objects.filter(intake__isnull=False).distinct().order_by('-start'), 'semesters': range(1, 13),
         **{key: request.GET.get(key, '') for key in ['studiengang', 'fach', 'fs', 'beginn']},

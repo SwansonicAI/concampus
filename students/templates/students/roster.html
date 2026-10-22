@@ -6,7 +6,7 @@
   <h1>Studierende</h1>
   <div class="actions"><a class="btn ghost" href="{% querystring format='csv' %}">Als CSV exportieren</a></div>
 </div>
-<p class="lead">{{ studies|length }} Studien</p>
+<p class="lead">{{ count }} Studien</p>
 <form class="toolbar">
   <div class="inline">
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name, E-Mail, Matrikel"></label>
@@ -40,6 +40,7 @@
       </tr>
       {% empty %}<tr><td colspan="8" class="empty">Keine Treffer.</td></tr>
       {% endfor %}
+      {% if count > studies|length %}<tr><td colspan="8" class="empty">{{ studies|length }} von {{ count }}: Suche oder Filter eingrenzen. Der CSV-Export enthält alle.</td></tr>{% endif %}
     </tbody>
   </table>
 </form>
