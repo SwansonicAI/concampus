@@ -2,22 +2,29 @@
 {% block title %}Deputat{% endblock %}
 {% block subnav %}{% include "courses/_nav.html" %}{% endblock %}
 {% block content %}
-<div class="head">
-  <h1>Deputat</h1>
-  <form class="actions"><select name="semester" onchange="this.form.requestSubmit()" aria-label="Semester">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></form>
-</div>
+<h1>Deputat</h1>
 <p class="lead">Lehrumfang in SWS im {{ term }}. Einzelunterricht zählt je Teilnahme.</p>
+<form class="toolbar">
+  <div class="inline">
+    <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    {% if everyone %}
+    <label>Institut<select name="institut" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>
+    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name"></label>
+    {% endif %}
+  </div>
+</form>
 <table data-panel>
   <thead><tr><th>Lehrende</th><th>Veranstaltungen</th><th class="num">SWS</th></tr></thead>
   <tbody>
     {% for teacher, courses, total in rows %}
     <tr>
-      <td><b>{{ teacher }}</b></td>
+      <td data-value="{{ teacher.name }}"><b>{{ teacher }}</b></td>
       <td>{% for c in courses %}<a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a> <small class="muted">{{ c.load }}</small>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
       <td class="num"><b>{{ total }}</b></td>
     </tr>
     {% empty %}<tr><td colspan="3" class="empty">Keine Lehre erfasst.</td></tr>
     {% endfor %}
   </tbody>
+  {% if rows|length > 1 %}<tfoot><tr class="total"><td>Gesamt</td><td>{{ rows|length }} Lehrende</td><td class="num">{{ total }}</td></tr></tfoot>{% endif %}
 </table>
 {% endblock %}

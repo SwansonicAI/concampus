@@ -9,6 +9,54 @@ function init(root) {
   root.querySelectorAll('.form div[id^="id_"]').forEach(list => list.querySelectorAll('input[type=checkbox]').length > 8 && filterable(list));
   root.querySelectorAll('[data-day], [data-moment]').forEach(dated);
   root.querySelectorAll('.lines').forEach(lineChart);
+  root.querySelectorAll('table:not(.hours)').forEach(sortable);
+}
+
+const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];
+
+// Column headings sort the rows: numbers largest first, dates and text in order, a second click reverses, empty cells
+// stay last. Headings marked data-sort ask the server instead, for lists too long to show at once. The order lasts the
+// session, so it survives filtering and coming back.
+function sortable(table) {
+  const heads = [...table.tHead?.rows[0].cells ?? []];
+  const rows = [...table.tBodies[0]?.rows ?? []];
+  const server = heads.some(th => th.dataset.sort);
+  if (!server && (rows.length < 2 || rows.some(row => row.cells.length !== heads.length))) return;  // nothing to sort, or grouped
+  const saved = table.closest('main') && `sort ${location.pathname} ${[...document.querySelectorAll('main table')].indexOf(table)}`;
+  const value = cell => {
+    const text = (cell.dataset.value ?? cell.textContent.trim()).replace(/(\d{1,2})\. (\p{L}+) (\d{4})/u, (all, d, m, y) => MONTHS.includes(m) ? `${d}.${MONTHS.indexOf(m) + 1}.${y}` : all);
+    const date = text.match(/(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\D+(\d{1,2}):(\d{2}))?/);
+    if (date) return `${date[3]}-${date[2].padStart(2, '0')}-${date[1].padStart(2, '0')} ${date[4]?.padStart(2, '0') ?? ''}${date[5] ?? ''}`;
+    if (/^-?(\d{1,3}(\.\d{3})+|\d+)(,\d+)?( ?%)?$/.test(text)) return Number(text.replace(/[.%\s]/g, '').replace(',', '.'));
+    return text === '–' ? '' : text;
+  };
+  const order = (col, down) => {
+    const values = new Map(rows.map(row => [row, value(row.cells[col])]));
+    rows.sort((r, s) => {
+      const [a, b] = down ? [values.get(s), values.get(r)] : [values.get(r), values.get(s)];
+      if (a === '' || b === '') return (values.get(r) === '') - (values.get(s) === '');
+      return typeof a === 'number' && typeof b === 'number' ? a - b : String(a).localeCompare(String(b), 'de', {numeric: true});
+    });
+    table.tBodies[0].append(...rows);
+    heads.forEach((th, i) => i === col ? th.setAttribute('aria-sort', down ? 'descending' : 'ascending') : th.removeAttribute('aria-sort'));
+    if (saved) sessionStorage.setItem(saved, `${col} ${down}`);
+  };
+  heads.forEach((th, col) => {
+    if (!th.textContent.trim()) return;  // e.g. the box that ticks all
+    const button = Object.assign(document.createElement('button'), {type: 'button'});
+    button.append(...th.childNodes);
+    th.append(button);
+    button.addEventListener('click', async () => {
+      const sorted = th.getAttribute('aria-sort');
+      if (!th.dataset.sort) return order(col, sorted ? sorted === 'ascending' : rows.every(row => typeof value(row.cells[col]) !== 'string' || !value(row.cells[col])));
+      const url = new URL(location.href);
+      url.searchParams.set('sortierung', sorted === 'ascending' ? `-${th.dataset.sort}` : th.dataset.sort);
+      await swap(url);
+      document.querySelector(`main th[data-sort="${th.dataset.sort}"] button`)?.focus();
+    });
+  });
+  const [col, down] = (!server && saved && sessionStorage.getItem(saved)?.split(' ')) || [];
+  if (heads[col]) order(Number(col), down === 'true');
 }
 
 // Line charts are drawn here from their data, at the size they are shown: the legend turns lines on and off and the
@@ -229,12 +277,16 @@ document.addEventListener('input', event => {
     pause = setTimeout(() => event.target.form.requestSubmit(), 300);
   }
 });
-document.addEventListener('submit', async event => {
+document.addEventListener('submit', event => {
   const form = event.target;
   if (!inPlace(form) || event.submitter?.hasAttribute('formaction')) return;  // a button with its own target leaves the page
   event.preventDefault();
   const url = new URL(form.action);
   url.search = new URLSearchParams(new FormData(form));
+  swap(url);
+});
+
+async function swap(url) {
   const field = document.activeElement, typed = field.value;
   const html = await (await fetch(url)).text();
   if (field.value !== typed) return;  // typing went on; its own request follows
@@ -245,7 +297,7 @@ document.addEventListener('submit', async event => {
   const again = field.name && main.querySelector(`[name="${field.name}"]`);
   again?.focus();
   if (again?.type === 'search') again.setSelectionRange(typed.length, typed.length);
-});
+}
 
 // A file over its limit is caught before a long upload starts.
 document.addEventListener('change', event => {

@@ -23,7 +23,7 @@
       <td>{% for s in c.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
       <td class="num">{{ c.hours|default_if_none:"" }}</td>
       <td class="num">{{ c.size }}{% if c.capacity %} / {{ c.capacity }}{% endif %}</td>
-      <td>{% if c.next_start %}{{ c.next_start|date:"D j.n., H:i" }}<br><small class="muted">{{ c.next_room }}</small>{% endif %}</td>
+      <td data-value="{{ c.next_start|date:'c' }}">{% if c.next_start %}{{ c.next_start|date:"D j.n., H:i" }}<br><small class="muted">{{ c.next_room }}</small>{% endif %}</td>
     </tr>
     {% empty %}
     <tr><td colspan="5" class="empty">Keine Veranstaltungen.</td></tr>

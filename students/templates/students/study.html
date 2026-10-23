@@ -90,7 +90,7 @@
     <tbody>
       {% for t in terms %}
       <tr>
-        <td>{{ t.term }}</td>
+        <td data-value="{{ t.term.start|date:'c' }}">{{ t.term }}</td>
         <td>{% if t.leave %}Urlaubssemester{% else %}immatrikuliert{% endif %}</td>
         <td class="num">{{ t.term.fee }} €</td>
         <td>{% if t.term_id == study.start_term_id %}zur Immatrikulation{% else %}{{ t.term.deadline|date:"j.n.Y" }}{% endif %}</td>

@@ -22,7 +22,7 @@
   <div>
     <h3>Nächste Termine</h3>
     <table>
-      {% for b in bookings %}<tr><td>{{ b.start|date:"D j.n." }}</td><td>{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</td><td><a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a></td></tr>{% empty %}<tr><td class="empty">Noch keine Termine.</td></tr>{% endfor %}
+      {% for b in bookings %}<tr><td data-value="{{ b.start|date:'c' }}">{{ b.start|date:"D j.n." }}</td><td>{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</td><td><a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a></td></tr>{% empty %}<tr><td class="empty">Noch keine Termine.</td></tr>{% endfor %}
     </table>
     {% if plan %}
     <form method="post" action="{% url 'courses:plan' course.pk %}" class="panel" style="margin-top: 24px">

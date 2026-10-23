@@ -19,6 +19,7 @@ from core import texts
 from core.access import require
 from core.history import tables
 from core.models import Institution, Term
+from core.text import matching
 from courses import panel
 from courses.forms import SlotForm
 from courses.models import Course, Participation
@@ -100,9 +101,10 @@ def board(request):
         .prefetch_related(Prefetch('participations', stages(), to_attr='stages'), 'documents')
         .order_by('-points', 'person__last_name')
     )
-    subject = request.GET.get('fach', '')
+    subject, q = request.GET.get('fach', ''), request.GET.get('q', '').strip()
     if subject.isdigit():
         studies = studies.filter(subject=subject)
+    studies = matching(studies, q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__email')
     types = document_types()
     for study in studies:
         study.incomplete = incomplete(study, types) if study.status == Study.Status.APPLIED else []
@@ -112,10 +114,13 @@ def board(request):
         .filter(Q(size__gt=0) | Q(program__isnull=False))
         .order_by(F('deadline').asc(nulls_last=True), F('date').asc(nulls_last=True), 'title')
     )
+    if subject.isdigit():  # its own auditions and those everyone takes
+        auditions = auditions.filter(Q(subject=subject) | Q(subject__isnull=True))
     return render(request, 'admissions/board.html', {
         'term': term,
         'terms': terms,
         'subject': subject,
+        'q': q,
         'subjects': sorted({s.subject for s in Study.objects.filter(start_term=term).select_related('subject')}, key=str),
         'columns': [(Study.Status(status), [s for s in studies if s.status == status]) for status in BOARD],
         'auditions': auditions,

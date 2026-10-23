@@ -27,7 +27,7 @@
         <td class="mid muted">{{ forloop.counter }}</td>
         <td class="mid"><a href="{{ p.study.get_absolute_url }}">{{ p.study.person.name }}</a><br><small class="muted">{{ p.study.subject }} · {{ p.study.program.degree }}{% if p.waiting %} · <b>Warteliste</b>{% endif %}{% if review %} · <a href="{% url 'admissions:review' course.pk %}?bewerbung={{ p.pk }}">Video</a>{% endif %}</small></td>
         {% if panel %}
-        <td class="mid">{{ p.slot|date:"j.n. H:i"|default:"–" }}</td>
+        <td class="mid" data-value="{{ p.slot|date:'c' }}">{{ p.slot|date:"j.n. H:i"|default:"–" }}</td>
         <td class="mid"><small title="{{ p.note }}">{{ p.note|truncatechars:42 }}</small></td>
         {% for e, value in p.marks %}
         <td class="num mid">{% if e.pk in columns and not course.released %}<input class="cell" type="text" inputmode="decimal" name="score-{{ p.pk }}-{{ e.pk }}" value="{{ value|default_if_none:''|unlocalize }}" aria-label="Wertung {{ e.last_name }}">{% else %}{{ value|default_if_none:"" }}{% endif %}</td>
@@ -37,7 +37,7 @@
         {% if decide and not course.released %}<td class="num mid"><input class="cell" type="text" inputmode="decimal" name="grade-{{ p.pk }}" value="{{ p.override|default_if_none:''|unlocalize }}" aria-label="Abweichendes Ergebnis"></td>{% endif %}
         {% else %}
         <td class="mid muted">{{ p.module.code|default:"" }}</td>
-        <td class="mid muted">{{ p.created|date:"j.n. H:i" }}</td>
+        <td class="mid muted" data-value="{{ p.created|date:'c' }}">{{ p.created|date:"j.n. H:i" }}</td>
         <td class="num mid">{% if decide and not course.released %}<input class="cell" type="text" inputmode="decimal" name="grade-{{ p.pk }}" value="{{ p.grade|default_if_none:''|unlocalize }}" aria-label="Note">{% elif p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</td>
         <td class="mid">
           {% if decide and not course.released %}

@@ -10,6 +10,7 @@
 <form class="toolbar">
   <div class="inline">
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name, E-Mail, Matrikel"></label>
+    <input type="hidden" name="sortierung" value="{{ sort }}">
     <label>Status<select name="status" onchange="this.form.requestSubmit()">{% for value, label in statuses %}<option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
     <label>Studiengang<select name="studiengang" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for p in programs %}<option value="{{ p.pk }}"{% if p.pk|stringformat:'s' == studiengang %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
     <label>Hauptfach<select name="fach" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for s in subjects %}<option value="{{ s.pk }}"{% if s.pk|stringformat:'s' == fach %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
@@ -25,7 +26,7 @@
     <button class="btn ghost small" formaction="{% url 'students:letters' %}">Bescheide drucken</button>
   </div>
   <table data-panel>
-    <thead><tr><th><input type="checkbox" onchange="this.form.querySelectorAll('[name=study]').forEach(box => box.checked = this.checked)" aria-label="Alle ankreuzen"></th><th>Matrikel</th><th>Name</th><th>Studiengang</th><th>Hauptfach</th><th>Klasse</th><th class="num">FS</th><th>Status</th></tr></thead>
+    <thead><tr><th><input type="checkbox" onchange="this.form.querySelectorAll('[name=study]').forEach(box => box.checked = this.checked)" aria-label="Alle ankreuzen"></th>{% for title, key, order in columns %}<th data-sort="{{ key }}"{% if order %} aria-sort="{{ order }}"{% endif %}{% if key == 'fs' %} class="num"{% endif %}>{{ title }}</th>{% endfor %}</tr></thead>
     <tbody>
       {% for s in studies %}
       <tr>

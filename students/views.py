@@ -42,6 +42,12 @@ def index(request):
     return redirect(study.get_absolute_url())
 
 
+COLUMNS = [  # heading, sort key, field; the server sorts, since the list may be longer than shown
+    ('Matrikel', 'matrikel', 'person__matriculation'), ('Name', 'name', 'person__last_name'), ('Studiengang', 'studiengang', 'program__name'),
+    ('Hauptfach', 'hauptfach', 'subject__name'), ('Klasse', 'klasse', 'teacher__last_name'), ('FS', 'fs', 'fs'), ('Status', 'status', 'status'),
+]
+
+
 @require('view_students')
 def roster(request):
     today = timezone.localdate()
@@ -54,8 +60,10 @@ def roster(request):
     for key, field in [('studiengang', 'program'), ('fach', 'subject'), ('fs', 'fs'), ('beginn', 'start_term')]:
         if (value := request.GET.get(key, '')).isdigit():
             studies = studies.filter(**{field: value})
-    q = request.GET.get('q', '').strip()
+    q, sort = request.GET.get('q', '').strip(), request.GET.get('sortierung', '')
     studies = matching(studies, q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__email', 'person__matriculation', 'teacher__last_name')
+    if field := next((f for _, key, f in COLUMNS if key == sort.removeprefix('-')), None):
+        studies = studies.order_by(F(field).desc(nulls_last=True) if sort.startswith('-') else F(field).asc(nulls_last=True), 'person__last_name', 'person__first_name')
     if request.GET.get('format') == 'csv':
         response = HttpResponse(content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = 'attachment; filename="studierende.csv"'
@@ -71,6 +79,7 @@ def roster(request):
     shown = list(studies[:SHOWN])
     return render(request, 'students/roster.html', {
         'studies': shown, 'count': len(shown) if len(shown) < SHOWN else studies.count(), 'q': q, 'status': status, 'statuses': Study.Status.choices,
+        'sort': sort, 'columns': [(title, key, 'ascending' if sort == key else 'descending' if sort == f'-{key}' else '') for title, key, _ in COLUMNS],
         'programs': Program.objects.all(), 'subjects': Subject.objects.all(),
         'terms': Term.objects.filter(intake__isnull=False).distinct().order_by('-start'), 'semesters': range(1, 13),
         **{key: request.GET.get(key, '') for key in ['studiengang', 'fach', 'fs', 'beginn']},

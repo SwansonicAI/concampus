@@ -836,7 +836,7 @@ class Command(BaseCommand):
         if taught in (WS, PIANO, SPEECH):
             teacher = self.pools[taught][study.pk % len(self.pools[taught])]
             label = {WS: 'Werkstudium', PIANO: 'Klavier (Pflichtfach)', SPEECH: 'Bühnensprechen'}[taught]
-            return self.course(term, f'{label} · {teacher.last_name}', Course.Kind.LESSON, hours=sws(form)), teacher, LESSON_ROOMS[taught]
+            return self.course(term, f'{label} · {teacher.first_name} {teacher.last_name}', Course.Kind.LESSON, hours=sws(form)), teacher, LESSON_ROOMS[taught]
         course = self.course(term, title, hours=sws(form) if form else None, deadline=date(2026, 10, 16) if term == self.current else None)
         course.form = form
         return course, self.teachers[lecturer(title)], None
@@ -1080,7 +1080,7 @@ class Command(BaseCommand):
             course.staff.set(course.jury)
             course.plan = (self.rooms[room], step)
             shared.append(course)
-        accompanist = Course.objects.create(term=term, kind=Course.Kind.LESSON, title=f'Korrepetition Eignungsprüfung {term}', hours=Decimal('0.5'))
+        accompanist = Course.objects.create(term=term, kind=Course.Kind.LESSON, title=f'Korrepetition Eignungsprüfung {term}')  # a service, not weekly teaching
         accompanist.staff.set([self.teachers['popescu'], self.teachers['hein']])
         rounds, rows, scores, documents = {}, [], [], []
         names = dict(DocumentType.objects.values_list('key', 'name'))

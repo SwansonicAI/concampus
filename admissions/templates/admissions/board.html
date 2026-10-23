@@ -4,12 +4,14 @@
 {% block content %}
 <div class="head">
   <h1>Bewerbungen</h1>
-  <form class="actions">
-    {% if 'run_auditions' in user.roles %}<a class="btn ghost" href="{% url 'setup:list' 'eignungspruefungen' %}">Eignungsprüfungen</a>{% endif %}
-    <select name="semester" onchange="this.form.requestSubmit()" aria-label="Studienbeginn">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>Studienbeginn {{ t }}</option>{% endfor %}</select>
-    <select name="fach" onchange="this.form.requestSubmit()" aria-label="Hauptfach"><option value="">Alle Hauptfächer</option>{% for s in subjects %}<option value="{{ s.pk }}"{% if s.pk|stringformat:'s' == subject %} selected{% endif %}>{{ s }}</option>{% endfor %}</select>
-  </form>
+  {% if 'run_auditions' in user.roles %}<div class="actions"><a class="btn ghost" href="{% url 'setup:list' 'eignungspruefungen' %}">Eignungsprüfungen</a></div>{% endif %}
 </div>
+<form class="toolbar">
+  <div class="inline">
+    <label>Studienbeginn<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    <label>Hauptfach<select name="fach" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for s in subjects %}<option value="{{ s.pk }}"{% if s.pk|stringformat:'s' == subject %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+  </div>
+</form>
 
 <h2>Eignungsprüfungen</h2>
 <table>
@@ -17,7 +19,7 @@
   <tbody>
     {% for c in auditions %}
     <tr>
-      <td>{% if c.date %}{{ c.date|date:"D j.n.Y" }}{% elif c.program %}online{% else %}–{% endif %}</td>
+      <td data-value="{{ c.date|date:'c' }}">{% if c.date %}{{ c.date|date:"D j.n.Y" }}{% elif c.program %}online{% else %}–{% endif %}</td>
       <td><a href="{% url 'admissions:audition' c.pk %}"><b>{{ c.title }}</b></a>{% if c.program %}<br><small class="muted">Bewerbung für {{ c.program.degree }} {{ c.program.name }}</small>{% endif %}</td>
       <td>{{ c.deadline|date:"j.n.Y"|default:"" }}</td>
       <td class="num">{{ c.size }}</td>
@@ -29,7 +31,13 @@
 </table>
 
 <section>
-  <h2>Stand der Bewerbungen</h2>
+  <div class="head">
+    <h2>Stand der Bewerbungen</h2>
+    <form class="actions">
+      <input type="hidden" name="semester" value="{{ term.pk }}"><input type="hidden" name="fach" value="{{ subject }}">
+      <input type="search" name="q" value="{{ q }}" placeholder="Name oder E-Mail" aria-label="Bewerbungen durchsuchen">
+    </form>
+  </div>
   <p class="lead">Sortiert nach Punkten im Hauptfach.</p>
   <div class="board" data-panel>
     {% for status, studies in columns %}

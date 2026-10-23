@@ -9,9 +9,9 @@
   <tbody>
     {% for c in auditions %}
     <tr>
-      <td>{% if c.date %}{{ c.date|date:"D j.n.Y" }}{% elif c.program %}online{% else %}–{% endif %}</td>
+      <td data-value="{{ c.date|date:'c' }}">{% if c.date %}{{ c.date|date:"D j.n.Y" }}{% elif c.program %}online{% else %}–{% endif %}</td>
       <td><a href="{% url 'admissions:audition' c.pk %}"><b>{{ c.title }}</b></a></td>
-      <td>{{ c.term }}</td>
+      <td data-value="{{ c.term.start|date:'c' }}">{{ c.term }}</td>
       <td class="num">{{ c.size }}</td>
       <td>{% if c.released %}<span class="badge green">abgeschlossen</span>{% else %}<span class="badge open">offen</span>{% endif %}</td>
     </tr>

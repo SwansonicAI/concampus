@@ -31,7 +31,7 @@
     <thead><tr><th>Name</th><th>Studiengang</th><th>Hauptfach</th><th>Seit</th></tr></thead>
     <tbody>
       {% for s in students %}
-      <tr><td><a href="{{ s.get_absolute_url }}">{{ s.person.name }}</a></td><td>{{ s.program }}</td><td>{{ s.subject }}</td><td>{{ s.start_term }}</td></tr>
+      <tr><td><a href="{{ s.get_absolute_url }}">{{ s.person.name }}</a></td><td>{{ s.program }}</td><td>{{ s.subject }}</td><td data-value="{{ s.start_term.start|date:'c' }}">{{ s.start_term }}</td></tr>
       {% empty %}<tr><td colspan="4" class="empty">Keine Studierenden zugeordnet.</td></tr>
       {% endfor %}
     </tbody>

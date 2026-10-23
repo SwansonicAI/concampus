@@ -18,11 +18,12 @@ from courses import panel
 from courses.forms import AddForm, ExamForm, SlotForm
 from courses.views import enrolled
 from courses.models import Course, Participation
-from curriculum.models import Module
+from curriculum.models import Module, Program
 from curriculum.views import plan as study_plan
 from students.models import Study
 
 EXAMS = [Course.Kind.EXAM, Course.Kind.RECOGNITION]
+STATES = [('offen', 'offen'), ('bewertung', 'in Bewertung'), ('freigegeben', 'freigegeben')]
 
 
 def verbal(grade):
@@ -59,10 +60,21 @@ def index(request):
         .annotate(graded=Count('participations', filter=Q(participations__passed__isnull=False), distinct=True))
         .order_by('date', 'title')
     )
-    if person.roles & {'manage_exams', 'decide_results'}:
-        context['exams'] = exams
-    elif 'teacher' in person.roles:
-        context['exams'] = exams.filter(staff=person)
+    office = bool(person.roles & {'manage_exams', 'decide_results'})
+    if office or 'teacher' in person.roles:
+        program, stand, q = (request.GET.get(key, '').strip() for key in ('studiengang', 'stand', 'q'))
+        if not office:
+            exams = exams.filter(staff=person)
+        if program.isdigit():
+            exams = exams.filter(pk__in=Course.objects.filter(modules__program=program).values('pk'))
+        candidate = [f'participations__study__person__{name}' for name in ('first_name', 'last_name', 'matriculation')]
+        exams = list(matching(exams, q, 'title', 'subject__name', 'staff__last_name', *candidate))
+        for c in exams:
+            c.state = 'freigegeben' if c.released else 'bewertung' if c.graded else 'offen'
+        context.update(
+            exams=[c for c in exams if not stand or c.state == stand], q=q, stand=stand, program=program, programs=Program.objects.all(),
+            states=[(key, label, sum(c.state == key for c in exams)) for key, label in STATES],
+        )
     if 'student' in person.roles:
         studies = person.studies.filter(status=Study.Status.ENROLLED)
         mine = Participation.objects.filter(study__in=studies, course__kind=Course.Kind.EXAM).select_related('course__term', 'module')

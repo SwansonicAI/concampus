@@ -114,6 +114,7 @@ input, select, textarea {
 }
 input:focus, select:focus, textarea:focus { outline: 2px solid var(--green); outline-offset: -1px; }
 input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--green); }
+.toolbar input[type=search], .head input[type=search] { width: 280px; }
 input.cell { width: 76px; padding: 4px 8px; text-align: right; }
 select.cell { padding: 4px 6px; }
 .form { display: grid; gap: 18px; max-width: 640px; }
@@ -151,6 +152,10 @@ select.cell { padding: 4px 6px; }
 /* Tables */
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 th { padding: 10px 12px; border-bottom: 2px solid var(--ink); font-size: 13px; font-weight: 700; letter-spacing: 0.03em; text-align: left; text-transform: uppercase; white-space: nowrap; }
+th button { padding: 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-align: inherit; text-transform: inherit; cursor: pointer; }
+th button:hover, th[aria-sort] button { color: var(--green); }
+th[aria-sort="ascending"] button::after { content: " ↑"; }
+th[aria-sort="descending"] button::after { content: " ↓"; }
 td { padding: 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
 td.mid { vertical-align: middle; }
 .num { text-align: right; }

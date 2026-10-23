@@ -15,8 +15,8 @@ from django.views.decorators.http import require_POST
 from core import history, texts
 from core.access import require
 from core.dates import day as understood
-from core.models import Term
-from core.text import matching
+from core.models import Institute, Term
+from core.text import fold, matching
 from core.views import without_term
 from curriculum.models import Program
 from rooms.models import Booking, BookingCategory
@@ -249,14 +249,19 @@ def load(request):
     everyone = 'view_teaching_load' in person.roles
     if not everyone:
         courses = courses.filter(staff=person)
+    institute, q = request.GET.get('institut', ''), request.GET.get('q', '').strip()
+    words = fold(q).split()
     teachers = defaultdict(list)
     for c in courses:
         c.load = (c.hours or 0) * (c.size if c.kind == Course.Kind.LESSON else 1)
         for s in c.staff.all():
-            if everyone or s == person:
+            if (everyone or s == person) and institute in ('', str(s.institute_id)) and all(w in fold(s.name) for w in words):
                 teachers[s].append(c)
     rows = sorted(((t, cs, sum(c.load for c in cs)) for t, cs in teachers.items()), key=lambda row: row[0].last_name)
-    return render(request, 'courses/load.html', {'term': term, 'terms': Term.objects.all(), 'rows': rows})
+    return render(request, 'courses/load.html', {
+        'term': term, 'terms': Term.objects.all(), 'rows': rows, 'total': sum(row[2] for row in rows), 'everyone': everyone,
+        'institutes': Institute.objects.all(), 'institute': institute, 'q': q,
+    })
 
 
 def missing(target):

@@ -4,6 +4,7 @@ from core.testing import Seeded, flashes
 from courses.models import Course
 from courses.panel import mean
 from curriculum.models import Program, Rounding, rounded
+from exams.views import EXAMS
 from students.models import Study
 
 
@@ -14,6 +15,11 @@ class ExamTest(Seeded):
         r = self.login('student').post(f'/pruefungen/{exam.pk}/anmelden/', {'study': study.pk}, follow=True)
         self.assertEqual(flashes(r), ['Angemeldet. Die Bestätigung liegt in Ihrem Postfach.'])
         self.assertTrue(exam.participations.filter(study=study).exists())
+
+    def test_the_list_finds_exams_by_candidate(self):
+        p = Course.objects.filter(kind=Course.Kind.EXAM, term__name='WiSe 2026/27', participations__isnull=False).first().participations.select_related('study__person').first()
+        found = self.login('pruefungsamt').get('/pruefungen/', {'q': p.study.person.matriculation}).context['exams']
+        self.assertEqual({c.pk for c in found}, set(p.study.participations.filter(course__kind__in=EXAMS, course__term__name='WiSe 2026/27').values_list('course', flat=True)))
 
     def test_results_follow_the_panel_then_lock_on_release(self):
         resit = Course.objects.get(title__contains='Wiederholung')
