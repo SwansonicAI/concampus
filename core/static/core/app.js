@@ -11,72 +11,117 @@ function init(root) {
   root.querySelectorAll('.lines').forEach(lineChart);
 }
 
-// Line charts are drawn here from their data, so the legend can turn lines on and off and the scale follows what is
-// left. The pointer reads every line at the nearest point in time.
+// Line charts are drawn here from their data, at the size they are shown: the legend turns lines on and off and the
+// scale follows what is left; the pointer reads every line at the nearest point in time and brings the closest forward.
 const SVG = 'http://www.w3.org/2000/svg';
+
+// A smooth path through the points that never overshoots them (monotone cubic), so curves invent no peaks.
+function curve(points) {
+  const n = points.length;
+  if (n < 3) return points.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join('');
+  const d = points.slice(1).map(([x, y], i) => (y - points[i][1]) / (x - points[i][0]));
+  const m = points.map((_, i) => i === 0 ? d[0] : i === n - 1 ? d[n - 2] : d[i - 1] * d[i] <= 0 ? 0 : (d[i - 1] + d[i]) / 2);
+  for (let i = 0; i < n - 1; i++) {
+    if (d[i] === 0) { m[i] = m[i + 1] = 0; continue; }
+    const a = m[i] / d[i], b = m[i + 1] / d[i], h = a * a + b * b;
+    if (h > 9) { m[i] = 3 * a / Math.sqrt(h) * d[i]; m[i + 1] = 3 * b / Math.sqrt(h) * d[i]; }
+  }
+  return points.map(([x, y], i) => {
+    if (!i) return `M${x},${y}`;
+    const [px, py] = points[i - 1], third = (x - px) / 3;
+    return `C${px + third},${py + m[i - 1] * third},${x - third},${y - m[i] * third},${x},${y}`;
+  }).join('');
+}
 
 function lineChart(chart) {
   const data = JSON.parse(chart.querySelector('script').textContent);
   const svg = chart.querySelector('svg'), tip = chart.querySelector('.tip'), keys = [...chart.querySelectorAll('.key')];
-  const [W, H, L, R, T, B] = [640, 260, 56, 16, 12, 28];
+  const [H, T, B, L, R] = [280, 16, 30, 56, 64];
+  const last = data.x.length - 1;
   const fmt = v => v.toLocaleString('de-DE', {maximumFractionDigits: data.decimals}) + data.unit;
-  const X = i => L + i * (W - L - R) / Math.max(1, data.x.length - 1);
-  const add = (name, attrs) => {
+  const add = (name, attrs, parent = svg) => {
     const node = document.createElementNS(SVG, name);
     Object.entries(attrs).forEach(([k, v]) => node.setAttribute(k, v));
-    return svg.appendChild(node);
+    return parent.appendChild(node);
   };
-  const shown = () => data.series.filter((s, i) => keys[i].getAttribute('aria-pressed') === 'true');
-  let cross;
+  const shown = () => data.series.filter((s, i) => !keys.length || keys[i].getAttribute('aria-pressed') === 'true');
+  const focus = s => {  // one line forward, the others back; none: all equal
+    svg.classList.toggle('focus', Boolean(s));
+    svg.querySelectorAll('.line').forEach(path => path.classList.toggle('on', path.dataset.series === String(data.series.indexOf(s))));
+  };
+  let X, Y, hover;
   const draw = () => {
+    const W = svg.getBoundingClientRect().width;
+    if (!W) return;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
     svg.replaceChildren();
     const lines = shown();
     const peak = Math.max(1, ...lines.flatMap(s => s.values));
-    const step = [1, 2, 2.5, 5, 10].map(f => f * 10 ** Math.floor(Math.log10(peak / 4))).find(s => s * 4 >= peak);
+    const step = [1, 2, 2.5, 5, 10].map(f => f * 10 ** Math.floor(Math.log10(peak / 4))).find(v => v * 4 >= peak);
     const top = Math.ceil(peak / step) * step;
-    const Y = v => T + (H - T - B) * (1 - v / top);
+    X = i => L + i * (W - L - R) / Math.max(1, last);
+    Y = v => T + (H - T - B) * (1 - v / top);
     for (let v = 0; v <= top + step / 2; v += step) {
-      add('line', {class: 'grid', x1: L, x2: W - R, y1: Y(v), y2: Y(v)});
-      add('text', {class: 'ytick', x: L - 8, y: Y(v)}).textContent = fmt(v);
+      add('line', {class: v ? 'grid' : 'base', x1: L, x2: W - R, y1: Y(v), y2: Y(v)});
+      add('text', {class: 'ytick', x: L - 10, y: Y(v)}).textContent = fmt(v);
     }
-    const every = Math.ceil(data.x.length / 12);
-    data.x.forEach((label, i) => {
-      if ((data.x.length - 1 - i) % every === 0) add('text', {class: 'xtick', x: X(i), y: H - 6}).textContent = label;
-    });
-    cross = add('line', {class: 'cross', x1: 0, x2: 0, y1: T, y2: H - B, visibility: 'hidden'});
+    const every = Math.ceil((last + 1) / Math.max(2, Math.floor((W - L - R) / 72)));
+    data.x.forEach((label, i) => (last - i) % every === 0 && (add('text', {class: 'xtick', x: X(i), y: H - 8}).textContent = label));
+    const points = s => s.values.map((v, i) => [X(i), Y(v)]);
+    if (lines.length === 1) add('path', {class: 'area', fill: lines[0].color, d: `${curve(points(lines[0]))}L${X(last)},${Y(0)}L${X(0)},${Y(0)}Z`});
     for (const s of lines) {
-      add('path', {class: 'line', stroke: s.color, d: s.values.map((v, i) => `${i ? 'L' : 'M'}${X(i)},${Y(v)}`).join('')});
-      s.values.forEach((v, i) => add('circle', {class: 'dot', cx: X(i), cy: Y(v), r: 3, fill: s.color}));
+      add('path', {class: 'line', stroke: s.color, d: curve(points(s)), 'data-series': data.series.indexOf(s)});
+      add('circle', {class: 'dot', cx: X(last), cy: Y(s.values[last]), r: 4, fill: s.color});
     }
+    let above = -Infinity;  // the value at each line's end, where it does not crowd the one above
+    [...lines].sort((a, b) => b.values[last] - a.values[last]).forEach(s => {
+      const y = Y(s.values[last]);
+      if (y - above < 15) return;
+      above = y;
+      add('text', {class: 'end', x: X(last) + 10, y}).textContent = fmt(s.values[last]);
+    });
+    hover = add('g', {visibility: 'hidden'});
+    add('line', {class: 'cross', y1: T, y2: H - B}, hover);
+    lines.forEach(s => add('circle', {class: 'dot', r: 4, fill: s.color}, hover));
   };
-  keys.forEach(key => key.addEventListener('click', () => {
-    key.setAttribute('aria-pressed', key.getAttribute('aria-pressed') !== 'true');
-    draw();
-  }));
+  keys.forEach((key, i) => {
+    key.addEventListener('click', () => {
+      key.setAttribute('aria-pressed', key.getAttribute('aria-pressed') !== 'true');
+      draw();
+    });
+    key.addEventListener('pointerenter', () => key.getAttribute('aria-pressed') === 'true' && focus(data.series[i]));
+    key.addEventListener('pointerleave', () => focus(null));
+  });
   svg.addEventListener('pointermove', event => {
     const box = svg.getBoundingClientRect();
-    const at = ((event.clientX - box.left) / box.width * W - L) / (W - L - R) * (data.x.length - 1);
-    const i = Math.max(0, Math.min(data.x.length - 1, Math.round(at)));
+    const x = event.clientX - box.left, y = event.clientY - box.top;
+    const i = Math.max(0, Math.min(last, Math.round((x - L) / (box.width - L - R) * last)));
+    const lines = shown();
+    const near = lines.reduce((best, s) => Math.abs(Y(s.values[i]) - y) < Math.abs(Y(best.values[i]) - y) ? s : best, lines[0]);
+    focus(lines.length > 1 && near);
+    const [cross, ...dots] = hover.children;
     cross.setAttribute('x1', X(i));
     cross.setAttribute('x2', X(i));
-    cross.setAttribute('visibility', 'visible');
-    const head = Object.assign(document.createElement('small'), {textContent: data.full[i]});
-    const rows = shown().sort((a, b) => b.values[i] - a.values[i]).map(s => {
+    dots.forEach((dot, k) => { dot.setAttribute('cx', X(i)); dot.setAttribute('cy', Y(lines[k].values[i])); });
+    hover.setAttribute('visibility', 'visible');
+    const rows = [...lines].sort((a, b) => b.values[i] - a.values[i]).map(s => {
       const row = document.createElement('div');
       row.style.setProperty('--c', s.color);
+      row.classList.toggle('on', lines.length > 1 && s === near);
       row.append(Object.assign(document.createElement('b'), {textContent: fmt(s.values[i])}), ' ', s.label);
       return row;
     });
-    tip.replaceChildren(head, ...rows);
-    tip.style.left = `${X(i) / W * 100}%`;
-    tip.style.transform = X(i) / W > 0.6 ? 'translateX(calc(-100% - 12px))' : 'translateX(12px)';
+    tip.replaceChildren(Object.assign(document.createElement('small'), {textContent: data.full[i]}), ...rows);
+    tip.style.left = `${X(i)}px`;
+    tip.style.transform = X(i) > box.width * 0.6 ? 'translateX(calc(-100% - 14px))' : 'translateX(14px)';
     tip.hidden = false;
   });
   svg.addEventListener('pointerleave', () => {
     tip.hidden = true;
-    cross.setAttribute('visibility', 'hidden');
+    hover?.setAttribute('visibility', 'hidden');
+    focus(null);
   });
-  draw();
+  new ResizeObserver(draw).observe(svg);
 }
 
 // Type-to-filter for long choice lists.

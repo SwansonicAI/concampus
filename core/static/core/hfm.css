@@ -425,21 +425,28 @@ tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 7
 .filters-on .chip { padding: 2px 8px; color: var(--ink); font-size: 13px; }
 .chart figcaption .links { display: flex; gap: 16px; }
 .lines .canvas { position: relative; }
-.lines svg { display: block; width: 100%; height: auto; overflow: visible; }
-.lines .grid { stroke: var(--line); stroke-width: 1; }
-.lines .ytick, .lines .xtick { fill: var(--muted); font-size: 11px; }
-.lines .ytick { text-anchor: end; dominant-baseline: middle; }
-.lines .xtick { text-anchor: middle; }
-.lines .line { fill: none; stroke-width: 2; stroke-linejoin: round; }
-.lines .dot { stroke: #fff; stroke-width: 1.5; }
-.lines .cross { stroke: var(--ink); stroke-width: 1; }
-.lines .tip { position: absolute; top: 8px; z-index: 5; min-width: 160px; padding: 8px 10px; background: var(--ink); color: #fff; font-size: 13px; pointer-events: none; }
-.lines .tip small { display: block; margin-bottom: 4px; color: #cfcfcf; }
-.lines .tip div::before { content: ""; display: inline-block; width: 12px; height: 2px; margin-right: 6px; vertical-align: middle; background: var(--c); }
-.lines .tip b { font-variant-numeric: tabular-nums; }
-.keys { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin-top: 10px; font-size: 14px; }
-.key { display: inline-flex; align-items: center; gap: 6px; padding: 2px 0; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; }
-.key::before { content: ""; width: 16px; height: 2px; background: var(--c); }
-.key[aria-pressed="false"] { color: var(--muted); text-decoration: line-through; }
+.lines svg { display: block; width: 100%; height: 280px; overflow: visible; }
+.lines .grid { stroke: #ececec; }
+.lines .base { stroke: #b5b5b5; }
+.lines text { font-size: 12px; font-variant-numeric: tabular-nums; }
+.lines .ytick { fill: var(--muted); text-anchor: end; dominant-baseline: middle; }
+.lines .xtick { fill: var(--muted); text-anchor: middle; }
+.lines .end { fill: var(--ink); dominant-baseline: middle; }
+.lines .line { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; transition: opacity 0.15s, stroke-width 0.15s; }
+.lines svg.focus .line { opacity: 0.18; }
+.lines svg.focus .line.on { opacity: 1; stroke-width: 3.5; }
+.lines .area { opacity: 0.1; }
+.lines .dot { stroke: #fff; stroke-width: 2; }
+.lines .cross { stroke: #b5b5b5; }
+.lines .tip { position: absolute; top: 8px; z-index: 5; min-width: 170px; padding: 8px 12px; background: var(--ink); color: #fff; font-size: 13px; line-height: 1.6; pointer-events: none; }
+.lines .tip small { display: block; margin-bottom: 2px; color: #cfcfcf; }
+.lines .tip div { color: #cfcfcf; }
+.lines .tip div.on { color: #fff; }
+.lines .tip div::before { content: ""; display: inline-block; width: 12px; height: 3px; margin-right: 8px; border-radius: 2px; vertical-align: middle; background: var(--c); }
+.lines .tip b { color: #fff; font-variant-numeric: tabular-nums; }
+.keys { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 20px; margin-top: 12px; font-size: 14px; }
+.key { display: inline-flex; align-items: center; gap: 8px; padding: 2px 0; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.key::before { content: ""; width: 16px; height: 3px; border-radius: 2px; background: var(--c); }
+.key[aria-pressed="false"] { color: var(--muted); }
 .key[aria-pressed="false"]::before { background: var(--line); }
 @media (max-width: 1100px) { .charts, .sections { grid-template-columns: 1fr; } }
