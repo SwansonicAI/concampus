@@ -363,6 +363,23 @@ if (drawer) {
     wider.textContent = drawer.classList.toggle('wide') ? 'Schmaler' : 'Breiter';
   });
 
+  // Dragging the green edge sets the panel's width, which it keeps from then on.
+  const edge = event => event.clientX - drawer.getBoundingClientRect().left < 12;
+  drawer.style.setProperty('--width', localStorage.getItem('panel width'));
+  drawer.addEventListener('pointerdown', event => {
+    if (event.button || !edge(event)) return;
+    event.preventDefault();
+    drawer.setPointerCapture(event.pointerId);
+  });
+  drawer.addEventListener('pointermove', event => {
+    if (!drawer.hasPointerCapture(event.pointerId)) return drawer.classList.toggle('edge', edge(event));
+    drawer.classList.remove('wide');
+    wider.textContent = 'Breiter';
+    drawer.style.setProperty('--width', `${Math.min(innerWidth - 48, Math.max(420, innerWidth - event.clientX))}px`);
+  });
+  drawer.addEventListener('pointerleave', () => drawer.classList.remove('edge'));
+  drawer.addEventListener('lostpointercapture', () => localStorage.setItem('panel width', drawer.style.getPropertyValue('--width')));
+
   document.addEventListener('click', event => {
     const link = event.target.closest('a[href]');
     if (!link || link === page || link.target || link.hasAttribute('download') || event.ctrlKey || event.metaKey || event.shiftKey) return;

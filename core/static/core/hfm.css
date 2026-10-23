@@ -10,6 +10,7 @@
   --amber: #a86400;
   --blue: #1f5fae;
   --wide: 1360px;
+  --radius: 4px;  /* controls, pills and small boxes; layout surfaces stay square */
 }
 
 * { box-sizing: border-box; }
@@ -64,11 +65,11 @@ section { margin-top: 52px; }
 .search input { width: 230px; padding: 6px 10px; border: 1px solid #3c3c3c; background: #262626; color: #fff; font-size: 14px; }
 .search input::placeholder { color: #9a9a9a; }
 .search input:focus { width: 300px; border-color: var(--green); outline: none; }
-.count { display: inline-block; min-width: 20px; margin-left: 5px; padding: 0 6px; background: var(--green); color: #fff; font-size: 12px; font-weight: 700; text-align: center; }
+.count { display: inline-block; min-width: 20px; margin-left: 5px; padding: 0 6px; border-radius: var(--radius); background: var(--green); color: #fff; font-size: 12px; font-weight: 700; text-align: center; }
 .menu { position: relative; }
 .menu summary { color: #fff; cursor: pointer; list-style: none; }
 .menu summary::after { content: " ▾"; color: #9a9a9a; }
-.menu[open] > div { position: absolute; right: 0; top: 30px; z-index: 10; display: grid; gap: 8px; min-width: 240px; padding: 16px; border: 1px solid var(--line); background: #fff; color: var(--ink); }
+.menu[open] > div { position: absolute; right: 0; top: 30px; z-index: 10; display: grid; gap: 8px; min-width: 240px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; color: var(--ink); }
 .subnav { display: flex; gap: 28px; margin: 0 0 36px; border-bottom: 1px solid var(--line); font-weight: 600; }
 .subnav a { margin-bottom: -1px; padding: 12px 0; border-bottom: 3px solid transparent; color: var(--ink); }
 .subnav a:hover { color: var(--green); text-decoration: none; }
@@ -87,6 +88,7 @@ main.page { min-height: 70vh; padding-top: 32px; padding-bottom: 96px; }
   gap: 8px;
   padding: 10px 18px;
   border: 2px solid var(--green);
+  border-radius: var(--radius);
   background: var(--green);
   color: #fff;
   font: inherit;
@@ -107,7 +109,7 @@ input, select, textarea {
   max-width: 100%;
   padding: 8px 10px;
   border: 1px solid #8a8a8a;
-  border-radius: 0;
+  border-radius: var(--radius);
   background: #fff;
   color: var(--ink);
   font: inherit;
@@ -140,7 +142,7 @@ select.cell { padding: 4px 6px; }
 /* Feedback */
 .flash { margin: 0 0 24px; padding: 12px 16px; border-left: 6px solid var(--green); background: var(--soft); font-weight: 600; }
 .flash.error { border-left-color: var(--red); }
-.badge { display: inline-block; padding: 2px 8px; background: var(--soft); color: var(--ink); font-size: 13px; font-weight: 600; white-space: nowrap; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius); background: var(--soft); color: var(--ink); font-size: 13px; font-weight: 600; white-space: nowrap; }
 .badge.green, .badge.enrolled, .badge.admitted, .badge.yes { background: var(--green); color: #fff; }
 .badge.applied, .badge.open { background: #e3eefb; color: var(--blue); }
 .badge.waitlisted, .badge.wait { background: #fbefd9; color: var(--amber); }
@@ -251,12 +253,12 @@ tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 7
 .board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px; align-items: start; }
 .board h3 { display: flex; justify-content: space-between; padding-bottom: 8px; border-bottom: 2px solid var(--ink); color: var(--ink); font-size: 15px; text-transform: uppercase; letter-spacing: 0.03em; }
 .tickets { display: grid; gap: 10px; }
-.ticket { display: block; padding: 12px 14px; border: 1px solid var(--line); color: var(--ink); font-size: 15px; }
+.ticket { display: block; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); font-size: 15px; }
 .ticket:hover { border-color: var(--green); text-decoration: none; }
 .ticket b { display: block; }
 .ticket small { display: block; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
-.chip { padding: 0 6px; border: 1px solid var(--line); color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.chip { padding: 0 6px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .chip.yes { border-color: var(--green); color: var(--green); }
 .chip.no { border-color: var(--red); color: var(--red); }
 
@@ -284,6 +286,7 @@ tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 7
   padding: 3px 7px;
   overflow: hidden;
   border-left: 4px solid var(--muted);
+  border-radius: var(--radius);
   background: var(--soft);
   color: var(--ink);
   font-size: 12px;
@@ -353,7 +356,7 @@ tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 7
 
 /* Search palette under the search box */
 .search { position: relative; }
-.palette { display: none; position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: 560px; max-height: 72vh; overflow-y: auto; padding: 8px 0; border: 1px solid var(--line); border-top: 4px solid var(--green); background: #fff; color: var(--ink); }
+.palette { display: none; position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: 560px; max-height: 72vh; overflow-y: auto; padding: 8px 0; border: 1px solid var(--line); border-top: 4px solid var(--green); border-radius: var(--radius); background: #fff; color: var(--ink); }
 .search.open .palette { display: block; }
 .palette .empty { margin: 8px 16px; }
 .found h4 { margin: 10px 16px 4px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
@@ -366,9 +369,10 @@ tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 7
 .results .found a { padding: 10px 4px; border-bottom: 1px solid var(--line); }
 
 /* Side panel: details beside the page, which stays where it was */
-.drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 20; width: min(840px, 100vw); overflow-y: auto; border-left: 6px solid var(--green); background: #fff; transform: translateX(100%); visibility: hidden; transition: transform 0.16s ease, visibility 0.16s; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 20; width: min(var(--width, 840px), 100vw); overflow-y: auto; border-left: 6px solid var(--green); background: #fff; transform: translateX(100%); visibility: hidden; transition: transform 0.16s ease, visibility 0.16s; }
 .drawer.open { transform: none; visibility: visible; }
 .drawer.wide { width: calc(100vw - 96px); }
+.drawer.edge { border-left-color: var(--green-dark); cursor: ew-resize; }
 .drawer-bar { position: sticky; top: 0; z-index: 1; display: flex; justify-content: flex-end; gap: 24px; padding: 14px 32px; border-bottom: 1px solid var(--line); background: #fff; font-size: 14px; font-weight: 600; }
 .drawer-bar .page { margin-right: auto; }
 .drawer-body { padding: 28px 32px 64px; container-type: inline-size; }
@@ -443,7 +447,7 @@ tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 7
 .lines .area { opacity: 0.1; }
 .lines .dot { stroke: #fff; stroke-width: 2; }
 .lines .cross { stroke: #b5b5b5; }
-.lines .tip { position: absolute; top: 8px; z-index: 5; min-width: 170px; padding: 8px 12px; background: var(--ink); color: #fff; font-size: 13px; line-height: 1.6; pointer-events: none; }
+.lines .tip { position: absolute; top: 8px; z-index: 5; min-width: 170px; padding: 8px 12px; border-radius: var(--radius); background: var(--ink); color: #fff; font-size: 13px; line-height: 1.6; pointer-events: none; }
 .lines .tip small { display: block; margin-bottom: 2px; color: #cfcfcf; }
 .lines .tip div { color: #cfcfcf; }
 .lines .tip div.on { color: #fff; }
