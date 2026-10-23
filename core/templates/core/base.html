@@ -16,18 +16,19 @@
     </a>
     {% if nav %}
     <nav class="apps">
-      {% for app, title in nav %}<a href="{% url app.url %}" class="{% if request.resolver_match.app_name == app.label %}on{% endif %}">{{ title }}</a>{% endfor %}
+      {% for app, title in nav %}{% if app.label != 'setup' %}<a href="{% url app.url %}" class="{% if request.resolver_match.app_name == app.label %}on{% endif %}">{{ title }}</a>{% endif %}{% endfor %}
     </nav>
     {% endif %}
     {% if user.is_authenticated %}
     <div class="me">
-      <form action="{% url 'search' %}" class="search" role="search"><input type="search" name="q" placeholder="Suchen oder springen …" aria-label="Suchen" title="Strg+K oder /" autocomplete="off"></form>
+      <form action="{% url 'search' %}" class="search" role="search"><input type="search" name="q" placeholder="Suchen …" aria-label="Suchen" title="Strg+K oder /" autocomplete="off"></form>
       <a href="{% url 'inbox' %}">Postfach{% if unread %}<span class="count">{{ unread }}</span>{% endif %}</a>
       <details class="menu">
         <summary>{{ user.first_name|default:user.username }}</summary>
         <div>
           <b>{{ user }}</b>
           <small class="muted">{{ user.email }}</small>
+          {% for app, title in nav %}{% if app.label == 'setup' %}<a href="{% url app.url %}">{{ title }}</a>{% endif %}{% endfor %}
           {% if user.is_superuser %}<a href="{% url 'admin:index' %}">Datenpflege</a>{% endif %}
           <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link">Abmelden</button></form>
         </div>

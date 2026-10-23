@@ -235,7 +235,8 @@ class Office(Tracked, Group):
     @classmethod
     def holding(cls, capability):
         """The offices that hold a capability, for sentences like 'Zentral vergeben: …'."""
-        return ' oder '.join(cls.objects.filter(permissions__codename=capability).values_list('name', flat=True))
+        *rest, last = cls.objects.filter(permissions__codename=capability).values_list('name', flat=True) or ['']
+        return f'{", ".join(rest)} oder {last}' if rest else last
 
 
 class Term(Tracked, models.Model):

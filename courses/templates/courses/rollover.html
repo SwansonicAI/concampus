@@ -14,7 +14,7 @@
   </div>
   <div>
     <table>
-      {% for c in pending %}<tr><td>{{ c.title }}</td><td class="muted">{{ c.get_kind_display }} · {{ c.term }}</td></tr>{% endfor %}
+      {% for c in pending %}<tr><td>{{ c.title }}</td><td class="muted nowrap">aus {{ c.term }}</td></tr>{% endfor %}
     </table>
   </div>
 </div>

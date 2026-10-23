@@ -49,7 +49,10 @@ def week(bookings, day):
         b.place = f'{line(b.start)} / {column} / {line(b.end)} / {column + 1}'
         overlapping = [o for o in placed if o is not b and o.start < b.end and b.start < o.end]
         b.clash = bool(overlapping)
-        b.lane = sum(1 for o in overlapping if placed.index(o) < n) % 2  # side by side instead of on top
+        taken = {o.lane for o in overlapping if placed.index(o) < n}
+        b.lane = next(i for i in range(len(placed)) if i not in taken)  # side by side instead of on top
+    for b in placed:
+        b.lanes = 1 + max(o.lane for o in placed if o.start < b.end and b.start < o.end)
     return {
         'dates': [monday + timedelta(days=n) for n in range(7)],
         'today': timezone.localdate(),
@@ -152,11 +155,22 @@ def room(request, pk):
     })
 
 
+def series(bookings):
+    """Each weekly series once, at its next date, with the date of its last."""
+    shown = {}
+    for b in bookings:
+        if b.series in shown:
+            shown[b.series].until = b.start
+        else:
+            b.until, shown[b.series or b.pk] = None, b
+    return list(shown.values())
+
+
 def mine(request):
     person, today = request.user, timezone.localdate()
     context = {
-        'bookings': person.bookings.filter(end__gte=timezone.now()).select_related('room', 'course'),
-        'attending': person.attending.filter(end__gte=timezone.now()).select_related('room', 'person'),
+        'bookings': series(person.bookings.filter(end__gte=timezone.now()).select_related('room', 'course')),
+        'attending': series(person.attending.filter(end__gte=timezone.now()).select_related('room', 'person')),
         'feed': feed(request),
     }
     if 'student' in person.roles:

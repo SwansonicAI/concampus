@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404, render
 from core.access import require
 from core.models import Term
 from courses.models import Course
+from students.models import Study
 from .models import Program
 
 
@@ -38,11 +39,10 @@ def plan(tree, semesters):
 
 @require('view_curriculum', 'teacher')
 def index(request):
-    programs = Program.objects.annotate(
-        students=Count('studies', filter=Q(studies__status='enrolled'), distinct=True),
-        applicants=Count('studies', filter=Q(studies__status='applied'), distinct=True),
-        size=Count('modules', filter=Q(modules__parent=None), distinct=True),
-    ).prefetch_related('subjects')
+    programs = list(Program.objects.annotate(size=Count('modules', filter=Q(modules__parent=None))).prefetch_related('subjects'))
+    counts = {(row['program'], row['status']): row['n'] for row in Study.objects.values('program', 'status').annotate(n=Count('pk'))}
+    for p in programs:  # counted apart: joining studies and modules in one query multiplies them
+        p.students, p.applicants = counts.get((p.pk, Study.Status.ENROLLED), 0), counts.get((p.pk, Study.Status.APPLIED), 0)
     return render(request, 'curriculum/index.html', {'programs': programs})
 
 

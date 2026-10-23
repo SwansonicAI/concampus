@@ -10,17 +10,16 @@
 {% endif %}
 <section>
   <table data-panel>
-    <thead><tr><th>Termin</th><th>Raum</th><th>Titel</th><th></th></tr></thead>
+    <thead><tr><th>Termin</th><th>Raum</th><th>Titel</th></tr></thead>
     <tbody>
       {% for b in bookings %}
       <tr>
-        <td>{{ b.start|date:"D j.n.Y" }}, {{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</td>
+        <td>{{ b.start|date:"D j.n.Y" }}, {{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}{% if b.until %}<br><small class="muted">wöchentlich bis {{ b.until|date:"j.n.Y" }}</small>{% endif %}</td>
         <td><a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a></td>
-        <td>{{ b.label }}{% if b.series %} <span class="badge">Serie</span>{% endif %}</td>
-        <td class="num"><a href="{% url 'rooms:booking' b.pk %}">Bearbeiten</a></td>
+        <td><a href="{% url 'rooms:booking' b.pk %}">{{ b.label }}</a></td>
       </tr>
       {% empty %}
-      <tr><td colspan="4" class="empty">Keine anstehenden Buchungen.</td></tr>
+      <tr><td colspan="3" class="empty">Keine anstehenden Buchungen.</td></tr>
       {% endfor %}
     </tbody>
   </table>
@@ -33,7 +32,7 @@
     <tbody>
       {% for b in attending %}
       <tr>
-        <td>{{ b.start|date:"D j.n.Y" }}, {{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</td>
+        <td>{{ b.start|date:"D j.n.Y" }}, {{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}{% if b.until %}<br><small class="muted">wöchentlich bis {{ b.until|date:"j.n.Y" }}</small>{% endif %}</td>
         <td><a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a></td>
         <td><a href="{% url 'rooms:booking' b.pk %}">{{ b.label }}</a></td>
         <td>{{ b.person }}</td>

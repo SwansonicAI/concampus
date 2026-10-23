@@ -27,10 +27,11 @@ class StudentsConfig(Tile, AppConfig):
         paid = StudyTerm.objects.filter(term=term, paid__isnull=False).values('study__person')
         if 'view_students' in person.roles:
             enrolled = Study.objects.filter(status=Study.Status.ENROLLED)
+            people = enrolled.values('person').distinct().count()  # people, as Auswertungen counts them, not their studies
             if not (term and term.reregistration_open):
-                return f'{enrolled.count()} immatrikuliert'
+                return f'{people} immatrikuliert'
             unpaid = enrolled.exclude(person__in=paid).values('person').distinct().count()
-            return f'{enrolled.count()} immatrikuliert · {unpaid} ohne Rückmeldung'
+            return f'{people} immatrikuliert · {unpaid} ohne Rückmeldung'
         if not term:
             return ''
         if not term.reregistration_open:

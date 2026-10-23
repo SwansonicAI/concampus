@@ -108,7 +108,7 @@ class DayField(forms.DateField):
 
 
 class ClockField(forms.TimeField):
-    widget = forms.TimeInput(format='%H:%M', attrs={'autocomplete': 'off', 'placeholder': 'z. B. 14 oder 14:30', 'size': 9})
+    widget = forms.TimeInput(format='%H:%M', attrs={'autocomplete': 'off', 'placeholder': 'z. B. 14:15', 'size': 9})
 
     def to_python(self, value):
         if value in self.empty_values or isinstance(value, time):

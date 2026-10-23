@@ -63,6 +63,8 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'hochadmin.urls'
 
+FORM_RENDERER = 'core.forms.Renderer'
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',

@@ -16,7 +16,7 @@ from core.access import require
 from core.history import tables
 from core.apps import plural
 from core.models import Institution, Message, Person, Term
-from core.text import matching
+from core.text import fold, matching
 from core.views import SHOWN, without_term
 from curriculum.models import Program, Subject
 from curriculum.views import plan
@@ -266,9 +266,17 @@ def reregistration(request):
             messages.success(request, f'{len(unpaid)} Studien wegen fehlender Rückmeldung beendet. Bescheide versandt.')
         return redirect('students:reregistration')
     rows = [(s, registrations.get(s.pk), s.person_id in paid, s.person.missing()) for s in enrolled]
+    states = {'offen': ('offen', lambda row: not row[2]), 'bezahlt': ('bezahlt', lambda row: row[2]), 'hindernis': ('mit Hindernis', lambda row: row[3])}
+    stand, q = request.GET.get('stand', ''), request.GET.get('q', '').strip()
+    words = fold(q).split()
+    shown = [
+        row for row in rows if (stand not in states or states[stand][1](row))
+        and all(w in fold(f'{row[0].person.name} {row[0].person.matriculation}') for w in words)
+    ]
+    counts = {key: sum(1 for row in rows if test(row)) for key, (_, test) in states.items()}
     return render(request, 'students/reregistration.html', {
-        'term': term, 'rows': rows, 'open': sum(1 for *_, done, _ in rows if not done), 'overdue': today > term.deadline,
-        'blocked': sum(1 for *_, missing in rows if missing),
+        'term': term, 'rows': shown, 'total': len(rows), 'open': counts['offen'], 'blocked': counts['hindernis'], 'overdue': today > term.deadline,
+        'q': q, 'stand': stand, 'states': [(key, label, counts[key]) for key, (label, _) in states.items()],
     })
 
 

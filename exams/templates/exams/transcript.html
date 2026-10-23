@@ -21,7 +21,7 @@
         {% for i in r.items %}{% if i.done %}<tr><td></td><td class="muted">{{ i.title }}</td><td></td><td class="num muted">{{ i.weight|floatformat:"-2" }}</td><td class="num muted">{% if i.grade is not None %}{{ i.grade|floatformat:1 }}{% else %}bestanden{% endif %}</td></tr>{% endif %}{% endfor %}
         {% else %}
         <tr>
-          <td><b>{{ r.node.code }}</b></td>
+          <td class="nowrap"><b>{{ r.node.code }}</b></td>
           <td><b>{{ r.node.title }}</b>{% if not r.node.done %} <small class="muted">(laufend)</small>{% endif %}</td>
           <td class="num">{{ r.node.earned }}{% if r.node.earned != r.node.credits %} / {{ r.node.credits }}{% endif %}</td>
           <td class="num">{% if r.node.weight %}{{ r.node.weight|floatformat:"-2" }}{% endif %}</td>

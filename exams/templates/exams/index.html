@@ -46,7 +46,7 @@
     <tr>
       <td>{{ c.date|date:"D j.n.Y"|default:"–" }}</td>
       <td><b>{{ c.title }}</b></td>
-      <td>{{ c.deadline|date:"j. F Y"|default:"–" }}</td>
+      <td>{{ c.deadline|date:"D j.n.Y"|default:"–" }}</td>
       <td class="num">
         {% if c.is_open %}
         <form method="post" action="{% url 'exams:register' c.pk %}">{% csrf_token %}<input type="hidden" name="study" value="{{ studies.0.pk }}"><button class="btn small">Anmelden</button></form>
@@ -65,9 +65,9 @@
     <tbody>
       {% for p in mine %}
       <tr>
-        <td data-value="{{ p.course.term.start|date:'c' }}">{{ p.course.term }}</td>
+        <td class="nowrap" data-value="{{ p.course.term.start|date:'c' }}">{{ p.course.term }}</td>
         <td><b>{{ p.course.title }}</b></td>
-        <td>{{ p.module.code|default:"" }}</td>
+        <td class="nowrap">{{ p.module.code|default:"" }}</td>
         <td data-value="{{ p.slot|date:'c' }}">{{ p.slot|date:"D j.n., H:i"|default:"–" }}</td>
         <td class="num">{% if p.course.released and p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</td>
         <td>

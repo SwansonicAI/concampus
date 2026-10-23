@@ -11,7 +11,7 @@
 <div class="stats">
   <div class="stat"><b>{{ teaching|length }}</b><span>Veranstaltungen im {{ term }}</span></div>
   <div class="stat"><b>{{ load }}</b><span>SWS Deputat</span></div>
-  <div class="stat"><b>{{ students|length }}</b><span>Studierende in meiner Klasse</span></div>
+  {% if students %}<div class="stat"><b>{{ students|length }}</b><span>Studierende in meiner Klasse</span></div>{% endif %}
 </div>
 <section>
   <h2>Veranstaltungen</h2>
@@ -25,6 +25,7 @@
     </tbody>
   </table>
 </section>
+{% if students %}
 <section>
   <h2>Meine Klasse</h2>
   <table data-panel>
@@ -32,16 +33,16 @@
     <tbody>
       {% for s in students %}
       <tr><td><a href="{{ s.get_absolute_url }}">{{ s.person.name }}</a></td><td>{{ s.program }}</td><td>{{ s.subject }}</td><td data-value="{{ s.start_term.start|date:'c' }}">{{ s.start_term }}</td></tr>
-      {% empty %}<tr><td colspan="4" class="empty">Keine Studierenden zugeordnet.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </section>
 {% endif %}
+{% endif %}
 
 {% if registrations is not None %}
-<section>
-  <h2>Belegt</h2>
+{% if teaching is not None %}<section>
+  <h2>Belegt</h2>{% endif %}
   <table{% if registrations %} data-panel{% endif %}>
     <thead><tr><th>Veranstaltung</th><th>Modul</th><th>Status</th></tr></thead>
     <tbody>
@@ -55,6 +56,6 @@
       {% endfor %}
     </tbody>
   </table>
-</section>
+{% if teaching is not None %}</section>{% endif %}
 {% endif %}
 {% endblock %}

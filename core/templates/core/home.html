@@ -37,16 +37,17 @@
 <section>
   <h2>Termine</h2>
   {% include "core/_days.html" %}
-  <div class="cards" data-panel>
+  <ul class="todo agenda" data-panel>
     {% for b in agenda %}
-    <a class="card" href="{% if b.course %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}">
-      <div class="top">{{ b.start|time:"H:i" }} – {{ b.end|time:"H:i" }}</div>
-      <div class="body"><h3>{{ b.label }}</h3>{{ b.room }} · {{ b.room.building }}</div>
-    </a>
+    <li><a href="{% if b.course %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}">
+      <span class="due">{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</span>
+      <span class="what">{{ b.label }}{% if b.course.kind == 'lesson' and b.person != user %} <span class="muted">· {{ b.person }}</span>{% endif %}</span>
+      <span class="where">{{ b.room }} · {{ b.room.building }}</span>
+    </a></li>
     {% empty %}
-    <p class="empty">Keine Termine am {{ day|date:"l, j. F" }}.</p>
+    <li class="empty">Keine Termine am {{ day|date:"l, j. F" }}.</li>
     {% endfor %}
-  </div>
+  </ul>
 </section>
 {% endif %}
 

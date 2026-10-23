@@ -15,7 +15,7 @@
       <dt>Umfang</dt><dd>{{ course.hours|default_if_none:"–" }} SWS{% if course.kind == 'lesson' %} je Teilnahme{% endif %}</dd>
       <dt>Teilnahmen</dt><dd>{{ count }}{% if course.capacity %} von {{ course.capacity }} Plätzen{% endif %}</dd>
       <dt>Anmeldeschluss</dt><dd>{{ course.deadline|date:"j. F Y"|default:"–" }}</dd>
-      <dt>Anrechenbar für</dt><dd>{% for m in modules %}<a href="{{ m.program.get_absolute_url }}">{{ m.code }} {{ m.title }}</a> <small class="muted">{{ m.program.degree }} {{ m.program.name }}</small><br>{% empty %}–{% endfor %}</dd>
+      <dt>Anrechenbar für</dt><dd>{% regroup modules by code as same %}{% for g in same %}{{ g.grouper }} {{ g.list.0.title }}<br><small>{% for m in g.list %}<a href="{{ m.program.get_absolute_url }}">{{ m.program.degree }} {{ m.program.name }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}</small><br>{% empty %}–{% endfor %}</dd>
     </dl>
     {% if course.description %}<p style="margin-top: 24px">{{ course.description|linebreaksbr }}</p>{% endif %}
   </div>

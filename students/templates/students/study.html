@@ -12,13 +12,14 @@
     {% if history %}<a class="btn ghost" href="{% url 'history' 'core.person' study.person.pk %}" data-panel>Verlauf</a>{% endif %}
   </div>
 </div>
-<p class="lead">{{ study.program }} · {{ study.subject }}{% if study.focus %} · Schwerpunkt {{ study.focus.title }}{% endif %} · <span class="badge {{ study.status }}">{{ study.get_status_display }}</span>{% if study.person.hold %} <span class="badge hold">Sperre: {{ study.person.hold }}</span>{% endif %}</p>
+<p class="lead">{% if study.person.matriculation %}Matrikel {{ study.person.matriculation }} · {% endif %}{{ study.program }} · {{ study.subject }}{% if study.focus %} · Schwerpunkt {{ study.focus.title }}{% endif %} · <span class="badge {{ study.status }}">{{ study.get_status_display }}</span>{% if study.person.hold %} <span class="badge hold">Sperre: {{ study.person.hold }}</span>{% endif %}</p>
 
 <div class="stats">
   <div class="stat"><b>{{ earned }} / {{ total }}</b><span>ECTS erworben</span><div class="bar"><i style="width: {% widthratio earned total 100 %}%"></i></div></div>
   <div class="stat"><b>{{ average|floatformat:1|default:"–" }}</b><span>Gesamtnote bisher</span></div>
-  <div class="stat"><b>{{ study.semester }}</b><span>Fachsemester · Regelstudienzeit {{ study.program.semesters }} · {{ study.university_semester }} Hochschulsemester</span></div>
-  <div class="stat"><b>{{ study.person.matriculation|default:"–" }}</b><span>Matrikelnummer</span></div>
+  {% with fs=study.semester hs=study.university_semester rsz=study.program.semesters %}
+  <div class="stat"><b>{{ fs }} / {{ rsz }}</b><span>Fachsemester der Regelstudienzeit{% if hs != fs %} · {{ hs }}. Hochschulsemester{% endif %}</span><div class="bar"><i style="width: {% widthratio fs rsz 100 %}%"></i></div></div>
+  {% endwith %}
 </div>
 
 <div class="cols">

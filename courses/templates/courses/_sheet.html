@@ -36,7 +36,7 @@
         <td class="mid">{% if p.passed %}<span class="badge yes">bestanden</span>{% elif p.passed is False %}<span class="badge no">nicht bestanden</span>{% else %}<span class="muted">offen</span>{% endif %}</td>
         {% if decide and not course.released %}<td class="num mid"><input class="cell" type="text" inputmode="decimal" name="grade-{{ p.pk }}" value="{{ p.override|default_if_none:''|unlocalize }}" aria-label="Abweichendes Ergebnis"></td>{% endif %}
         {% else %}
-        <td class="mid muted">{{ p.module.code|default:"" }}</td>
+        <td class="mid muted nowrap">{{ p.module.code|default:"" }}</td>
         <td class="mid muted" data-value="{{ p.created|date:'c' }}">{{ p.created|date:"j.n. H:i" }}</td>
         <td class="num mid">{% if decide and not course.released %}<input class="cell" type="text" inputmode="decimal" name="grade-{{ p.pk }}" value="{{ p.grade|default_if_none:''|unlocalize }}" aria-label="Note">{% elif p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</td>
         <td class="mid">

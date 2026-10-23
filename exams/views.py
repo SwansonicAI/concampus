@@ -111,7 +111,7 @@ def exam(request, pk):
         'decide': decide,
         'history': Course.visible_to(person.roles),
         'slots': slots,
-        'modules': course.modules.select_related('program'),
+        'modules': course.modules.select_related('program').order_by('code', 'program__degree', 'program__name'),
         'bookings': course.bookings.select_related('room'),
         'missing': sum(1 for p in rows if p.passed is None),
         'adding': AddForm(),

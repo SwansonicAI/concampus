@@ -23,7 +23,7 @@
     <dt>Kommission</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
     <dt>Anmeldeschluss</dt><dd>{{ course.deadline|date:"j. F Y"|default:"–" }}</dd>
     <dt>Bewertung</dt><dd>{% if course.points %}Punkte, bestanden ab {{ course.pass_mark }}{% else %}Noten 1,0–5,0, bestanden bis 4,0{% endif %}</dd>
-    <dt>Module</dt><dd>{% for m in modules %}{{ m.code }} {{ m.title }} <small class="muted">{{ m.program.degree }} {{ m.program.name }}</small><br>{% empty %}–{% endfor %}</dd>
+    <dt>Module</dt><dd>{% regroup modules by code as same %}{% for g in same %}{{ g.grouper }} {{ g.list.0.title }}<br><small class="muted">{% for m in g.list %}{{ m.program.degree }} {{ m.program.name }}{% if not forloop.last %} · {% endif %}{% endfor %}</small><br>{% empty %}–{% endfor %}</dd>
     <dt>Räume</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, <a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a><br>{% empty %}–{% endfor %}</dd>
   </dl>
   {% if slots and not course.released and course.kind == 'exam' %}

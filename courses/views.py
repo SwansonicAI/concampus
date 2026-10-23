@@ -114,7 +114,7 @@ def course(request, pk):
         'count': len(rows),
         'staffed': staffed,
         'eligible': person.studies.filter(status=Study.Status.ENROLLED, program__modules__courses=course).distinct(),
-        'modules': course.modules.select_related('program'),
+        'modules': course.modules.select_related('program').order_by('code', 'program__degree', 'program__name'),
         'bookings': course.bookings.filter(start__gte=timezone.now()).select_related('room')[:6],
         'plan': PlanForm(person=person) if staffed else None,
         'adding': AddForm() if staffed else None,

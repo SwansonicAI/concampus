@@ -1,9 +1,9 @@
 {% extends base %}
 {% block title %}{{ letter.subject }}{% endblock %}
 {% block content %}
-<p><a class="more" href="{% url 'inbox' %}">Postfach</a></p>
+<p class="eyebrow"><a href="{% url 'inbox' %}">Postfach</a></p>
 <h1>{{ letter.subject }}</h1>
 <p class="lead">{{ letter.created|date:"l, j. F Y, H:i" }} Uhr</p>
 <div class="document">{{ letter.body|linebreaks }}</div>
-{% if letter.link %}<p><a class="btn" href="{{ letter.link }}">Zum Vorgang</a></p>{% endif %}
+{% if letter.link %}<p><a class="btn" href="{{ letter.link }}">{{ place }} öffnen</a></p>{% endif %}
 {% endblock %}

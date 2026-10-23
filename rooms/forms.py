@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timedelta
 
 from django import forms
+from django.db.models import Min, Q
 from django.utils import timezone
 from django.utils.formats import number_format
 
@@ -30,8 +31,8 @@ def quota(person, day, exclude=None):
 
 
 class Participants(forms.ModelMultipleChoiceField):
-    def label_from_instance(self, person):
-        return f'{person.name}{f" ({person.matriculation})" if person.matriculation else ""}'
+    def label_from_instance(self, person):  # the Hauptfach tells namesakes apart without showing anyone's Matrikel
+        return f'{person.name} · {person.subject}'
 
 
 class BookingForm(forms.ModelForm):
@@ -67,7 +68,10 @@ class BookingForm(forms.ModelForm):
         self.fields['category'].empty_label = None
         self.fields['title'].required = False
         self.fields['title'].help_text = 'Leer: die Kategorie, z. B. „Übebuchung“.'
-        self.fields['participants'].queryset = Person.objects.filter(studies__status='enrolled').distinct().order_by('last_name', 'first_name').exclude(pk=person.pk)
+        enrolled = Q(studies__status='enrolled')
+        self.fields['participants'].queryset = (
+            Person.objects.filter(enrolled).annotate(subject=Min('studies__subject__name', filter=enrolled)).order_by('last_name', 'first_name').exclude(pk=person.pk)
+        )
         if self.student:
             del self.fields['description']
         if self.student or self.instance.pk:

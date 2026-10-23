@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta
+from urllib.parse import urlsplit
 
 from django.apps import apps
 from django.contrib import messages
@@ -6,7 +7,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
+from django.urls import resolve, reverse
 from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -44,7 +45,7 @@ def home(request):
         'day': day,
         'calendar': bool(marked),
         'days': strip(today, day, marked),
-        'agenda': bookings.filter(start__date=day).select_related('room', 'course', 'category'),
+        'agenda': bookings.filter(start__date=day).select_related('room', 'course', 'category', 'person'),
         'letters': person.messages.filter(read=None)[:3],
     })
 
@@ -58,7 +59,8 @@ def message(request, pk):
     if not letter.read:
         letter.read = timezone.now()
         letter.save(update_fields=['read'])
-    return render(request, 'core/message.html', {'letter': letter})
+    place = letter.link and dict((app.label, title) for app, title in tiles(request.user)).get(resolve(urlsplit(letter.link).path).app_name)
+    return render(request, 'core/message.html', {'letter': letter, 'place': place or 'Campus'})
 
 
 def letter(request, pk):

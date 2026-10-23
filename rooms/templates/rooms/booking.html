@@ -32,7 +32,7 @@
     <div class="panel">
       <h3>Regeln</h3>
       <p>Lehrende und Studierende buchen die Räume ihres Instituts. Veranstaltungs- und Sitzungsräume werden zentral vergeben{% if central %}: {{ central }}{% endif %}.</p>
-      <p>Studierende buchen bis {{ rules.student_ahead_hours }} Stunden im Voraus und höchstens {{ rules.student_daily_hours }} Stunden am Tag. Was in den nächsten {{ rules.last_minute_hours }} Stunden beginnt, zählt nicht zum Kontingent.{% for c in special %} {{ c }}: {% if c.ahead %}bis {{ c.ahead }} im Voraus{% endif %}{% if c.ahead and c.participants %}, {% endif %}{% if c.participants %}mit mindestens {{ c.participants }} weiteren Teilnehmenden{% endif %}.{% endfor %}</p>
+      <p>Studierende buchen bis {{ rules.student_ahead_hours }} Stunden im Voraus und höchstens {{ rules.student_daily_hours }} Stunden am Tag. Was in den nächsten {{ rules.last_minute_hours }} Stunden beginnt, zählt nicht zum Kontingent.{% for c in special %} {{ c }}: {% if c.ahead %}bis {{ c.ahead }} im Voraus{% endif %}{% if c.ahead and c.participants %}, {% endif %}{% if c.participants == 1 %}mit mindestens einer weiteren Person{% elif c.participants %}mit mindestens {{ c.participants }} weiteren Personen{% endif %}.{% endfor %}</p>
       <p>Lehrende buchen bis {{ rules.teacher_ahead_days }} Tage im Voraus, ohne Kontingent. Wiederkehrende Buchungen werden nur gespeichert, wenn alle Termine frei sind.</p>
     </div>
     {% endif %}
