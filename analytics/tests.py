@@ -54,3 +54,6 @@ class AccessTest(Seeded):
             with self.subTest(link=link):
                 self.assertEqual(asa.get(link).status_code, 200)
         self.assertEqual(asa.get('/auswertungen/abfrage/?was=bewerbungen&nach=hauptfach&und=ergebnis&format=csv')['Content-Type'], 'text/csv; charset=utf-8')
+        lines = asa.get('/auswertungen/abfrage/?was=bewerbungen&nach=studienjahr&und=ergebnis&darstellung=linien').context['chart']['data']
+        self.assertEqual({s['label'] for s in lines['series']} >= {'abgelehnt', 'immatrikuliert'}, True)
+        self.assertEqual({len(s['values']) for s in lines['series']}, {len(lines['x'])})

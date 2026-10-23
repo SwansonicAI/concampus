@@ -10,6 +10,7 @@ from django.utils.http import urlencode
 from core.models import Term
 from .figures import MEASURES, OTHERS, semesters, table, window
 
+PALETTE = ['#008a00', '#2a78d6', '#eb6834', '#6250d6', '#d4518a', '#a86400']  # line colours, checked for colour blindness and contrast on white
 SPANS = [('j5', 'letzte 5 Jahre'), ('j10', 'letzte 10 Jahre'), ('alle', 'alle Semester')]
 
 
@@ -21,13 +22,14 @@ class Query:
     where: dict = field(default_factory=dict)
     zeit: str = ''
     share: bool = False
+    as_lines: bool = False  # across time as lines
 
     @classmethod
     def read(cls, params):
         measure = MEASURES.get(params.get('was')) or MEASURES['studierende']
         keys = [k for k in dict.fromkeys([params.get('nach') or measure.default, params.get('und', '')]) if k in measure.dimensions] or [measure.default]
         where = {k[2:]: v for k, v in params.items() if k.startswith('f_') and k[2:] in measure.dimensions and v}
-        return cls(measure, keys, where, params.get('zeit', ''), params.get('anteil') == '1')
+        return cls(measure, keys, where, params.get('zeit', ''), params.get('anteil') == '1', params.get('darstellung') == 'linien')
 
     @property
     def timed(self):
@@ -44,7 +46,7 @@ class Query:
 
     def params(self, **changes):
         q = replace(self, **changes)
-        found = {'was': q.measure.key, 'nach': q.keys[0], 'und': q.keys[1] if len(q.keys) > 1 else '', 'zeit': q.zeit, 'anteil': '1' if q.share else ''}
+        found = {'was': q.measure.key, 'nach': q.keys[0], 'und': q.keys[1] if len(q.keys) > 1 else '', 'zeit': q.zeit, 'anteil': '1' if q.share else '', 'darstellung': 'linien' if q.as_lines else ''}
         found.update({f'f_{k}': v for k, v in q.where.items()})
         return {k: v for k, v in found.items() if v}
 
@@ -59,7 +61,7 @@ class Query:
         then = self.measure.default if self.measure.dimensions[key].time else self.measure.drill
         if then == key or then in where:
             return None
-        return self.url(keys=[then], where=where, zeit='', share=False)
+        return self.url(keys=[then], where=where, zeit='', share=False, as_lines=False)
 
     def records(self, **values):
         if None in values.values() or OTHERS in values.values():
@@ -89,6 +91,8 @@ def chart(query, person, title=''):
         peak = max(values.values(), default=0) or 1
         last = list(t.rows)[-1] if t.rows and dim.time else None
         found['columns'], found['timed'], found['dense'] = dim.time or dim.columns, dim.time, len(t.rows) > 12
+        if not dim.time and m.dimensions[m.drill].time:  # how each value developed, as lines
+            found['trend'] = query.url(keys=[m.drill, key], zeit='j10', share=False, as_lines=True)
         found['bars'] = [{
             'label': label, 'tick': short(label), 'shown': figure(n / t.total if query.share and t.total else n, m, query.share),
             'width': round(100 * n / peak, 1), 'now': v == last, 'drill': query.drill(key, v),
@@ -109,6 +113,32 @@ def chart(query, person, title=''):
     } for r, label in t.rows.items()]
     found['foot'] = [figure(t.col_totals.get(c, 0), m) for c in t.cols]
     return found
+
+
+def lines(query, title=''):
+    """Time across, one line per value of the other dimension, the largest first. The browser draws them, so the legend
+    can turn lines off and the scale follows what is left."""
+    m = query.measure
+    time = next(k for k in query.keys if m.dimensions[k].time)
+    other = next((k for k in query.keys if k != time), None)
+    t = table(m, [time, other] if other else [time], query.terms, query.where)
+    xs = list(t.rows)
+    totals = [t.row_totals.get(x, 0) for x in xs]
+    if other:
+        order = sorted((c for c in t.cols if c != OTHERS), key=lambda c: -t.col_totals.get(c, 0))
+        series = [(t.cols[c], [t.cells.get((x, c), 0) for x in xs]) for c in order]
+    else:
+        series = [(m.title, totals)]
+    if query.share:
+        series = [(name, [100 * v / n if n else 0 for v, n in zip(values, totals)]) for name, values in series]
+    return {
+        'title': title, 'template': 'analytics/_lines.html', 'more': max(0, len(series) - len(PALETTE)),
+        'data': {
+            'x': [short(t.rows[x]) for x in xs], 'full': [str(t.rows[x]) for x in xs], 'decimals': 0 if query.share else m.decimals,
+            'unit': ' %' if query.share else f' {m.unit}' if m.unit else '',
+            'series': [{'label': str(name), 'color': color, 'values': [float(v) for v in values]} for color, (name, values) in zip(PALETTE, series)],
+        },
+    }
 
 
 def label(dim, value):

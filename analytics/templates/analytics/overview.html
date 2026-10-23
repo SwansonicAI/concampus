@@ -5,7 +5,7 @@
 <p class="eyebrow">Stand {% now "j. F Y" %}</p>
 <h1>Auswertungen</h1>
 
-<div class="sections">
+<div class="sections" data-panel>
 {% for s in sections %}
 <section class="figures{% if s.half %} half{% endif %}">
   <div class="head"><h2>{{ s.title }}</h2><p class="eyebrow">{{ s.when }}</p></div>

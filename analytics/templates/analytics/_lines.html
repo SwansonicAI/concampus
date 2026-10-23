@@ -1,0 +1,6 @@
+<figure class="chart lines">
+  {% if c.title %}<figcaption><span>{{ c.title }}</span></figcaption>{% endif %}
+  <div class="canvas"><svg viewBox="0 0 640 260" role="img" aria-label="{{ c.title|default:"Verlauf" }}"></svg><div class="tip" hidden></div></div>
+  <div class="keys">{% for s in c.data.series %}<button type="button" class="key" aria-pressed="true" style="--c: {{ s.color }}">{{ s.label }}</button>{% endfor %}{% if c.more %}<span class="muted">und {{ c.more }} weitere, in der Tabelle</span>{% endif %}</div>
+  {{ c.data|json_script }}
+</figure>

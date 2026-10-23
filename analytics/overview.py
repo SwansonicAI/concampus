@@ -119,7 +119,8 @@ def funnel(term):
         )
     )
     steps = [('beworben', 'all'), ('zur Hauptfachprüfung', 'n_sat'), ('Hauptfach bestanden', 'n_passed'), ('zugelassen', 'n_offered'), ('Platz angenommen', 'n_took')]
-    return {'title': f'Weg durch die Eignungsprüfung, {term}', 'bars': [
+    trend = Query(MEASURES['bewerbungen'], ['studienjahr', 'ergebnis'], zeit='j10', as_lines=True).url()
+    return {'title': f'Weg durch die Eignungsprüfung, {term}', 'trend': trend, 'bars': [
         {'label': label, 'shown': number_format(found[k], 0, force_grouping=True), 'width': percent(found[k], found['all']), 'extra': f'{percent(found[k], found["all"])} %'}
         for label, k in steps
     ] if found['all'] else []}

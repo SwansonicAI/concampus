@@ -1,6 +1,6 @@
 {% load l10n %}
 <figure class="chart{% if c.wide %} wide{% endif %}">
-  <figcaption><span>{{ c.title }}</span>{% if c.query and c.title %}<a href="{{ c.query.url }}">In der Abfrage öffnen</a>{% endif %}</figcaption>
+  <figcaption><span>{{ c.title }}</span><span class="links">{% if c.trend %}<a href="{{ c.trend }}">Verlauf</a>{% endif %}{% if c.query and c.title %}<a href="{{ c.query.url }}">Abfrage</a>{% endif %}</span></figcaption>
   {% if c.grid %}
   <div class="scroll">
     <table class="heat hours">

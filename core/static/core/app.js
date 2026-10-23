@@ -8,6 +8,75 @@ const fold = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
 function init(root) {
   root.querySelectorAll('.form div[id^="id_"]').forEach(list => list.querySelectorAll('input[type=checkbox]').length > 8 && filterable(list));
   root.querySelectorAll('[data-day], [data-moment]').forEach(dated);
+  root.querySelectorAll('.lines').forEach(lineChart);
+}
+
+// Line charts are drawn here from their data, so the legend can turn lines on and off and the scale follows what is
+// left. The pointer reads every line at the nearest point in time.
+const SVG = 'http://www.w3.org/2000/svg';
+
+function lineChart(chart) {
+  const data = JSON.parse(chart.querySelector('script').textContent);
+  const svg = chart.querySelector('svg'), tip = chart.querySelector('.tip'), keys = [...chart.querySelectorAll('.key')];
+  const [W, H, L, R, T, B] = [640, 260, 56, 16, 12, 28];
+  const fmt = v => v.toLocaleString('de-DE', {maximumFractionDigits: data.decimals}) + data.unit;
+  const X = i => L + i * (W - L - R) / Math.max(1, data.x.length - 1);
+  const add = (name, attrs) => {
+    const node = document.createElementNS(SVG, name);
+    Object.entries(attrs).forEach(([k, v]) => node.setAttribute(k, v));
+    return svg.appendChild(node);
+  };
+  const shown = () => data.series.filter((s, i) => keys[i].getAttribute('aria-pressed') === 'true');
+  let cross;
+  const draw = () => {
+    svg.replaceChildren();
+    const lines = shown();
+    const peak = Math.max(1, ...lines.flatMap(s => s.values));
+    const step = [1, 2, 2.5, 5, 10].map(f => f * 10 ** Math.floor(Math.log10(peak / 4))).find(s => s * 4 >= peak);
+    const top = Math.ceil(peak / step) * step;
+    const Y = v => T + (H - T - B) * (1 - v / top);
+    for (let v = 0; v <= top + step / 2; v += step) {
+      add('line', {class: 'grid', x1: L, x2: W - R, y1: Y(v), y2: Y(v)});
+      add('text', {class: 'ytick', x: L - 8, y: Y(v)}).textContent = fmt(v);
+    }
+    const every = Math.ceil(data.x.length / 12);
+    data.x.forEach((label, i) => {
+      if ((data.x.length - 1 - i) % every === 0) add('text', {class: 'xtick', x: X(i), y: H - 6}).textContent = label;
+    });
+    cross = add('line', {class: 'cross', x1: 0, x2: 0, y1: T, y2: H - B, visibility: 'hidden'});
+    for (const s of lines) {
+      add('path', {class: 'line', stroke: s.color, d: s.values.map((v, i) => `${i ? 'L' : 'M'}${X(i)},${Y(v)}`).join('')});
+      s.values.forEach((v, i) => add('circle', {class: 'dot', cx: X(i), cy: Y(v), r: 3, fill: s.color}));
+    }
+  };
+  keys.forEach(key => key.addEventListener('click', () => {
+    key.setAttribute('aria-pressed', key.getAttribute('aria-pressed') !== 'true');
+    draw();
+  }));
+  svg.addEventListener('pointermove', event => {
+    const box = svg.getBoundingClientRect();
+    const at = ((event.clientX - box.left) / box.width * W - L) / (W - L - R) * (data.x.length - 1);
+    const i = Math.max(0, Math.min(data.x.length - 1, Math.round(at)));
+    cross.setAttribute('x1', X(i));
+    cross.setAttribute('x2', X(i));
+    cross.setAttribute('visibility', 'visible');
+    const head = Object.assign(document.createElement('small'), {textContent: data.full[i]});
+    const rows = shown().sort((a, b) => b.values[i] - a.values[i]).map(s => {
+      const row = document.createElement('div');
+      row.style.setProperty('--c', s.color);
+      row.append(Object.assign(document.createElement('b'), {textContent: fmt(s.values[i])}), ' ', s.label);
+      return row;
+    });
+    tip.replaceChildren(head, ...rows);
+    tip.style.left = `${X(i) / W * 100}%`;
+    tip.style.transform = X(i) / W > 0.6 ? 'translateX(calc(-100% - 12px))' : 'translateX(12px)';
+    tip.hidden = false;
+  });
+  svg.addEventListener('pointerleave', () => {
+    tip.hidden = true;
+    cross.setAttribute('visibility', 'hidden');
+  });
+  draw();
 }
 
 // Type-to-filter for long choice lists.

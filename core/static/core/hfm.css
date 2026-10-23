@@ -423,4 +423,23 @@ tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 7
 .heat.hours th { padding: 6px 4px; text-align: center; }
 .filters-on { margin: -8px 0 20px; }
 .filters-on .chip { padding: 2px 8px; color: var(--ink); font-size: 13px; }
+.chart figcaption .links { display: flex; gap: 16px; }
+.lines .canvas { position: relative; }
+.lines svg { display: block; width: 100%; height: auto; overflow: visible; }
+.lines .grid { stroke: var(--line); stroke-width: 1; }
+.lines .ytick, .lines .xtick { fill: var(--muted); font-size: 11px; }
+.lines .ytick { text-anchor: end; dominant-baseline: middle; }
+.lines .xtick { text-anchor: middle; }
+.lines .line { fill: none; stroke-width: 2; stroke-linejoin: round; }
+.lines .dot { stroke: #fff; stroke-width: 1.5; }
+.lines .cross { stroke: var(--ink); stroke-width: 1; }
+.lines .tip { position: absolute; top: 8px; z-index: 5; min-width: 160px; padding: 8px 10px; background: var(--ink); color: #fff; font-size: 13px; pointer-events: none; }
+.lines .tip small { display: block; margin-bottom: 4px; color: #cfcfcf; }
+.lines .tip div::before { content: ""; display: inline-block; width: 12px; height: 2px; margin-right: 6px; vertical-align: middle; background: var(--c); }
+.lines .tip b { font-variant-numeric: tabular-nums; }
+.keys { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin-top: 10px; font-size: 14px; }
+.key { display: inline-flex; align-items: center; gap: 6px; padding: 2px 0; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; }
+.key::before { content: ""; width: 16px; height: 2px; background: var(--c); }
+.key[aria-pressed="false"] { color: var(--muted); text-decoration: line-through; }
+.key[aria-pressed="false"]::before { background: var(--line); }
 @media (max-width: 1100px) { .charts, .sections { grid-template-columns: 1fr; } }

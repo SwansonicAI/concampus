@@ -6,17 +6,18 @@
   <h1>Abfrage</h1>
   <div class="actions"><a class="btn ghost" href="{% querystring format='csv' %}">Als CSV exportieren</a></div>
 </div>
-<p class="lead">{% if q.timed %}{{ q.measure.title }} je {{ chart.table.dims.0.title }}, {{ span }}{% else %}{{ total }} {{ q.measure.title }} im {{ terms }}{% endif %}</p>
+<p class="lead">{% if q.timed %}{{ q.measure.title }} je {{ split }}, {{ span }}{% else %}{{ total }} {{ q.measure.title }} im {{ terms }}{% endif %}</p>
 <form class="toolbar">
   <div class="inline">
     <label>Was<select name="was" onchange="this.form.requestSubmit()">{% for m in measures %}<option value="{{ m.key }}"{% if m == q.measure %} selected{% endif %}>{{ m.title }}</option>{% endfor %}</select></label>
     <label>nach<select name="nach" onchange="this.form.requestSubmit()">{% for key, d in dimensions %}<option value="{{ key }}"{% if key == q.keys.0 %} selected{% endif %}>{{ d.title }}</option>{% endfor %}</select></label>
     <label>und nach<select name="und" onchange="this.form.requestSubmit()"><option value="">–</option>{% for key, d in dimensions %}<option value="{{ key }}"{% if key == q.keys.1 %} selected{% endif %}>{{ d.title }}</option>{% endfor %}</select></label>
     <label>Zeitraum<select name="zeit" onchange="this.form.requestSubmit()">{% for value, text in spans %}<option value="{{ value }}"{% if value == zeit %} selected{% endif %}>{{ text }}</option>{% endfor %}</select></label>
+    {% if q.timed %}<label>Darstellung<select name="darstellung" onchange="this.form.requestSubmit()"><option value="">{% if q.keys.1 %}Tabelle{% else %}Säulen{% endif %}</option><option value="linien"{% if q.as_lines %} selected{% endif %}>{% if q.keys.1 %}Linien{% else %}Linie{% endif %}</option></select></label>{% endif %}
     {% if not q.measure.decimals %}<label>Anzeige<select name="anteil" onchange="this.form.requestSubmit()"><option value="">Anzahl</option><option value="1"{% if q.share %} selected{% endif %}>Anteil je Zeile</option></select></label>{% endif %}
     {% for k, v in q.where.items %}<input type="hidden" name="f_{{ k }}" value="{{ v }}">{% endfor %}
   </div>
 </form>
 {% if filters %}<div class="chips filters-on">{% for title, value, url in filters %}<a class="chip" href="{{ url }}" title="Diese Einschränkung entfernen">{{ title }}: {{ value }} ×</a>{% endfor %}</div>{% endif %}
-{% include "analytics/_chart.html" with c=chart %}
+{% if chart.template %}{% include chart.template with c=chart %}{% else %}{% include "analytics/_chart.html" with c=chart %}{% endif %}
 {% endblock %}

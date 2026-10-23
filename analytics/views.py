@@ -10,7 +10,7 @@ from django.utils.formats import number_format
 from core.access import require
 from core.models import Term
 from core.views import SHOWN, without_term
-from .charts import SPANS, Query, chart, label
+from .charts import SPANS, Query, chart, label, lines
 from .figures import MEASURES, narrowed, semesters, table
 from .overview import overview
 
@@ -29,13 +29,14 @@ def query(request):
         return export(q)
     m = q.measure
     return render(request, 'analytics/query.html', {
-        'q': q, 'chart': (found := chart(q, request.user)), 'total': number_format(found['table'].total, m.decimals, force_grouping=True),
+        'q': q, 'chart': lines(q) if q.as_lines and q.timed else chart(q, request.user),
+        'total': number_format(table(m, q.keys[:1], q.terms, q.where).total, m.decimals, force_grouping=True),
         'measures': MEASURES.values(), 'dimensions': m.dimensions.items(),
         'spans': SPANS if q.timed else [(str(t.pk), t.name) for t in reversed(semesters(m))],
         'zeit': q.zeit or ('j10' if q.timed else str(q.terms[0].pk) if q.terms else ''),
         'filters': [(m.dimensions[k].title, label(m.dimensions[k], v), q.url(where={x: y for x, y in q.where.items() if x != k})) for k, v in q.where.items()],
         'terms': ', '.join(t.name for t in q.terms) if not q.timed else '',
-        'span': dict(SPANS).get(q.zeit, SPANS[1][1]),
+        'span': dict(SPANS).get(q.zeit, SPANS[1][1]), 'split': m.dimensions[q.keys[0]].title,
     })
 
 
