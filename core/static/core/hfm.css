@@ -375,6 +375,12 @@ tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 7
 }
 
 /* Auswertungen: one green for what is counted, grey for context; every number also stands as text */
+.sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 48px; }
+.sections > section { grid-column: 1 / -1; }
+.sections > section.half { grid-column: auto; }
+.half .stats { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 20px; }
+.half .charts { grid-template-columns: 1fr; }
+.chart.wide { grid-column: 1 / -1; }
 .figures .stats { margin-bottom: 8px; }
 .stat .was { display: block; color: var(--muted); font-size: 13px; }
 .spark { display: block; width: 100%; height: 24px; margin-top: 8px; overflow: visible; }
@@ -385,8 +391,13 @@ tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 7
 .chart figcaption a { font-size: 14px; font-weight: 600; white-space: nowrap; }
 .bars { display: grid; gap: 6px; font-size: 14px; }
 .bars .row { display: grid; grid-template-columns: minmax(120px, 34%) 1fr minmax(64px, auto) auto; gap: 12px; align-items: center; }
-.bars .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bars .name a, .columns .tick a, .heat td > a { color: var(--ink); }
+.bars .name a, .columns .tick a, .heat td > a { color: var(--ink); text-decoration: underline dotted #b5b5b5; text-underline-offset: 3px; }
+.bars .name a:hover, .columns .tick a:hover, .heat td > a:hover { color: var(--green); text-decoration: underline; }
+.tail summary { padding: 6px 4px; color: var(--green); font-weight: 600; cursor: pointer; list-style: none; }
+.tail summary::-webkit-details-marker { display: none; }
+.tail summary::before { content: "+ "; }
+.tail[open] summary::before { content: "– "; }
+.tail .row { margin-top: 6px; }
 .bars .track { height: 10px; background: var(--soft); }
 .bars .track i { display: block; height: 100%; background: var(--green); }
 .bars .value { text-align: right; font-variant-numeric: tabular-nums; }
@@ -412,4 +423,4 @@ tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 7
 .heat.hours th { padding: 6px 4px; text-align: center; }
 .filters-on { margin: -8px 0 20px; }
 .filters-on .chip { padding: 2px 8px; color: var(--ink); font-size: 13px; }
-@media (max-width: 1100px) { .charts { grid-template-columns: 1fr; } }
+@media (max-width: 1100px) { .charts, .sections { grid-template-columns: 1fr; } }

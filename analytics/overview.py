@@ -1,11 +1,10 @@
-"""The Überblick: each area's key figures against the year before, its course as charts, and what stands out."""
+"""The Überblick: each area's key figures against the year before, and charts that let the numbers speak for themselves."""
 from datetime import datetime, time, timedelta
 
-from django.db.models import Count, Exists, F, OuterRef, Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.utils import timezone
 from django.utils.formats import number_format
 
-from core.apps import plural
 from core.models import Term
 from courses.models import Course, Participation
 from rooms.models import Booking, Room
@@ -45,7 +44,7 @@ def rated(query, person, key, good, phrase):
     return found
 
 
-def students(person, insights):
+def students(person):
     m = MEASURES['studierende']
     terms = window(m, 10)
     if not terms:
@@ -56,27 +55,23 @@ def students(person, insights):
     shares = [percent(abroad.get(t.pk, 0), n) for t, n in zip(terms, series)]
     within = [percent(regular.get(t.pk, 0), n) for t, n in zip(terms, series)]
     now = terms[-1]
-    over = tally(m, ['regelstudienzeit'], [now]).get(OVER[2], 0)
-    if over:
-        q = Query(m, ['studiengang'], {'regelstudienzeit': OVER[2]})
-        insights.append({'text': f'{over} Studierende sind mehr als zwei Semester über der Regelstudienzeit.', 'url': q.url('analytics:records') if m.capability in person.roles else q.url()})
     return {
         'title': 'Studierende', 'when': now.name,
         'stats': [
-            stat('Studierende', series[-1], before=ago(series), series=series),
+            stat('Studierende', series[-1], before=ago(series)),
             stat('im 1. Fachsemester', starters[-1], before=ago(starters), series=starters[-1::-2][::-1]),
             stat('mit ausländischer Staatsangehörigkeit', shares[-1], before=ago(shares), series=shares, unit=' %'),
             stat('in der Regelstudienzeit', within[-1], before=ago(within), series=within, unit=' %'),
         ],
         'charts': [
-            chart(Query(m, ['semester'], zeit='j10'), person, 'Studierende je Semester'),
+            chart(Query(m, ['semester'], zeit='j10'), person, 'Studierende je Semester') | {'wide': True},
             chart(Query(m, ['studiengang']), person, f'nach Studiengang, {now}'),
-            chart(Query(m, ['fachsemester']), person, f'nach Fachsemester, {now}'),
+            chart(Query(m, ['staat']), person, f'nach Staatsangehörigkeit, {now}'),
         ],
     }
 
 
-def applications(person, insights):
+def applications(person):
     m = MEASURES['bewerbungen']
     terms = semesters(m)
     now = Term.current()
@@ -85,7 +80,6 @@ def applications(person, insights):
         return None
     current, before = rounds[-1], ago(rounds)
     by_term = tally(m, ['semester'], terms)
-    years = tally(m, ['studienjahr'], window(m, 10))
     outcome = {t: tally(m, ['ergebnis'], [t]) for t in (current, before) if t}
 
     def rates(t):
@@ -95,31 +89,20 @@ def applications(person, insights):
 
     (admit, accept), (admit_before, accept_before) = rates(current), rates(before)
     stats = [
-        stat(f'Bewerbungen zum {current}', by_term.get(current.pk, 0), before=by_term.get(before.pk) if before else None, series=list(years.values())),
+        stat(f'Bewerbungen zum {current}', by_term.get(current.pk, 0), before=by_term.get(before.pk) if before else None),
         stat('Zulassungsquote', admit, before=admit_before, unit=' %'),
         stat('Annahmequote', accept, before=accept_before, unit=' %'),
     ]
     if terms[-1] != current:  # a round still open
         running = terms[-1]
         stats.append(stat(f'Bewerbungen zum {running}, laufend', by_term.get(running.pk, 0), before=by_term.get(rounds[-2].pk) if len(rounds) > 1 else None))
-    if before:
-        subjects = tally(m, ['hauptfach'], [current]), tally(m, ['hauptfach'], [before])
-        changes = sorted((percent(n - subjects[1][s], subjects[1][s]), s, n, subjects[1][s]) for s, n in subjects[0].items() if subjects[1].get(s, 0) >= 10)
-        names = m.dimensions['hauptfach'].labels([c[1] for c in changes])
-        for change, subject, n, was in [changes[0], changes[-1]] if changes else []:
-            if abs(change) >= 15:
-                insights.append({
-                    'text': f'Bewerbungen {names[subject]}: {n} statt {was} zum {before} ({change:+d} %).',
-                    'url': Query(m, ['studienjahr'], {'hauptfach': str(subject)}).url(),
-                })
     return {
         'title': 'Bewerbung', 'when': f'Runde {current}',
         'stats': stats,
         'charts': [
-            chart(Query(m, ['studienjahr'], zeit='j10'), person, 'Bewerbungen je Studienjahr'),
-            rated(Query(m, ['hauptfach'], zeit=str(current.pk)), person, 'ergebnis', OUTCOMES[3:], 'zugelassen') | {'title': f'nach Hauptfach, {current}'},
+            chart(Query(m, ['studienjahr'], zeit='j10'), person, 'Bewerbungen je Studienjahr'), funnel(current),
+            rated(Query(m, ['hauptfach'], zeit=str(current.pk)), person, 'ergebnis', OUTCOMES[3:], 'zugelassen') | {'title': f'nach Hauptfach, {current}', 'wide': True},
         ],
-        'funnel': funnel(current),
     }
 
 
@@ -136,10 +119,13 @@ def funnel(term):
         )
     )
     steps = [('beworben', 'all'), ('zur Hauptfachprüfung', 'n_sat'), ('Hauptfach bestanden', 'n_passed'), ('zugelassen', 'n_offered'), ('Platz angenommen', 'n_took')]
-    return [{'label': label, 'shown': number_format(found[k], 0, force_grouping=True), 'width': percent(found[k], found['all']), 'share': percent(found[k], found['all'])} for label, k in steps] if found['all'] else []
+    return {'title': f'Weg durch die Eignungsprüfung, {term}', 'bars': [
+        {'label': label, 'shown': number_format(found[k], 0, force_grouping=True), 'width': percent(found[k], found['all']), 'extra': f'{percent(found[k], found["all"])} %'}
+        for label, k in steps
+    ] if found['all'] else []}
 
 
-def exams(person, insights):
+def exams(person):
     m = MEASURES['pruefungen']
     last = semesters(m)[-1:]
     if not last:
@@ -148,46 +134,26 @@ def exams(person, insights):
     result = tally(m, ['ergebnis'], last)
     count = sum(result.values())
     mean = tally(MEASURES['durchschnitt'], (), last)
-    failing = (
-        Course.objects.filter(term=term, kind=Course.Kind.EXAM, released__isnull=False)
-        .annotate(n=Count('participations', filter=Q(participations__passed__isnull=False)), failed=Count('participations', filter=Q(participations__passed=False)))
-        .filter(n__gte=5, failed__gte=F('n') * 0.3).order_by('-failed')
-    )
-    if failing:
-        insights.append({
-            'text': f'{plural(len(failing), "Prüfung", "Prüfungen")} mit Durchfallquote ab 30 % im {term}: {", ".join(c.title for c in failing[:2])}{" …" if len(failing) > 2 else ""}.',
-            'url': failing[0].get_absolute_url() if 'manage_exams' in person.roles else Query(m, ['studiengang', 'ergebnis'], zeit=str(term.pk), share=True).url(),
-        })
     return {
-        'title': 'Prüfungen', 'when': term.name,
+        'title': 'Prüfungen', 'when': term.name, 'half': True,
         'stats': [
             stat('Prüfungsergebnisse', count),
             stat('bestanden', percent(result.get(True, 0), count), unit=' %'),
             stat('Durchschnittsnote', shown=figure(mean, MEASURES['durchschnitt'])),
         ],
-        'charts': [
-            chart(Query(m, ['note'], zeit=str(term.pk)), person, 'Notenverteilung'),
-            rated(Query(m, ['studiengang'], zeit=str(term.pk)), person, 'ergebnis', [True], 'bestanden') | {'title': 'nach Studiengang'},
-        ],
+        'charts': [rated(Query(m, ['studiengang'], zeit=str(term.pk)), person, 'ergebnis', [True], 'bestanden') | {'title': 'nach Studiengang'}],
     }
 
 
-def teaching(person, insights):
+def teaching(person):
     term = Term.current()
     courses = Course.objects.filter(term=term, kind=Course.Kind.COURSE).annotate(n=Count('participations'))
     sizes = list(courses.values_list('n', 'capacity'))
     lessons = Course.objects.filter(term=term, kind=Course.Kind.LESSON).count()
     taken = sum(n for n, _ in sizes)
-    full = sum(1 for n, cap in sizes if cap and n >= cap)
-    small = sum(1 for n, _ in sizes if n < 3)
-    m = MEASURES['veranstaltungen']
-    query = Query(m, ['groesse'], {'art': Course.Kind.COURSE})
-    if small:
-        insights.append({'text': f'{plural(small, "Lehrveranstaltung", "Lehrveranstaltungen")} im {term} mit weniger als drei Teilnehmenden.', 'url': query.url()})
-    if full:
-        insights.append({'text': f'{plural(full, "Lehrveranstaltung ist", "Lehrveranstaltungen sind")} voll belegt, Anmeldungen kommen auf die Warteliste.', 'url': query.url()})
+    query = Query(MEASURES['veranstaltungen'], ['groesse'], {'art': Course.Kind.COURSE})
     return {
-        'title': 'Lehre', 'when': term.name,
+        'title': 'Lehre', 'when': term.name, 'half': True,
         'stats': [
             stat('Lehrveranstaltungen', len(sizes)),
             stat('Klassen im Einzelunterricht', lessons),
@@ -198,7 +164,7 @@ def teaching(person, insights):
     }
 
 
-def rooms(person, insights):
+def rooms(person):
     """The last seven days in the rooms the Institute give out themselves, worked out per hour."""
     today = timezone.localdate()
     days = [today - timedelta(days=n) for n in range(6, -1, -1)]
@@ -238,13 +204,6 @@ def rooms(person, insights):
             for g, (m, n) in sorted(found.items(), key=lambda kv: -kv[1][0] / kv[1][1])
         ]
 
-    idle = sum(1 for m in by_room.values() if m < 0.1 * open_)
-    busy = sum(1 for m in by_room.values() if m > 0.85 * open_)
-    query = Query(MEASURES['raumstunden'], ['raum'])
-    if idle:
-        insights.append({'text': f'{idle} der {len(rooms)} Instituts- und Übungsräume waren in den letzten sieben Tagen zu weniger als 10 % belegt.', 'url': query.url()})
-    if busy:
-        insights.append({'text': f'{plural(busy, "Raum war", "Räume waren")} zu mehr als 85 % belegt.', 'url': query.url()})
     return {
         'title': 'Räume', 'when': f'{days[0]:%d.%m.} bis {days[-1]:%d.%m.%Y}, {HOURS[0]}–{HOURS[-1] + 1} Uhr',
         'stats': [
@@ -253,15 +212,13 @@ def rooms(person, insights):
             stat('Buchungen von Studierenden', students),
             stat('am vollsten', shown=f'{WEEKDAYS[peak[0].isoweekday()]} {peak[1]}–{peak[1] + 1} Uhr'),
         ],
-        'grid': {'hours': list(HOURS), 'days': grid},
         'charts': [
-            {'title': 'Belegung nach Raumfunktion', 'bars': bars(lambda r: r.function.name)},
-            {'title': 'nach Gebäude', 'bars': bars(lambda r: r.building)},
+            {'title': 'Belegung der Instituts- und Übungsräume je Stunde', 'grid': {'hours': list(HOURS), 'days': grid}},
+            {'title': 'nach Raumfunktion', 'bars': bars(lambda r: r.function.name)},
         ],
     }
 
 
 def overview(person):
-    insights = []
-    sections = [students(person, insights), applications(person, insights), exams(person, insights), teaching(person, insights), rooms(person, insights)]
-    return {'sections': [s for s in sections if s], 'insights': insights}
+    sections = [students(person), applications(person), exams(person), teaching(person), rooms(person)]
+    return {'sections': [s for s in sections if s]}

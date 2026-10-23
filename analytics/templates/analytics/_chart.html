@@ -1,7 +1,14 @@
 {% load l10n %}
-<figure class="chart">
+<figure class="chart{% if c.wide %} wide{% endif %}">
   <figcaption><span>{{ c.title }}</span>{% if c.query and c.title %}<a href="{{ c.query.url }}">In der Abfrage öffnen</a>{% endif %}</figcaption>
-  {% if c.lines %}
+  {% if c.grid %}
+  <div class="scroll">
+    <table class="heat hours">
+      <thead><tr><th></th>{% for h in c.grid.hours %}<th class="num">{{ h }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for day in c.grid.days %}<tr><td>{{ day.label }}</td>{% for cell in day.cells %}<td class="num{% if cell.shade > 55 %} dark{% endif %}" style="--v: {{ cell.shade|unlocalize }}%" title="{{ cell.tip }}">{{ cell.share }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% elif c.lines %}
   <div class="scroll">
     <table class="heat">
       <thead><tr><th>{{ c.table.dims.0.title }}</th>{% for h in c.head %}<th class="num">{{ h }}</th>{% endfor %}<th class="num">Gesamt</th></tr></thead>
@@ -32,14 +39,15 @@
   </div>
   {% elif c.bars %}
   <div class="bars">
-    {% for b in c.bars %}
-    <div class="row">
-      <span class="name" title="{{ b.label }}">{% if b.drill %}<a href="{{ b.drill }}" title="Verlauf und weitere Aufteilung">{{ b.label }}</a>{% else %}{{ b.label }}{% endif %}</span>
-      <span class="track"><i style="width: {{ b.width|unlocalize }}%"></i></span>
-      <span class="value">{% if b.records %}<a href="{{ b.records }}" data-panel>{{ b.shown }}</a>{% else %}{{ b.shown }}{% endif %}</span>
-      <span class="extra">{{ b.extra|default:"" }}</span>
-    </div>
-    {% endfor %}
+    {% if c.bars|length > 14 %}
+    {% for b in c.bars|slice:":12" %}{% include "analytics/_bar.html" %}{% endfor %}
+    <details class="tail">
+      <summary>{{ c.bars|length|add:"-12" }} weitere</summary>
+      {% for b in c.bars|slice:"12:" %}{% include "analytics/_bar.html" %}{% endfor %}
+    </details>
+    {% else %}
+    {% for b in c.bars %}{% include "analytics/_bar.html" %}{% endfor %}
+    {% endif %}
   </div>
   {% else %}
   <p class="empty">Nichts zu zählen.</p>

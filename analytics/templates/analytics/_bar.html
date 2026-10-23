@@ -1,0 +1,7 @@
+{% load l10n %}
+<div class="row">
+  <span class="name">{% if b.drill %}<a href="{{ b.drill }}" title="Verlauf und weitere Aufteilung">{{ b.label }}</a>{% else %}{{ b.label }}{% endif %}</span>
+  <span class="track"><i style="width: {{ b.width|unlocalize }}%"></i></span>
+  <span class="value">{% if b.records %}<a href="{{ b.records }}" data-panel>{{ b.shown }}</a>{% else %}{{ b.shown }}{% endif %}</span>
+  <span class="extra">{{ b.extra|default:"" }}</span>
+</div>
