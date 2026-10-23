@@ -903,7 +903,11 @@ class Command(BaseCommand):
         Score.objects.bulk_create(Score(participation=created[(c, s, m)], examiner=e, value=v) for c, s, m, e, v in scores)
         Course.staff.through.objects.bulk_create([Course.staff.through(course_id=c, person_id=p) for c, p in staff], ignore_conflicts=True)
         Course.modules.through.objects.bulk_create([Course.modules.through(course_id=c, module_id=m) for c, m in links])
-        self.schedule()
+        takers = defaultdict(set)  # who sits in each course this term, so the week is planned around them
+        for p in rows.values():
+            if p.course.term_id == self.current.pk:
+                takers[p.course_id].add(p.study.person_id)
+        self.schedule(takers)
 
     def guests(self):
         """Gasthörer:innen in this term's lectures, and the snags the Rückmeldung has to show."""
@@ -923,8 +927,9 @@ class Command(BaseCommand):
             person.insurer, person.insurance_confirmed = 'BARMER' if person.insurer != 'BARMER' else 'AOK PLUS', None
             person.save(update_fields=['insurer', 'insurance_confirmed'])
 
-    def schedule(self):
-        """Weekly bookings across the lecture period: one-to-one lessons first, then group courses; nothing overlaps."""
+    def schedule(self, takers):
+        """Weekly bookings across the lecture period: group courses first, each where the fewest of its students already
+        have a course, then the one-to-one lessons around each student's week. No room, teacher or student is booked twice."""
         rng, busy, patterns = self.rng, defaultdict(list), []
 
         def free(keys, start, end):
@@ -934,17 +939,6 @@ class Command(BaseCommand):
             for key in keys:
                 busy[key].append((start, end))
 
-        for person, course, teacher, rooms, minutes in self.lessons:
-            days = [(teacher.pk + k) % 5 for k in range(5)]
-            found = next((
-                (room, day, start) for day in days for start in range(9 * 60, 20 * 60 - minutes + 1, 15) for room in rooms
-                if free([(room, day), (teacher.pk, day)], start, start + minutes)
-            ), None)
-            if found is None:
-                continue
-            room, day, start = found
-            take([(room, day), (teacher.pk, day)], start, start + minutes)
-            patterns.append((room, day, start, minutes, person, course))
         groups = [c for c in self.courses.values() if c.term_id == self.current.pk and c.kind == Course.Kind.COURSE and c.form[:1] in ('V', 'S', 'Ü', 'G')]
         bookings = []
         for course in sorted(groups, key=lambda c: c.title not in FIXED):
@@ -957,29 +951,47 @@ class Command(BaseCommand):
                     for n in range(days)
                 ]
                 continue
+            people = takers[course.pk]
             if course.title in FIXED:
                 room, day, start, minutes = FIXED[course.title]
                 start = clock(start)
             else:
                 minutes = length(course.form)
-                found = next((
-                    (room, day, start) for day in rng.sample(range(5), 5) for start in (9 * 60 + 15, 11 * 60 + 15, 13 * 60 + 15, 15 * 60 + 15, 17 * 60 + 15)
+                slots = [(day, start) for day in rng.sample(range(5), 5) for start in (9 * 60 + 15, 11 * 60 + 15, 13 * 60 + 15, 15 * 60 + 15, 17 * 60 + 15)]
+                clashes = {(day, start): sum(not free([(p, day)], start, start + minutes) for p in people) for day, start in slots}
+                found = min((
+                    (room, day, start) for day, start in slots
                     for room in SEMINAR_ROOMS if free([(room, day), (teacher.pk, day)], start, start + minutes)
-                ), None)
+                ), key=lambda o: clashes[o[1:]], default=None)
                 if found is None:
                     continue
                 room, day, start = found
-            take([(room, day), (teacher.pk, day)], start, start + minutes)
-            patterns.append((room, day, start, minutes, teacher, course))
-        for room, day, start, minutes, person, course in patterns:
+            take([(room, day), (teacher.pk, day), *((p, day) for p in people)], start, start + minutes)
+            patterns.append((room, day, start, minutes, teacher, course, None))
+        for person, course, teacher, rooms, minutes in self.lessons:
+            days = [(teacher.pk + k) % 5 for k in range(5)]
+            found = next((
+                (room, day, start) for day in days for start in range(9 * 60, 20 * 60 - minutes + 1, 15) for room in rooms
+                if free([(room, day), (teacher.pk, day), (person.pk, day)], start, start + minutes)
+            ), None)
+            if found is None:
+                continue
+            room, day, start = found
+            take([(room, day), (teacher.pk, day), (person.pk, day)], start, start + minutes)
+            patterns.append((room, day, start, minutes, teacher, course, person))  # the teacher books, the student is entered
+        attending = []
+        for room, day, start, minutes, person, course, student in patterns:
             first = LATER.get(course.title, self.current.lectures_start)
             series, d = uuid.uuid4(), first + timedelta(days=(day - first.weekday()) % 7)
             while d <= self.current.lectures_end:
                 if d not in FREE_DAYS:
                     category = 'probe' if course.title == 'Hochschulchor' else 'unterricht'
                     bookings.append(Booking(room=self.rooms[room], start=at(d, start), end=at(d, start + minutes), person=person, course=course, series=series, category_id=category))
+                    if student:
+                        attending.append((bookings[-1], student))
                 d += timedelta(weeks=1)
         Booking.objects.bulk_create(bookings)
+        Booking.participants.through.objects.bulk_create(Booking.participants.through(booking_id=b.pk, person_id=s.pk) for b, s in attending)
         meeting = timezone.localdate()
         Booking.objects.create(room=self.rooms['FH 115'], start=at(meeting, hour=14), end=at(meeting, 15 * 60 + 30), person=self.staff['dekanat'], title='Prüfungsausschuss', category_id='sitzung')
 

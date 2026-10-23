@@ -187,6 +187,14 @@ tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 7
 .agenda .what::before { content: none; }
 .agenda .due { min-width: 0; color: var(--ink); text-align: left; }
 .agenda .empty { padding: 14px 4px; border-bottom: 1px solid var(--line); }
+.demo-entry { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 15px; }
+dialog.demo { width: min(560px, calc(100vw - 32px)); padding: 28px 32px 32px; border: 0; border-radius: var(--radius); }
+dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
+.demo h2 { margin: 0 0 12px; }
+.demo .people { display: grid; border-top: 2px solid var(--ink); }
+.demo .people button { display: flex; justify-content: space-between; gap: 16px; padding: 12px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.demo .people button:hover { background: var(--soft); }
+@container (max-width: 880px) { .cols { grid-template-columns: minmax(0, 1fr); } }  /* the side panel stacks what sits side by side on a page */
 .calm { color: var(--muted); }
 .launch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .app { display: flex; gap: 16px; align-items: center; padding: 18px 20px; border: 1px solid var(--line); border-left: 6px solid var(--green); color: var(--ink); }

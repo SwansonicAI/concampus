@@ -1,0 +1,8 @@
+# Strings Django ships without a German translation.
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Language: de\n"
+
+msgid "- Select an option -"
+msgstr "Bitte wählen"

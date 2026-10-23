@@ -19,6 +19,8 @@ class SignupForm(BaseUserCreationForm):
         super().__init__(*args, **kwargs)
         for field in ['first_name', 'last_name', 'email', 'gender', 'birth_date']:
             self.fields[field].required = True
+        self.fields['password1'].help_text = 'Mindestens 8 Zeichen, nicht nur Ziffern und nicht Ihrem Namen ähnlich.'
+        self.fields['password2'].help_text = ''
 
     def clean_email(self):
         email = self.cleaned_data['email'].lower()

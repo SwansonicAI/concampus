@@ -14,11 +14,24 @@
       <input type="hidden" name="next" value="{{ next }}">
       <div class="actions"><button class="btn">Anmelden</button><a href="{% url 'password_reset' %}">Passwort vergessen?</a></div>
     </form>
+    {% if demo %}
+    <p class="demo-entry"><button type="button" class="btn ghost small" onclick="document.getElementById('demo').showModal()">Demo-Profil wählen</button></p>
+    <dialog id="demo" class="demo" aria-labelledby="demo-title" onclick="event.target === this && this.close()">
+      <div class="head"><h2 id="demo-title">Demo-Profil wählen</h2><form method="dialog"><button class="link">Schließen</button></form></div>
+      <p class="muted">Ohne Passwort anmelden und Campus so sehen, wie diese Person ihn sieht.</p>
+      <form method="post" action="{% url 'demo' %}" class="people">
+        {% csrf_token %}
+        {% for role, person in demo %}<button name="konto" value="{{ person.username }}"><b>{{ role }}</b><span class="muted">{{ person }}</span></button>{% endfor %}
+      </form>
+    </dialog>
+    {% endif %}
   </div>
-  {% if institution.signup %}<div>
-    <h2>Bewerben</h2>
-    <p>Sie möchten an der {{ institution.name }} studieren? Legen Sie ein Konto an und bewerben Sie sich für die Eignungsprüfung.</p>
-    <p><a class="more" href="{% url 'admissions:signup' %}">Konto anlegen</a></p>
-  </div>{% endif %}
+  <div>
+    {% if institution.signup %}<section>
+      <h2>Bewerben</h2>
+      <p>Sie möchten an der {{ institution.name }} studieren? Legen Sie ein Konto an und bewerben Sie sich für die Eignungsprüfung.</p>
+      <p><a class="more" href="{% url 'admissions:signup' %}">Konto anlegen</a></p>
+    </section>{% endif %}
+  </div>
 </div>
 {% endblock %}

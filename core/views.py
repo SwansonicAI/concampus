@@ -2,6 +2,9 @@ from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 
 from django.apps import apps
+from django.conf import settings
+from django.contrib.auth import login
+from django.contrib.auth.decorators import login_not_required
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Q
@@ -22,7 +25,7 @@ from . import dates
 from .apps import feature, tile_apps, tiles
 from .days import busy, strip
 from .history import describe, restore, tables
-from .models import Change, Message, Term, Tracked
+from .models import Change, Message, Person, Term, Tracked
 from .text import fold, matching
 
 
@@ -45,13 +48,37 @@ def home(request):
         'day': day,
         'calendar': bool(marked),
         'days': strip(today, day, marked),
-        'agenda': bookings.filter(start__date=day).select_related('room', 'course', 'category', 'person'),
+        'agenda': bookings.filter(start__date=day).select_related('room', 'course', 'category').prefetch_related('participants'),
         'letters': person.messages.filter(read=None)[:3],
     })
 
 
 def inbox(request):
     return render(request, 'core/inbox.html', {'letters': request.user.messages.all()})
+
+
+ROLES = {'student': 'Studierende', 'applicant': 'Bewerbende', 'teacher': 'Lehrende'}
+
+
+def demo_people():
+    """The demo's people in the configured order, each with what they stand for: their office, else their role."""
+    found = Person.objects.prefetch_related('groups').in_bulk(settings.DEMO, field_name='username')
+    shown = []
+    for username in settings.DEMO:
+        if person := found.get(username):
+            offices = person.groups.all()
+            shown.append((offices[0].name if offices else next((label for role, label in ROLES.items() if role in person.roles), ''), person))
+    return shown
+
+
+@login_not_required
+@require_POST
+def demo(request):
+    """Only in the demo: sign in as one of its people, without a password."""
+    if request.POST.get('konto') not in settings.DEMO:
+        raise Http404
+    login(request, get_object_or_404(Person, username=request.POST['konto']), backend=settings.AUTHENTICATION_BACKENDS[0])
+    return redirect('home')
 
 
 def message(request, pk):

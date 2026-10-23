@@ -36,6 +36,14 @@ def deputat(courses):
     return sum((c.hours or 0) * (c.load if c.kind == Course.Kind.LESSON else 1) for c in courses)
 
 
+def credited(course):
+    """The modules a course counts for, by title: [(title, [(program, codes)])], so a course in many plans reads in a few lines."""
+    found = defaultdict(lambda: defaultdict(list))
+    for m in course.modules.select_related('program').order_by('title', 'program__degree', 'program__name', 'code'):
+        found[m.title][m.program].append(m.code)
+    return [(title, list(programs.items())) for title, programs in found.items()]
+
+
 def enrolled():
     """Everyone who can be entered into a course, for the name suggestions."""
     return Study.objects.filter(status=Study.Status.ENROLLED).select_related('person', 'program', 'subject').order_by('person__last_name')
@@ -114,7 +122,7 @@ def course(request, pk):
         'count': len(rows),
         'staffed': staffed,
         'eligible': person.studies.filter(status=Study.Status.ENROLLED, program__modules__courses=course).distinct(),
-        'modules': course.modules.select_related('program').order_by('code', 'program__degree', 'program__name'),
+        'modules': credited(course),
         'bookings': course.bookings.filter(start__gte=timezone.now()).select_related('room')[:6],
         'plan': PlanForm(person=person) if staffed else None,
         'adding': AddForm() if staffed else None,

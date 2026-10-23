@@ -168,7 +168,7 @@ def audition(request, pk):
     return render(request, 'admissions/audition.html', {
         'course': course,
         'staff': staff,
-        'rows': rows,
+        'rows': rows, 'timed': any(p.slot for p in rows), 'noted': any(p.note for p in rows),
         'columns': [e.pk for e in columns],
         'office': office,
         'history': Course.visible_to(person.roles),

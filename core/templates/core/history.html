@@ -7,7 +7,7 @@
   <tbody>
     {% for c in changes %}
     <tr>
-      <td class="muted">{{ c.at|date:"j.n.Y, H:i" }}<br><small>{{ c.by|default:"System" }}</small></td>
+      <td class="muted nowrap">{{ c.at|date:"j.n.Y, H:i" }}<br><small>{{ c.by|default:"System" }}</small></td>
       <td>
         {{ c.record }} <span class="muted">{{ c.get_action_display }}</span>
         {% for label, before, after in c.lines %}<br><small>{{ label }}: {% if before %}<span class="muted">{{ before }}</span> → {% endif %}{{ after }}</small>{% endfor %}

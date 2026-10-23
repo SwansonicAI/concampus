@@ -16,7 +16,7 @@ from core.text import matching
 from core.views import without_term
 from courses import panel
 from courses.forms import AddForm, ExamForm, SlotForm
-from courses.views import enrolled
+from courses.views import credited, enrolled
 from courses.models import Course, Participation
 from curriculum.models import Module, Program
 from curriculum.views import plan as study_plan
@@ -78,7 +78,8 @@ def index(request):
     if 'student' in person.roles:
         studies = person.studies.filter(status=Study.Status.ENROLLED)
         mine = Participation.objects.filter(study__in=studies, course__kind=Course.Kind.EXAM).select_related('course__term', 'module')
-        context.update(mine=mine.order_by('-course__term__start'), offered=offered(person), studies=studies)
+        mine = list(mine.order_by('-course__term__start'))
+        context.update(mine=mine, timed=any(p.slot for p in mine), offered=offered(person), studies=studies)
     return render(request, 'exams/index.html', context)
 
 
@@ -104,14 +105,14 @@ def exam(request, pk):
     return render(request, 'exams/exam.html', {
         'course': course,
         'staff': staff,
-        'rows': rows,
+        'rows': rows, 'timed': any(p.slot for p in rows), 'noted': any(p.note for p in rows),
         'columns': [e.pk for e in columns],
         'panel': course.kind in Course.PANEL,
         'office': office,
         'decide': decide,
         'history': Course.visible_to(person.roles),
         'slots': slots,
-        'modules': course.modules.select_related('program').order_by('code', 'program__degree', 'program__name'),
+        'modules': credited(course),
         'bookings': course.bookings.select_related('room'),
         'missing': sum(1 for p in rows if p.passed is None),
         'adding': AddForm(),

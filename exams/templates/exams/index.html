@@ -61,14 +61,14 @@
 <section>
   <h2>Angemeldet und abgelegt</h2>
   <table>
-    <thead><tr><th>Semester</th><th>Prüfung</th><th>Modul</th><th>Termin</th><th class="num">Note</th><th>Ergebnis</th></tr></thead>
+    <thead><tr><th>Semester</th><th>Prüfung</th><th>Modul</th>{% if timed %}<th>Termin</th>{% endif %}<th class="num">Note</th><th>Ergebnis</th></tr></thead>
     <tbody>
       {% for p in mine %}
       <tr>
         <td class="nowrap" data-value="{{ p.course.term.start|date:'c' }}">{{ p.course.term }}</td>
         <td><b>{{ p.course.title }}</b></td>
         <td class="nowrap">{{ p.module.code|default:"" }}</td>
-        <td data-value="{{ p.slot|date:'c' }}">{{ p.slot|date:"D j.n., H:i"|default:"–" }}</td>
+        {% if timed %}<td data-value="{{ p.slot|date:'c' }}">{{ p.slot|date:"D j.n., H:i"|default:"–" }}</td>{% endif %}
         <td class="num">{% if p.course.released and p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</td>
         <td>
           {% if p.course.released %}{% if p.passed %}<span class="badge yes">bestanden</span>{% else %}<span class="badge no">nicht bestanden</span>{% endif %}

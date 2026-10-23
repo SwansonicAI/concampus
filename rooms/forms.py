@@ -64,7 +64,7 @@ class BookingForm(forms.ModelForm):
         allowed = BookingCategory.objects.all()
         if not self.office:
             allowed = allowed.filter(teachers=True) if 'teacher' in roles else allowed.filter(students=True)
-        self.fields['category'].queryset = allowed
+        self.fields['category'].queryset = allowed | BookingCategory.objects.filter(key=self.instance.category_id)  # never silently changed
         self.fields['category'].empty_label = None
         self.fields['title'].required = False
         self.fields['title'].help_text = 'Leer: die Kategorie, z. B. „Übebuchung“.'

@@ -91,12 +91,12 @@ def groups():
 def index(request):
     person, today = request.user, timezone.localdate()
     day = understood(request.GET.get('tag', '')) or today
-    group = request.GET.get('raeume') or ('zentral' if 'book_any_room' in person.roles else 'meine')
+    allowed = set(bookable(person).values_list('pk', flat=True))
+    group = request.GET.get('raeume') or ('zentral' if 'book_any_room' in person.roles else 'meine' if allowed else 'alle')
     kind, _, key = group.partition(':')
     rooms = Room.objects.prefetch_related(Prefetch(
         'bookings', Booking.objects.filter(start__date=day).select_related('course', 'person', 'category').prefetch_related('participants'), to_attr='day',
     ))
-    allowed = set(bookable(person).values_list('pk', flat=True))
     rooms = {
         'meine': rooms.filter(pk__in=allowed), 'zentral': rooms.filter(function__central=True), 'haus': rooms.filter(building=key), 'funktion': rooms.filter(function=key),
         'institut': rooms.filter(institutes=key) if key.isdigit() else rooms,

@@ -24,6 +24,8 @@ SECRET_KEY = 'django-insecure-%)0d+-lm(h92#hmxl_=l)4@d8&st)!27uy&)n1gcm$0ye5vt*=
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
+# Accounts the login page offers without a password, to see Campus as each kind of user; never in production.
+DEMO = ['student', 'bewerbung', 'lehre', 'asa', 'pruefungsamt', 'dekanat', 'veranstaltungsbuero', 'praesidium', 'campus'] if DEBUG else []
 
 ALLOWED_HOSTS = []
 
@@ -119,6 +121,7 @@ AUTH_PASSWORD_VALIDATORS = [
 # https://docs.djangoproject.com/en/6.1/topics/i18n/
 
 LANGUAGE_CODE = 'de'
+LOCALE_PATHS = [BASE_DIR / 'locale']  # the few strings Django ships untranslated
 
 TIME_ZONE = 'Europe/Berlin'
 
