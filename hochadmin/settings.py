@@ -10,24 +10,26 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
 from pathlib import Path
+from urllib.parse import parse_qsl, unquote, urlsplit
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
+# A server sets its key, hosts and database in the environment; without a key this is development.
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-%)0d+-lm(h92#hmxl_=l)4@d8&st)!27uy&)n1gcm$0ye5vt*='
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-%)0d+-lm(h92#hmxl_=l)4@d8&st)!27uy&)n1gcm$0ye5vt*=')
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
-# Accounts the login page offers without a password, to see Campus as each kind of user; never in production.
-DEMO = ['student', 'bewerbung', 'lehre', 'asa', 'pruefungsamt', 'dekanat', 'veranstaltungsbuero', 'praesidium', 'campus'] if DEBUG else []
+DEBUG = 'SECRET_KEY' not in os.environ
+# Accounts the login page offers without a password, to see Campus as each kind of user; only in development and on the demo server.
+DEMO = ['student', 'bewerbung', 'lehre', 'asa', 'pruefungsamt', 'dekanat', 'veranstaltungsbuero', 'praesidium', 'campus'] if DEBUG or os.environ.get('DEMO') else []
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split()
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # the app is only reached through the proxy
+SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG
 
 
 # Application definition
@@ -52,6 +54,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -96,6 +99,13 @@ DATABASES = {
         'ATOMIC_REQUESTS': True,  # a change and its history are saved together or not at all
     }
 }
+if url := os.environ.get('DATABASE_URL'):  # postgresql://user:password@host/name?sslmode=require
+    url = urlsplit(url)
+    DATABASES['default'] |= {
+        'ENGINE': 'django.db.backends.postgresql', 'NAME': url.path[1:], 'USER': unquote(url.username), 'PASSWORD': unquote(url.password),
+        'HOST': url.hostname, 'PORT': url.port or '', 'OPTIONS': dict(parse_qsl(url.query)),
+        'CONN_MAX_AGE': 600, 'CONN_HEALTH_CHECKS': True,  # keep connections open; the database may close them when idle
+    }
 
 
 # Password validation
@@ -134,6 +144,11 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = 'static/'
+STATIC_ROOT = BASE_DIR / 'static'
+STORAGES = {
+    'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+    'staticfiles': {'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage' if DEBUG else 'whitenoise.storage.CompressedManifestStaticFilesStorage'},
+}
 
 AUTH_USER_MODEL = 'core.Person'
 

@@ -1,0 +1,27 @@
+# The server: the app behind Caddy, which fetches the HTTPS certificate for DOMAIN.
+# .env next to this file holds DOMAIN, SECRET_KEY, DATABASE_URL and, on the demo server, DEMO=1.
+services:
+  app:
+    build: .
+    env_file: .env
+    environment:
+      ALLOWED_HOSTS: ${DOMAIN}
+    volumes:
+      - media:/app/media
+    restart: unless-stopped
+  proxy:
+    image: caddy:2
+    ports:
+      - 80:80
+      - 443:443
+      - 443:443/udp
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy:/data
+    restart: unless-stopped
+
+volumes:
+  media:
+  caddy:
