@@ -6,7 +6,7 @@
   <h1>{{ course.title }}</h1>
   {% if staffed %}<div class="actions"><a class="btn ghost" href="{% url 'courses:edit' course.pk %}">Bearbeiten</a></div>{% endif %}
 </div>
-<p class="lead">{{ course.get_kind_display }} · {{ course.term }}{% if course.subject %} · {{ course.subject }}{% endif %}</p>
+<p class="lead">{{ course.format|default:course.get_kind_display }} · {{ course.term }}{% if course.area %} · {{ course.area }}{% endif %}{% if course.subject %} · {{ course.subject }}{% endif %}</p>
 
 <div class="cols">
   <div>
@@ -14,7 +14,8 @@
       <dt>Lehrende</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
       <dt>Umfang</dt><dd>{{ course.hours|default_if_none:"–" }} SWS{% if course.kind == 'lesson' %} je Teilnahme{% endif %}</dd>
       <dt>Teilnahmen</dt><dd>{{ count }}{% if course.capacity %} von {{ course.capacity }} Plätzen{% endif %}</dd>
-      <dt>Anmeldeschluss</dt><dd>{{ course.deadline|date:"j. F Y"|default:"–" }}</dd>
+      <dt>Platzvergabe</dt><dd>{{ course.get_allocation_display|capfirst }}</dd>
+      <dt>Anmeldung</dt><dd>{% if course.opens %}vom {{ course.opens|date:"j. F" }} {% endif %}{% if course.deadline %}bis {{ course.deadline|date:"j. F Y" }}{% elif not course.opens %}–{% endif %}</dd>
       <dt>Anrechenbar für</dt><dd>{% for title, programs in modules %}{{ title }}<br><small>{% for program, codes in programs %}<a href="{{ program.get_absolute_url }}">{{ program.degree }} {{ program.name }}</a> <span class="muted">{{ codes|join:", " }}</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}</small><br>{% empty %}–{% endfor %}</dd>
     </dl>
     {% if course.description %}<p style="margin-top: 24px">{{ course.description|linebreaksbr }}</p>{% endif %}
@@ -29,16 +30,30 @@
       {% csrf_token %}
       <h3>Wöchentlich planen</h3>
       <div class="inline">{% for field in plan %}<label>{{ field.label }}{{ field }}</label>{% endfor %}</div>
-      <p class="muted" style="margin: 12px 0"><small>Bucht den Raum über die ganze Vorlesungszeit ({{ course.term.lectures_start|date:"j.n." }}–{{ course.term.lectures_end|date:"j.n.Y" }}), nur wenn alle Termine frei sind.</small></p>
+      <p class="muted" style="margin: 12px 0"><small>Bucht den Raum über die ganze Vorlesungszeit ({{ course.term.lectures_start|date:"j.n." }}–{{ course.term.lectures_end|date:"j.n.Y" }}) ohne die vorlesungsfreien Tage, nur wenn alle Termine frei sind.</small></p>
       <button class="btn">Termine buchen</button>
+    </form>
+    <form method="post" action="{% url 'courses:date' course.pk %}" class="panel" style="margin-top: 24px">
+      {% csrf_token %}
+      <h3>Einzeltermin</h3>
+      <div class="inline">{% for field in date %}<label>{{ field.label }}{{ field }}</label>{% endfor %}</div>
+      <p class="muted" style="margin: 12px 0"><small>Für Blockveranstaltungen, Proben und Nachholtermine.</small></p>
+      <button class="btn ghost">Termin buchen</button>
     </form>
     {% endif %}
   </div>
 </div>
 
-{% if eligible or own %}
+{% if eligible or own or wished %}
 <section>
   <h2>Meine Anmeldung</h2>
+  {% if wished %}
+  <form method="post" action="{% url 'courses:retract' wished.pk %}" class="actions">
+    {% csrf_token %}
+    <span>Angefragt am {{ wished.created|date:"j. F Y" }} · <span class="badge wait">Die Lehrenden entscheiden</span></span>
+    <button class="btn ghost small">Zurückziehen</button>
+  </form>
+  {% endif %}
   {% for p in own %}
   <form method="post" action="{% url 'courses:withdraw' p.pk %}" class="actions">
     {% csrf_token %}
@@ -46,14 +61,73 @@
     {% if course.is_open %}<button class="btn ghost small">Abmelden</button>{% endif %}
   </form>
   {% empty %}
-  {% if course.is_open %}
+  {% if wished %}
+  {% elif course.allocation == 'staff' %}<p class="empty">Die Lehrenden teilen die Plätze ein.</p>
+  {% elif course.allocation == 'ensemble' and course.is_open %}
+  <form method="post" action="{% url 'courses:ensemble' course.pk %}" class="form">
+    {% csrf_token %}
+    <div><label>Mein Studium<select name="study">{% for s in eligible %}<option value="{{ s.pk }}">{{ s.subject }} · {{ s.program }}</option>{% endfor %}</select></label></div>
+    {{ grouping }}
+    <div class="actions"><button class="btn">Ensemble anmelden</button></div>
+  </form>
+  {% elif course.is_open %}
   <form method="post" action="{% url 'courses:register' course.pk %}" class="actions">
     {% csrf_token %}
     <select name="study">{% for s in eligible %}<option value="{{ s.pk }}">{{ s.subject }} · {{ s.program }}</option>{% endfor %}</select>
-    <button class="btn">Anmelden</button>
+    {% if course.allocation == 'choice' %}<input name="note" placeholder="Nachricht an die Lehrenden (freiwillig)" aria-label="Nachricht an die Lehrenden">{% endif %}
+    <button class="btn">{% if course.allocation == 'choice' %}Platz anfragen{% else %}Anmelden{% endif %}</button>
   </form>
+  {% elif course.upcoming %}<p class="empty">Anmeldung ab {{ course.opens|date:"j. F Y" }}.</p>
   {% else %}<p class="empty">Anmeldeschluss vorbei.</p>{% endif %}
   {% endfor %}
+</section>
+{% endif %}
+
+{% if ensembles %}
+<section>
+  <h2>{% if staffed %}Ensembles{% else %}Mein Ensemble{% endif %}</h2>
+  <table>
+    <thead><tr><th>Besetzung</th><th>Mitglieder</th><th>Repertoire</th><th>Betreuung</th></tr></thead>
+    <tbody>
+      {% for e in ensembles %}
+      <tr>
+        <td><b>{{ e.name }}</b>{% if e.wish and not e.coach %}<br><small class="muted">Wunsch: {{ e.wish }}</small>{% endif %}</td>
+        <td><small>{% for s in e.members.all %}{{ s.person.name }} <span class="muted">{{ s.subject }}</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}</small></td>
+        <td><small>{{ e.repertoire|linebreaksbr }}</small></td>
+        <td>
+          {% if staffed %}
+          <form method="post" action="{% url 'courses:coach' e.pk %}" class="inline">
+            {% csrf_token %}
+            <select name="coach" aria-label="Betreuung"><option value="">Noch offen</option>{% for s in staff %}<option value="{{ s.pk }}"{% if s == e.coach %} selected{% endif %}>{{ s.last_name }}</option>{% endfor %}</select>
+            <button class="btn ghost small">Speichern</button>
+            <button class="link" name="dissolve" value="1"><small>auflösen</small></button>
+          </form>
+          {% else %}{{ e.coach|default:"noch offen" }}{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if signups %}
+<section>
+  <h2>Anfragen</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Studium</th><th>Nachricht</th><th>Angefragt</th><th></th></tr></thead>
+    <tbody>
+      {% for s in signups %}
+      <tr>
+        <td><a href="{{ s.study.get_absolute_url }}">{{ s.study.person.name }}</a></td>
+        <td><small>{{ s.study.subject }} · {{ s.study.program.degree }}</small></td>
+        <td><small>{{ s.note|linebreaksbr }}</small></td>
+        <td data-value="{{ s.created|date:'c' }}">{{ s.created|date:"j.n. H:i" }}</td>
+        <td class="num"><form method="post" action="{% url 'courses:choose' s.pk %}" class="actions">{% csrf_token %}<button class="btn small" name="decision" value="yes">Zulassen</button><button class="btn ghost small" name="decision" value="no">Absagen</button></form></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </section>
 {% endif %}
 

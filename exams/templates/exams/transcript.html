@@ -2,9 +2,10 @@
 {% block title %}{% if complete %}Zeugnis{% else %}Leistungsübersicht{% endif %} {{ study.person.name }}{% endblock %}
 {% block content %}
 <div class="document">
-  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button>{% if supplement %}<a class="btn ghost" href="{% url 'exams:supplement' study.pk %}">Diploma Supplement</a>{% endif %}<a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
   {% include "core/_letterhead.html" with office=sender %}
   <h1>{% if complete %}Zeugnis{% else %}Leistungsübersicht{% endif %}</h1>
+  {% if copy %}<p class="muted"><small>Abschrift zur Information. Gültig ist das unterschriebene und gesiegelte Zeugnis.</small></p>{% endif %}
   <dl class="facts">
     <dt>Name</dt><dd><b>{{ study.person.legal_name }}</b>{% if study.person.birth_name %}, geb. {{ study.person.birth_name }}{% endif %}</dd>
     <dt>Geboren</dt><dd>{{ study.person.birth_date|date:"j. F Y" }}{% if study.person.birth_place %} in {{ study.person.birth_place }}{% endif %}</dd>

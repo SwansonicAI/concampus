@@ -16,13 +16,13 @@ from students.models import Document, Study
 from .access import CODENAMES
 from .apps import tile_apps, tiles
 from .history import acting, restore
-from .models import Change, Message, Office, Person, Term, Text
+from .models import Change, Institute, Message, Office, Person, Term, Text
 from .testing import Empty, Seeded, flashes
 from .texts import TEXTS, render, send
 from .views import found
 
 PANEL = {'X-Panel': '1'}
-DEMO = ['admin', 'asa', 'pruefungsamt', 'dekanat', 'veranstaltungsbuero', 'lehre', 'student', 'bewerbung']
+DEMO = ['admin', 'asa', 'pruefungsamt', 'dekanat', 'institut', 'veranstaltungsbuero', 'lehre', 'student', 'bewerbung', 'absolvent']
 
 
 class HistoryTest(Empty):
@@ -158,6 +158,30 @@ class CapabilityTest(Seeded):
             if path.suffix in ('.py', '.html', '.js', '.css') and not {'.venv', 'migrations', 'management'} & set(path.parts) and path.name not in branding and 'test' not in path.name:
                 with self.subTest(path=str(path.relative_to(root))):
                     self.assertIsNone(names.search(path.read_text(encoding='utf-8')))
+
+
+class ReachTest(Seeded):
+    """An office limited to an Institut reads and changes the records of that Institut only."""
+
+    def test_an_institute_office_keeps_to_its_institute(self):
+        strings, client = 'Streichinstrumente und Harfe', self.login('institut')
+        studies = client.get('/studierende/liste/').context['studies']
+        self.assertTrue(studies and all(s.subject.institute.name == strings for s in studies))
+        other = Study.objects.filter(status='enrolled').exclude(subject__institute__name=strings).first()
+        self.assertEqual(client.get(f'/studierende/{other.pk}/').status_code, 403)
+        own, foreign = Room.objects.filter(institutes__name=strings).first(), Room.objects.exclude(institutes__name=strings).first()
+        self.assertEqual(client.get(f'/einstellungen/raeume/{own.pk}/').status_code, 200)
+        self.assertEqual(client.get(f'/einstellungen/raeume/{foreign.pk}/').status_code, 404)
+        piano = Institute.objects.get(name='Klavier')
+        r = client.post('/einstellungen/raeume/neu/', {'name': 'X 1', 'building': 'X', 'function': own.function_id, 'institutes': [piano.pk], 'capacity': 2})
+        self.assertTrue(r.context['form'].non_field_errors())
+        self.assertFalse(Room.objects.filter(name='X 1').exists())
+
+    def test_rights_for_the_whole_hochschule_cannot_be_limited(self):
+        r = self.login('campus').post('/einstellungen/aemter/neu/', {
+            'name': 'Institutssekretariat Klavier', 'institutes': [Institute.objects.get(name='Klavier').pk], 'capabilities': ['view_students', 'manage_terms'],
+        })
+        self.assertIn('Nur für die ganze Hochschule', str(r.context['form'].errors))
 
 
 class TextTest(Seeded):

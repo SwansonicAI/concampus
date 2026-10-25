@@ -25,7 +25,7 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-%)0d+-lm(h92#hmxl_=l)
 
 DEBUG = 'SECRET_KEY' not in os.environ
 # Accounts the login page offers without a password, to see Campus as each kind of user; only in development and on the demo server.
-DEMO = ['student', 'bewerbung', 'lehre', 'asa', 'pruefungsamt', 'dekanat', 'veranstaltungsbuero', 'praesidium', 'campus'] if DEBUG or os.environ.get('DEMO') else []
+DEMO = ['student', 'bewerbung', 'absolvent', 'lehre', 'asa', 'pruefungsamt', 'dekanat', 'institut', 'veranstaltungsbuero', 'praesidium', 'campus'] if DEBUG or os.environ.get('DEMO') else []
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split()
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # the app is only reached through the proxy
@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'exams',
     'admissions',
     'rooms',
+    'instruments',
     'analytics',
     'setup',
 ]
@@ -171,3 +172,9 @@ MAILERS = {
         'BACKEND': 'django.core.mail.backends.console.EmailBackend',
     },
 }
+if url := os.environ.get('EMAIL_URL'):  # smtp://user:password@host:587 with STARTTLS, smtps://…:465 with TLS from the start
+    url = urlsplit(url)
+    MAILERS['default'] = {'BACKEND': 'django.core.mail.backends.smtp.EmailBackend', 'OPTIONS': {
+        'host': url.hostname, 'port': url.port, 'username': unquote(url.username or ''), 'password': unquote(url.password or ''),
+        'use_ssl': url.scheme == 'smtps', 'use_tls': url.scheme == 'smtp',
+    }}

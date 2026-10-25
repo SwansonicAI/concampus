@@ -13,6 +13,14 @@
     {% if history %}<a href="{% url 'history' table object.pk %}">Verlauf</a>{% endif %}
   </div>
 </form>
+{% if object.pk and editor.invite %}
+<form method="post" action="{% url 'setup:invite' object.pk %}" class="panel" style="margin-top: 32px">
+  {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+  <h3>Zugang</h3>
+  <p class="muted"><small>Schickt {{ object.email|default:"der Person" }} einen Link, mit dem sie ihr Passwort festlegt und sich anmeldet. Er gilt drei Tage und nur einmal.</small></p>
+  <button class="btn ghost small">Einladung senden</button>
+</form>
+{% endif %}
 {% if object.pk and editor.deletable %}
 <form method="post" action="{% url 'setup:delete' editor.key object.pk %}?next={{ back|urlencode }}" style="margin-top: 32px">
   {% csrf_token %}<button class="link"><small>Löschen</small></button>

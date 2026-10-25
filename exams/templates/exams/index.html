@@ -21,8 +21,8 @@
   <tbody>
     {% for c in exams %}
     <tr>
-      <td>{{ c.date|date:"D j.n.Y"|default:"–" }}</td>
-      <td><a href="{% url 'exams:exam' c.pk %}"><b>{{ c.title }}</b></a>{% if c.subject and c.subject.name not in c.title %}<br><small class="muted">{{ c.subject }}</small>{% endif %}</td>
+      <td>{% if c.kind == 'thesis' %}Abgabe {{ c.deadline|date:"j.n.Y" }}{% else %}{{ c.date|date:"D j.n.Y"|default:"–" }}{% endif %}</td>
+      <td><a href="{% url 'exams:exam' c.pk %}"><b>{{ c.title }}</b></a>{% if c.kind == 'thesis' %}<br><small class="muted">Abschlussarbeit {{ c.candidate }}</small>{% elif c.subject and c.subject.name not in c.title %}<br><small class="muted">{{ c.subject }}</small>{% endif %}</td>
       <td>{% for s in c.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
       <td class="num">{{ c.size }}</td>
       <td>{% if c.released %}<span class="badge green">freigegeben</span>{% elif c.graded %}<span class="badge wait">{{ c.graded }} von {{ c.size }} bewertet</span>{% else %}<span class="badge open">offen</span>{% endif %}</td>
@@ -37,6 +37,25 @@
 {% if exams is not None %}<section>{% endif %}
 <h1>Meine Prüfungen</h1>
 <p class="lead">{% for s in studies %}<a class="more" href="{% url 'exams:transcript' s.pk %}">Leistungsübersicht {{ s.subject }} · {{ s.program.degree }}</a>{% if not forloop.last %} &nbsp; {% endif %}{% endfor %}</p>
+
+{% for p in theses %}
+<div class="panel" style="margin-bottom: 28px">
+  <h3>{{ p.module.title }}: {{ p.course.title }}</h3>
+  <dl class="facts">
+    <dt>Gutachter:innen</dt><dd>{% for s in p.course.staff.all %}{{ s }}{% if not forloop.last %}, {% endif %}{% endfor %}</dd>
+    <dt>Abgabe bis</dt><dd>{{ p.course.deadline|date:"l, j. F Y" }}</dd>
+    <dt>Abgegeben</dt><dd>{% if p.handed %}<a href="{{ p.handed.href }}">{{ p.handed.title }}</a> <small class="muted">{{ p.handed.created|date:"j.n.Y, H:i" }}</small>{% else %}noch nicht{% endif %}</dd>
+    {% if p.course.released %}<dt>Ergebnis</dt><dd>{% if p.passed %}<span class="badge yes">bestanden</span> {{ p.grade|floatformat:1 }}{% else %}<span class="badge no">nicht bestanden</span>{% endif %}</dd>{% endif %}
+  </dl>
+  {% if p.course.is_open and not p.course.released %}
+  <form method="post" enctype="multipart/form-data" action="{% url 'exams:submit' p.pk %}" class="inline handed" data-upload>
+    {% csrf_token %}
+    <input type="file" name="file" accept=".pdf" aria-label="Abschlussarbeit als PDF">
+    <button class="btn small">{% if p.handed %}Neue Fassung abgeben{% else %}Abgeben{% endif %}</button>
+  </form>
+  {% endif %}
+</div>
+{% endfor %}
 
 <h2>Anmeldung möglich</h2>
 <table>

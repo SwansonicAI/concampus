@@ -17,6 +17,7 @@ class Study(Tracked, models.Model):
 
     owner = 'person_id'
     capabilities = ('manage_students',)
+    scope = (['subject__institute'], ['program'])
 
     class Status(models.TextChoices):
         APPLIED = 'applied', 'Beworben'
@@ -29,6 +30,7 @@ class Study(Tracked, models.Model):
         LEFT = 'left', 'Ausgeschieden'
 
     APPLICATION = [Status.APPLIED, Status.ADMITTED, Status.WAITLISTED, Status.REJECTED]
+    FORMER = [Status.GRADUATED, Status.LEFT]  # with registered terms: studied here once
 
     person = models.ForeignKey(Person, models.CASCADE, related_name='studies', verbose_name='Person')
     program = models.ForeignKey(Program, models.PROTECT, related_name='studies', verbose_name='Studiengang')
@@ -107,11 +109,11 @@ class Study(Tracked, models.Model):
         return self.person.external_terms + here
 
     def record(self):
-        """Credited participations, one per module, a graded one where there is one. Exams count once released."""
+        """Credited participations, one per module, a graded one where there is one. Exams and theses count once released."""
         best = {}
         rows = (
             self.participations.filter(passed=True, module__isnull=False)
-            .exclude(course__kind='exam', course__released=None)
+            .exclude(course__kind__in=['exam', 'thesis'], course__released=None)
             .select_related('module', 'course__term')
         )
         for p in rows:
@@ -133,6 +135,7 @@ class StudyTerm(Tracked, models.Model):
 
     owner = 'study.person_id'
     capabilities = ('manage_students',)
+    scope = (['study__subject__institute'], ['study__program'])
 
     study = models.ForeignKey(Study, models.CASCADE, related_name='terms', verbose_name='Studium')
     term = models.ForeignKey(Term, models.PROTECT, related_name='registrations', verbose_name='Semester')
@@ -162,7 +165,10 @@ class DocumentType(Tracked, Keyed):
         FOREIGN = 'foreign', 'bei ausländischer Staatsangehörigkeit'
         NEVER = 'never', 'nicht in der Checkliste'
 
-    SYSTEM = {'notice': {'name': 'Bescheid', 'condition': Condition.NEVER}}  # what the code files itself
+    SYSTEM = {  # what the code files itself
+        'notice': {'name': 'Bescheid', 'condition': Condition.NEVER},
+        'abschlussarbeit': {'name': 'Abschlussarbeit', 'condition': Condition.NEVER, 'file_types': '.pdf'},
+    }
     capabilities = ('run_auditions',)
 
     name = models.CharField('Name', max_length=80, unique=True)
@@ -195,6 +201,14 @@ class DocumentType(Tracked, Keyed):
     def limit(self):
         return f'{number_format(self.max_mb / 1024, 1)} GB' if self.max_mb >= 1024 else f'{self.max_mb} MB'
 
+    def refuses(self, file):
+        """Why a file cannot be handed in as this kind, or ''."""
+        if self.extensions and not file.name.lower().endswith(self.extensions):
+            return f'{self} bitte als {self.file_types} hochladen.'
+        if self.max_mb and file.size > self.max_mb * 2 ** 20:
+            return f'Die Datei ist größer als {self.limit}. Bitte verkleinern und erneut hochladen.'
+        return ''
+
 
 def stored(document, filename):
     """A random name: nobody finds a file by guessing its address. The title keeps what it was called."""
@@ -206,6 +220,7 @@ class Document(Tracked, models.Model):
 
     owner = 'person_id'
     capabilities = ('manage_students',)
+    scope = (['study__subject__institute'], ['study__program'])
 
     VIDEO_FILES = ('.mp4', '.m4v', '.mov', '.webm', '.ogv', '.ogg')  # what browsers play
 
@@ -225,6 +240,15 @@ class Document(Tracked, models.Model):
 
     def __str__(self):
         return self.title
+
+    @classmethod
+    def hand_in(cls, study, kind, file):
+        """File an upload; where the kind keeps one file only, it replaces the one before."""
+        if kind.single:
+            for old in study.documents.filter(kind=kind):
+                old.file.delete(save=False)
+                old.delete()
+        return cls.objects.create(person=study.person, study=study, kind=kind, title=file.name[:120], file=file)
 
     @property
     def href(self):

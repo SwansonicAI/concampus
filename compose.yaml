@@ -1,11 +1,18 @@
 # The server: the app behind Caddy, which fetches the HTTPS certificate for DOMAIN.
-# .env next to this file holds DOMAIN, SECRET_KEY, DATABASE_URL and, on the demo server, DEMO=1.
+# .env next to this file holds DOMAIN, SECRET_KEY, DATABASE_URL, EMAIL_URL and, on the demo server, DEMO=1.
 services:
   app:
     build: .
     env_file: .env
     environment:
       ALLOWED_HOSTS: ${DOMAIN}
+    volumes:
+      - media:/app/media
+    restart: unless-stopped
+  prune:  # nightly: deletion periods (manage.py prune)
+    build: .
+    env_file: .env
+    command: sh -c 'while true; do python manage.py prune; sleep 86400; done'
     volumes:
       - media:/app/media
     restart: unless-stopped

@@ -1,0 +1,109 @@
+{% extends base %}
+{% load i18n %}
+{% block title %}Diploma Supplement {{ study.person.name }}{% endblock %}
+{% block content %}
+{% language 'en' %}
+{% with p=study.person program=study.program %}
+<div class="document">
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="more" href="{% url 'exams:transcript' study.pk %}">Zum Zeugnis</a></p>
+  {% if not finished %}<p class="no-print fail">Entwurf: Es sind {{ earned }} von {{ total }} ECTS erworben. Die Gesamtnote folgt mit dem Abschluss.</p>{% endif %}
+  {% include "core/_letterhead.html" with office=awarding|linebreaksbr %}
+  <h1>Diploma Supplement</h1>
+  {% if copy %}<p class="muted"><small>Copy for information. Valid only as the signed and sealed original.</small></p>{% endif %}
+  <p class="muted"><small>This Diploma Supplement follows the model developed by the European Commission, the Council of Europe and UNESCO/CEPES. It provides independent data to improve the international transparency and fair academic and professional recognition of qualifications.</small></p>
+
+  <section>
+    <h2>1. Holder of the qualification</h2>
+    <dl class="facts">
+      <dt>1.1 Family name</dt><dd><b>{{ p.last_name }}</b>{% if p.birth_name %}, born {{ p.birth_name }}{% endif %}</dd>
+      <dt>1.2 Given names</dt><dd>{{ p.given_names|default:p.first_name }}</dd>
+      <dt>1.3 Date of birth</dt><dd>{{ p.birth_date|date:"j F Y"|default:"–" }}{% if p.birth_place %}, {{ p.birth_place }}{% endif %}</dd>
+      <dt>1.4 Student ID</dt><dd>{{ p.matriculation|default:"–" }}</dd>
+    </dl>
+  </section>
+
+  <section>
+    <h2>2. Qualification</h2>
+    <dl class="facts">
+      <dt>2.1 Name of qualification</dt><dd>{{ program.qualification|default:program.degree }}</dd>
+      <dt>2.2 Main field of study</dt><dd>{{ program.english|default:program.name }}, main subject {{ study.subject.english|default:study.subject.name }}</dd>
+      <dt>2.3 Awarding institution</dt><dd>{{ awarding|linebreaksbr }}</dd>
+      <dt>2.4 Institution administering studies</dt><dd>Same as 2.3</dd>
+      <dt>2.5 Language of instruction and examination</dt><dd>German</dd>
+    </dl>
+  </section>
+
+  <section>
+    <h2>3. Level, length and access</h2>
+    <dl class="facts">
+      <dt>3.1 Level</dt>
+      <dd>{% if program.level == 'bachelor' %}First degree (Bachelor), EQF and DQR level 6{% elif program.level == 'master' %}Second degree (Master), EQF and DQR level 7{% else %}First degree of one integrated cycle (Diplom), equivalent to Master level, EQF and DQR level 7{% endif %}</dd>
+      <dt>3.2 Official length</dt><dd>{{ program.semesters }} semesters full-time, {{ total }} ECTS credits</dd>
+      <dt>3.3 Access requirements</dt>
+      <dd>{% if program.postgraduate %}A first higher education degree in a relevant field and an entrance examination of artistic aptitude{% else %}Higher education entrance qualification (Hochschulreife) or, by way of exception, outstanding artistic talent; in either case an entrance examination of artistic aptitude{% endif %}</dd>
+    </dl>
+  </section>
+
+  <section>
+    <h2>4. Contents and results</h2>
+    <dl class="facts">
+      <dt>4.1 Mode of study</dt><dd>Full-time</dd>
+      <dt>4.2 Learning outcomes</dt><dd>{{ program.outcomes|linebreaksbr|default:"–" }}</dd>
+      <dt>4.3 Programme details</dt><dd>Modules with credits and grades below, in the original German. Examination regulations of {{ program.version }}; studies commenced {{ study.start_term }}.</dd>
+    </dl>
+    <table>
+      <thead><tr><th>Module</th><th>Title</th><th class="num">ECTS</th><th class="num">Grade</th></tr></thead>
+      <tbody>
+        {% for r in rows %}{% if r.kind != 'part' %}
+        <tr>
+          <td class="nowrap">{{ r.node.code }}</td>
+          <td>{{ r.node.title }}{% if not r.node.done %} <small class="muted">(in progress)</small>{% endif %}</td>
+          <td class="num">{{ r.node.earned }}</td>
+          <td class="num">{% if r.node.done %}{{ r.node.grade|default_if_none:"passed" }}{% endif %}</td>
+        </tr>
+        {% endif %}{% empty %}<tr><td colspan="4" class="empty">–</td></tr>{% endfor %}
+        <tr class="total"><td colspan="2">Total</td><td class="num">{{ earned }} / {{ total }}</td><td></td></tr>
+      </tbody>
+    </table>
+    <dl class="facts" style="margin-top: 16px">
+      <dt>4.4 Grading scheme</dt>
+      <dd>
+        {% for limit, word, translated in grades %}up to {{ limit|floatformat:1 }} {{ word }} ({{ translated }}){% if not forloop.last %}; {% endif %}{% endfor %}; 4.1 to 5.0 nicht ausreichend (fail). The lowest pass grade is 4.0.
+        The overall grade is the mean of the module grades weighted as the examination regulations set.{% if program.honours %} Up to {{ program.honours|floatformat:1 }} the degree is awarded with distinction (mit Auszeichnung).{% endif %}
+      </dd>
+      <dt>4.5 Overall classification</dt>
+      <dd>{% if finished and average %}<b>{{ average|floatformat:1 }} ({{ verbal }}){% if honours %}, with distinction{% endif %}</b>{% else %}Not yet awarded{% endif %}</dd>
+    </dl>
+  </section>
+
+  <section>
+    <h2>5. Function of the qualification</h2>
+    <dl class="facts">
+      <dt>5.1 Access to further study</dt>
+      <dd>{% if program.level == 'bachelor' %}Qualifies to apply for Master programmes{% else %}Qualifies to apply for doctoral studies and for postgraduate artistic programmes{% endif %}</dd>
+      <dt>5.2 Professional status</dt><dd>Not applicable</dd>
+    </dl>
+  </section>
+
+  <section>
+    <h2>6. Additional information</h2>
+    <dl class="facts">
+      <dt>6.1 Additional information</dt><dd>–</dd>
+      <dt>6.2 Further information</dt><dd>{{ institution.website|default:"–" }}</dd>
+    </dl>
+  </section>
+
+  <section>
+    <h2>7. Certification</h2>
+    <p>This Diploma Supplement refers to the Zeugnis and the degree certificate of the same date.</p>
+    <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ today|date:"j F Y" }}</span><span>{{ signature }}<br><small class="muted">Official stamp</small></span></div>
+  </section>
+
+  <section>
+    <h2>8. National higher education system</h2>
+    <p>{{ system|linebreaksbr }}</p>
+  </section>
+</div>
+{% endwith %}
+{% endlanguage %}
+{% endblock %}

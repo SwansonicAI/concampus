@@ -7,7 +7,7 @@
   <div class="actions">
     <a class="btn ghost" href="?tag={{ prev|date:'Y-m-d' }}" data-key="ArrowLeft" title="Vorherige Woche (←)">← Woche</a>
     <a class="btn ghost" href="?tag={{ next|date:'Y-m-d' }}" data-key="ArrowRight" title="Nächste Woche (→)">Woche →</a>
-    {% if 'manage_rooms' in user.roles %}<a class="btn ghost" href="{% url 'setup:edit' 'raeume' room.pk %}?next={{ request.path|urlencode }}" data-panel>Bearbeiten</a>{% endif %}
+    {% if edit %}<a class="btn ghost" href="{% url 'setup:edit' 'raeume' room.pk %}?next={{ request.path|urlencode }}" data-panel>Bearbeiten</a>{% endif %}
     {% if bookable %}<a class="btn" href="{% url 'rooms:new' %}?raum={{ room.pk }}">Buchen</a>{% endif %}
   </div>
 </div>

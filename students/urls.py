@@ -17,4 +17,5 @@ urlpatterns = [
     path('<int:pk>/fachwechsel/', views.change, name='change'),
     path('<int:pk>/sperre/', views.hold, name='hold'),
     path('<int:pk>/bescheinigung/', views.certificate, name='certificate'),
+    path('<int:pk>/studienzeiten/', views.periods, name='periods'),
 ]

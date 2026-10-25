@@ -63,6 +63,16 @@ TEXTS = {
         'Studiengang {studiengang}, Hauptfach {hauptfach}, exmatrikuliert.',
         STUDY + ('rueckmeldesemester',), appeal=True,
     ),
+    'abschlussarbeit': Spec(
+        BESCHEID, 'Abschlussarbeit angemeldet', 'Ausgabe des Themas der Abschlussarbeit',
+        'Ihre Abschlussarbeit im Modul {modul} ist angemeldet.\n\nThema: {thema}\nGutachter:innen: {gutachter}\nAbgabe bis: {frist}\n\n'
+        'Bitte laden Sie die Arbeit bis dahin unter „Prüfungen“ als PDF hoch.',
+        STUDY + ('modul', 'thema', 'gutachter', 'frist'),
+    ),
+    'verlaengerung': Spec(
+        BESCHEID, 'Abgabefrist verlängert', 'Verlängerung der Bearbeitungszeit',
+        'Die Bearbeitungszeit Ihrer Abschlussarbeit „{thema}“ ist verlängert. Neue Abgabefrist: {frist}.', STUDY + ('thema', 'frist'),
+    ),
     'willkommen': Spec(NACHRICHT, 'Konto angelegt', 'Willkommen', 'Ihr Konto ist angelegt. Sie können sich jetzt für die Eignungsprüfung bewerben.'),
     'bewerbung': Spec(
         NACHRICHT, 'Bewerbung eingegangen', 'Bewerbung eingegangen',
@@ -86,6 +96,29 @@ TEXTS = {
         ('beitrag', 'frist'),
     ),
     'eingetragen': Spec(NACHRICHT, 'In eine Veranstaltung eingetragen', 'Eingetragen: {veranstaltung}', 'Sie wurden für „{veranstaltung}“ im {semester} eingetragen.', ('veranstaltung', 'semester')),
+    'ensemble': Spec(
+        NACHRICHT, 'Mit einem Ensemble angemeldet', 'Ensemble: {besetzung}',
+        '{von} hat Sie mit „{besetzung}“ für „{veranstaltung}“ angemeldet. Die Betreuung teilen die Lehrenden zu.', ('veranstaltung', 'besetzung', 'von'),
+    ),
+    'betreuung': Spec(
+        NACHRICHT, 'Betreuung eines Ensembles', 'Betreuung: {besetzung}',
+        '„{besetzung}“ wird in „{veranstaltung}“ von {betreuung} betreut.', ('veranstaltung', 'besetzung', 'betreuung'),
+    ),
+    'leihe': Spec(
+        NACHRICHT, 'Instrument ausgeliehen', 'Leihinstrument: {instrument}',
+        'Sie haben {instrument} ausgeliehen. Bitte geben Sie es bis zum {frist} zurück; danach ist keine Rückmeldung möglich, bis es zurück ist.',
+        ('instrument', 'frist'),
+    ),
+    'konto': Spec(
+        NACHRICHT, 'Einladung zum Konto', 'Ihr Zugang zu {hochschule}',
+        'Für Sie ist ein Konto angelegt, Benutzername: {benutzername}.\n\nLegen Sie hier Ihr Passwort fest und melden Sie sich an: {zugang}\n\n'
+        'Der Link gilt drei Tage und nur einmal.',
+        ('benutzername', 'zugang'),
+    ),
+    'kein_platz': Spec(
+        NACHRICHT, 'Kein Platz in einer Veranstaltung', 'Kein Platz: {veranstaltung}',
+        'Für „{veranstaltung}“ im {semester} konnten wir Ihnen leider keinen Platz geben.', ('veranstaltung', 'semester'),
+    ),
     'pruefungsanmeldung': Spec(NACHRICHT, 'Prüfungsanmeldung', 'Prüfungsanmeldung: {pruefung}', 'Sie sind zur Prüfung {pruefung} ({modul}) angemeldet.', ('pruefung', 'modul')),
     'ergebnis': Spec(NACHRICHT, 'Ergebnis freigegeben', 'Ergebnis: {pruefung}', 'Ihr Prüfungsergebnis ist freigegeben.', ('pruefung',)),
     'anerkennung': Spec(NACHRICHT, 'Anerkennung', 'Anerkennung: {modul}', 'Anerkannt: {modul}.\nHerkunft: {herkunft}', ('modul', 'herkunft')),
@@ -108,6 +141,25 @@ TEXTS = {
     'absender_bescheinigungen': Spec(BAUSTEIN, 'Absender der Immatrikulationsbescheinigung', '', '{hochschule}'),
     'absender_leistungen': Spec(BAUSTEIN, 'Absender der Leistungsübersichten und Zeugnisse', '', '{hochschule}'),
     'unterschrift_zeugnisse': Spec(BAUSTEIN, 'Unterschrift auf Zeugnissen', '', 'Vorsitz Prüfungsausschuss'),
+    'ds_hochschule': Spec(BAUSTEIN, 'Diploma Supplement: Hochschule und Status', '', '{hochschule}\nUniversity of Music, state institution'),
+    'ds_hochschulsystem': Spec(
+        BAUSTEIN, 'Diploma Supplement: Hochschulsystem (Abschnitt 8)', '',
+        'Higher education in Germany is offered at three types of institutions: Universitäten (universities), Fachhochschulen or '
+        'Hochschulen für Angewandte Wissenschaften (universities of applied sciences), and Kunst- und Musikhochschulen (universities of '
+        'art and music), which prepare students for artistic careers and for teaching the arts. All are state institutions or '
+        'state-recognised, and all award Bachelor and Master degrees.\n\n'
+        'Programmes are structured in two cycles. Bachelor programmes last six to eight semesters (180 to 240 ECTS credits) and lead to a '
+        'first degree that qualifies for a profession. Master programmes last two to four semesters (60 to 120 ECTS credits) and lead to a '
+        'second degree; together with the Bachelor they amount to 300 ECTS credits. Some programmes lead to a Diplom or a Staatsprüfung '
+        '(state examination) in one integrated cycle, equivalent to the Master level. Bachelor degrees are at level 6, Master and integrated '
+        'degrees at level 7 of the German and the European Qualifications Framework (DQR, EQF). Programmes are accredited under the rules '
+        'of the Akkreditierungsrat.\n\n'
+        'Grades range from 1.0 (sehr gut, very good) to 4.0 (ausreichend, sufficient); 5.0 (nicht ausreichend) is a fail. Access to higher '
+        'education requires the Allgemeine Hochschulreife or an equivalent; universities of art and music also admit by an entrance '
+        'examination of artistic aptitude, by way of exception without the Hochschulreife.\n\n'
+        'National sources of information: Kultusministerkonferenz (KMK), www.kmk.org; Hochschulrektorenkonferenz (HRK), www.hrk.de; '
+        'Akkreditierungsrat, www.akkreditierungsrat.de; German ENIC-NARIC, www.kmk.org/zab.',
+    ),
     'anmeldung': Spec(BAUSTEIN, 'Begrüßung auf der Anmeldeseite', '', 'Campus ist die Verwaltung von Studium, Lehre, Prüfungen, Aufnahme und Räumen der {hochschule}.'),
     'bewerbung_hinweise': Spec(
         BAUSTEIN, 'Hinweise beim Bewerben', '',
@@ -164,3 +216,8 @@ def block(key, **values):
 def send(key, person, link='', **values):
     subject, body = render(key, vorname=person.first_name, nachname=person.last_name, **values)
     return Message.send(person, subject, body, link)
+
+
+def mail(key, person, **values):
+    """By e-mail only, for what must not stay readable in the Postfach, where offices see it too: a sign-in link."""
+    Message.mail(person, *render(key, vorname=person.first_name, nachname=person.last_name, **values))

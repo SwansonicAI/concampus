@@ -19,12 +19,25 @@
     <thead><tr><th>Veranstaltung</th><th>Art</th><th class="num">SWS</th><th class="num">Teilnahmen</th></tr></thead>
     <tbody>
       {% for c in teaching %}
-      <tr><td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a></td><td>{{ c.get_kind_display }}</td><td class="num">{{ c.hours|default_if_none:"" }}</td><td class="num">{{ c.size }}</td></tr>
+      <tr><td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a></td><td>{{ c.format|default:c.get_kind_display }}</td><td class="num">{{ c.hours|default_if_none:"" }}</td><td class="num">{{ c.size }}</td></tr>
       {% empty %}<tr><td colspan="4" class="empty">Keine Veranstaltungen in diesem Semester.</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </section>
+{% if coached %}
+<section>
+  <h2>Meine Ensembles</h2>
+  <table data-panel>
+    <thead><tr><th>Besetzung</th><th>Mitglieder</th><th>Veranstaltung</th></tr></thead>
+    <tbody>
+      {% for e in coached %}
+      <tr><td><b>{{ e.name }}</b></td><td>{% for s in e.members.all %}{{ s.person.name }}{% if not forloop.last %} · {% endif %}{% endfor %}</td><td><a href="{% url 'courses:course' e.course.pk %}">{{ e.course.title }}</a></td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
 {% if students %}
 <section>
   <h2>Meine Klasse</h2>

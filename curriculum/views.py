@@ -60,6 +60,6 @@ def program(request, pk):
             row['offers'] = sorted({c for i in row['items'] for c in offers[i.pk]}, key=lambda c: c.title)
     figures = bool(request.user.roles & OVERSIGHT)
     return render(request, 'curriculum/program.html', {
-        'program': program, 'rows': rows, 'semesters': range(1, program.semesters + 1), 'term': term, 'edit': 'edit_curriculum' in request.user.roles,
+        'program': program, 'rows': rows, 'semesters': range(1, program.semesters + 1), 'term': term, 'edit': request.user.may('edit_curriculum', program),
         'total': sum(m.credits for m in tree), 'figures': figures, 'students': figures and program.studies.filter(status='enrolled').count(),
     })

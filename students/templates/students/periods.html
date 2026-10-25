@@ -1,0 +1,41 @@
+{% extends base %}
+{% block title %}Studienzeitbescheinigung{% endblock %}
+{% block content %}
+<div class="document">
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
+  {% include "core/_letterhead.html" with office=sender %}
+  <h1>Studienzeit&shy;bescheinigung</h1>
+  <p>Hiermit werden die Studienzeiten an der {{ institution.name }} bescheinigt für</p>
+  <dl class="facts">
+    <dt>Name</dt><dd><b>{{ person.legal_name }}</b>{% if person.birth_name %}, geb. {{ person.birth_name }}{% endif %}</dd>
+    <dt>Geboren</dt><dd>{{ person.birth_date|date:"j. F Y" }}{% if person.birth_place %} in {{ person.birth_place }}{% endif %}</dd>
+    <dt>Matrikelnummer</dt><dd>{{ person.matriculation|default:"–" }}</dd>
+  </dl>
+  <section>
+    <table>
+      <thead><tr><th>Semester</th><th>Zeitraum</th><th>Studiengang und Hauptfach</th><th class="num">Fachsemester</th></tr></thead>
+      <tbody>
+        {% for term, s, leave, semester in rows %}
+        <tr>
+          <td class="nowrap">{{ term }}</td>
+          <td class="nowrap">{{ term.start|date:"d.m.Y" }} bis {{ term.end|date:"d.m.Y" }}</td>
+          <td>{{ s.program.degree }} {{ s.program.name }}, {{ s.subject }}</td>
+          <td class="num">{% if leave %}Urlaubssemester{% else %}{{ semester }}{% endif %}</td>
+        </tr>
+        {% empty %}<tr><td colspan="4" class="empty">Keine Semester.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+  <dl class="facts" style="margin-top: 16px">
+    {% for s in studies %}
+    <dt>{{ s.program.degree }} {{ s.program.name }}, {{ s.subject }}</dt>
+    <dd>{% if s.status == 'enrolled' %}immatrikuliert{% elif s.status == 'graduated' %}abgeschlossen zum {{ s.since|date:"j. F Y" }}{% else %}ohne Abschluss beendet zum {{ s.since|date:"j. F Y" }}{% endif %}</dd>
+    {% endfor %}
+    <dt>Semester an dieser Hochschule</dt><dd>{{ count }}{% if leave %}, davon {{ leave }} Urlaubssemester{% endif %}</dd>
+    {% if person.external_terms %}<dt>An anderen Hochschulen</dt><dd>{{ person.external_terms }} Semester</dd>{% endif %}
+  </dl>
+  <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ today|date:"j. F Y" }}</span><span>{{ sender }}</span></div>
+  <p class="muted" style="margin-top: 48px"><small>Diese Bescheinigung wurde maschinell erstellt und ist ohne Unterschrift gültig.</small></p>
+</div>
+{% endblock %}

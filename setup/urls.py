@@ -7,6 +7,7 @@ urlpatterns = [
     path('', views.index, name='index'),
     path('texte/', views.texts, name='texts'),
     path('texte/<str:key>/', views.text, name='text'),
+    path('konten/<int:pk>/einladung/', views.invite, name='invite'),
     path('<str:key>/', views.listing, name='list'),
     path('<str:key>/neu/', views.edit, name='new'),
     path('<str:key>/<int:pk>/', views.edit, name='edit'),

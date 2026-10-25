@@ -1,0 +1,6 @@
+{% with here=request.resolver_match.url_name %}
+<nav class="subnav">
+  {% if 'manage_instruments' in user.roles %}<a href="{% url 'instruments:index' %}" class="{% if here == 'index' or here == 'instrument' %}on{% endif %}">Leihinstrumente</a>{% endif %}
+  <a href="{% url 'instruments:mine' %}" class="{% if here == 'mine' %}on{% endif %}">Meine Leihinstrumente</a>
+</nav>
+{% endwith %}

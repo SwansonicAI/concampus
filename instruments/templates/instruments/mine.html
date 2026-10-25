@@ -1,0 +1,22 @@
+{% extends base %}
+{% block title %}Meine Leihinstrumente{% endblock %}
+{% block subnav %}{% include "instruments/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Meine Leihinstrumente</h1>
+<table>
+  <thead><tr><th>Instrument</th><th>Inventarnummer</th><th>Ausgeliehen</th><th>Rückgabe bis</th><th>Zurück</th></tr></thead>
+  <tbody>
+    {% for loan in loans %}
+    <tr>
+      <td><b>{{ loan.instrument.name }}</b>{% if loan.note %}<br><small class="muted">{{ loan.note }}</small>{% endif %}</td>
+      <td>{{ loan.instrument.number }}</td>
+      <td>{{ loan.start|date:"j.n.Y" }}</td>
+      <td>{{ loan.due|date:"j.n.Y" }}{% if loan.overdue %} <span class="badge no">überfällig</span>{% endif %}</td>
+      <td>{{ loan.returned|date:"j.n.Y"|default:"–" }}</td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty">Sie haben keine Instrumente ausgeliehen.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if loans %}<p class="muted"><small>Bitte geben Sie Instrumente rechtzeitig zurück: Solange eines überfällig ist, ist keine Rückmeldung möglich.</small></p>{% endif %}
+{% endblock %}

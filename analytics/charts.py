@@ -83,7 +83,7 @@ def short(label):
 def chart(query, person, title=''):
     """A table as the page shows it: bars or columns for one dimension, a shaded grid for two; numbers open their records."""
     m, t = query.measure, table(query.measure, query.keys, query.terms, query.where)
-    open_ = m.capability in person.roles
+    open_ = person.everywhere(m.capability)
     found = {'title': title, 'query': query, 'table': t, 'total': figure(t.total, m)}
     if len(query.keys) == 1:
         dim, key = t.dims[0], query.keys[0]

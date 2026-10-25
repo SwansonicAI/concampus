@@ -13,7 +13,7 @@ class RoomsConfig(Tile, AppConfig):
     url = 'rooms:index'
 
     def title(self, roles):
-        if roles - {'applicant'}:
+        if roles - {'applicant', 'alumni'}:
             return 'Räume'
 
     def features(self, person):
@@ -38,7 +38,7 @@ class RoomsConfig(Tile, AppConfig):
 
         today = timezone.localdate()
         if 'manage_bookings' in person.roles:
-            return f'{Booking.objects.filter(start__date=today).count()} Buchungen heute'
+            return f'{person.within(Booking.objects.filter(start__date=today), "manage_bookings").count()} Buchungen heute'
         if 'student' in person.roles:
             daily = Institution.get().student_daily_hours
             return f'Heute noch {number_format(daily - quota(person, today))} von {daily} Std. Übezeit'

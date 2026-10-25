@@ -30,9 +30,11 @@ class Subject(Tracked, models.Model):
     """Main subject (Hauptfach)."""
 
     capabilities = ('edit_curriculum',)
+    scope = (['institute'], ['programs'])
 
     name = models.CharField('Name', max_length=80, unique=True)
     institute = models.ForeignKey('core.Institute', models.SET_NULL, null=True, blank=True, related_name='subjects', verbose_name='Institut')
+    english = models.CharField('Englisch', max_length=80, blank=True, help_text='Für das Diploma Supplement.')
 
     class Meta:
         ordering = ['name']
@@ -47,6 +49,12 @@ class Program(Tracked, models.Model):
     """A degree programme under one version of its regulations (Studiengang + Prüfungsordnung)."""
 
     capabilities = ('edit_curriculum',)
+    scope = (['subjects__institute'], ['pk'])
+
+    class Level(models.TextChoices):  # as the Diploma Supplement states it
+        BACHELOR = 'bachelor', 'Bachelor, erster Abschluss (EQR 6)'
+        MASTER = 'master', 'Master, zweiter Abschluss (EQR 7)'
+        DIPLOMA = 'diplom', 'Diplom, grundständig (EQR 7)'
 
     name = models.CharField('Name', max_length=120)
     degree = models.CharField('Abschluss', max_length=40)
@@ -61,6 +69,13 @@ class Program(Tracked, models.Model):
         'Mit Auszeichnung bis', max_digits=2, decimal_places=1, null=True, blank=True,
         help_text='Gesamtnote, bis zu der „mit Auszeichnung“ vergeben wird; leer: nie.',
     )
+    thesis_weeks = models.PositiveSmallIntegerField(
+        'Bearbeitungszeit der Abschlussarbeit (Wochen)', null=True, blank=True, help_text='Ab Ausgabe des Themas; leer: die Abgabe wird von Hand eingetragen.',
+    )
+    level = models.CharField('Stufe', max_length=8, choices=Level, blank=True, help_text='Für das Diploma Supplement; leer: keines.')
+    qualification = models.CharField('Abschluss ausgeschrieben', max_length=120, blank=True, help_text='Wie im Diploma Supplement, z. B. „Bachelor of Music (B.Mus.)“.')
+    english = models.CharField('Studiengang auf Englisch', max_length=120, blank=True)
+    outcomes = models.TextField('Lernergebnisse auf Englisch', blank=True, help_text='Abschnitt 4.2 des Diploma Supplement.')
 
     class Meta:
         ordering = ['-degree', 'name', '-version']
@@ -115,6 +130,7 @@ class Module(Tracked, models.Model):
     """
 
     capabilities = ('edit_curriculum',)
+    scope = (['program__subjects__institute'], ['program'])
 
     program = models.ForeignKey(Program, models.CASCADE, related_name='modules', verbose_name='Studiengang')
     parent = models.ForeignKey('self', models.CASCADE, null=True, blank=True, related_name='children', verbose_name='Übergeordnet')

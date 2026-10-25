@@ -1,7 +1,4 @@
 from django.apps import AppConfig
-
-from datetime import timedelta
-
 from django.urls import reverse
 from django.utils import timezone
 
@@ -26,7 +23,7 @@ class AdmissionsConfig(Tile, AppConfig):
         from students.models import Study
 
         if 'view_applications' in person.roles:
-            return f'{Study.objects.filter(status=Study.Status.APPLIED).count()} offene Bewerbungen'
+            return f'{person.within(Study.objects.filter(status=Study.Status.APPLIED), "view_applications").count()} offene Bewerbungen'
         if 'teacher' in person.roles:
             juries = person.teaching.filter(kind=Course.Kind.AUDITION, released=None).count()
             return f'{plural(juries, "Eignungsprüfung", "Eignungsprüfungen")} als Kommission'
@@ -44,12 +41,12 @@ class AdmissionsConfig(Tile, AppConfig):
                 feature('Meine Bewerbung', reverse('admissions:mine'), 'status einladung termin ergebnis video unterlagen hochladen'),
                 feature('Neue Bewerbung', reverse('admissions:apply'), 'bewerben studiengang'),
             ]
-        elif 'student' in roles:
+        elif roles & {'student', 'alumni'}:
             found.append(feature('Bewerbung für ein weiteres Studium', reverse('admissions:apply'), 'master konzertexamen bewerben eignungsprüfung'))
         return found
 
     def tasks(self, person):
-        from core.models import Institution
+        from core.models import Institution, Term
         from courses.models import Course
         from students.models import Study
 
@@ -64,15 +61,19 @@ class AdmissionsConfig(Tile, AppConfig):
                     found.append(task(f'{course.title}: Ihre Wertung fehlt für {plural(missing, "Bewerbung", "Bewerbungen")}', url, course.deadline))
         if 'decide_applications' in person.roles:
             ready = [
-                s for s in Study.objects.filter(status=Study.Status.APPLIED).prefetch_related('participations__course')
+                s for s in person.within(Study.objects.filter(status=Study.Status.APPLIED), 'decide_applications').prefetch_related('participations__course')
                 if (stages := [p for p in s.participations.all() if p.course.kind == Course.Kind.AUDITION])
                 and all(p.passed is not None for p in stages)
                 and (any(p.passed is False for p in stages) or any(p.course.stage == 'Hauptfach' for p in stages))
             ]
             if ready:
                 found.append(task(f'{plural(len(ready), "Bewerbung", "Bewerbungen")} entscheiden', reverse('admissions:board')))
-        from .views import document_types, incomplete, uploads_open
+        from .views import accept_by, document_types, incomplete, uploads_open, vacancies
 
+        if 'decide_applications' in person.roles:
+            for term in filter(None, [Term.current(), Term.upcoming()]):
+                if moves := vacancies(term, person):
+                    found.append(task(f'Nachrücken zum {term}: {plural(len(moves), "Studiengang", "Studiengänge")}', f"{reverse('admissions:board')}?semester={term.pk}"))
         types = document_types()
         for study in person.studies.filter(status=Study.Status.APPLIED).select_related('person', 'program', 'subject').prefetch_related('documents'):
             if uploads_open(study) and (missing := incomplete(study, types)):
@@ -80,7 +81,8 @@ class AdmissionsConfig(Tile, AppConfig):
                 found.append(task(f'Für die Bewerbung {study.subject} fehlt noch: {", ".join(missing)}', reverse('admissions:mine'), deadline))
         days = Institution.get().accept_days
         for study in person.studies.filter(status=Study.Status.ADMITTED, terms=None):
-            found.append(task(f'Studienplatz {study.subject} annehmen oder ablehnen', reverse('admissions:mine'), study.since + timedelta(days=days)))
+            if accept_by(study, days) >= timezone.localdate():
+                found.append(task(f'Studienplatz {study.subject} annehmen oder ablehnen', reverse('admissions:mine'), accept_by(study, days)))
         for p in person.studies.filter(status=Study.Status.APPLIED).values_list('participations__course__title', 'participations__slot'):
             if p[1] and p[1] > timezone.now():
                 found.append(task(f'{p[0]} am {timezone.localtime(p[1]):%d.%m. um %H:%M} Uhr', reverse('admissions:mine'), timezone.localdate(p[1])))

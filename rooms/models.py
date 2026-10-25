@@ -42,6 +42,7 @@ class Room(Tracked, models.Model):
     """A room of the Hochschule or a venue it uses. Institutes book their own rooms; others are given out centrally."""
 
     capabilities = ('manage_rooms',)
+    scope = (['institutes'], [])
 
     name = models.CharField('Name', max_length=60, unique=True, help_text='Raumnummer oder Name, z. B. „FH 214“ oder „Festsaal“.')
     purpose = models.CharField('Bezeichnung', max_length=80, blank=True, help_text='Wie an der Tür, z. B. „Unterrichtsraum Klavier“.')
@@ -117,6 +118,7 @@ class Booking(Tracked, models.Model):
 
     owner = 'person_id'
     capabilities = ('manage_bookings',)
+    scope = (['room__institutes'], [])
     keep = timedelta(days=730)
 
     room = models.ForeignKey(Room, models.CASCADE, related_name='bookings', verbose_name='Raum')

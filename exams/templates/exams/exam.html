@@ -7,7 +7,7 @@
   <div class="actions">
     {% if office %}<a class="btn ghost" href="{% url 'exams:edit' course.pk %}">Bearbeiten</a>{% endif %}
     {% if history %}<a class="btn ghost" href="{% url 'history' 'courses.course' course.pk %}" data-panel>Verlauf</a>{% endif %}
-    {% if course.kind == 'exam' %}
+    {% if course.kind != 'recognition' %}
     <form method="post" action="{% url 'exams:release' course.pk %}">
       {% csrf_token %}
       {% if course.released %}{% if decide %}<button class="btn ghost">Wieder öffnen</button>{% endif %}
@@ -20,11 +20,28 @@
 
 <div class="cols">
   <dl class="facts">
+    {% if course.kind == 'thesis' %}
+    <dt>Gutachter:innen</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
+    <dt>Abgabe bis</dt><dd>{{ course.deadline|date:"j. F Y"|default:"–" }}</dd>
+    <dt>Abgegeben</dt>
+    <dd>
+      {% if handed %}<a href="{{ handed.href }}">{{ handed.title }}</a> <small class="muted">{{ handed.created|date:"j.n.Y, H:i" }}</small>{% else %}noch nicht{% endif %}
+      {% if office and not course.released and rows %}
+      <form method="post" enctype="multipart/form-data" action="{% url 'exams:submit' rows.0.pk %}" class="inline handed" data-upload>
+        {% csrf_token %}
+        <input type="file" name="file" accept=".pdf" aria-label="Abschlussarbeit">
+        <button class="btn ghost small">Abgabe verbuchen</button>
+      </form>
+      {% endif %}
+    </dd>
+    {% if course.description %}<dt>Notiz</dt><dd>{{ course.description|linebreaksbr }}</dd>{% endif %}
+    {% else %}
     <dt>Kommission</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
     <dt>Anmeldeschluss</dt><dd>{{ course.deadline|date:"j. F Y"|default:"–" }}</dd>
+    {% endif %}
     <dt>Bewertung</dt><dd>{% if course.points %}Punkte, bestanden ab {{ course.pass_mark }}{% else %}Noten 1,0–5,0, bestanden bis 4,0{% endif %}</dd>
     <dt>Module</dt><dd>{% for title, programs in modules %}{{ title }}<br><small class="muted">{% for program, codes in programs %}{{ program.degree }} {{ program.name }} {{ codes|join:", " }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</small><br>{% empty %}–{% endfor %}</dd>
-    <dt>Räume</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, <a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a><br>{% empty %}–{% endfor %}</dd>
+    {% if course.kind != 'thesis' %}<dt>Räume</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, <a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a><br>{% empty %}–{% endfor %}</dd>{% endif %}
   </dl>
   {% if slots and not course.released and course.kind == 'exam' %}
   <form method="post" action="{% url 'exams:plan' course.pk %}" class="panel">
@@ -38,9 +55,9 @@
 </div>
 
 <section>
-  <h2>Kandidat:innen</h2>
+  <h2>{% if course.kind == 'thesis' %}Gutachten{% else %}Kandidat:innen{% endif %}</h2>
   {% if not decide %}<p class="lead">Sie tragen Ihre eigene Wertung ein. Das Ergebnis ergibt sich aus den Wertungen der ganzen Kommission.</p>{% endif %}
   {% include "courses/_sheet.html" with decide=decide %}
-  {% if office and not course.released %}{% include "courses/_add.html" %}{% endif %}
+  {% if office and not course.released and course.kind != 'thesis' %}{% include "courses/_add.html" %}{% endif %}
 </section>
 {% endblock %}

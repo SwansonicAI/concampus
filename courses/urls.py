@@ -17,4 +17,9 @@ urlpatterns = [
     path('<int:pk>/anmelden/', views.register, name='register'),
     path('<int:pk>/planen/', views.plan, name='plan'),
     path('teilnahme/<int:pk>/abmelden/', views.withdraw, name='withdraw'),
+    path('<int:pk>/termin/', views.date, name='date'),
+    path('<int:pk>/ensemble/', views.ensemble, name='ensemble'),
+    path('ensemble/<int:pk>/', views.coach, name='coach'),
+    path('anfrage/<int:pk>/', views.choose, name='choose'),
+    path('anfrage/<int:pk>/zurueckziehen/', views.retract, name='retract'),
 ]

@@ -112,7 +112,7 @@ class RulesAreDataTest(BookingRulesTest):
     def test_the_hochschule_sets_the_horizon_and_the_quota(self):
         Institution.objects.update(student_ahead_hours=48, student_daily_hours=1)
         self.assertEqual(flashes(self.book(**times(slot(30)), follow=True)), ['Buchung gespeichert.'])
-        self.refused(self.book(**times(slot(5), 120)), 'Kontingent von 1 Stunden')
+        self.refused(self.book(**times(slot(5, 120), 120)), 'Kontingent von 1 Stunden')
 
     def test_a_category_sets_its_own_rules(self):
         BookingCategory.objects.filter(key='kammermusik').update(participants=2, ahead_hours=24)

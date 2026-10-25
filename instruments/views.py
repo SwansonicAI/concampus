@@ -1,0 +1,89 @@
+from django.contrib import messages
+from django.db.models import Prefetch
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
+from django.utils import timezone
+from django.views.decorators.http import require_POST
+
+from core import texts
+from core.access import require
+from core.models import Institute, Term
+from core.text import matching
+from courses.views import enrolled
+from .forms import LendForm
+from .models import Instrument, Loan
+
+STATES = [('frei', 'frei'), ('verliehen', 'verliehen'), ('ueberfaellig', 'überfällig'), ('gesperrt', 'nicht verleihbar')]
+
+
+def state(instrument):
+    """What the list says of an instrument; needs `open`, its loan not yet returned, from `pool`."""
+    if instrument.open:
+        return 'ueberfaellig' if instrument.open[0].overdue else 'verliehen'
+    return 'frei' if instrument.available else 'gesperrt'
+
+
+def pool(person):
+    """The instruments the person looks after, each with `open` (its current loan, if any)."""
+    return (
+        person.within(Instrument.objects.all(), 'manage_instruments').select_related('institute')
+        .prefetch_related(Prefetch('loans', Loan.objects.filter(returned=None).select_related('person'), to_attr='open'))
+    )
+
+
+@require('manage_instruments')
+def index(request):
+    instruments = pool(request.user)
+    stand, institute, q = (request.GET.get(key, '').strip() for key in ('stand', 'institut', 'q'))
+    if institute.isdigit():
+        instruments = instruments.filter(institute=institute)
+    instruments = list(matching(instruments, q, 'name', 'number', 'maker', 'loans__person__last_name') if q else instruments)
+    for i in instruments:
+        i.state = state(i)
+    return render(request, 'instruments/index.html', {
+        'instruments': [i for i in instruments if not stand or i.state == stand],
+        'states': [(key, label, sum(i.state == key for i in instruments)) for key, label in STATES],
+        'stand': stand, 'institute': institute, 'q': q,
+        'institutes': Institute.objects.filter(instruments__in=pool(request.user).values('pk')).distinct(),
+    })
+
+
+@require('manage_instruments')
+def instrument(request, pk):
+    instrument = get_object_or_404(pool(request.user), pk=pk)
+    term = Term.current()  # lent for the semester, as a rule
+    return render(request, 'instruments/instrument.html', {
+        'instrument': instrument, 'state': state(instrument), 'loans': instrument.loans.select_related('person'),
+        'lending': LendForm(initial={'due': term and term.end}) if state(instrument) == 'frei' else None, 'enrolled': enrolled(),
+    })
+
+
+@require('manage_instruments')
+@require_POST
+def lend(request, pk):
+    instrument = get_object_or_404(pool(request.user), pk=pk)
+    form = LendForm(request.POST)
+    if state(instrument) != 'frei':
+        messages.error(request, 'Das Instrument ist nicht frei.')
+    elif not form.is_valid():
+        messages.error(request, ' '.join(e for errors in form.errors.values() for e in errors))
+    else:
+        loan = Loan.objects.create(instrument=instrument, person=form.cleaned_data['who'], due=form.cleaned_data['due'], note=form.cleaned_data['note'])
+        texts.send('leihe', loan.person, reverse('instruments:mine'), instrument=instrument.name, frist=f'{loan.due:%d.%m.%Y}')
+        messages.success(request, f'{instrument.name} an {loan.person} verliehen, zurück bis {loan.due:%d.%m.%Y}.')
+    return redirect('instruments:instrument', pk=instrument.pk)
+
+
+@require('manage_instruments')
+@require_POST
+def give_back(request, pk):
+    loan = get_object_or_404(request.user.within(Loan.objects.filter(returned=None), 'manage_instruments'), pk=pk)
+    loan.returned = timezone.localdate()
+    loan.save(update_fields=['returned'])
+    messages.success(request, f'{loan.instrument.name} zurückgenommen.')
+    return redirect('instruments:instrument', pk=loan.instrument_id)
+
+
+def mine(request):
+    """The instruments the person has borrowed, out now and before."""
+    return render(request, 'instruments/mine.html', {'loans': request.user.loans.select_related('instrument')})

@@ -59,7 +59,7 @@ def export(q):
 @require('view_statistics')
 def records(request):
     q = Query.read(request.GET)
-    if q.measure.capability not in request.user.roles:
+    if not request.user.everywhere(q.measure.capability):  # names of the whole Hochschule
         raise PermissionDenied
     found = q.measure.objects(narrowed(q.measure, q.terms, q.where))
     return render(request, 'analytics/records.html', {

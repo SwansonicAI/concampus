@@ -1,3 +1,8 @@
+import re
+
+from django.core import mail
+from django.test import Client
+
 from core.models import Change, Office, Person, Term
 from core.testing import Seeded, flashes
 from curriculum.models import Module, Program, Subject
@@ -45,7 +50,7 @@ class EditorTest(Seeded):
                 self.assertEqual(admin.get(f'/einstellungen/{key}/').status_code, 200)
                 r = admin.post(f'/einstellungen/{key}/neu/', data, headers=PANEL)
                 self.assertEqual(r.status_code, 204, r.context and r.context['form'].errors)
-                obj = e.objects().order_by('-pk').first()
+                obj = e.model.objects.order_by('-pk').first()
                 table = e.model._meta.label_lower
                 self.assertTrue(Change.objects.filter(table=table, row=obj.pk, action='created').exists())
                 admin.post(f'/einstellungen/{key}/{obj.pk}/', {**data, **change})
@@ -88,3 +93,17 @@ class CurriculumEditorTest(Seeded):
         r = dekanat.post(f'/einstellungen/module/{root.pk}/', {'parent': module.pk, 'title': root.title, 'credits': root.credits, 'weight': '0'})
         self.assertIn('parent', r.context['form'].errors)
         self.assertIn('Modul hinzufügen', dekanat.get(f'/studiengaenge/{program.pk}/').text)
+
+
+class InvitationTest(Seeded):
+    def test_a_new_account_sets_its_password_from_the_invitation(self):
+        campus = self.login('campus')
+        campus.post('/einstellungen/konten/neu/', {'first_name': 'Ida', 'last_name': 'Neu', 'email': 'ida.neu@example.org', 'username': 'ida.neu', 'is_active': 'on'})
+        person = Person.objects.get(username='ida.neu')
+        with self.captureOnCommitCallbacks(execute=True):
+            campus.post(f'/einstellungen/konten/{person.pk}/einladung/')
+        link = re.search(r'https?://\S+', mail.outbox[-1].body).group()
+        anon = Client()
+        form = anon.get(link, follow=True).redirect_chain[-1][0]
+        anon.post(form, {'new_password1': 'Geige-Weimar-2026', 'new_password2': 'Geige-Weimar-2026'})
+        self.assertTrue(Client().login(username='ida.neu', password='Geige-Weimar-2026'))

@@ -1,0 +1,51 @@
+{% extends base %}
+{% block title %}{{ instrument.name }}{% endblock %}
+{% block subnav %}{% include "instruments/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>{{ instrument.name }}</h1>
+  <div class="actions">
+    <a class="btn ghost" href="{% url 'setup:edit' 'instrumente' instrument.pk %}?next={{ request.path|urlencode }}" data-panel>Bearbeiten</a>
+    <a class="btn ghost" href="{% url 'history' 'instruments.instrument' instrument.pk %}" data-panel>Verlauf</a>
+  </div>
+</div>
+<p class="lead">{{ instrument.number }}{% if instrument.institute %} · {{ instrument.institute }}{% endif %}</p>
+
+<div class="cols">
+  <dl class="facts">
+    <dt>Hersteller und Baujahr</dt><dd>{{ instrument.maker|default:"–" }}</dd>
+    <dt>Zustand und Zubehör</dt><dd>{{ instrument.note|linebreaksbr|default:"–" }}</dd>
+    <dt>Stand</dt>
+    <dd>
+      {% if instrument.open %}{% with loan=instrument.open.0 %}
+      <span class="badge {% if loan.overdue %}no{% else %}wait{% endif %}">{% if loan.overdue %}überfällig{% else %}verliehen{% endif %}</span>
+      an {{ loan.person }} seit {{ loan.start|date:"j.n.Y" }}, zurück bis {{ loan.due|date:"j.n.Y" }}{% if loan.note %}<br><small class="muted">{{ loan.note }}</small>{% endif %}
+      <form method="post" action="{% url 'instruments:give_back' loan.pk %}" style="margin-top: 8px">{% csrf_token %}<button class="btn small">Zurückgenommen</button></form>
+      {% endwith %}{% elif instrument.available %}<span class="badge green">frei</span>{% else %}<span class="badge">nicht verleihbar</span>{% endif %}
+    </dd>
+  </dl>
+  {% if lending %}
+  <form method="post" action="{% url 'instruments:lend' instrument.pk %}" class="panel">
+    {% csrf_token %}
+    <h3>Verleihen</h3>
+    <div class="inline">{% for field in lending %}<label>{{ field.label }}{{ field }}</label>{% endfor %}</div>
+    <p class="muted" style="margin: 12px 0"><small>Die Person erhält eine Nachricht mit dem Rückgabetag. Wer überzieht, kann sich nicht zurückmelden, bis das Instrument zurück ist.</small></p>
+    <button class="btn">Verleihen</button>
+    {% include "students/_enrolled.html" %}
+  </form>
+  {% endif %}
+</div>
+
+<section>
+  <h2>Leihen</h2>
+  <table>
+    <thead><tr><th>An</th><th>Ausgeliehen</th><th>Rückgabe bis</th><th>Zurück</th><th>Notiz</th></tr></thead>
+    <tbody>
+      {% for loan in loans %}
+      <tr><td>{{ loan.person.name }}</td><td data-value="{{ loan.start|date:'c' }}">{{ loan.start|date:"j.n.Y" }}</td><td data-value="{{ loan.due|date:'c' }}">{{ loan.due|date:"j.n.Y" }}</td><td>{{ loan.returned|date:"j.n.Y"|default:"–" }}</td><td><small>{{ loan.note }}</small></td></tr>
+      {% empty %}<tr><td colspan="5" class="empty">Noch nie verliehen.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

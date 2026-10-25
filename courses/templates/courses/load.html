@@ -19,7 +19,7 @@
     {% for teacher, courses, total in rows %}
     <tr>
       <td data-value="{{ teacher.name }}"><b>{{ teacher }}</b></td>
-      <td>{% for c in courses %}<a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a> <small class="muted">{{ c.load }}</small>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+      <td>{% for c, load in courses %}<a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a> <small class="muted">{{ load }}</small>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
       <td class="num"><b>{{ total }}</b></td>
     </tr>
     {% empty %}<tr><td colspan="3" class="empty">Keine Lehre erfasst.</td></tr>

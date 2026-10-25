@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from django.db.models import Q
 
 from django.urls import reverse
 from django.utils.formats import date_format, number_format
@@ -16,7 +17,7 @@ class StudentsConfig(Tile, AppConfig):
     def title(self, roles):
         if 'view_students' in roles:
             return 'Studierende'
-        if 'student' in roles:
+        if roles & {'student', 'alumni'}:
             return 'Mein Studium'
 
     def figure(self, person):
@@ -26,12 +27,17 @@ class StudentsConfig(Tile, AppConfig):
         term = Term.upcoming()
         paid = StudyTerm.objects.filter(term=term, paid__isnull=False).values('study__person')
         if 'view_students' in person.roles:
-            enrolled = Study.objects.filter(status=Study.Status.ENROLLED)
+            enrolled = person.within(Study.objects.filter(status=Study.Status.ENROLLED), 'view_students')
             people = enrolled.values('person').distinct().count()  # people, as Auswertungen counts them, not their studies
             if not (term and term.reregistration_open):
                 return f'{people} immatrikuliert'
             unpaid = enrolled.exclude(person__in=paid).values('person').distinct().count()
             return f'{people} immatrikuliert · {unpaid} ohne Rückmeldung'
+        if 'student' not in person.roles:
+            from .views import own
+
+            study = own(person)
+            return f'{study.get_status_display()} am {date_format(study.since, "j.n.Y")}'
         if not term:
             return ''
         if not term.reregistration_open:
@@ -39,6 +45,8 @@ class StudentsConfig(Tile, AppConfig):
         return f'Rückmeldung {term}: {"erledigt" if paid.filter(study__person=person).exists() else "offen"}'
 
     def features(self, person):
+        from .models import Study
+
         found = []
         if 'view_students' in person.roles:
             found += [
@@ -49,11 +57,11 @@ class StudentsConfig(Tile, AppConfig):
             found += [
                 feature('Rückmeldung', reverse('students:reregistration'), 'semesterbeitrag zahlung bezahlt überweisung exmatrikulieren'),
             ]
-        for study in person.studies.filter(status='enrolled'):
-            found += [
-                feature(f'Mein Studium {study.subject}', study.get_absolute_url(), 'akte status ects fachsemester rückmeldung urlaubssemester beurlaubung'),
-                feature('Immatrikulationsbescheinigung', reverse('students:certificate', args=[study.pk]), 'bescheinigung studienbescheinigung nachweis drucken pdf'),
-            ]
+        for study in person.studies.filter(Q(status='enrolled') | Q(status__in=Study.FORMER, terms__isnull=False)).distinct().select_related('subject'):
+            found.append(feature(f'Mein Studium {study.subject}', study.get_absolute_url(), 'akte status ects fachsemester rückmeldung urlaubssemester beurlaubung abschluss'))
+            if study.status == 'enrolled':
+                found.append(feature('Immatrikulationsbescheinigung', reverse('students:certificate', args=[study.pk]), 'bescheinigung studienbescheinigung nachweis drucken pdf'))
+            found.append(feature(f'Studienzeitbescheinigung {study.subject}', reverse('students:periods', args=[study.pk]), 'studienzeiten semester rentenversicherung nachweis drucken pdf'))
         return found
 
     def tasks(self, person):
@@ -65,7 +73,7 @@ class StudentsConfig(Tile, AppConfig):
         enrolled = Study.objects.filter(status=Study.Status.ENROLLED)
         found = []
         if 'manage_students' in person.roles:
-            accepted = Study.objects.filter(status=Study.Status.ADMITTED, terms__isnull=False).distinct().count()
+            accepted = person.within(Study.objects.filter(status=Study.Status.ADMITTED, terms__isnull=False), 'manage_students').distinct().count()
             if accepted:
                 found.append(task(f'{plural(accepted, "angenommenen Studienplatz", "angenommene Studienplätze")} immatrikulieren', reverse('admissions:board')))
         if 'manage_reregistration' in person.roles:

@@ -2,11 +2,17 @@ from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
 
-from core.models import Message, Person
+from datetime import timedelta
+
+from django.db.models import Count
+from django.utils import timezone
+
+from core.models import Message, Person, Term
 from core.testing import Seeded, flashes
 from courses.models import Course, Participation, Score
 from students.models import Document, DocumentType, Study, StudyTerm
-from .views import checklist, incomplete
+from .retention import forget
+from .views import checklist, incomplete, vacancies
 
 PANEL = {'X-Panel': '1'}
 
@@ -32,6 +38,21 @@ class DecisionTest(Seeded):
         asa.post(f'/studierende/{study.pk}/immatrikulieren/')
         study.refresh_from_db()
         self.assertEqual(study.status, Study.Status.ENROLLED)
+
+
+class MoveUpTest(Seeded):
+    def test_an_offer_not_accepted_in_time_goes_down_the_list(self):
+        term = Term.current()
+        intake, (late,), (behind,) = vacancies(term, Person.objects.get(username='asa'))[0]
+        applicant = Client()
+        applicant.force_login(late.person)
+        applicant.post(f'/aufnahme/meine/{late.pk}/annahme/', {'decision': 'yes', 'insurer': 'BARMER', 'insurance': 'gesetzlich'})
+        self.assertFalse(late.terms.exists())
+        self.login('asa').post(f'/aufnahme/pruefung/{intake.pk}/nachruecken/')
+        self.assertEqual(Study.objects.get(pk=late.pk).status, Study.Status.LEFT)
+        self.assertEqual(Study.objects.get(pk=behind.pk).status, Study.Status.ADMITTED)
+        self.assertTrue(Message.objects.filter(person=behind.person, subject='Zulassungsbescheid').exists())
+        self.assertEqual(vacancies(term, Person.objects.get(username='asa')), [])
 
 
 class ApplicationTest(Seeded):
@@ -175,3 +196,18 @@ class SignupTest(Seeded):
         Client().post('/konto/password_reset/', {'email': person.email})
         self.assertEqual(len(mail.outbox), 1)
         self.assertIn('/konto/reset/', mail.outbox[0].body)
+
+
+class RetentionTest(Seeded):
+    def test_applications_that_came_to_nothing_are_forgotten_but_still_counted(self):
+        study = (
+            Study.objects.filter(status='rejected', start_term=Term.current(), documents__isnull=False)
+            .annotate(n=Count('person__studies', distinct=True)).filter(n=1).select_related('person').first()
+        )
+        gender = study.person.gender
+        forget(timezone.localdate() + timedelta(days=1))
+        person = Person.objects.get(pk=study.person_id)
+        self.assertFalse(study.documents.exists())
+        self.assertEqual((person.last_name, person.email, person.is_active, person.gender), ('Anonym', '', False, gender))
+        self.assertTrue(Study.objects.filter(pk=study.pk).exists())
+        self.assertFalse(Message.objects.filter(person=person).exists())

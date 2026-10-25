@@ -30,6 +30,27 @@
   </tbody>
 </table>
 
+{% if vacancies %}
+<section>
+  <h2>Nachrücken</h2>
+  <p class="lead">Zulassungen, die bis zur Frist nicht angenommen sind, erlöschen. Freie Plätze gehen nach Punkten an die Nachrückliste.</p>
+  <table>
+    <thead><tr><th>Studiengang und Hauptfach</th><th class="num">Studienplätze</th><th>Frist verstrichen</th><th>Rückt nach</th><th></th></tr></thead>
+    <tbody>
+      {% for intake, lapsed, waiting in vacancies %}
+      <tr>
+        <td><b>{{ intake.program.degree }} {{ intake.program.name }}</b><br><small class="muted">{{ intake.subject }}</small></td>
+        <td class="num">{{ intake.capacity }}</td>
+        <td>{% for s in lapsed %}<a href="{% url 'admissions:application' s.pk %}" data-panel>{{ s.person.name }}</a><br>{% empty %}–{% endfor %}</td>
+        <td>{% for s in waiting %}<a href="{% url 'admissions:application' s.pk %}" data-panel>{{ s.person.name }}</a> <small class="muted">{{ s.points|floatformat:1 }} Punkte</small><br>{% empty %}<span class="muted">Niemand auf der Nachrückliste</span>{% endfor %}</td>
+        <td class="num"><form method="post" action="{% url 'admissions:move_up' intake.pk %}">{% csrf_token %}<button class="btn small">{% if waiting %}Nachrücken{% else %}Schließen{% endif %}</button></form></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
 <section>
   <div class="head">
     <h2>Stand der Bewerbungen</h2>
@@ -49,7 +70,7 @@
           <b>{{ s.person.name }}</b>
           {{ s.subject }} · {{ s.program.degree }}<br>
           {% if s.slot %}<small class="muted">Nächster Termin {{ s.slot|date:"j.n. H:i" }}</small>{% endif %}
-          {% if s.accepted and s.status == 'admitted' %}<small class="muted">Platz angenommen</small>{% endif %}
+          {% if s.accepted and s.status == 'admitted' %}<small class="muted">Platz angenommen</small>{% elif s.lapsed %}<small class="fail">Annahmefrist verstrichen</small>{% endif %}
           <span class="chips">{% for p in s.stages %}<span class="chip{% if p.passed %} yes{% elif p.passed is False %} no{% endif %}" title="{{ p.course.title }}">{{ p.course.stage }}{% if p.grade is not None and p.course.stage != 'Video' %} {{ p.grade|floatformat:1 }}{% endif %}</span>{% endfor %}{% if s.incomplete %}<span class="chip no" title="Fehlt: {{ s.incomplete|join:', ' }}">unvollständig</span>{% endif %}</span>
         </a>
         {% empty %}<p class="empty">–</p>{% endfor %}

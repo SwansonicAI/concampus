@@ -1,30 +1,32 @@
 from django import forms
 from django.contrib import messages
+from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import PermissionDenied
 from django.db.models import ProtectedError, RestrictedError
 from django.forms import modelform_factory
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
-from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.encoding import force_bytes
+from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_encode
 from django.views.decorators.http import require_POST
 
-from core.access import require
-from core.models import Text
+from core.access import kept, require
+from core.models import Person, Text
 from core.text import matching
-from core.texts import TEXTS, Values, basics, wording
+from core.texts import TEXTS, Values, basics, mail, wording
 from core.views import SHOWN
 from .editors import EDITORS, formfield
 
 
 def usable(person):
     """The settings lists a person keeps up, for the start page and the tile."""
-    return [e for e in EDITORS.values() if e.section and e.capability in person.roles]
+    return [e for e in EDITORS.values() if e.section and e.usable(person)]
 
 
 def places(person):
     """(section, title, url, count) of everything under Einstellungen the person keeps up."""
-    found = [(e.section, e.title, reverse('setup:list', args=[e.key]), e.objects().count()) for e in usable(person)]
+    found = [(e.section, e.title, reverse('setup:list', args=[e.key]), e.objects(person).count()) for e in usable(person)]
     if 'manage_institution' in person.roles:
         found.append(('Verwaltung', 'Texte', reverse('setup:texts'), len(TEXTS)))
     return found
@@ -34,7 +36,7 @@ def editor(request, key):
     found = EDITORS.get(key)
     if found is None:
         raise Http404
-    if found.capability not in request.user.roles:
+    if not found.usable(request.user):
         raise PermissionDenied
     return found
 
@@ -70,7 +72,8 @@ def listing(request, key):
     if not e.section:
         raise Http404
     q = request.GET.get('q', '').strip()
-    objects = matching(e.objects(), q, *e.search) if q else e.objects()
+    objects = e.objects(request.user)
+    objects = matching(objects, q, *e.search) if q else objects
     return render(request, 'setup/list.html', {
         'editor': e, 'q': q, 'rows': [(obj, [cell(obj, name) for _, name in e.columns]) for obj in objects[:SHOWN]],
         'count': objects.count(), 'history': e.model.visible_to(request.user.roles),
@@ -81,10 +84,10 @@ def edit(request, key, pk=None):
     e = editor(request, key)
     if not (pk or e.creatable):
         raise Http404
-    obj = get_object_or_404(e.objects(), pk=pk) if pk else e.start(request)
+    obj = get_object_or_404(e.objects(request.user), pk=pk) if pk else e.start(request)
     form = modelform_factory(e.model, form=e.form, fields=e.fields, formfield_callback=formfield)(request.POST or None, instance=obj)
-    if form.is_valid():
-        obj = form.save()
+    if form.is_valid() and (saved := kept(form, request.user, e.capability)):
+        obj = saved
         messages.success(request, f'„{obj}“ gespeichert.')
         return redirect(back(request, e))
     return render(request, 'setup/form.html', {
@@ -136,12 +139,26 @@ def text(request, key):
     })
 
 
+@require('manage_accounts')
+@require_POST
+def invite(request, pk):
+    """Send a person a link to set their password and sign in; it works once, for a few days."""
+    person = get_object_or_404(Person, pk=pk, is_active=True)
+    if not person.email:
+        messages.error(request, 'Ohne E-Mail-Adresse kann keine Einladung verschickt werden.')
+    else:
+        link = request.build_absolute_uri(reverse('password_reset_confirm', args=[urlsafe_base64_encode(force_bytes(person.pk)), default_token_generator.make_token(person)]))
+        mail('konto', person, zugang=link, benutzername=person.username)
+        messages.success(request, f'Einladung an {person.email} verschickt.')
+    return redirect(request.POST.get('next') if url_has_allowed_host_and_scheme(request.POST.get('next', ''), {request.get_host()}) else reverse('setup:edit', args=['konten', pk]))
+
+
 @require_POST
 def delete(request, key, pk):
     e = editor(request, key)
     if not e.deletable:
         raise Http404
-    obj = get_object_or_404(e.objects(), pk=pk)
+    obj = get_object_or_404(e.objects(request.user), pk=pk)
     try:
         obj.delete()
     except (ProtectedError, RestrictedError):

@@ -1,3 +1,4 @@
+from core.apps import tiles
 from core.models import Message, Person, Term
 from core.testing import Seeded, flashes
 from .models import Document, Study, StudyTerm
@@ -67,3 +68,13 @@ class FileTest(Seeded):
         self.assertTrue(Study.objects.filter(status='guest').exists())
         jena = Study.objects.filter(program__degree='B.Ed.', participations__course__kind='recognition').first()
         self.assertTrue(sum(m.earned for m in jena.progress()[0]))
+
+
+class AlumniTest(Seeded):
+    def test_graduates_keep_their_study_file(self):
+        person = Person.objects.get(username='absolvent')
+        study, client = person.studies.get(), self.login('absolvent')
+        self.assertEqual([title for _, title in tiles(person)], ['Mein Studium'])
+        self.assertEqual(client.get(f'/studierende/{study.pk}/studienzeiten/').context['count'], study.program.semesters)
+        self.assertTrue(client.get(f'/pruefungen/leistungen/{study.pk}/').context['copy'])
+        self.assertContains(client.get(f'/pruefungen/leistungen/{study.pk}/diploma-supplement/'), 'Copy for information')

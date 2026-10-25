@@ -1,4 +1,5 @@
 from django.apps import AppConfig
+from django.db.models import Count, Q
 from django.utils.formats import number_format
 
 from django.urls import reverse
@@ -29,10 +30,10 @@ class CoursesConfig(Tile, AppConfig):
         if not term:
             return ''
         if 'manage_courses' in person.roles:
-            return f'{term.courses.filter(kind__in=TEACHING).count()} Veranstaltungen im {term}'
+            return f'{person.within(term.courses.filter(kind__in=TEACHING), "manage_courses").count()} Veranstaltungen im {term}'
         if 'teacher' in person.roles:
             courses = person.teaching.filter(term=term, kind__in=TEACHING)
-            return f'{plural(courses.count(), "Veranstaltung", "Veranstaltungen")} · {number_format(deputat(courses))} SWS'
+            return f'{plural(courses.count(), "Veranstaltung", "Veranstaltungen")} · {number_format(deputat(courses, person))} SWS'
         count = Course.objects.filter(term=term, kind__in=TEACHING, participations__study__person=person).distinct().count()
         return f'{count} belegt im {term}'
 
@@ -60,6 +61,10 @@ class CoursesConfig(Tile, AppConfig):
         if 'teacher' in person.roles:
             for course in person.teaching.filter(term=term, kind=TEACHING[0], bookings=None):
                 found.append(task(f'Termine planen: {course.title}', course.get_absolute_url()))
+            for course in person.teaching.filter(term=term, signups__isnull=False).annotate(n=Count('signups')):
+                found.append(task(f'{course.title}: {plural(course.n, "Anfrage", "Anfragen")} entscheiden', course.get_absolute_url()))
+            for course in person.teaching.filter(term=term).annotate(n=Count('ensembles', filter=Q(ensembles__coach=None))).filter(n__gt=0):
+                found.append(task(f'{course.title}: {plural(course.n, "Ensemble", "Ensembles")} ohne Betreuung', course.get_absolute_url()))
         if 'roll_over' in person.roles:
             from .views import missing
 

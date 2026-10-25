@@ -8,13 +8,49 @@ from curriculum.models import Module, Program, Subject
 from students.models import Study
 
 
+class Area(Tracked, models.Model):
+    """A Fachgebiet: how the Vorlesungsverzeichnis groups courses, e.g. Musiktheorie or Kammermusik."""
+
+    capabilities = ('manage_courses',)
+
+    name = models.CharField('Name', max_length=80, unique=True)
+    order = models.PositiveSmallIntegerField('Reihenfolge', default=0)
+
+    class Meta:
+        ordering = ['order', 'name']
+        verbose_name = 'Fachgebiet'
+        verbose_name_plural = 'Fachgebiete'
+
+    def __str__(self):
+        return self.name
+
+
+class Format(Tracked, models.Model):
+    """A Lehrform, as the Studienpläne abbreviate it: Vorlesung (V), Seminar (S), Einzelunterricht (E) …"""
+
+    capabilities = ('manage_courses',)
+
+    name = models.CharField('Name', max_length=60, unique=True)
+    short = models.CharField('Kürzel', max_length=8, blank=True, help_text='Wie in den Studienplänen, z. B. „S“ für Seminar.')
+    order = models.PositiveSmallIntegerField('Reihenfolge', default=0)
+
+    class Meta:
+        ordering = ['order', 'name']
+        verbose_name = 'Lehrform'
+        verbose_name_plural = 'Lehrformen'
+
+    def __str__(self):
+        return self.name
+
+
 class Course(Tracked, models.Model):
-    """Anything a term offers that people take part in: seminars, lessons, exams, auditions, recognitions.
+    """Anything a term offers that people take part in: seminars, lessons, exams, auditions, recognitions, theses.
 
     They share staff, participations, rooms and results; the kind decides which app shows them and how.
     """
 
     capabilities = ('manage_courses', 'manage_exams', 'run_auditions')
+    scope = (['subject__institute', 'staff__institute'], ['program', 'modules__program'])
 
     class Kind(models.TextChoices):
         COURSE = 'course', 'Lehrveranstaltung'
@@ -22,12 +58,21 @@ class Course(Tracked, models.Model):
         EXAM = 'exam', 'Prüfung'
         AUDITION = 'audition', 'Eignungsprüfung'
         RECOGNITION = 'recognition', 'Anerkennung'
+        THESIS = 'thesis', 'Abschlussarbeit'  # one candidate: the title is the topic, the staff its examiners, the deadline when it is due
 
-    PANEL = [Kind.EXAM, Kind.AUDITION]
+    class Allocation(models.TextChoices):
+        ORDER = 'order', 'in der Reihenfolge der Anmeldung'
+        CHOICE = 'choice', 'die Lehrenden wählen aus den Anmeldungen'
+        STAFF = 'staff', 'die Lehrenden teilen ein, ohne Anmeldung'
+        ENSEMBLE = 'ensemble', 'als Ensemble; die Lehrenden teilen die Betreuung zu'
+
+    PANEL = [Kind.EXAM, Kind.AUDITION, Kind.THESIS]
 
     term = models.ForeignKey(Term, models.PROTECT, related_name='courses', verbose_name='Semester')
     kind = models.CharField('Art', max_length=12, choices=Kind, default=Kind.COURSE)
     title = models.CharField('Titel', max_length=200)
+    area = models.ForeignKey(Area, models.SET_NULL, null=True, blank=True, related_name='courses', verbose_name='Fachgebiet')
+    format = models.ForeignKey(Format, models.SET_NULL, null=True, blank=True, related_name='courses', verbose_name='Lehrform')
     program = models.ForeignKey(
         Program, models.PROTECT, null=True, blank=True, related_name='auditions', verbose_name='Studiengang',
         help_text='Nur bei Eignungsprüfungen: Studiengang, für den sie zulässt.',
@@ -37,6 +82,8 @@ class Course(Tracked, models.Model):
     staff = models.ManyToManyField(Person, blank=True, related_name='teaching', verbose_name='Lehrende / Kommission')
     hours = models.DecimalField('SWS', max_digits=4, decimal_places=1, null=True, blank=True, help_text='Bei Einzelunterricht je Teilnahme.')
     capacity = models.PositiveSmallIntegerField('Plätze', null=True, blank=True)
+    allocation = models.CharField('Platzvergabe', max_length=8, choices=Allocation, default=Allocation.ORDER)
+    opens = models.DateField('Anmeldung ab', null=True, blank=True, help_text='Erster Tag der Anmeldung; leer: sofort.')
     deadline = models.DateField('Anmeldeschluss', null=True, blank=True, help_text='Letzter Tag für An- und Abmeldung.')
     pass_mark = models.DecimalField(
         'Bestehensgrenze', max_digits=4, decimal_places=1, null=True, blank=True,
@@ -69,12 +116,18 @@ class Course(Tracked, models.Model):
         )
 
     def get_absolute_url(self):
-        app = {self.Kind.EXAM: 'exams:exam', self.Kind.RECOGNITION: 'exams:exam', self.Kind.AUDITION: 'admissions:audition'}
+        app = {self.Kind.EXAM: 'exams:exam', self.Kind.RECOGNITION: 'exams:exam', self.Kind.THESIS: 'exams:exam', self.Kind.AUDITION: 'admissions:audition'}
         return reverse(app.get(self.kind, 'courses:course'), args=[self.pk])
 
     @property
     def is_open(self):
-        return self.deadline is None or timezone.localdate() <= self.deadline
+        today = timezone.localdate()
+        return (self.opens is None or self.opens <= today) and (self.deadline is None or today <= self.deadline)
+
+    @property
+    def upcoming(self):
+        """Registration has yet to open."""
+        return self.opens is not None and timezone.localdate() < self.opens
 
     @property
     def points(self):
@@ -104,6 +157,7 @@ class Participation(Tracked, models.Model):
 
     owner = 'study.person_id'
     capabilities = ('decide_results', 'run_auditions')
+    scope = (['study__subject__institute', 'course__subject__institute'], ['study__program'])
 
     course = models.ForeignKey(Course, models.CASCADE, related_name='participations', verbose_name='Veranstaltung')
     study = models.ForeignKey(Study, models.CASCADE, related_name='participations', verbose_name='Studium')
@@ -127,11 +181,58 @@ class Participation(Tracked, models.Model):
         return f'{self.study.person} · {self.course}'
 
 
+class Signup(Tracked, models.Model):
+    """A wish for a place in a course whose staff choose; accepted, it becomes a participation."""
+
+    owner = 'study.person_id'
+    capabilities = ('manage_courses',)
+    scope = (['course__subject__institute', 'course__staff__institute'], ['study__program'])
+
+    course = models.ForeignKey(Course, models.CASCADE, related_name='signups', verbose_name='Veranstaltung')
+    study = models.ForeignKey(Study, models.CASCADE, related_name='signups', verbose_name='Studium')
+    module = models.ForeignKey(Module, models.PROTECT, null=True, blank=True, related_name='+', verbose_name='Modul')
+    note = models.TextField('Nachricht an die Lehrenden', blank=True)
+    created = models.DateTimeField('Angefragt', default=timezone.now)
+
+    class Meta:
+        ordering = ['created']
+        verbose_name = 'Platzanfrage'
+        verbose_name_plural = 'Platzanfragen'
+        constraints = [models.UniqueConstraint(fields=['course', 'study'], name='unique_signup')]
+
+    def __str__(self):
+        return f'{self.study.person} · {self.course}'
+
+
+class Ensemble(Tracked, models.Model):
+    """Students who play together in a course such as Kammermusik: registered as a group, coached by one of its teachers."""
+
+    capabilities = ('manage_courses',)
+    scope = (['course__subject__institute', 'course__staff__institute'], ['members__program'])
+
+    course = models.ForeignKey(Course, models.CASCADE, related_name='ensembles', verbose_name='Veranstaltung')
+    name = models.CharField('Besetzung', max_length=80)
+    members = models.ManyToManyField(Study, related_name='ensembles', verbose_name='Mitglieder')
+    repertoire = models.TextField('Repertoire', blank=True)
+    wish = models.ForeignKey(Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Wunsch-Betreuung')
+    coach = models.ForeignKey(Person, models.SET_NULL, null=True, blank=True, related_name='coaching', verbose_name='Betreuung')
+    created = models.DateTimeField('Angemeldet', default=timezone.now)
+
+    class Meta:
+        ordering = ['created']
+        verbose_name = 'Ensemble'
+        verbose_name_plural = 'Ensembles'
+
+    def __str__(self):
+        return f'{self.name} · {self.course}'
+
+
 class Score(Tracked, models.Model):
     """One examiner's mark. The participation's grade is the panel's decision, usually the mean."""
 
     owner = 'participation.study.person_id'
     capabilities = ('decide_results', 'run_auditions')
+    scope = (['participation__study__subject__institute', 'participation__course__subject__institute'], ['participation__study__program'])
 
     participation = models.ForeignKey(Participation, models.CASCADE, related_name='scores', verbose_name='Teilnahme')
     examiner = models.ForeignKey(Person, models.CASCADE, related_name='scores', verbose_name='Prüfer:in')

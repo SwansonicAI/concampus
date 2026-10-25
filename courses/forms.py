@@ -7,6 +7,7 @@ from core.dates import ClockField, DayField, MomentField
 from core.models import Person
 from curriculum.models import Module
 from rooms.forms import bookable
+from students.models import Study
 from .models import Course
 
 
@@ -24,6 +25,25 @@ class PlanForm(forms.Form):
     def __init__(self, *args, person, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['room'].queryset = bookable(person)
+
+
+class DateForm(forms.Form):
+    """One date of a course, such as a day of a block seminar."""
+
+    day = DayField(label='Tag')
+    begin = ClockField(label='Von')
+    until = ClockField(label='Bis')
+    room = forms.ModelChoiceField(label='Raum', queryset=None, empty_label='Bitte wählen')
+
+    def __init__(self, *args, person, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['room'].queryset = bookable(person)
+
+    def clean(self):
+        data = super().clean()
+        if data.get('begin') and data.get('until') and data['until'] <= data['begin']:
+            raise forms.ValidationError('„Bis“ muss nach „Von“ liegen.')
+        return data
 
 
 class SlotForm(forms.Form):
@@ -48,11 +68,12 @@ def leaf_modules():
 
 
 class CourseForm(forms.ModelForm):
+    opens = DayField(label='Anmeldung ab', required=False, help_text='Erster Tag der Anmeldung; leer: sofort.')
     deadline = DayField(label='Anmeldeschluss', required=False, help_text='Letzter Tag für An- und Abmeldung.')
 
     class Meta:
         model = Course
-        fields = ['title', 'kind', 'subject', 'staff', 'modules', 'hours', 'capacity', 'deadline', 'description']
+        fields = ['title', 'kind', 'area', 'format', 'subject', 'staff', 'modules', 'hours', 'capacity', 'allocation', 'opens', 'deadline', 'description']
         widgets = {
             'staff': forms.CheckboxSelectMultiple,
             'modules': forms.CheckboxSelectMultiple,
@@ -70,12 +91,35 @@ class CourseForm(forms.ModelForm):
             self.fields['modules'].choices = leaf_modules()
         if 'subject' in self.fields:
             self.fields['subject'].empty_label = 'Keines'
+        if 'area' in self.fields:
+            self.fields['area'].empty_label = 'Keines'
 
 
 class ExamForm(CourseForm):
     class Meta(CourseForm.Meta):
         fields = ['title', 'staff', 'modules', 'deadline', 'pass_mark', 'max_points', 'description']
         labels = {'staff': 'Kommission', 'modules': 'Prüft das Modul'}
+
+
+class ThesisForm(CourseForm):
+    """An Abschlussarbeit. Registering it, the office picks the module of the candidate's plan it is written for."""
+
+    module = forms.ModelChoiceField(label='Modul', queryset=Module.objects.none(), empty_label=None)
+    deadline = DayField(label='Abgabe bis', help_text='Bei einer Verlängerung das neue Datum; die Person erhält einen Bescheid.')
+    field_order = ['module', 'title', 'staff', 'deadline', 'description']
+
+    class Meta(CourseForm.Meta):
+        fields = ['title', 'staff', 'deadline', 'description']
+        labels = {'title': 'Thema', 'staff': 'Gutachter:innen', 'description': 'Notiz'}
+
+    def __init__(self, *args, study=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if study is None:  # registered already: the module stays
+            del self.fields['module']
+            return
+        exams = study.program.modules.filter(children=None, exam=True).order_by(F('semester').desc(nulls_last=True), 'code')
+        self.fields['module'].queryset = exams
+        self.fields['module'].initial = exams.filter(title__icontains='arbeit').first()  # Bachelor-, Master-, Diplomarbeit come last in the plan
 
 
 class AuditionForm(CourseForm):
@@ -87,6 +131,31 @@ class AuditionForm(CourseForm):
         fields = ['title', 'term', 'program', 'subject', 'video', 'staff', 'deadline', 'capacity', 'pass_mark', 'max_points', 'accompaniment', 'description']
         labels = {'staff': 'Kommission', 'capacity': 'Studienplätze'}
         help_texts = {'program': 'Nur bei der ersten Stufe: der Studiengang, für den man sich hier bewirbt.'}
+
+
+class EnsembleForm(forms.Form):
+    """Register an ensemble: the person registering and the others who play with them."""
+
+    name = forms.CharField(label='Besetzung', max_length=80, help_text='Z. B. „Streichquartett“ oder „Duo Violine/Klavier“.')
+    members = forms.CharField(label='Weitere Mitglieder', widget=forms.Textarea(attrs={'rows': 3}), help_text='Eine Person je Zeile: Name oder E-Mail-Adresse.')
+    repertoire = forms.CharField(label='Repertoire', widget=forms.Textarea(attrs={'rows': 3}), required=False)
+    wish = forms.ModelChoiceField(label='Wunsch-Betreuung', queryset=None, required=False, empty_label='Keine Angabe')
+
+    def __init__(self, *args, course, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.course = course
+        self.fields['wish'].queryset = course.staff.all()
+
+    def clean_members(self):
+        """Each line one enrolled person for whose Studiengang the course counts."""
+        found = []
+        for line in filter(None, (line.strip() for line in self.cleaned_data['members'].splitlines())):
+            studies = [s for s in Study.find(line) if self.course.modules.filter(program=s.program_id).exists()]
+            if len(studies) != 1:
+                names = ', '.join(str(s.person) for s in studies)
+                raise forms.ValidationError(f'„{line}“: mehrere passen ({names}). Bitte genauer.' if studies else f'„{line}“: niemand, für den die Veranstaltung anrechenbar ist.')
+            found.append(studies[0])
+        return found
 
 
 class AddForm(forms.Form):

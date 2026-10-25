@@ -4,7 +4,7 @@ from django import forms
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Count, F, Q
+from django.db.models import Count, F, Prefetch, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -20,6 +20,7 @@ from core.text import fold, matching
 from core.views import SHOWN, without_term
 from curriculum.models import Program, Subject
 from curriculum.views import plan
+from instruments.models import Loan
 from .models import Document, Study, StudyTerm
 
 class ChangeForm(forms.Form):
@@ -32,11 +33,19 @@ class ComposeForm(forms.Form):
     body = forms.CharField(label='Text', widget=forms.Textarea)
 
 
+def own(person):
+    """The person's own study to open: the one under way, else the latest they finished or left."""
+    return (
+        person.studies.filter(status=Study.Status.ENROLLED).first()
+        or person.studies.filter(status__in=Study.FORMER, terms__isnull=False).order_by('-since').first()
+    )
+
+
 def index(request):
     roles = request.user.roles
     if 'view_students' in roles:
         return redirect('students:list')
-    study = request.user.studies.filter(status=Study.Status.ENROLLED).first()
+    study = own(request.user)
     if study is None:
         raise PermissionDenied
     return redirect(study.get_absolute_url())
@@ -53,7 +62,7 @@ def roster(request):
     today = timezone.localdate()
     status = request.GET.get('status', Study.Status.ENROLLED)
     studies = (
-        Study.objects.filter(status=status).select_related('person', 'program', 'subject', 'start_term', 'teacher')
+        request.user.within(Study.objects.filter(status=status), 'view_students').select_related('person', 'program', 'subject', 'start_term', 'teacher')
         .annotate(fs=F('prior_terms') + Count('terms', filter=Q(terms__leave=False, terms__term__start__lte=today)))
         .order_by('person__last_name', 'person__first_name')
     )
@@ -89,7 +98,7 @@ def roster(request):
 @require('manage_students')
 def letters(request):
     """The latest Bescheid of each chosen study, ready to print."""
-    studies = Study.objects.filter(pk__in=request.GET.getlist('study')).select_related('person')
+    studies = request.user.within(Study.objects.filter(pk__in=request.GET.getlist('study')), 'manage_students').select_related('person')
     issued = Document.objects.filter(study__in=studies, message__isnull=False).select_related('message__person').order_by('created')
     latest = {d.study_id: d.message for d in issued}
     return render(request, 'core/letter.html', {'letters': latest.values(), 'missing': [s.person.name for s in studies if s.pk not in latest]})
@@ -98,7 +107,7 @@ def letters(request):
 @require('message_students')
 def compose(request):
     """One message to the chosen people, e.g. everyone in their first semester."""
-    studies = Study.objects.filter(pk__in=request.POST.getlist('study') or request.GET.getlist('study')).select_related('person')
+    studies = request.user.within(Study.objects.filter(pk__in=request.POST.getlist('study') or request.GET.getlist('study')), 'message_students').select_related('person')
     people = sorted({s.person for s in studies}, key=lambda p: p.name)
     back = request.POST.get('next') or request.GET.get('next', '')
     if not url_has_allowed_host_and_scheme(back, {request.get_host()}):
@@ -115,8 +124,8 @@ def compose(request):
 def study(request, pk):
     person = request.user
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term', 'teacher', 'focus'), pk=pk)
-    office = 'manage_students' in person.roles
-    if not ('view_files' in person.roles or study.person == person or study.teacher == person):
+    office = person.may('manage_students', study)
+    if not (study.person == person or study.teacher == person or person.may('view_files', study)):
         raise PermissionDenied
     tree, average = study.progress()
     upcoming = Term.upcoming()
@@ -137,6 +146,8 @@ def study(request, pk):
         'documents': study.documents.all(),
         'others': study.person.studies.exclude(pk=study.pk).select_related('program', 'subject'),
         'change': ChangeForm() if office else None,
+        'thesis': study.status == Study.Status.ENROLLED and person.may('manage_exams', study),
+        'loans': study.person.loans.filter(returned=None).select_related('instrument'),
         'history': bool(tables(person.roles)),
     })
 
@@ -151,7 +162,7 @@ def next_matriculation():
 @require_POST
 def enrol(request, pk):
     """Immatrikulation of an admitted applicant: matriculation number and first registered term."""
-    study = get_object_or_404(Study.objects.select_related('person', 'start_term'), pk=pk, status=Study.Status.ADMITTED)
+    study = get_object_or_404(request.user.within(Study.objects.select_related('person', 'start_term'), 'manage_students'), pk=pk, status=Study.Status.ADMITTED)
     person = study.person
     if missing := study.missing():
         messages.error(request, f'Noch nicht immatrikuliert: {", ".join(missing)}.')
@@ -173,7 +184,7 @@ def enrol(request, pk):
 @require_POST
 def insured(request, pk):
     """The health insurer's electronic notice (Studierendenmeldeverfahren) has arrived."""
-    study = get_object_or_404(Study.objects.select_related('person'), pk=pk)
+    study = get_object_or_404(request.user.within(Study.objects.select_related('person'), 'manage_students'), pk=pk)
     study.person.insurance_confirmed = timezone.localdate()
     study.person.save(update_fields=['insurance_confirmed'])
     messages.success(request, 'Versicherungsmeldung verbucht.')
@@ -184,7 +195,7 @@ def insured(request, pk):
 def leave(request, pk):
     """Urlaubssemester for the upcoming term, requested by the student or recorded by the office."""
     study = get_object_or_404(Study, pk=pk, status=Study.Status.ENROLLED)
-    if not ('manage_students' in request.user.roles or study.person == request.user):
+    if not (study.person == request.user or request.user.may('manage_students', study)):
         raise PermissionDenied
     term = Term.upcoming()
     registration, _ = StudyTerm.objects.get_or_create(study=study, term=term)
@@ -197,7 +208,7 @@ def leave(request, pk):
 @require('manage_students')
 @require_POST
 def exmatriculate(request, pk):
-    study = get_object_or_404(Study.objects.select_related('person'), pk=pk, status=Study.Status.ENROLLED)
+    study = get_object_or_404(request.user.within(Study.objects.select_related('person'), 'manage_students'), pk=pk, status=Study.Status.ENROLLED)
     status = Study.Status.GRADUATED if request.POST.get('reason') == 'graduated' else Study.Status.LEFT
     study.set_status(status)
     reason = 'Abschluss des Studiums' if status == Study.Status.GRADUATED else 'Abbruch oder Wechsel des Studiums'
@@ -210,7 +221,7 @@ def exmatriculate(request, pk):
 @require_POST
 def change(request, pk):
     """Fachwechsel: end this study, start the new one now with the semesters so far credited."""
-    study = get_object_or_404(Study, pk=pk, status=Study.Status.ENROLLED)
+    study = get_object_or_404(request.user.within(Study.objects.all(), 'manage_students'), pk=pk, status=Study.Status.ENROLLED)
     form = ChangeForm(request.POST)
     if not form.is_valid():
         messages.error(request, 'Bitte Studiengang und Hauptfach wählen.')
@@ -230,7 +241,7 @@ def change(request, pk):
 @require('manage_students')
 @require_POST
 def hold(request, pk):
-    study = get_object_or_404(Study.objects.select_related('person'), pk=pk)
+    study = get_object_or_404(request.user.within(Study.objects.select_related('person'), 'manage_students'), pk=pk)
     study.person.hold = request.POST.get('hold', '').strip()
     study.person.save(update_fields=['hold'])
     messages.success(request, 'Sperre gesetzt.' if study.person.hold else 'Sperre aufgehoben.')
@@ -243,7 +254,10 @@ def reregistration(request):
     term, today = Term.upcoming(), timezone.localdate()
     if term is None:
         return without_term(request, 'das nächste Semester, für das sich Studierende zurückmelden')
-    enrolled = Study.objects.filter(status=Study.Status.ENROLLED).select_related('person', 'program', 'subject').order_by('person__last_name')
+    enrolled = (
+        Study.objects.filter(status=Study.Status.ENROLLED).select_related('person', 'program', 'subject').order_by('person__last_name')
+        .prefetch_related(Prefetch('person__loans', Loan.objects.filter(returned=None).select_related('instrument')))
+    )
     registrations = {r.study_id: r for r in StudyTerm.objects.filter(term=term)}
     paid = {r.study.person_id for r in StudyTerm.objects.filter(term=term, paid__isnull=False).select_related('study')}
     if request.method == 'POST':
@@ -280,10 +294,32 @@ def reregistration(request):
     })
 
 
+def periods(request, pk):
+    """Studienzeitbescheinigung: every semester the person was registered here, on leave or not, and how each study ended;
+    asked for by pension insurance long after."""
+    study = get_object_or_404(Study.objects.select_related('person'), pk=pk)
+    person = study.person
+    if not (person == request.user or request.user.may('manage_students', study)):
+        raise PermissionDenied
+    today = timezone.localdate()
+    studies = list(person.studies.filter(terms__isnull=False).distinct().select_related('program', 'subject').order_by('start_term__start'))
+    rows = []
+    for s in studies:
+        semester = s.prior_terms
+        for registration in s.terms.filter(term__start__lte=today).select_related('term'):
+            semester += not registration.leave
+            rows.append((registration.term, s, registration.leave, semester))
+    rows.sort(key=lambda row: row[0].start)
+    return render(request, 'students/periods.html', {
+        'study': study, 'person': person, 'studies': studies, 'rows': rows, 'count': len({row[0] for row in rows}),
+        'leave': len({term for term, _, leave, _ in rows if leave}), 'today': today, 'sender': texts.block('absender_bescheinigungen'),
+    })
+
+
 def certificate(request, pk):
     """Immatrikulationsbescheinigung for the current term."""
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject'), pk=pk, status=Study.Status.ENROLLED)
-    if not ('manage_students' in request.user.roles or study.person == request.user):
+    if not (study.person == request.user or request.user.may('manage_students', study)):
         raise PermissionDenied
     term = Term.current()
     return render(request, 'students/certificate.html', {

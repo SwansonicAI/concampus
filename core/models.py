@@ -1,4 +1,7 @@
-from django.contrib.auth.models import AbstractUser, Group, Permission
+from datetime import timedelta
+
+from django.apps import apps
+from django.contrib.auth.models import AbstractUser, Group
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.core.serializers.json import DjangoJSONEncoder
@@ -17,6 +20,7 @@ class Tracked:
     owner = ''  # path to the id of the person the record is about, e.g. 'study.person_id'; their history goes with them
     capabilities = ()  # who sees its history and may restore it
     keep = None  # how long its changes are kept (timedelta); None: as long as the person they are about
+    scope = None  # (paths to its Institute, paths to its Studiengänge), for offices limited to some; None: only offices for the whole Hochschule
 
     @classmethod
     def from_db(cls, db, field_names, values):
@@ -37,6 +41,15 @@ class Tracked:
     @classmethod
     def visible_to(cls, roles):
         return bool(roles & set(cls.capabilities))
+
+    @classmethod
+    def open_to(cls, person, pk):
+        """Whether the record is within the person's reach for its history: by any of their capabilities that sees a history,
+        as its history spans what several offices look after (a person's); a deleted record only for offices of the whole
+        Hochschule."""
+        record = cls.objects.filter(pk=pk).first()
+        seeing = {c for model in apps.get_models() if issubclass(model, Tracked) for c in model.capabilities}
+        return any(person.may(c, record) if record else person.everywhere(c) for c in person.reach if c in seeing)
 
 
 class Keyed(models.Model):
@@ -73,6 +86,10 @@ class Institution(Tracked, models.Model):
     accessibility = models.URLField('Barrierefreiheit', blank=True)
     matriculation_start = models.PositiveIntegerField('Erste Matrikelnummer', default=100001, help_text='Danach fortlaufend.')
     accept_days = models.PositiveSmallIntegerField('Frist zur Annahme eines Studienplatzes (Tage)', default=14)
+    retention_months = models.PositiveSmallIntegerField(
+        'Bewerbungen ohne Studium aufbewahren (Monate)', default=6,
+        help_text='Danach werden ihre Unterlagen gelöscht und wer nur beworben war, wird anonymisiert; die Statistik zählt weiter. 0: nie.',
+    )
     signup = models.BooleanField('Neue Bewerbungskonten', default=True, help_text='Ohne Haken legt niemand ein neues Bewerbungskonto an.')
     insurers = models.TextField('Krankenkassen', blank=True, help_text='Vorschläge beim Annehmen des Studienplatzes, eine je Zeile.')
     student_daily_hours = models.PositiveSmallIntegerField('Übezeit am Tag (Std.)', default=4, help_text='So viele Stunden buchen Studierende am Tag.')
@@ -117,6 +134,7 @@ class Person(Tracked, AbstractUser):
 
     owner = 'pk'
     capabilities = ('manage_students', 'manage_accounts')
+    scope = (['institute', 'studies__subject__institute'], ['studies__program'])
 
     class Gender(models.TextChoices):  # as the official student statistics count it
         FEMALE = 'w', 'weiblich'
@@ -185,11 +203,12 @@ class Person(Tracked, AbstractUser):
         ).distinct()
 
     def missing(self):
-        """What blocks enrolment and Rückmeldung whatever has been paid: a Sperre, no confirmation from the health insurer."""
+        """What blocks enrolment and Rückmeldung whatever has been paid: a Sperre, no confirmation from the health insurer,
+        an instrument kept past its day. Reads `loans.all()`; prefetch them, with their instruments, for many people."""
         reasons = [f'Sperre: {self.hold}'] if self.hold else []
         if not self.insurance_confirmed:
             reasons.append('Versicherungsmeldung der Krankenkasse fehlt')
-        return reasons
+        return reasons + [f'Leihinstrument zurückgeben: {loan.instrument.name}' for loan in self.loans.all() if loan.overdue]
 
     @classmethod
     def history(cls, pk):
@@ -202,35 +221,91 @@ class Person(Tracked, AbstractUser):
         return cls.objects.filter(models.Q(institute__isnull=False) | models.Q(teaching__isnull=False)).distinct()
 
     @cached_property
-    def roles(self):
-        """The capabilities of the person's offices (all for superusers), plus 'student', 'applicant' and 'teacher' as
-        derived from studies and teaching."""
+    def reach(self):
+        """Where each capability of the person's offices holds: None for the whole Hochschule, else the ids of the
+        Institute and the Studiengänge it is limited to. Superusers hold all, everywhere."""
         if self.is_superuser:
-            roles = set(CODENAMES)
-        else:
-            roles = set(Permission.objects.filter(group__user=self, codename__in=CODENAMES).values_list('codename', flat=True))
-        statuses = set(self.studies.values_list('status', flat=True))
+            return dict.fromkeys(CODENAMES)
+        reach = {}
+        for office in Office.objects.filter(user=self).prefetch_related('permissions', 'institutes', 'programs'):
+            institutes, programs = {i.pk for i in office.institutes.all()}, {p.pk for p in office.programs.all()}
+            for capability in (p.codename for p in office.permissions.all() if p.codename in CODENAMES):
+                if not (institutes or programs) or reach.get(capability, ()) is None:
+                    reach[capability] = None
+                else:
+                    held = reach.setdefault(capability, (set(), set()))
+                    held[0].update(institutes)
+                    held[1].update(programs)
+        return reach
+
+    def everywhere(self, capability):
+        return capability in self.reach and self.reach[capability] is None
+
+    def within(self, queryset, *capabilities):
+        """The records of `queryset` the person may act on with any of these capabilities: all, or those of the Institute
+        and Studiengänge their offices are limited to, reached by the model's `scope`."""
+        reaches = [self.reach[c] for c in capabilities if c in self.reach]
+        if None in reaches:
+            return queryset
+        model = queryset.model
+        if not reaches or model.scope is None:
+            return queryset.none()
+        ids = [{pk for reach in reaches for pk in reach[n]} for n in (0, 1)]
+        found = models.Q(pk__in=[])
+        for paths, pks in zip(model.scope, ids):
+            for path in paths:
+                found |= models.Q(**{f'{path}__in': pks})
+        return queryset.filter(pk__in=model.objects.filter(found).values('pk'))
+
+    def may(self, capability, record):
+        """Whether the person may act on this record with the capability."""
+        return self.everywhere(capability) or capability in self.reach and self.within(type(record).objects.filter(pk=record.pk), capability).exists()
+
+    def reached(self, model, capability):
+        """Ids of the records of `model` the person may act on with the capability, kept for the request: for long lists of rooms."""
+        found = self.__dict__.setdefault('_reached', {})
+        if (model, capability) not in found:
+            found[model, capability] = set(self.within(model.objects.all(), capability).values_list('pk', flat=True))
+        return found[model, capability]
+
+    @cached_property
+    def roles(self):
+        """The capabilities of the person's offices, plus 'student', 'applicant', 'alumni' (studied here, graduated or not)
+        and 'teacher' as derived from studies and teaching."""
+        roles = set(self.reach)
+        studies = list(self.studies.annotate(registered=models.Count('terms')).values_list('status', 'registered'))
+        statuses = {status for status, _ in studies}
         if 'enrolled' in statuses:
             roles.add('student')
         if statuses & {'applied', 'admitted', 'waitlisted'}:
             roles.add('applicant')
+        if any(status in ('graduated', 'left') and registered for status, registered in studies):
+            roles.add('alumni')
         if self.teaching.exists():
             roles.add('teacher')
         return roles
 
 
 class Office(Tracked, Group):
-    """An office of the Hochschule, named as it likes: the people in it and what they may do (core.access.CAPABILITIES)."""
+    """An office of the Hochschule, named as it likes: the people in it and what they may do (core.access.CAPABILITIES),
+    for the whole Hochschule or only for some Institute and Studiengänge."""
 
     capabilities = ('manage_accounts',)
 
+    institutes = models.ManyToManyField(Institute, blank=True, related_name='offices', verbose_name='Nur für die Institute')
+    programs = models.ManyToManyField('curriculum.Program', blank=True, related_name='offices', verbose_name='Nur für die Studiengänge')
+
     class Meta:
-        proxy = True
         ordering = ['name']
         verbose_name = 'Amt'
         verbose_name_plural = 'Ämter'
         default_permissions = ()
         permissions = [capability for _, group in CAPABILITIES for capability in group]
+
+    @property
+    def remit(self):
+        """Whom the office acts for, as its list shows it."""
+        return ', '.join(map(str, [*self.institutes.all(), *self.programs.all()])) or 'ganze Hochschule'
 
     @classmethod
     def holding(cls, capability):
@@ -284,6 +359,39 @@ class Term(Tracked, models.Model):
     def pick(cls, pk):
         """The term with this pk (as given in a query string), else the current one."""
         return (pk and pk.isdigit() and cls.objects.filter(pk=pk).first()) or cls.current()
+
+
+class Holiday(Tracked, models.Model):
+    """Days without lectures: public holidays, the Christmas break. Weekly course dates leave them out."""
+
+    capabilities = ('manage_terms',)
+
+    name = models.CharField('Bezeichnung', max_length=80)
+    first = models.DateField('Von')
+    last = models.DateField('Bis', null=True, blank=True, help_text='Leer: nur ein Tag.')
+
+    class Meta:
+        ordering = ['first']
+        verbose_name = 'Vorlesungsfreier Tag'
+        verbose_name_plural = 'Vorlesungsfreie Tage'
+
+    def __str__(self):
+        return self.name
+
+    def clean(self):
+        if self.last and self.first and self.last < self.first:
+            raise ValidationError({'last': 'Endet nicht vor dem ersten Tag.'})
+
+    @classmethod
+    def days(cls, start, end):
+        """The lecture-free days from `start` to `end`."""
+        found = set()
+        for holiday in cls.objects.filter(first__lte=end).filter(models.Q(last__gte=start) | models.Q(last=None, first__gte=start)):
+            day = max(holiday.first, start)
+            while day <= min(holiday.last or holiday.first, end):
+                found.add(day)
+                day += timedelta(days=1)
+        return found
 
 
 class Text(Tracked, models.Model):
@@ -340,10 +448,15 @@ class Message(models.Model):
     @classmethod
     def send(cls, person, subject, body, link='', sender=''):
         message = cls.objects.create(person=person, subject=subject, body=body, link=link, sender=sender)
-        if person.email:  # once saved, so no mail goes out for what was rolled back; the Postfach has it either way
-            sender = Institution.get().email or None
-            transaction.on_commit(lambda: send_mail(subject, body, sender, [person.email], fail_silently=True))
+        if person.email:  # the Postfach has it either way
+            cls.mail(person, subject, body)
         return message
+
+    @staticmethod
+    def mail(person, subject, body):
+        """By e-mail only, once the transaction commits, so no mail goes out for what was rolled back."""
+        sender = Institution.get().email or None
+        transaction.on_commit(lambda: send_mail(subject, body, sender, [person.email], fail_silently=True))
 
 
 class Change(models.Model):

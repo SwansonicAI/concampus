@@ -64,12 +64,16 @@ def week(bookings, day):
 
 
 def editable(booking, person):
-    return 'manage_bookings' in person.roles or booking.person_id == person.pk
+    return booking.person_id == person.pk or booking.room_id in person.reached(Room, 'manage_bookings')
 
 
-def private(person):
-    """Students see that a room is taken, not by whom or for what, unless it is a public event."""
-    return not person.roles & {'teacher', 'view_bookings'}
+def private(booking, person):
+    """Students see that a room is taken, not by whom or for what, unless it is a public event or they take part; staff
+    need the right to see bookings, for the rooms it holds for. Needs the booking's participants, best prefetched."""
+    return not (
+        'teacher' in person.roles or booking.room_id in person.reached(Room, 'view_bookings') or booking.category.public
+        or person in booking.participants.all()
+    )
 
 
 def legend():
@@ -92,7 +96,7 @@ def index(request):
     person, today = request.user, timezone.localdate()
     day = understood(request.GET.get('tag', '')) or today
     allowed = set(bookable(person).values_list('pk', flat=True))
-    group = request.GET.get('raeume') or ('zentral' if 'book_any_room' in person.roles else 'meine' if allowed else 'alle')
+    group = request.GET.get('raeume') or ('zentral' if person.everywhere('book_any_room') else 'meine' if allowed else 'alle')
     kind, _, key = group.partition(':')
     rooms = Room.objects.prefetch_related(Prefetch(
         'bookings', Booking.objects.filter(start__date=day).select_related('course', 'person', 'category').prefetch_related('participants'), to_attr='day',
@@ -101,13 +105,12 @@ def index(request):
         'meine': rooms.filter(pk__in=allowed), 'zentral': rooms.filter(function__central=True), 'haus': rooms.filter(building=key), 'funktion': rooms.filter(function=key),
         'institut': rooms.filter(institutes=key) if key.isdigit() else rooms,
     }.get(kind, rooms)
-    hidden = private(person)
     for room in rooms:
         room.bookable = room.pk in allowed
         for b in room.day:
             b.columns = f'{line(b.start)} / {line(b.end)}'
             b.editable = editable(b, person)
-            b.hidden = hidden and not b.editable and not b.category.public and person not in b.participants.all()
+            b.hidden = not b.editable and private(b, person)
     monday = day - timedelta(days=day.weekday())
     now = timezone.localtime()
     return render(request, 'rooms/index.html', {
@@ -151,6 +154,7 @@ def room(request, pk):
     day = understood(request.GET.get('tag', '')) or timezone.localdate()
     return render(request, 'rooms/room.html', {
         'room': room, 'day': day, 'bookable': bookable(request.user).filter(pk=pk).exists(), 'central': Office.holding('book_any_room'),
+        'edit': request.user.may('manage_rooms', room),
         **week(room.bookings.all(), day),
     })
 
@@ -195,7 +199,7 @@ def booking(request, pk=None):
     person = request.user
     booking = get_object_or_404(Booking.objects.select_related('course', 'person', 'room', 'category'), pk=pk) if pk else Booking()
     if pk and not editable(booking, person):
-        if private(person) and not booking.category.public and person not in booking.participants.all():
+        if private(booking, person):
             raise PermissionDenied
         return render(request, 'rooms/details.html', {'booking': booking, 'participants': booking.participants.all()})
     initial = {}

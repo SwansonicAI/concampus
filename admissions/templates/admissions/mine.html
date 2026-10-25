@@ -29,9 +29,12 @@
     <h3>Studienplatz angenommen</h3>
     <p>Bitte überweisen Sie den Semesterbeitrag von {{ s.start_term.fee }} € bis zum {{ s.start_term.deadline|date:"j. F Y" }}.</p>
     {% if s.waiting %}<p>Für die Immatrikulation fehlt noch: {{ s.waiting|join:" · " }}.</p>{% endif %}
+    {% elif s.lapsed %}
+    <h3>Frist zur Annahme verstrichen</h3>
+    <p>Sie hätten den Studienplatz bis zum {{ s.accept_by|date:"j. F Y" }} annehmen können. Bitte wenden Sie sich an die Hochschule.</p>
     {% else %}
     <h3>Sie haben einen Studienplatz</h3>
-    <p>Zum Annehmen brauchen wir Ihre Krankenversicherung: Die Kasse meldet Ihren Status anschließend elektronisch an die Hochschule.</p>
+    <p>Bitte nehmen Sie ihn bis zum <b>{{ s.accept_by|date:"j. F Y" }}</b> an. Dazu brauchen wir Ihre Krankenversicherung: Die Kasse meldet Ihren Status anschließend elektronisch an die Hochschule.</p>
     <form method="post" action="{% url 'admissions:accept' s.pk %}" class="form">
       {% csrf_token %}
       {{ accept }}

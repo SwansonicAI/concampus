@@ -1,0 +1,35 @@
+{% extends base %}
+{% block title %}Leihinstrumente{% endblock %}
+{% block subnav %}{% include "instruments/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Leihinstrumente</h1>
+  <div class="actions"><a class="btn ghost" href="{% url 'setup:new' 'instrumente' %}?next={{ request.path|urlencode }}" data-panel>Instrument erfassen</a></div>
+</div>
+<p class="lead">{% for key, label, n in states %}{{ n }} {{ label }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+<form class="toolbar">
+  <div class="inline">
+    <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for key, label, n in states %}<option value="{{ key }}"{% if key == stand %} selected{% endif %}>{{ label }} ({{ n }})</option>{% endfor %}</select></label>
+    {% if institutes|length > 1 %}<label>Institut<select name="institut" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>{% endif %}
+    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Instrument, Inventarnummer, Name"></label>
+  </div>
+</form>
+<table>
+  <thead><tr><th>Inventarnummer</th><th>Instrument</th><th>Institut</th><th>Stand</th></tr></thead>
+  <tbody>
+    {% for i in instruments %}
+    <tr>
+      <td class="nowrap">{{ i.number }}</td>
+      <td><a href="{% url 'instruments:instrument' i.pk %}"><b>{{ i.name }}</b></a>{% if i.maker %}<br><small class="muted">{{ i.maker }}</small>{% endif %}</td>
+      <td>{{ i.institute|default:"–" }}</td>
+      <td>
+        {% if i.state == 'frei' %}<span class="badge green">frei</span>
+        {% elif i.state == 'gesperrt' %}<span class="badge">nicht verleihbar</span>
+        {% else %}{% with loan=i.open.0 %}<span class="badge {% if loan.overdue %}no{% else %}wait{% endif %}">{% if loan.overdue %}überfällig{% else %}verliehen{% endif %}</span> {{ loan.person.name }}, bis {{ loan.due|date:"j.n.Y" }}{% endwith %}{% endif %}
+      </td>
+    </tr>
+    {% empty %}<tr><td colspan="4" class="empty">Keine Instrumente.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

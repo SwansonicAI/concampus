@@ -7,13 +7,14 @@ from django.contrib.auth.models import Permission
 from django.db import models
 from django.shortcuts import get_object_or_404
 
-from core.access import CAPABILITIES
+from core.access import CAPABILITIES, EVERYWHERE
 from core.dates import DayField
-from core.models import Institute, Institution, Office, Person, Term
+from core.models import Holiday, Institute, Institution, Office, Person, Term
 from courses.forms import AuditionForm
-from courses.models import Course
+from courses.models import Area, Course, Format
 from curriculum.forms import ModuleForm
 from curriculum.models import Module, Program, Subject
+from instruments.models import Instrument
 from rooms.models import BookingCategory, Room, RoomFunction
 from students.forms import StudyForm
 from students.models import DocumentType, Study
@@ -35,9 +36,15 @@ class Editor:
     new: Callable = None  # request → the unsaved record a new form starts from
     deletable: bool = True  # people are deactivated, not deleted: their records hang on them
     single: bool = False  # one record only, like the Hochschule's own data
+    invite: bool = False  # people: its form offers to send a sign-in invitation
 
-    def objects(self):
-        return self.queryset() if self.queryset else self.model.objects.all()
+    def objects(self, person):
+        """The records the person keeps up: all, or those of the Institute and Studiengänge their office is limited to."""
+        return person.within(self.queryset() if self.queryset else self.model.objects.all(), self.capability)
+
+    def usable(self, person):
+        """Whether the person keeps this list up: with the capability, and where it is limited, for a list whose records belong somewhere."""
+        return self.capability in person.roles and (self.model.scope is not None or person.everywhere(self.capability))
 
     @property
     def creatable(self):
@@ -61,9 +68,14 @@ class OfficeForm(forms.ModelForm):
 
     class Meta:
         model = Office
-        fields = ['name']
+        fields = ['name', 'institutes', 'programs']
         labels = {'name': 'Name des Amts'}
-        help_texts = {'name': 'Wie es an der Hochschule heißt, z. B. „Studierendensekretariat“.'}
+        help_texts = {
+            'name': 'Wie es an der Hochschule heißt, z. B. „Studierendensekretariat“.',
+            'institutes': 'Leer lassen, wenn das Amt für die ganze Hochschule zuständig ist.',
+            'programs': 'Ebenso. Mit Instituten und Studiengängen gilt jedes Recht für beides.',
+        }
+        widgets = {'institutes': forms.CheckboxSelectMultiple, 'programs': forms.CheckboxSelectMultiple}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -71,6 +83,14 @@ class OfficeForm(forms.ModelForm):
             self.initial['capabilities'] = list(self.instance.permissions.values_list('codename', flat=True))
             members = ', '.join(str(p) for p in self.instance.user_set.order_by('last_name'))
             self.note = f'Mitglieder: {members or "noch niemand"}. Wer dazugehört, wird bei den Konten eingetragen.'
+
+    def clean(self):
+        data = super().clean()
+        if data.get('institutes') or data.get('programs'):
+            labels = dict(choice for _, group in CAPABILITIES for choice in group)
+            if wide := [labels[c] for c in data.get('capabilities', []) if c in EVERYWHERE]:
+                raise forms.ValidationError(f'Nur für die ganze Hochschule zu vergeben: {"; ".join(wide)}.')
+        return data
 
     def save(self, commit=True):
         office = super().save()
@@ -120,20 +140,20 @@ EDITORS = {e.key: e for e in [
         'hochschule', Institution, 'Hochschule', 'manage_institution', 'Verwaltung', single=True, deletable=False,
         fields=[
             'name', 'short_name', 'address', 'place', 'email', 'website', 'imprint', 'privacy', 'accessibility',
-            'matriculation_start', 'accept_days', 'signup', 'insurers',
+            'matriculation_start', 'accept_days', 'retention_months', 'signup', 'insurers',
             'student_daily_hours', 'student_ahead_hours', 'last_minute_hours', 'teacher_ahead_days',
         ],
-        columns=[('Name', 'name'), ('Ort', 'place')], words='hochschuldaten anschrift regeln buchungsregeln matrikelnummer fristen',
+        columns=[('Name', 'name'), ('Ort', 'place')], words='hochschuldaten anschrift regeln buchungsregeln matrikelnummer fristen löschfristen datenschutz',
     ),
     Editor(
         'aemter', Office, 'Ämter und Rechte', 'manage_accounts', 'Verwaltung', form=OfficeForm,
-        columns=[('Amt', 'name'), ('Mitglieder', 'user_set')], search=['name'], words='rollen rechte gruppen berechtigungen',
-        queryset=lambda: Office.objects.prefetch_related('user_set'),
+        columns=[('Amt', 'name'), ('Zuständig für', 'remit'), ('Mitglieder', 'user_set')], search=['name'], words='rollen rechte gruppen berechtigungen institut',
+        queryset=lambda: Office.objects.prefetch_related('user_set', 'institutes', 'programs'),
     ),
     Editor(
         'konten', Person, 'Konten', 'manage_accounts', 'Verwaltung', form=AccountForm,
         columns=[('Name', 'name'), ('E-Mail', 'email'), ('Ämter', 'groups'), ('Institut', 'institute')],
-        search=['first_name', 'last_name', 'email', 'username'], words='mitarbeitende lehrende zugang benutzer',
+        search=['first_name', 'last_name', 'email', 'username'], words='mitarbeitende lehrende zugang benutzer einladung passwort', invite=True,
         queryset=lambda: (
             Person.objects.filter(models.Q(groups__isnull=False) | models.Q(institute__isnull=False) | models.Q(studies=None)).distinct()
             .select_related('institute').prefetch_related('groups')
@@ -147,6 +167,11 @@ EDITORS = {e.key: e for e in [
         search=['name'], words='vorlesungszeit rückmeldefrist semesterbeitrag termine',
         queryset=lambda: Term.objects.order_by('-start'),
     ),
+    Editor(
+        'vorlesungsfrei', Holiday, 'Vorlesungsfreie Tage', 'manage_terms', 'Verwaltung', fields=['name', 'first', 'last'],
+        columns=[('Bezeichnung', 'name'), ('Von', 'first'), ('Bis', 'last')], search=['name'], words='feiertage ferien weihnachtspause semesterplanung',
+        queryset=lambda: Holiday.objects.order_by('-first'),
+    ),
     Editor('institute', Institute, 'Institute', 'manage_institution', 'Verwaltung', fields=['name'], columns=[('Institut', 'name')], search=['name']),
     Editor(
         'personen', Person, 'Stammdaten', 'manage_students', deletable=False,
@@ -157,13 +182,24 @@ EDITORS = {e.key: e for e in [
     ),
     Editor(
         'studiengaenge', Program, 'Studiengänge', 'edit_curriculum', 'Studium und Lehre',
-        fields=['degree', 'name', 'version', 'semesters', 'subjects', 'postgraduate', 'attempts', 'rounding', 'mean_rounding', 'honours'],
+        fields=[
+            'degree', 'name', 'version', 'semesters', 'subjects', 'postgraduate', 'attempts', 'rounding', 'mean_rounding', 'honours', 'thesis_weeks',
+            'level', 'qualification', 'english', 'outcomes',
+        ],
         columns=[('Abschluss', 'degree'), ('Studiengang', 'name'), ('PO-Version', 'version'), ('Regelstudienzeit', 'semesters')],
-        search=['degree', 'name'], words='prüfungsordnung po fpso',
+        search=['degree', 'name'], words='prüfungsordnung po fpso diploma supplement abschlussarbeit bearbeitungszeit',
     ),
     Editor('module', Module, 'Module', 'edit_curriculum', form=ModuleForm, new=new_module),
     Editor(
-        'hauptfaecher', Subject, 'Hauptfächer', 'edit_curriculum', 'Studium und Lehre', fields=['name', 'institute'],
+        'fachgebiete', Area, 'Fachgebiete', 'manage_courses', 'Studium und Lehre', fields=['name', 'order'],
+        columns=[('Fachgebiet', 'name'), ('Reihenfolge', 'order')], search=['name'], words='vorlesungsverzeichnis bereiche gliederung',
+    ),
+    Editor(
+        'lehrformen', Format, 'Lehrformen', 'manage_courses', 'Studium und Lehre', fields=['name', 'short', 'order'],
+        columns=[('Lehrform', 'name'), ('Kürzel', 'short')], search=['name', 'short'], words='vorlesung seminar übung einzelunterricht veranstaltungsart',
+    ),
+    Editor(
+        'hauptfaecher', Subject, 'Hauptfächer', 'edit_curriculum', 'Studium und Lehre', fields=['name', 'institute', 'english'],
         columns=[('Hauptfach', 'name'), ('Institut', 'institute')], search=['name'], queryset=lambda: Subject.objects.select_related('institute'),
     ),
     Editor('studien', Study, 'Studium', 'manage_students', form=StudyForm, deletable=False),
@@ -180,6 +216,11 @@ EDITORS = {e.key: e for e in [
         columns=[('Raum', 'name'), ('Bezeichnung', 'purpose'), ('Gebäude', 'building'), ('Funktion', 'function'), ('Plätze', 'capacity')],
         search=['name', 'purpose', 'building', 'equipment'], words='ausstattung flügel gebäude',
         queryset=lambda: Room.objects.select_related('function'),
+    ),
+    Editor(
+        'instrumente', Instrument, 'Leihinstrumente', 'manage_instruments', 'Räume', fields=['number', 'name', 'maker', 'institute', 'note', 'available'],
+        columns=[('Instrument', 'name'), ('Inventarnummer', 'number'), ('Institut', 'institute'), ('Verleihbar', 'available')],
+        search=['name', 'number', 'maker'], words='instrumentenpool inventar leihe', queryset=lambda: Instrument.objects.select_related('institute'),
     ),
     Editor(
         'unterlagen', DocumentType, 'Unterlagenarten', 'run_auditions', 'Aufnahme',

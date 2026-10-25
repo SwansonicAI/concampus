@@ -14,13 +14,14 @@ from .models import Booking, BookingCategory, Room, later, span
 
 
 def bookable(person):
-    """Rooms a person may book: all with the right to; teachers and students the rooms of their Institute, except event
-    and meeting rooms, which are given out centrally."""
-    if 'book_any_room' in person.roles:
+    """Rooms a person may book: all with the right to, where it holds; teachers and students the rooms of their Institute,
+    except event and meeting rooms, which are given out centrally."""
+    if person.everywhere('book_any_room'):
         return Room.objects.all()
-    if not person.roles & {'teacher', 'student'}:
-        return Room.objects.none()
-    return Room.objects.filter(institutes__in=person.institutes()).exclude(function__central=True).distinct()
+    rooms = person.within(Room.objects.all(), 'book_any_room')
+    if person.roles & {'teacher', 'student'}:
+        rooms |= Room.objects.filter(institutes__in=person.institutes()).exclude(function__central=True)
+    return rooms.distinct()
 
 
 def quota(person, day, exclude=None):
