@@ -32,6 +32,7 @@ DEMO_CODE = os.environ.get('DEMO_CODE', 'demo' if DEBUG else '')
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split()
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # the app is only reached through the proxy
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG
+CSRF_FAILURE_VIEW = 'core.views.stale'
 
 
 # Application definition

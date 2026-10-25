@@ -1,5 +1,5 @@
 from django.apps import AppConfig
-from django.db.models import Q
+from django.db.models import Count, F, Q
 
 from django.urls import reverse
 from django.utils.formats import date_format, number_format
@@ -76,6 +76,15 @@ class StudentsConfig(Tile, AppConfig):
             accepted = person.within(Study.objects.filter(status=Study.Status.ADMITTED, terms__isnull=False), 'manage_students').distinct().count()
             if accepted:
                 found.append(task(f'{plural(accepted, "angenommenen Studienplatz", "angenommene Studienplätze")} immatrikulieren', reverse('admissions:board')))
+            from courses.models import Participation
+
+            fails = (  # a module failed as often as the Prüfungsordnung allows
+                Participation.objects.filter(passed=False, course__released__isnull=False, study__in=person.within(enrolled, 'manage_students'))
+                .values('study', 'module', 'study__program__attempts').annotate(n=Count('pk')).filter(n__gte=F('study__program__attempts'))
+            )
+            passed = set(Participation.objects.filter(passed=True, study__in={f['study'] for f in fails}).values_list('study', 'module'))
+            for study in Study.objects.filter(pk__in={f['study'] for f in fails if (f['study'], f['module']) not in passed}).select_related('person'):
+                found.append(task(f'Exmatrikulieren: {study.person}, Prüfung endgültig nicht bestanden', study.get_absolute_url()))
         if 'manage_reregistration' in person.roles:
             unpaid = enrolled.exclude(person__in=paid).values('person').distinct().count()
             if unpaid and term and term.reregistration_open:

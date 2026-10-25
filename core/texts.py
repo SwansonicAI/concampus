@@ -73,6 +73,13 @@ TEXTS = {
         BESCHEID, 'Abgabefrist verlängert', 'Verlängerung der Bearbeitungszeit',
         'Die Bearbeitungszeit Ihrer Abschlussarbeit „{thema}“ ist verlängert. Neue Abgabefrist: {frist}.', STUDY + ('thema', 'frist'),
     ),
+    'endgueltig': Spec(
+        BESCHEID, 'Endgültig nicht bestanden', 'Bescheid: Prüfung endgültig nicht bestanden',
+        'Sie haben die Prüfung „{pruefung}“ im Modul {modul} auch im {versuch}. Versuch nicht bestanden. Weitere Versuche sieht die '
+        'Prüfungsordnung nicht vor: Die Prüfung ist endgültig nicht bestanden, der Prüfungsanspruch im Studiengang {studiengang} ist '
+        'erloschen. Über die Exmatrikulation erhalten Sie einen gesonderten Bescheid.',
+        STUDY + ('pruefung', 'modul', 'versuch'), appeal=True,
+    ),
     'willkommen': Spec(NACHRICHT, 'Konto angelegt', 'Willkommen', 'Ihr Konto ist angelegt. Sie können sich jetzt für die Eignungsprüfung bewerben.'),
     'bewerbung': Spec(
         NACHRICHT, 'Bewerbung eingegangen', 'Bewerbung eingegangen',

@@ -19,7 +19,7 @@
       <tbody>
         {% for r in rows %}
         {% if r.kind == 'part' %}
-        {% for i in r.items %}{% if i.done %}<tr><td></td><td class="muted">{{ i.title }}</td><td></td><td class="num muted">{{ i.weight|floatformat:"-2" }}</td><td class="num muted">{% if i.grade is not None %}{{ i.grade|floatformat:1 }}{% else %}bestanden{% endif %}</td></tr>{% endif %}{% endfor %}
+        {% for i in r.items %}{% if i.done %}<tr><td></td><td class="muted">{{ i.title }}</td><td></td><td class="num muted">{% if i.weight %}{{ i.weight|floatformat:"-2" }}{% endif %}</td><td class="num muted">{% if i.grade is not None %}{{ i.grade|floatformat:1 }}{% else %}bestanden{% endif %}</td></tr>{% endif %}{% endfor %}
         {% else %}
         <tr>
           <td class="nowrap"><b>{{ r.node.code }}</b></td>

@@ -1,13 +1,14 @@
 from decimal import Decimal
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db.models import Count
 from django.test import Client
 
 from core.testing import Seeded, flashes
 from courses.models import Course, Participation
 from courses.panel import mean
 from curriculum.models import Program, Rounding, rounded
-from exams.views import EXAMS, handed_in, offered
+from exams.views import EXAMS, attempts, exhausted, handed_in, offered
 from students.models import Study
 
 
@@ -49,6 +50,41 @@ class ExamTest(Seeded):
         self.assertEqual(office.post(f'/pruefungen/{resit.pk}/', data).status_code, 403)
         study = resit.participations.first().study
         self.assertTrue(any(p.module.code.startswith('BM-BS-01') for p in study.record()))
+
+
+class OfficeTest(Seeded):
+    """What the Prüfungsamt handles beyond the marks: withdrawals and no-shows, the last attempt, Anerkennungen, files of marks."""
+
+    def test_a_withdrawal_needs_no_result_and_a_last_attempt_failed_ends_the_claim(self):
+        resit = Course.objects.get(title__contains='Wiederholung')
+        office = self.login('pruefungsamt')
+        rows = office.get(f'/pruefungen/{resit.pk}/').context['rows']
+        first, last = sorted(rows, key=lambda p: p.attempt)
+        self.assertTrue(last.last)
+        data = {f'score-{p.pk}-{e.pk}': str(v if v is not None else '') for p in rows for e, v in p.marks}
+        data |= {f'grade-{p.pk}': '' for p in rows} | {f'remark-{first.pk}': 'rt', f'remark-{last.pk}': 'ne'}
+        office.post(f'/pruefungen/{resit.pk}/', data)
+        r = office.post(f'/pruefungen/{resit.pk}/freigabe/', follow=True)
+        self.assertIn('1 Bescheid über endgültiges Nichtbestehen versandt.', flashes(r)[-1])
+        self.assertIn(last.module, exhausted(last.study))
+        self.assertIn(f'Exmatrikulieren: {last.study.person}', self.login('asa').get('/').content.decode())
+        self.assertEqual(attempts(first.study.person, first.module), 1)  # the withdrawal is no attempt
+
+    def test_a_whole_module_is_recognised_with_a_converted_grade(self):
+        study = Study.objects.filter(status='enrolled', program__degree='B.Mus.').first()
+        office = self.login('pruefungsamt')
+        choices = office.get(f'/pruefungen/anerkennung/?studium={study.pk}').context['form'].fields['module'].choices
+        options = next(options for _, options in choices[1:] if options[0][1] == 'Ganzes Modul')
+        office.post(f'/pruefungen/anerkennung/?studium={study.pk}', {'module': options[0][0], 'foreign': '8', 'best': '10', 'worst': '5', 'note': 'mdw Wien, SoSe 2024'})
+        recognised = Participation.objects.filter(study=study, course__kind='recognition')
+        self.assertEqual((recognised.count(), set(recognised.values_list('grade', flat=True))), (len(options) - 1, {Decimal('2.2')}))
+
+    def test_marks_come_from_a_file(self):
+        exam = Course.objects.annotate(n=Count('staff', distinct=True)).filter(kind='exam', released=None, n=1, participations__isnull=False).distinct().first()
+        lines = ['Matrikelnummer;Note', *(f'{p.study.person.matriculation};1,7' for p in exam.participations.select_related('study__person')), '999999;2,0']
+        r = self.login(exam.staff.get().username).post(f'/pruefungen/{exam.pk}/noten/', {'file': SimpleUploadedFile('noten.csv', '\n'.join(lines).encode())}, follow=True)
+        self.assertIn('Nicht angemeldet: 999999.', flashes(r)[0])
+        self.assertEqual(set(exam.participations.values_list('grade', 'passed')), {(Decimal('1.7'), True)})
 
 
 class ThesisTest(Seeded):

@@ -159,6 +159,11 @@ class Participation(Tracked, models.Model):
     capabilities = ('decide_results', 'run_auditions')
     scope = (['study__subject__institute', 'course__subject__institute'], ['study__program'])
 
+    class Remark(models.TextChoices):  # as Prüfungsämter note them
+        EXCUSED = 'rt', 'RT · Rücktritt mit triftigem Grund'
+        ABSENT = 'ne', 'NE · nicht erschienen'
+        CHEATED = 'tv', 'TV · Täuschungsversuch'
+
     course = models.ForeignKey(Course, models.CASCADE, related_name='participations', verbose_name='Veranstaltung')
     study = models.ForeignKey(Study, models.CASCADE, related_name='participations', verbose_name='Studium')
     module = models.ForeignKey(Module, models.PROTECT, null=True, blank=True, related_name='participations', verbose_name='Modul')
@@ -166,6 +171,10 @@ class Participation(Tracked, models.Model):
     slot = models.DateTimeField('Termin', null=True, blank=True)
     grade = models.DecimalField('Note / Punkte', max_digits=4, decimal_places=2, null=True, blank=True)
     passed = models.BooleanField('Bestanden', null=True, blank=True)
+    remark = models.CharField(
+        'Vermerk', max_length=2, choices=Remark, blank=True,
+        help_text='Nicht erschienen und Täuschung gelten als nicht bestanden; ein Rücktritt mit triftigem Grund zählt nicht als Versuch.',
+    )
     created = models.DateTimeField('Angemeldet', default=timezone.now, help_text='Reihenfolge für die Warteliste.')
 
     class Meta:

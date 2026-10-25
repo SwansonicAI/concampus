@@ -90,7 +90,7 @@
         {% if timed %}<td data-value="{{ p.slot|date:'c' }}">{{ p.slot|date:"D j.n., H:i"|default:"–" }}</td>{% endif %}
         <td class="num">{% if p.course.released and p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</td>
         <td>
-          {% if p.course.released %}{% if p.passed %}<span class="badge yes">bestanden</span>{% else %}<span class="badge no">nicht bestanden</span>{% endif %}
+          {% if p.course.released %}{% if p.passed %}<span class="badge yes">bestanden</span>{% elif p.passed is False %}<span class="badge no">nicht bestanden</span>{% else %}<span class="badge wait">entschuldigt</span>{% endif %}{% if p.remark %} <small class="muted">{{ p.get_remark_display }}</small>{% endif %}
           {% elif p.course.is_open %}<form method="post" action="{% url 'exams:withdraw' p.pk %}">{% csrf_token %}<button class="btn ghost small">Rücktritt</button></form>
           {% else %}<span class="badge open">angemeldet</span>{% endif %}
         </td>

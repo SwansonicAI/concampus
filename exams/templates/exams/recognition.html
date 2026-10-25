@@ -2,15 +2,19 @@
 {% block title %}Anerkennung{% endblock %}
 {% block subnav %}{% include "exams/_nav.html" %}{% endblock %}
 {% block content %}
-<h1>Anerkennung</h1>
+<h1>Anerkennung{% if study %} · {{ study.person.name }}{% endif %}</h1>
+{% if study %}
+<p class="lead">{{ study.person.matriculation }} · {{ study.program.degree }} {{ study.program.name }} · {{ study.subject }} · <a href="{{ study.get_absolute_url }}">Studienakte</a> · <a href="{% url 'exams:recognition' %}">andere Person</a></p>
+{% else %}
 <p class="lead">Leistungen aus anderen Hochschulen oder Studiengängen auf Module anrechnen. Jede Anerkennung erscheint sofort in der Leistungsübersicht.</p>
+{% endif %}
 <div class="cols">
   <form method="post" class="form">
     {% csrf_token %}
     {{ form }}
-    <div class="actions"><button class="btn">Anerkennen</button></div>
+    <div class="actions"><button class="btn">{% if study %}Anerkennen{% else %}Weiter{% endif %}</button></div>
   </form>
-  {% include "students/_enrolled.html" %}
+  {% if not study %}{% include "students/_enrolled.html" %}{% endif %}
   <div>
     <h3>Zuletzt anerkannt · {{ course.term }}</h3>
     <table data-panel>

@@ -87,6 +87,10 @@ class SmokeTest(Seeded):
         self.assertEqual(Client().get('/konto/login/').status_code, 200)
         self.assertEqual(Client().get('/').status_code, 302)
 
+    def test_a_stale_form_offers_its_page_again(self):
+        r = Client(enforce_csrf_checks=True).post('/konto/login/', {'username': 'student'}, HTTP_REFERER='http://testserver/konto/login/')
+        self.assertContains(r, 'href="http://testserver/konto/login/"', status_code=403)
+
     def test_demo_logins_only_past_the_code_and_only_for_its_people(self):
         client = Client()
         self.assertEqual(client.post('/demo/', {'konto': 'student'}).status_code, 404)  # no code set: no way in

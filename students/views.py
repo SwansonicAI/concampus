@@ -20,6 +20,7 @@ from core.text import fold, matching
 from core.views import SHOWN, without_term
 from curriculum.models import Program, Subject
 from curriculum.views import plan
+from exams.views import exhausted
 from instruments.models import Loan
 from .models import Document, Study, StudyTerm
 
@@ -147,6 +148,8 @@ def study(request, pk):
         'others': study.person.studies.exclude(pk=study.pk).select_related('program', 'subject'),
         'change': ChangeForm() if office else None,
         'exits': destatis.EXITS, 'leaves': destatis.LEAVES,
+        'exhausted': exhausted(study) if study.status == Study.Status.ENROLLED else [],
+        'recognise': study.status == Study.Status.ENROLLED and person.may('recognise', study),
         'thesis': study.status == Study.Status.ENROLLED and person.may('manage_exams', study),
         'loans': study.person.loans.filter(returned=None).select_related('instrument'),
         'history': bool(tables(person.roles)),

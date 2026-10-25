@@ -1,4 +1,5 @@
 """Results sheets shared by courses, exams and auditions: marks per examiner, grades, pass decisions, slots."""
+from collections import Counter
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -28,7 +29,8 @@ def mean(values, rounding):
 
 def sheet(course):
     """(staff, participations). Each participation gets `marks` [(examiner, value)], `mean` of the marks so far,
-    `auto` (the mean once every examiner has marked) and `override` (a grade set by hand instead)."""
+    `auto` (the mean once every examiner has marked) and `override` (a grade set by hand instead); in an exam also
+    `attempt`, which try this is, and `last`, whether the Prüfungsordnung allows no further one."""
     staff = list(course.staff.all())
     rows = list(
         course.participations.select_related('study__person', 'study__program', 'study__subject', 'module')
@@ -40,7 +42,15 @@ def sheet(course):
         p.marks = [(e, values.get(e.pk)) for e in staff]
         p.mean = mean(list(values.values()), p.study.program.mean_rounding)
         p.auto = p.mean if panel and staff and len(values) == len(staff) else None
-        p.override = p.grade if p.grade is not None and p.grade != p.auto else None
+        p.override = p.grade if p.grade is not None and p.grade != p.auto and not p.remark else None
+    if course.kind in (Course.Kind.EXAM, Course.Kind.THESIS):
+        tried = Counter(
+            Participation.objects.filter(study__in=[p.study_id for p in rows], passed=False, course__released__isnull=False)
+            .exclude(course=course).values_list('study', 'module')
+        )
+        for p in rows:
+            p.attempt = tried[p.study_id, p.module_id] + 1
+            p.last = p.attempt >= p.study.program.attempts
     return staff, rows
 
 
@@ -48,7 +58,8 @@ def save(post, rows, columns, decide):
     """Apply a results form. Raises InvalidOperation on a malformed number; nothing is saved then.
 
     Panels: examiners enter marks for themselves (`columns`); the result follows: once all have marked, the grade
-    is the mean and passing follows from the course's rule. With `decide`, a grade entered by hand overrides it.
+    is the mean and passing follows from the course's rule. With `decide`, a grade entered by hand overrides it, and
+    a Vermerk overrides both: absent or cheating fails, a withdrawal for good reason leaves no result.
     Courses: whoever decides enters a grade, or only passed / not passed for ungraded work.
     """
     new, changed, cleared = [], [], []
@@ -73,12 +84,19 @@ def save(post, rows, columns, decide):
             override = number(post.get(f'grade-{p.pk}')) if decide else p.override
             p.grade = override if override is not None else auto
             p.passed = p.course.passes(p.grade) if p.grade is not None else None
+            if decide:
+                remark = post.get(f'remark-{p.pk}', '')
+                p.remark = remark if remark in Participation.Remark.values else ''
+            if p.remark == Participation.Remark.EXCUSED:
+                p.grade = p.passed = None
+            elif p.remark:
+                p.grade, p.passed = None if p.course.points else Decimal('5.0'), False
         elif decide:
             p.grade = number(post.get(f'grade-{p.pk}'))
             choice = {'1': True, '0': False}.get(post.get(f'passed-{p.pk}'))
             p.passed = p.course.passes(p.grade) if p.grade is not None else choice
     with transaction.atomic():
-        Participation.objects.bulk_update(rows, ['grade', 'passed'])
+        Participation.objects.bulk_update(rows, ['grade', 'passed', 'remark'])
         Score.objects.filter(pk__in=cleared).delete()
         Score.objects.bulk_create(new)
         Score.objects.bulk_update(changed, ['value'])

@@ -107,6 +107,12 @@ def gate(request):
     return render(request, 'core/gate.html')
 
 
+def stale(request, reason=''):
+    """A form sent from a page gone stale, typically one from before signing in or out: offer a fresh copy of it."""
+    back = request.META.get('HTTP_REFERER', '')
+    return render(request, 'core/stale.html', {'back': back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else reverse('home')}, status=403)
+
+
 @login_not_required
 @require_POST
 def demo(request):
@@ -247,9 +253,12 @@ def found(person, q, limit):
             shown = shown.filter(Q(category__public=True) | Q(pk__in=agenda(person).values('pk')) | Q(room__in=person.reached(Room, 'view_bookings')))
         named = [c.key for c in BookingCategory.objects.all() if all(w in fold(c.name) for w in sought)]
         events = shown.filter(Q(pk__in=matching(shown, q, 'title', 'description', 'course__title').values('pk')) | Q(category__in=named))
+        nearest = {}  # a course's or series' next date only, not every lesson of the term
+        for b in events.order_by('start')[:limit * 20]:
+            nearest.setdefault(b.course_id or b.series or b.pk, b)
         groups.append(('Termine', [
             hit(b.label, reverse('rooms:booking', args=[b.pk]), f'{date_format(timezone.localtime(b.start), "D j.n., H:i")} · {b.room} · {b.category}')
-            for b in events[:limit]
+            for b in list(nearest.values())[:limit]
         ]))
     groups.append(('Postfach', [hit(m.subject, m.get_absolute_url(), date_format(m.created, 'j.n.Y')) for m in matching(person.messages.all(), q, 'subject', 'body')[:limit]]))
     return groups

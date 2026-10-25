@@ -1384,6 +1384,24 @@ class Command(BaseCommand):
                 Score.objects.filter(participation=p).update(value=Decimal('5.0'))
                 retry = Participation.objects.create(course=resit, study=p.study, module=p.module, slot=start + timedelta(minutes=30 * k), note=self.repertoire(p.study.subject.name))
                 Score.objects.bulk_create(Score(participation=retry, examiner=e, value=rng.choice(NOTES[1:5])) for e in examiners[:2])
+            self.failed_before(failed[-1], 2)  # the second candidate's resit is the last attempt the Prüfungsordnung allows
+            lost = (  # one more has failed it three times: the Prüfungsanspruch is lost, the Studierendenamt has to exmatriculate
+                Participation.objects.filter(course__kind=Course.Kind.EXAM, module=failed[0].module, passed=True, study__in=[s for s in self.enrolled if s.fs == 5])
+                .exclude(study__in=[p.study for p in failed]).select_related('course__term').first()
+            )
+            if lost:
+                lost.grade, lost.passed = Decimal('5.0'), False
+                lost.save(update_fields=['grade', 'passed'])
+                Score.objects.filter(participation=lost).update(value=Decimal('5.0'))
+                for back in (1, 2):
+                    self.failed_before(lost, back)
+
+    def failed_before(self, p, back):
+        """An earlier failed attempt at p's exam, `back` terms before."""
+        term = self.calendar[self.calendar.index(p.course.term) - back]
+        course = self.course(term, p.course.title, Course.Kind.EXAM, subject=p.course.subject, released=at(term.end - timedelta(days=45), hour=12))
+        course.modules.add(p.module)
+        Participation.objects.create(course=course, study=p.study, module=p.module, grade=Decimal('5.0'), passed=False, created=at(term.start, hour=9))
 
     def theses(self, theses):
         """Topics given out this October, due within the Prüfungsordnung's weeks; one handed in early, half marked: a task for the demo teacher."""

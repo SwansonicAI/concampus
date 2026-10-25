@@ -1,5 +1,7 @@
+from datetime import timedelta
+
 from django.apps import AppConfig
-from django.db.models import Count, F, Min, Q
+from django.db.models import Count, Exists, F, Min, OuterRef, Q
 from django.urls import reverse
 from django.utils import timezone
 
@@ -54,11 +56,22 @@ class ExamsConfig(Tile, AppConfig):
         found, now = [], timezone.now()
         exams = Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], released=None).annotate(
             held=Min('bookings__start'), size=Count('participations', distinct=True),
-            open=Count('participations', filter=Q(participations__passed=None), distinct=True),
+            open=Count('participations', filter=Q(participations__passed=None) & ~Q(participations__remark='rt'), distinct=True),
         ).filter(size__gt=0)
         if 'decide_results' in person.roles:
-            for exam in person.within(exams, 'decide_results').filter(open=0):
+            decided = person.within(exams, 'decide_results')
+            for exam in decided.filter(open=0):
                 found.append(task(f'Ergebnisse freigeben: {exam.title}', exam.get_absolute_url()))
+            for exam in decided.filter(open__gt=0, held__lte=now - timedelta(days=7)):  # a week after the exam, results are overdue
+                found.append(task(f'Ergebnisse überfällig: {exam.title}, {plural(exam.open, "Teilnahme", "Teilnahmen")} offen', exam.get_absolute_url(), timezone.localdate(exam.held)))
+        if 'manage_exams' in person.roles:
+            from students.models import Document
+
+            handed = Document.objects.filter(kind='abschlussarbeit', study__participations__course=OuterRef('pk'), created__gte=F('study__participations__created'))
+            late = Course.objects.filter(kind=Course.Kind.THESIS, released=None, deadline__lt=timezone.localdate()).exclude(Exists(handed))
+            for thesis in person.within(late, 'manage_exams').prefetch_related('participations__study__person'):
+                who = ', '.join(p.study.person.last_name for p in thesis.participations.all())
+                found.append(task(f'Abschlussarbeit nicht abgegeben: {who}, {thesis.title}', thesis.get_absolute_url(), thesis.deadline))
         if 'teacher' in person.roles:
             for exam in exams.filter(staff=person, held__lte=now):
                 missing = exam.participations.exclude(scores__examiner=person).count()

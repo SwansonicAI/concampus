@@ -6,6 +6,7 @@
   <h1>{{ course.title }}</h1>
   <div class="actions">
     {% if office %}<a class="btn ghost" href="{% url 'exams:edit' course.pk %}">Bearbeiten</a>{% endif %}
+    {% if course.kind != 'recognition' %}<a class="btn ghost" href="{% url 'exams:roster' course.pk %}">Notenliste</a>{% endif %}
     {% if history %}<a class="btn ghost" href="{% url 'history' 'courses.course' course.pk %}" data-panel>Verlauf</a>{% endif %}
     {% if course.kind != 'recognition' %}
     <form method="post" action="{% url 'exams:release' course.pk %}">
@@ -58,6 +59,20 @@
   <h2>{% if course.kind == 'thesis' %}Gutachten{% else %}Kandidat:innen{% endif %}</h2>
   {% if not decide %}<p class="lead">Sie tragen Ihre eigene Wertung ein. Das Ergebnis ergibt sich aus den Wertungen der ganzen Kommission.</p>{% endif %}
   {% include "courses/_sheet.html" with decide=decide %}
+  {% if rows and course.kind == 'exam' %}
+  <div class="inline" style="margin-top: 16px">
+    <a class="more" href="{% url 'exams:roster' course.pk %}?format=csv">Als CSV</a>
+    {% if course.released %}<a class="more" href="{% url 'exams:roster' course.pk %}?aushang">Aushang nach Matrikelnummer</a>{% endif %}
+    {% if importing %}
+    <form method="post" enctype="multipart/form-data" action="{% url 'exams:marks' course.pk %}" class="inline">
+      {% csrf_token %}
+      <label>Noten aus Datei<input type="file" name="file" accept=".csv,.txt" required></label>
+      <button class="btn ghost small">Übernehmen</button>
+    </form>
+    <small class="muted">Je Zeile Matrikelnummer und Note, getrennt durch Semikolon oder Tabulator{% if user in staff %}; sie füllen Ihre Spalte{% endif %}.</small>
+    {% endif %}
+  </div>
+  {% endif %}
   {% if office and not course.released and course.kind != 'thesis' %}{% include "courses/_add.html" %}{% endif %}
 </section>
 {% endblock %}

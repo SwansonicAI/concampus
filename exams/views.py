@@ -1,12 +1,16 @@
+import csv
+import io
+from collections import Counter
 from datetime import timedelta
-from decimal import InvalidOperation
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
 
 from django import forms
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Count, Min, Q
-from django.http import Http404
+from django.db.models import Count, DateTimeField, Min, Q
+from django.db.models.functions import Cast, Coalesce
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -14,6 +18,7 @@ from django.views.decorators.http import require_POST
 
 from core import texts
 from core.access import kept, require
+from core.apps import plural
 from core.models import Term
 from core.text import matching
 from core.views import without_term
@@ -47,11 +52,28 @@ def attempts(person, module):
     return Participation.objects.filter(study__person=person, module=module, passed=False, course__released__isnull=False).count()
 
 
+def exhausted(study):
+    """Modules the study has failed as often as its Prüfungsordnung allows and never passed: the Prüfungsanspruch is lost."""
+    failed = Counter(Participation.objects.filter(study=study, passed=False, course__released__isnull=False).values_list('module', flat=True))
+    passed = set(Participation.objects.filter(study=study, passed=True).values_list('module', flat=True))
+    return Module.objects.filter(pk__in=[m for m, n in failed.items() if n >= study.program.attempts and m not in passed])
+
+
+def outcome(p):
+    """A result in words, as lists and notices give it."""
+    return 'bestanden' if p.passed else 'nicht bestanden' if p.passed is False else 'entschuldigt' if p.remark else ''
+
+
+def due(p):
+    """Whether a result is still to be entered: a withdrawal for good reason needs none."""
+    return p.passed is None and p.remark != Participation.Remark.EXCUSED
+
+
 def offered(person):
     """Exams of this term the person may still register for: their programme's modules, due by now, not yet passed;
     artistic exams held per Hauptfach only in their own."""
     studies = person.studies.filter(status=Study.Status.ENROLLED)
-    passed = Participation.objects.filter(study__in=studies, passed=True).values('module')
+    passed = Participation.objects.filter(study__in=studies, passed=True, module__isnull=False).values('module')  # NOT IN with a NULL matches nothing
     semester = max((s.semester for s in studies), default=0)
     return (
         Course.objects.filter(term=Term.current(), kind=Course.Kind.EXAM, modules__program__studies__in=studies, deadline__gte=timezone.localdate())
@@ -69,7 +91,7 @@ def index(request):
         Course.objects.filter(term=term, kind__in=EXAMS).select_related('subject').prefetch_related('staff')
         .annotate(date=Min('bookings__start'), size=Count('participations', distinct=True), candidate=Min('participations__study__person__last_name'))
         .annotate(graded=Count('participations', filter=Q(participations__passed__isnull=False), distinct=True))
-        .order_by('date', 'title')
+        .order_by(Coalesce('date', Cast('deadline', DateTimeField())).asc(nulls_last=True), 'title')  # a thesis by when it is due
     )
     office = bool(person.roles & {'manage_exams', 'decide_results'})
     if office or 'teacher' in person.roles:
@@ -130,9 +152,11 @@ def exam(request, pk):
         'slots': slots,
         'modules': credited(course),
         'bookings': course.bookings.select_related('room'),
-        'missing': sum(1 for p in rows if p.passed is None),
+        'missing': sum(1 for p in rows if due(p)),
+        'remarks': Participation.Remark.choices if decide and course.kind in (Course.Kind.EXAM, Course.Kind.THESIS) else [],
         'handed': handed_in(rows[0]) if course.kind == Course.Kind.THESIS and rows else None,
         'adding': AddForm(),
+        'importing': not course.released and course.kind == Course.Kind.EXAM and (decide or person in staff),
         'enrolled': enrolled() if office else [],
     })
 
@@ -219,9 +243,69 @@ def plan(request, pk):
     return redirect(course)
 
 
+def roster(request, pk):
+    """The exam's list to print and sign; once released also as a notice by Matrikelnummer (?aushang); or as CSV."""
+    course = get_object_or_404(Course.objects.select_related('term'), pk=pk, kind__in=[Course.Kind.EXAM, Course.Kind.THESIS])
+    person = request.user
+    if not (person.may('manage_exams', course) or person.may('decide_results', course) or course.staff.filter(pk=person.pk).exists()):
+        raise PermissionDenied
+    staff, rows = panel.sheet(course)
+    if request.GET.get('format') == 'csv':
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="notenliste-{course.pk}.csv"'
+        response.write('\ufeff')
+        writer = csv.writer(response, delimiter=';')
+        writer.writerow(['Matrikelnummer', 'Nachname', 'Vorname', 'Studiengang', 'Hauptfach', 'Termin', *(e.last_name for e in staff), 'Note', 'Ergebnis', 'Vermerk'])
+        for p in rows:
+            writer.writerow([
+                p.study.person.matriculation, p.study.person.last_name, p.study.person.first_name, f'{p.study.program.degree} {p.study.program.name}',
+                p.study.subject, f'{timezone.localtime(p.slot):%d.%m.%Y %H:%M}' if p.slot else '', *(str(v or '').replace('.', ',') for _, v in p.marks),
+                str(p.grade if p.grade is not None else '').replace('.', ','), outcome(p), p.remark.upper(),
+            ])
+        return response
+    notice = 'aushang' in request.GET
+    if notice and not course.released:
+        raise Http404
+    return render(request, 'exams/roster.html', {
+        'course': course, 'staff': staff, 'rows': sorted(rows, key=lambda p: p.study.person.matriculation or '') if notice else rows,
+        'notice': notice, 'bookings': course.bookings.select_related('room'), 'today': timezone.localdate(), 'sender': texts.block('absender_leistungen'),
+    })
+
+
+def marks(request, pk):
+    """Take marks from a file, as a Klausur's examiner keeps them: Matrikelnummer and mark per line. An examiner fills
+    their own column; whoever decides results, not on the Kommission, the result."""
+    course = get_object_or_404(Course, pk=pk, kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], released=None)
+    person = request.user
+    own, decide = course.staff.filter(pk=person.pk).exists(), person.may('decide_results', course)
+    if request.method != 'POST' or not (own or decide):
+        raise PermissionDenied
+    staff, rows = panel.sheet(course)
+    text = request.FILES['file'].read().decode('utf-8-sig', errors='replace') if 'file' in request.FILES else ''
+    delimiter = ';' if ';' in text else '\t' if '\t' in text else ','  # a semicolon first: German marks have decimal commas
+    found = {line[0].strip(): line[1].strip() for line in csv.reader(io.StringIO(text), delimiter=delimiter) if len(line) >= 2 and line[0].strip().isdigit()}
+    unknown = []
+    by_number = {p.study.person.matriculation: p for p in rows}
+    post = {f'score-{p.pk}-{e.pk}': str(v if v is not None else '') for p in rows for e, v in p.marks}
+    post |= {f'grade-{p.pk}': str(p.override if p.override is not None else '') for p in rows} | {f'remark-{p.pk}': p.remark for p in rows}
+    for number, value in found.items():
+        if (p := by_number.get(number)) is None:
+            unknown.append(number)
+        else:
+            post[f'score-{p.pk}-{person.pk}' if own else f'grade-{p.pk}'] = value
+    try:
+        panel.save(post, rows, [person] if own else [], decide=decide and not own)
+    except InvalidOperation:
+        messages.error(request, 'Die Datei enthält eine Note, die keine Zahl zwischen 0 und 99 ist. Nichts übernommen.')
+    else:
+        messages.success(request, f'{plural(len(found) - len(unknown), "Note", "Noten")} übernommen.' + (f' Nicht angemeldet: {", ".join(unknown)}.' if unknown else ''))
+    return redirect(course)
+
+
 @require_POST
 def release(request, pk):
-    """Release results to the candidates and lock them; only whoever decides results can reopen."""
+    """Release results to the candidates and lock them; only whoever decides results can reopen. A last attempt failed
+    ends the Prüfungsanspruch: the candidate gets the Bescheid."""
     course = get_object_or_404(Course, pk=pk, kind__in=EXAMS)
     office = request.user.may('decide_results', course)
     if not (office or course.staff.filter(pk=request.user.pk).exists()):
@@ -232,13 +316,19 @@ def release(request, pk):
         course.released = None
         messages.success(request, 'Ergebnisse wieder zur Bearbeitung geöffnet.')
     else:
-        if course.participations.filter(passed=None).exists():
-            messages.error(request, 'Erst freigeben, wenn für alle Teilnehmenden ein Ergebnis eingetragen ist.')
+        _, rows = panel.sheet(course)
+        if open_ := [p for p in rows if due(p)]:
+            gaps = [p.study.person.last_name + (f' (fehlt: {", ".join(e.last_name for e, v in p.marks if v is None)})' if any(v is None for _, v in p.marks) else '') for p in open_]
+            messages.error(request, f'Noch ohne Ergebnis: {", ".join(gaps[:8])}{f" und {len(gaps) - 8} weitere" if len(gaps) > 8 else ""}.')
             return redirect(course)
         course.released = timezone.now()
-        for p in course.participations.select_related('study__person'):
+        final = 0
+        for p in rows:
             texts.send('ergebnis', p.study.person, reverse('exams:index'), pruefung=course.title)
-        messages.success(request, 'Ergebnisse freigegeben und gesperrt.')
+            if p.passed is False and getattr(p, 'last', False):
+                p.study.notify('endgueltig', reverse('exams:index'), pruefung=course.title, modul=p.module, versuch=p.attempt)
+                final += 1
+        messages.success(request, 'Ergebnisse freigegeben und gesperrt.' + (f' {plural(final, "Bescheid", "Bescheide")} über endgültiges Nichtbestehen versandt.' if final else ''))
     course.save(update_fields=['released'])
     return redirect(course)
 
@@ -277,45 +367,82 @@ def withdraw(request, pk):
 
 
 class RecognitionForm(forms.Form):
+    """An Anerkennung in two steps: whose, then which of their open modules, with the grade as it is or converted from
+    another grading system by the modified Bavarian formula."""
+
     who = forms.CharField(label='Studierende:r', widget=forms.TextInput(attrs={'list': 'enrolled', 'placeholder': 'Name oder Matrikelnummer', 'autocomplete': 'off'}))
-    module = forms.CharField(label='Modul', help_text='Kürzel oder Titel, z. B. „MT-01 Klausur“ oder „Musiktheorie I“.')
-    grade = forms.DecimalField(label='Note', required=False, min_value=1, max_value=4, decimal_places=1)
+    module = forms.ChoiceField(label='Modul', help_text='Ein Teil, oder das ganze Modul mit allen noch offenen Teilen.')
+    grade = forms.DecimalField(label='Note', required=False, min_value=1, max_value=4, decimal_places=1, help_text='Leer: bestanden ohne Note.')
+    foreign = forms.DecimalField(label='Oder umrechnen: erzielte Note', required=False, decimal_places=2)
+    best = forms.DecimalField(label='Beste Note dort', required=False, decimal_places=2)
+    worst = forms.DecimalField(label='Schlechteste bestandene Note dort', required=False, decimal_places=2, help_text='Modifizierte bayerische Formel.')
     note = forms.CharField(label='Herkunft', widget=forms.Textarea(attrs={'rows': 3}), help_text='Hochschule, Veranstaltung, Semester, ECTS.')
+
+    def __init__(self, *args, study=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if study is None:
+            for name in ['module', 'grade', 'foreign', 'best', 'worst', 'note']:
+                del self.fields[name]
+            return
+        del self.fields['who']
+        passed = Participation.objects.filter(study=study, passed=True, module__isnull=False).values('module')
+        self.open = {str(m.pk): m for m in Module.objects.filter(program=study.program, children=None).exclude(pk__in=passed).select_related('parent').order_by('code')}
+        groups = {}
+        for m in self.open.values():
+            groups.setdefault(m.parent, []).append(m)
+        self.fields['module'].choices = [('', '–')] + [
+            (f'{parent.code} {parent.title}' if parent else 'Weitere', ([(f'm{parent.pk}', 'Ganzes Modul')] if parent and len(parts) > 1 else []) + [(str(m.pk), f'{m.code} {m.title}') for m in parts])
+            for parent, parts in groups.items()
+        ]
+
+    def clean_who(self):
+        found = Study.find(self.cleaned_data['who'])
+        if len(found) != 1:
+            raise forms.ValidationError(f'Mehrere passen: {", ".join(str(s.person) for s in found)}.' if found else 'Niemand Immatrikuliertes passt dazu.')
+        return found[0]
+
+    def clean_module(self):
+        value = self.cleaned_data['module']
+        return [m for m in self.open.values() if f'm{m.parent_id}' == value] if value.startswith('m') else [self.open[value]]
 
     def clean(self):
         data = super().clean()
-        found = Study.find(data.get('who', ''))
-        if len(found) != 1:
-            names = ', '.join(str(s.person) for s in found)
-            raise forms.ValidationError(f'Mehrere passen: {names}.' if found else 'Niemand Immatrikuliertes passt dazu.')
-        study = data['study'] = found[0]
-        modules = matching(Module.objects.filter(program=study.program, children=None), data.get('module', ''), 'code', 'title')
-        if len(modules) != 1:
-            raise forms.ValidationError(f'Kein eindeutiges Modul in {study.program} für „{data.get("module")}“.')
-        data['module'] = modules[0]
+        given = [data.get(name) for name in ('foreign', 'best', 'worst')]
+        if 'module' in self.fields and any(v is not None for v in given):
+            foreign, best, worst = given
+            if None in given or best == worst:
+                raise forms.ValidationError('Zum Umrechnen erzielte, beste und schlechteste bestandene Note angeben.')
+            grade = 1 + 3 * (best - foreign) / (best - worst)  # 1,0 for the best, 4,0 for the worst passing grade
+            data['grade'] = max(Decimal('1.0'), min(Decimal('4.0'), grade.quantize(Decimal('0.1'), ROUND_DOWN)))
         return data
 
 
 @require('recognise')
 def recognition(request):
+    """Anerkennung: from the study file, or by name or Matrikelnummer first."""
     term = Term.current()
     if term is None:
         return without_term(request, 'ein Semester, in dem Anerkennungen verbucht werden')
     course, _ = Course.objects.get_or_create(term=term, kind=Course.Kind.RECOGNITION, defaults={'title': f'Anerkennungen {term}'})
-    form = RecognitionForm(request.POST or None)
-    if form.is_valid() and not request.user.may('recognise', form.cleaned_data['study']):
+    study, pk = None, request.GET.get('studium', '')
+    if pk:
+        studies = request.user.within(Study.objects.select_related('person', 'program', 'subject'), 'recognise')
+        study = get_object_or_404(studies, pk=pk if pk.isdigit() else 0, status=Study.Status.ENROLLED)
+    form = RecognitionForm(request.POST or None, study=study)
+    if form.is_valid() and study is None:
+        if request.user.may('recognise', found := form.cleaned_data['who']):
+            return redirect(f'{reverse("exams:recognition")}?studium={found.pk}')
         form.add_error(None, 'Diese Person studiert außerhalb der Institute und Studiengänge, für die Ihr Amt zuständig ist.')
-    if form.is_valid():
+    elif form.is_valid():
         data = form.cleaned_data
-        Participation.objects.update_or_create(
-            course=course, study=data['study'], module=data['module'],
-            defaults={'grade': data['grade'], 'passed': True, 'note': data['note']},
-        )
-        texts.send('anerkennung', data['study'].person, modul=data['module'], herkunft=data['note'])
-        messages.success(request, f'{data["module"]} für {data["study"].person} anerkannt.')
-        return redirect('exams:recognition')
+        for module in data['module']:
+            Participation.objects.update_or_create(course=course, study=study, module=module, defaults={'grade': data['grade'], 'passed': True, 'note': data['note']})
+        codes = ', '.join(m.code for m in data['module'])
+        texts.send('anerkennung', study.person, modul=codes, herkunft=data['note'])
+        messages.success(request, f'{codes} für {study.person} anerkannt' + (f' mit {data["grade"]}.' if data['grade'] is not None else '.'))
+        return redirect(f'{reverse("exams:recognition")}?studium={study.pk}')
     return render(request, 'exams/recognition.html', {
-        'form': form, 'course': course, 'enrolled': enrolled(),
+        'form': form, 'course': course, 'study': study, 'enrolled': [] if study else enrolled(),
         'recent': course.participations.select_related('study__person', 'module').order_by('-created')[:20],
     })
 
