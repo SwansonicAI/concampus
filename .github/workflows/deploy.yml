@@ -30,6 +30,6 @@ jobs:
           DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          echo "$DEPLOY_KEY" | tr -d '\r' > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519  # pasted into a browser, it may carry Windows line ends
           echo "$SERVER $SERVER_KEY" > ~/.ssh/known_hosts
           ssh -T deploy@$SERVER
