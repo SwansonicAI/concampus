@@ -18,7 +18,7 @@ class CurriculumConfig(Tile, AppConfig):
     def features(self, person):
         if not self.title(person.roles):
             return []
-        return [feature('Studiengänge', reverse('curriculum:index'), 'studienordnung svpp studienverlaufsplan modulhandbuch module ects fpso')]
+        return [feature('Studiengänge', reverse('curriculum:index'), 'studienplan studienordnung svpp studienverlaufsplan modulhandbuch module ects fpso')]
 
     def figure(self, person):
         from .models import Module, Program

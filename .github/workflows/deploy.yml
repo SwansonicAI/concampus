@@ -11,6 +11,16 @@ env:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:  # the server's database, not SQLite: it holds data to what the models say
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost/postgres
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6

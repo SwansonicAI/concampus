@@ -218,6 +218,14 @@ class SearchTest(Seeded):
         self.assertIn('Köhler', self.login('asa').get('/suche/', {'q': 'KOEHLER'}, headers={'X-Fragment': '1'}).text)
         self.assertTrue(student.get('/datum/', {'q': 'nächsten fr 9'}).json()['iso'])
 
+    def test_any_form_of_a_word_and_what_is_sought(self):
+        groups = dict(found(Person.objects.get(username='lehre'), 'Studienpläne', 30))
+        self.assertIn('Studiengänge', [h['title'] for h in groups['Funktionen']])
+        self.assertEqual(len(groups['Studiengänge']), Program.objects.count())
+        rooms = {h['title'] for h in dict(found(Person.objects.get(username='lehre'), 'Räume Orgel', 30))['Räume']}
+        self.assertLessEqual(set(Room.objects.filter(purpose__icontains='orgel').values_list('name', flat=True)), rooms)
+        self.assertLess(len(rooms), Room.objects.count())
+
     def test_side_panel(self):
         student = self.login('student')
         booking = Booking.objects.filter(person__username='student').first()

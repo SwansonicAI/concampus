@@ -26,7 +26,7 @@ from .apps import feature, tile_apps, tiles
 from .days import busy, strip
 from .history import describe, restore, tables
 from .models import Change, Message, Person, Term, Tracked
-from .text import fold, matching
+from .text import fold, matching, words
 
 
 def home(request):
@@ -160,7 +160,7 @@ def hit(title, url, meta=''):
 
 
 def found(person, q, limit):
-    roles, words = person.roles, fold(q).split()
+    roles, sought = person.roles, words(q)
     groups = []
     if q and roles - {'applicant'} and (when := dates.moment(q)):
         groups.append(('Springen zu', jumps(roles, *when)))
@@ -170,7 +170,7 @@ def found(person, q, limit):
     if person.is_superuser:
         places.append((feature('Datenpflege', reverse('admin:index'), 'admin stammdaten verwaltung'), ''))
     groups.append(('Funktionen', [
-        hit(f['title'], f['url'], app) for f, app in places if all(w in fold(f"{f['title']} {f['words']} {app}") for w in words)
+        hit(f['title'], f['url'], app) for f, app in places if all(w in fold(f"{f['title']} {f['words']} {app}") for w in sought)
     ][:limit if q else None]))  # an empty box lists everything the person can do
     if len(q) < 2:
         return groups
@@ -196,21 +196,21 @@ def found(person, q, limit):
     exams = courses.exclude(kind__in=teaching).filter(papers).distinct()
     groups.append(('Prüfungen', [hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in exams[:limit]]))
     if roles & {'view_curriculum', 'teacher'}:
-        groups.append(('Studiengänge', [hit(str(p), p.get_absolute_url()) for p in matching(Program.objects.all(), q, 'name', 'degree')[:limit]]))
+        groups.append(('Studiengänge', [hit(str(p), p.get_absolute_url()) for p in matching(Program.objects.all(), q, 'name', 'degree', names='studiengang studienplan')[:limit]]))
         groups.append(('Module', [
             hit(f'{m.code} {m.title}', m.program.get_absolute_url(), str(m.program))
-            for m in matching(Module.objects.select_related('program'), q, 'code', 'title')[:limit]
+            for m in matching(Module.objects.select_related('program'), q, 'code', 'title', names='modul')[:limit]
         ]))
     if roles - {'applicant'}:
         groups.append(('Räume', [
             hit(r.name, reverse('rooms:room', args=[r.pk]), ' · '.join(filter(None, [r.purpose, r.building, f'{r.capacity} Plätze'])))
-            for r in matching(Room.objects.all(), q, 'name', 'purpose', 'building', 'equipment')[:limit]
+            for r in matching(Room.objects.all(), q, 'name', 'purpose', 'building', 'equipment', names='raum')[:limit]
         ]))
         # bookings by title or category: concerts for everyone, one's own dates, everything for the offices
         shown = Booking.objects.filter(end__gte=timezone.now()).select_related('room', 'course', 'category')
         if 'view_bookings' not in roles:
             shown = shown.filter(Q(category__public=True) | Q(pk__in=agenda(person).values('pk')))
-        named = [c.key for c in BookingCategory.objects.all() if all(w in fold(c.name) for w in words)]
+        named = [c.key for c in BookingCategory.objects.all() if all(w in fold(c.name) for w in sought)]
         events = shown.filter(Q(pk__in=matching(shown, q, 'title', 'description', 'course__title').values('pk')) | Q(category__in=named))
         groups.append(('Termine', [
             hit(b.label, reverse('rooms:booking', args=[b.pk]), f'{date_format(timezone.localtime(b.start), "D j.n., H:i")} · {b.room} · {b.category}')
