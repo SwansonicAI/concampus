@@ -18,6 +18,7 @@ from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import models, transaction
 from django.utils import timezone
+from django.utils.crypto import get_random_string
 
 from admissions.retention import forget, months_before
 from admissions.views import DECISIONS
@@ -610,7 +611,7 @@ def studied_before(person, study, semesters):
 
 
 class Command(BaseCommand):
-    help = 'Fill an empty database with demo data (fictional people, HfM Weimar structure). Password for every account: demo.'
+    help = 'Fill an empty database with demo data (fictional people, HfM Weimar structure). Nobody knows the passwords; sign in through the demo profiles.'
 
     def add_arguments(self, parser):
         parser.add_argument('--reset', action='store_true', help='Empty the database first.')
@@ -621,7 +622,7 @@ class Command(BaseCommand):
         elif Person.objects.exists():
             raise CommandError('The database is not empty. Use --reset to replace everything.')
         self.rng = random.Random(1872)  # the year the Hochschule was founded
-        self.password = make_password('demo')
+        self.password = make_password(get_random_string(32))  # one nobody knows: the demo has its access code and profiles
         self.logins = set()
         with transaction.atomic(), history.quietly():
             self.terms()

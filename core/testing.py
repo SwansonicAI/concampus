@@ -4,6 +4,7 @@ import shutil
 import tempfile
 from io import StringIO
 
+from django.conf import settings
 from django.core.management import call_command
 from django.test import Client, TestCase, override_settings
 from django.test.runner import DiscoverRunner
@@ -15,6 +16,10 @@ MEDIA = tempfile.mkdtemp(prefix='hochadmin-test-')
 
 class Runner(DiscoverRunner):
     """Seeds the test database once; each test's changes are rolled back after it."""
+
+    def setup_test_environment(self, **kwargs):
+        super().setup_test_environment(**kwargs)
+        settings.DEMO_CODE = ''  # no demo gate; the test of it sets a code
 
     def setup_databases(self, **kwargs):
         databases = super().setup_databases(**kwargs)

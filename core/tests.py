@@ -87,13 +87,19 @@ class SmokeTest(Seeded):
         self.assertEqual(Client().get('/konto/login/').status_code, 200)
         self.assertEqual(Client().get('/').status_code, 302)
 
-    def test_demo_logins_only_in_the_demo_and_only_for_its_people(self):
+    def test_demo_logins_only_past_the_code_and_only_for_its_people(self):
         client = Client()
-        self.assertEqual(client.post('/demo/', {'konto': 'admin'}).status_code, 404)
-        with self.settings(DEMO=[]):
-            self.assertEqual(client.post('/demo/', {'konto': 'student'}).status_code, 404)
-        client.post('/demo/', {'konto': 'student'})
-        self.assertEqual(client.get('/').context['user'].username, 'student')
+        self.assertEqual(client.post('/demo/', {'konto': 'student'}).status_code, 404)  # no code set: no way in
+        with self.settings(DEMO_CODE='Notenpult'):
+            self.assertRedirects(client.get('/konto/login/'), '/zugang/?next=/konto/login/', fetch_redirect_response=False)
+            client.post('/zugang/', {'code': 'Pult'})
+            self.assertEqual(client.post('/demo/', {'konto': 'student'}).status_code, 302)  # still at the gate
+            client.post('/zugang/', {'code': ' notenpult '})
+            self.assertEqual(client.post('/demo/', {'konto': 'admin'}).status_code, 404)
+            with self.settings(DEMO=[]):
+                self.assertEqual(client.post('/demo/', {'konto': 'student'}).status_code, 404)
+            client.post('/demo/', {'konto': 'student'})
+            self.assertEqual(client.get('/').context['user'].username, 'student')
 
 
 class CapabilityTest(Seeded):

@@ -6,12 +6,14 @@ from django.conf import settings
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_not_required
 from django.contrib import messages
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Q
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import resolve, reverse
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.formats import date_format
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
@@ -71,11 +73,45 @@ def demo_people():
     return shown
 
 
+DEMO_DAYS = 30  # how long a browser keeps the access code
+GUESSES = 10  # wrong codes from one address before it waits a quarter of an hour
+
+
+def ticket():
+    """What a browser keeps once it has given the demo's access code; tied to the code, so a new code shuts everyone out."""
+    return salted_hmac('demo', settings.DEMO_CODE.lower()).hexdigest()
+
+
+def admitted(request):
+    return bool(settings.DEMO_CODE) and constant_time_compare(request.COOKIES.get('demo', ''), ticket())
+
+
+@login_not_required
+def gate(request):
+    """Only in the demo: the shared access code, given once per browser; an address that keeps guessing waits."""
+    if not settings.DEMO_CODE:
+        raise Http404
+    target = request.GET.get('next', '')
+    target = target if url_has_allowed_host_and_scheme(target, {request.get_host()}) else reverse('login')
+    if request.method == 'POST':
+        key = 'gate:' + request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', '')).split(',')[-1].strip()  # as the proxy saw it
+        if (tries := cache.get(key, 0)) >= GUESSES:
+            messages.error(request, 'Zu viele Versuche. Bitte in einer Viertelstunde noch einmal.')
+        elif constant_time_compare(request.POST.get('code', '').strip().lower(), settings.DEMO_CODE.lower()):
+            response = redirect(target)
+            response.set_cookie('demo', ticket(), max_age=DEMO_DAYS * 86400, secure=not settings.DEBUG, httponly=True, samesite='Lax')
+            return response
+        else:
+            cache.set(key, tries + 1, 15 * 60)
+            messages.error(request, 'Dieser Zugangscode stimmt nicht.')
+    return render(request, 'core/gate.html')
+
+
 @login_not_required
 @require_POST
 def demo(request):
-    """Only in the demo: sign in as one of its people, without a password."""
-    if request.POST.get('konto') not in settings.DEMO:
+    """Only in the demo, past its access code: sign in as one of its people, without a password."""
+    if request.POST.get('konto') not in settings.DEMO or not admitted(request):
         raise Http404
     login(request, get_object_or_404(Person, username=request.POST['konto']), backend=settings.AUTHENTICATION_BACKENDS[0])
     return redirect('home')

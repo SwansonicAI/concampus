@@ -1,0 +1,15 @@
+{% extends base %}
+{% block title %}Demo-Zugang{% endblock %}
+{% block content %}
+<div class="cols">
+  <div>
+    <h1>Demo-Zugang</h1>
+    <p class="lead">Diese Demo ist für eingeladene Gäste. Bitte geben Sie den Zugangscode ein, den Sie erhalten haben; dieser Browser behält ihn einen Monat.</p>
+    <form method="post" class="form">
+      {% csrf_token %}
+      <div><label for="code">Zugangscode</label><input id="code" name="code" type="password" autocomplete="current-password" required autofocus></div>
+      <div class="actions"><button class="btn">Weiter</button></div>
+    </form>
+  </div>
+</div>
+{% endblock %}

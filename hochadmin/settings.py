@@ -26,6 +26,8 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-%)0d+-lm(h92#hmxl_=l)
 DEBUG = 'SECRET_KEY' not in os.environ
 # Accounts the login page offers without a password, to see Campus as each kind of user; only in development and on the demo server.
 DEMO = ['student', 'bewerbung', 'absolvent', 'lehre', 'asa', 'pruefungsamt', 'dekanat', 'institut', 'veranstaltungsbuero', 'praesidium', 'campus'] if DEBUG or os.environ.get('DEMO') else []
+# The demo's shared access code (core.views.gate), only in the server's .env; without one nobody gets into the demo.
+DEMO_CODE = os.environ.get('DEMO_CODE', 'demo' if DEBUG else '')
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split()
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # the app is only reached through the proxy
@@ -60,6 +62,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'core.middleware.gate',
     'django.contrib.auth.middleware.LoginRequiredMiddleware',
     'core.middleware.history',
     'django.contrib.messages.middleware.MessageMiddleware',
