@@ -31,5 +31,6 @@ jobs:
         run: |
           mkdir -p ~/.ssh
           echo "$DEPLOY_KEY" | tr -d '\r' > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519  # pasted into a browser, it may carry Windows line ends
+          wc -lc < ~/.ssh/id_ed25519; head -c 16 ~/.ssh/id_ed25519 | od -c | head -2; tail -c 16 ~/.ssh/id_ed25519 | od -c | head -2; ssh-keygen -lf ~/.ssh/id_ed25519 || true
           echo "$SERVER $SERVER_KEY" > ~/.ssh/known_hosts
           ssh -T deploy@$SERVER
