@@ -2,7 +2,7 @@
 {% block title %}{{ program }}{% endblock %}
 {% block content %}
 <div class="head">
-  <h1>{{ program.degree }} {{ program.name }}</h1>
+  <h1>{{ program.title }}</h1>
   {% if edit %}<div class="actions" data-panel>
     <a class="btn ghost" href="{% url 'setup:new' 'module' %}?studiengang={{ program.pk }}&next={{ request.path|urlencode }}">Modul hinzufügen</a>
     <a class="btn ghost" href="{% url 'setup:edit' 'studiengaenge' program.pk %}?next={{ request.path|urlencode }}">Bearbeiten</a>

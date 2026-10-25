@@ -10,7 +10,7 @@
     <dt>Name</dt><dd><b>{{ study.person.legal_name }}</b>{% if study.person.birth_name %}, geb. {{ study.person.birth_name }}{% endif %}</dd>
     <dt>Geboren</dt><dd>{{ study.person.birth_date|date:"j. F Y" }}{% if study.person.birth_place %} in {{ study.person.birth_place }}{% endif %}</dd>
     <dt>Matrikelnummer</dt><dd>{{ study.person.matriculation|default:"–" }}</dd>
-    <dt>Studiengang</dt><dd>{{ study.program.degree }} {{ study.program.name }}, Prüfungsordnung {{ study.program.version }}</dd>
+    <dt>Studiengang</dt><dd>{{ study.program.title }}, Prüfungsordnung {{ study.program.version }}</dd>
     <dt>Hauptfach</dt><dd>{{ study.subject }}</dd>
   </dl>
   <section>
@@ -39,6 +39,6 @@
   {% if complete %}
   <p style="margin-top: 24px">Gesamtnote: <b>{{ average }} ({{ verbal }}){% if honours %}, mit Auszeichnung{% endif %}</b></p>
   {% endif %}
-  <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ today|date:"j. F Y" }}</span><span>{{ signature }}</span></div>
+  <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ today|date:"j. F Y" }}</span>{% if complete %}{% for name in signature.splitlines %}<span>{{ name }}</span>{% endfor %}{% else %}<span>{{ sender }}</span>{% endif %}</div>
 </div>
 {% endblock %}

@@ -12,7 +12,7 @@ from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import models, transaction
 from django.db.models.signals import m2m_changed, post_save, pre_delete
 from django.utils import timezone
-from django.utils.formats import localize
+from django.utils.formats import date_format, localize
 from django.utils.text import capfirst
 
 from .models import Change, Person, Tracked
@@ -234,7 +234,7 @@ def show(field, value, names):
     if isinstance(value, bool):
         return 'ja' if value else 'nein'
     if isinstance(value, datetime):
-        return f'{timezone.localtime(value):%d.%m.%Y, %H:%M}'
+        return date_format(timezone.localtime(value), 'j.n.Y, H:i')
     if isinstance(value, date):
-        return f'{value:%d.%m.%Y}'
+        return date_format(value, 'j.n.Y')
     return localize(value.normalize() if isinstance(value, Decimal) else value)  # 1,7 rather than 1,70

@@ -10,6 +10,7 @@ from django.db.models import Count, F, OuterRef, Q, Subquery
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.views.decorators.http import require_POST
 
 from core import history, texts
@@ -100,9 +101,9 @@ def catalogue(request):
         courses = matching(courses, q, 'title', 'staff__last_name', 'subject__name', 'area__name', 'description')
     return render(request, 'courses/catalogue.html', {
         'term': term,
-        'terms': Term.objects.filter(courses__kind__in=TEACHING).distinct(),
+        'terms': Term.objects.filter(courses__kind__in=TEACHING).distinct().order_by('-start'),
         'courses': courses.order_by(F('area__order').asc(nulls_last=True), 'area__name', 'title'),
-        'programs': Program.objects.all(),
+        'programs': Program.planned(),
         'program': program,
         'areas': Area.objects.filter(courses__in=offered.values('pk')).distinct(),
         'area': area,
@@ -151,6 +152,7 @@ def course(request, pk):
         'grouping': EnsembleForm(course=course) if course.allocation == Course.Allocation.ENSEMBLE else None,
         'adding': AddForm() if staffed else None,
         'enrolled': enrolled() if staffed else [],
+        'reachable': Study.reachable(person, Study.objects.filter(Q(participations__course=course) | Q(signups__course=course))) if staffed else set(),
         'panel': False,
     })
 
@@ -202,7 +204,7 @@ def register(request, pk):
     elif course.allocation == Course.Allocation.ENSEMBLE:
         messages.error(request, 'Bitte als Ensemble anmelden.')
     elif course.upcoming:
-        messages.error(request, f'Die Anmeldung beginnt am {course.opens:%d.%m.%Y}.')
+        messages.error(request, f'Die Anmeldung beginnt am {date_format(course.opens, "j.n.Y")}.')
     elif not course.is_open:
         messages.error(request, 'Der Anmeldeschluss ist vorbei.')
     elif module is None:
@@ -227,7 +229,7 @@ def ensemble(request, pk):
     study = get_object_or_404(Study, pk=request.POST.get('study'), person=request.user, status=Study.Status.ENROLLED)
     form = EnsembleForm(request.POST, course=course)
     if not course.is_open:
-        messages.error(request, 'Der Anmeldeschluss ist vorbei.' if not course.upcoming else f'Die Anmeldung beginnt am {course.opens:%d.%m.%Y}.')
+        messages.error(request, 'Der Anmeldeschluss ist vorbei.' if not course.upcoming else f'Die Anmeldung beginnt am {date_format(course.opens, "j.n.Y")}.')
         return redirect(course)
     if not form.is_valid():
         messages.error(request, ' '.join(e for errors in form.errors.values() for e in errors))
@@ -314,7 +316,7 @@ def date(request, pk):
         messages.error(request, ' '.join(error.messages))
     else:
         booking.save()
-        messages.success(request, f'Termin am {start:%d.%m.%Y} in {booking.room} gebucht.')
+        messages.success(request, f'Termin am {date_format(start, "j.n.Y")} in {booking.room} gebucht.')
     return redirect(course)
 
 
@@ -361,7 +363,7 @@ def plan(request, pk):
 def mine(request):
     person = request.user
     term = Term.pick(request.GET.get('semester'))
-    context = {'term': term, 'terms': Term.objects.filter(courses__isnull=False).distinct()}
+    context = {'term': term, 'terms': Term.objects.filter(courses__isnull=False).distinct().order_by('-start')}
     if 'teacher' in person.roles:
         teaching = person.teaching.filter(term=term, kind__in=TEACHING)
         context.update(
@@ -405,7 +407,7 @@ def load(request):
                 teachers[s].append((c, (c.hours or 0) * share(c, coached[s.pk])))
     rows = sorted(((t, cs, sum(load for _, load in cs)) for t, cs in teachers.items()), key=lambda row: row[0].last_name)
     return render(request, 'courses/load.html', {
-        'term': term, 'terms': Term.objects.all(), 'rows': rows, 'total': sum(row[2] for row in rows), 'everyone': everyone,
+        'term': term, 'terms': Term.objects.order_by('-start'), 'rows': rows, 'total': sum(row[2] for row in rows), 'everyone': everyone,
         'institutes': Institute.objects.all(), 'institute': institute, 'q': q,
     })
 

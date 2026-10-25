@@ -13,7 +13,7 @@
   </dl>
   <p style="margin-top: 24px">im {{ term }} ({{ term.start|date:"j.n.Y" }} bis {{ term.end|date:"j.n.Y" }}) an der {{ institution.name }} immatrikuliert ist{% if registration.leave %} und für dieses Semester beurlaubt ist{% endif %}:</p>
   <dl class="facts">
-    <dt>Studiengang</dt><dd>{{ study.program.degree }} {{ study.program.name }}</dd>
+    <dt>Studiengang</dt><dd>{{ study.program.title }}</dd>
     <dt>Hauptfach</dt><dd>{{ study.subject }}</dd>
     <dt>Fachsemester</dt><dd>{{ study.semester }}</dd>
     <dt>Hochschulsemester</dt><dd>{{ study.university_semester }}</dd>

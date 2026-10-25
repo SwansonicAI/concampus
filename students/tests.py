@@ -7,7 +7,7 @@ from .models import Document, Study, StudyTerm
 class EnrolmentTest(Seeded):
     def test_enrolment_waits_for_the_insurers_notice(self):
         asa = self.login('asa')
-        study = next(s for s in Study.objects.filter(status='admitted') if s.missing())
+        study = next(s for s in Study.objects.filter(status='admitted') if s.missing() == ['Versicherungsmeldung der Krankenkasse fehlt'])
         self.assertIn('Versicherungsmeldung der Krankenkasse fehlt', study.missing())
         self.assertIn('Versicherungsmeldung', flashes(asa.post(f'/studierende/{study.pk}/immatrikulieren/', follow=True))[0])
         asa.post(f'/studierende/{study.pk}/versicherung/')
@@ -64,7 +64,7 @@ class FileTest(Seeded):
 
     def test_programmes_beyond_the_bachelor(self):
         degrees = set(Study.objects.values_list('program__degree', flat=True))
-        self.assertTrue({'B.Mus.', 'M.Mus.', 'B.Ed.', 'M.Ed.', 'Konzertdiplom', 'Dr. phil.'} <= degrees)
+        self.assertTrue({'B.Mus.', 'M.Mus.', 'B.Ed.', 'M.Ed.', 'Konzertexamen', 'Dr. phil.'} <= degrees)
         self.assertTrue(Study.objects.filter(status='guest').exists())
         jena = Study.objects.filter(program__degree='B.Ed.', participations__course__kind='recognition').first()
         self.assertTrue(sum(m.earned for m in jena.progress()[0]))

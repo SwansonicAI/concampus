@@ -1,7 +1,10 @@
+from collections import defaultdict
+
 from django import forms
 from django.contrib.auth.forms import BaseUserCreationForm
 from django.db import models
 from django.utils import timezone
+from django.utils.formats import date_format
 
 from core import destatis
 from core.dates import DayField
@@ -37,7 +40,7 @@ class SignupForm(BaseUserCreationForm):
 class IntakeField(forms.ModelChoiceField):
     def label_from_instance(self, course):
         stage = 'mit Videostufe' if course.video else 'ohne Videostufe'
-        return f'{course.program.degree} {course.program.name} · {course.subject} · ab {course.term}, {stage} (Frist {course.deadline:%d.%m.%Y})'
+        return f'{course.program.title} · {course.subject} · ab {course.term}, {stage} (Frist {date_format(course.deadline, "j.n.Y")})'
 
 
 class ApplicationForm(forms.Form):
@@ -60,11 +63,18 @@ class ApplicationForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['audition'].queryset = (
+        auditions = self.fields['audition'].queryset = (
             Course.objects.filter(kind=Course.Kind.AUDITION, program__isnull=False, deadline__gte=timezone.localdate())
             .select_related('program', 'subject', 'term').order_by('program__degree', 'program__name', 'subject__name')
         )
-        self.fields['teacher'].queryset = Person.objects.filter(teaching__kind=Course.Kind.LESSON, teaching__subject__isnull=False).distinct()
+        classes = defaultdict(set)  # who teaches each Hauptfach one can apply for, grouped so applicants find their instrument
+        for subject, pk in Course.objects.filter(kind=Course.Kind.LESSON, subject__in=auditions.values('subject'), staff__isnull=False).values_list('subject__name', 'staff'):
+            classes[subject].add(pk)
+        teachers = self.fields['teacher'].queryset = Person.objects.filter(pk__in={pk for pks in classes.values() for pk in pks})
+        people = teachers.in_bulk()
+        self.fields['teacher'].choices = [('', 'Keine Angabe')] + [
+            (subject, [(p.pk, str(p)) for p in sorted((people[pk] for pk in pks), key=lambda p: p.name)]) for subject, pks in sorted(classes.items())
+        ]
 
 
 

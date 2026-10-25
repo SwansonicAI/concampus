@@ -5,12 +5,18 @@
 <div class="head">
   <h1>Rückmeldung {{ term }}</h1>
 </div>
-<p class="lead">Semesterbeitrag {{ term.fee }} € · Rückmeldung {{ term.reregistration_start|date:"j.n." }}–{{ term.deadline|date:"j.n.Y" }} · {{ open }} von {{ total }} Studien offen{% if blocked %} · {{ blocked }} mit Hindernis{% endif %}</p>
+<p class="lead">Semesterbeitrag {{ term.fee }} € · Rückmeldung {{ term.reregistration_start|date:"j.n." }}–{{ term.deadline|date:"j.n.Y" }}{% if term.late_deadline %} · Nachfrist bis {{ term.late_deadline|date:"j.n." }} mit {{ late_fee }} € Säumnisgebühr{% endif %} · {{ open }} von {{ total }} Studierenden offen{% if blocked %} · {{ blocked }} gesperrt{% endif %}</p>
 <form class="toolbar">
   <div class="inline">
-    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name oder Matrikel"></label>
+    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name oder Matrikelnummer"></label>
     <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for key, label, n in states %}<option value="{{ key }}"{% if key == stand %} selected{% endif %}>{{ label }} ({{ n }})</option>{% endfor %}</select></label>
   </div>
+</form>
+<form method="post" enctype="multipart/form-data" class="inline" style="margin-bottom: 16px">
+  {% csrf_token %}
+  <label>Kontoauszug<input type="file" name="statement" accept=".csv,.txt,.xml" required></label>
+  <button class="btn ghost small">Zahlungen einlesen</button>
+  <small class="muted">CSV oder CAMT.053 der Bank; zugeordnet über die Matrikelnummer im Verwendungszweck, in der Nachfrist mit Säumnisgebühr.</small>
 </form>
 <form method="post">
   {% csrf_token %}
@@ -22,14 +28,14 @@
     <small class="muted">Der Beitrag gilt je Person für alle ihre Studien.</small>
   </div>
   <table data-panel>
-    <thead><tr><th></th><th>Matrikel</th><th>Name</th><th>Studium</th><th>Status</th></tr></thead>
+    <thead><tr><th></th><th>Matrikelnr.</th><th>Name</th><th>Studium</th><th>Status</th></tr></thead>
     <tbody>
       {% for study, registration, done, missing in rows %}
       <tr>
         <td class="mid">{% if not done %}<input type="checkbox" name="person" value="{{ study.person_id }}" aria-label="{{ study.person.name }}">{% endif %}</td>
         <td class="mid">{{ study.person.matriculation }}</td>
         <td class="mid"><a href="{% url 'students:study' study.pk %}">{{ study.person.name }}</a>{% if missing %}<br><small class="fail">{{ missing|join:" · " }}</small>{% endif %}</td>
-        <td class="mid">{{ study.program.degree }} {{ study.program.name }} · {{ study.subject }}</td>
+        <td class="mid">{{ study.program.title }} · {{ study.subject }}</td>
         <td class="mid">{% if done %}<span class="badge green">bezahlt {{ registration.paid|date:"j.n." }}</span>{% else %}<span class="badge wait">offen</span>{% endif %}{% if registration.leave %} <span class="badge">Urlaubssemester</span>{% endif %}</td>
       </tr>
       {% empty %}<tr><td colspan="5" class="empty">Keine Treffer.</td></tr>

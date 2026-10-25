@@ -98,10 +98,32 @@ class Program(Tracked, models.Model):
         constraints = [models.UniqueConstraint(fields=['degree', 'name', 'version'], name='unique_program')]
 
     def __str__(self):
-        return f'{self.degree} {self.name} ({self.version})'
+        return f'{self.title} ({self.version})'
+
+    @property
+    def title(self):
+        """The programme as the Hochschule names it: 'B.Mus. Klavier', but just 'Konzertexamen' where the name says the degree."""
+        return self.name if self.degree in self.name else f'{self.degree} {self.name}'
 
     def get_absolute_url(self):
         return reverse('curriculum:program', args=[self.pk])
+
+    def foci(self):
+        """The pks of the Schwerpunkte a student chooses between: areas of a choice where any one of them alone carries
+        its credits, like Künstlerische or Instrumentalpädagogische Vertiefung."""
+        modules = list(self.modules.all())
+        children = defaultdict(list)
+        for m in modules:
+            children[m.parent_id].append(m)
+        return [
+            kid.pk for m in modules if len(children[m.pk]) > 1 and all(k.credits >= m.credits for k in children[m.pk])
+            for kid in children[m.pk] if children[kid.pk]
+        ]
+
+    @classmethod
+    def planned(cls):
+        """Programmes with a Studienplan, which courses, exams and auditions belong to; not a Gasthörerschaft."""
+        return cls.objects.filter(modules__isnull=False).distinct()
 
     def curriculum(self, results=None):
         """Root modules in study-plan order. Each module gets `nodes` (children), `offered` (their credits),

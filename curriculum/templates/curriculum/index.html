@@ -5,13 +5,13 @@
   <h1>Studiengänge</h1>
   {% if 'edit_curriculum' in user.roles %}<div class="actions"><a class="btn ghost" href="{% url 'setup:new' 'studiengaenge' %}?next={{ request.path|urlencode }}" data-panel>Neuer Studiengang</a></div>{% endif %}
 </div>
-<p class="lead">Jeder Studiengang ist ein Baum aus Modulen. Pflicht und Wahl folgen aus den ECTS: Ein Bereich ist erfüllt, sobald seine bestandenen Module seine ECTS erreichen.</p>
+<p class="lead">Die Studienverlaufs- und Prüfungspläne aller Studiengänge, je Prüfungsordnung.</p>
 <table>
   <thead><tr><th>Studiengang</th><th>Hauptfächer</th><th class="num">PO</th><th class="num">Semester</th><th class="num">Module</th>{% if figures %}<th class="num">Studierende</th><th class="num">Bewerbungen</th>{% endif %}</tr></thead>
   <tbody>
     {% for p in programs %}
     <tr>
-      <td><a href="{{ p.get_absolute_url }}"><b>{{ p.degree }} {{ p.name }}</b></a></td>
+      <td><a href="{{ p.get_absolute_url }}"><b>{{ p.title }}</b></a></td>
       <td>{{ p.subjects.all|join:", " }}</td>
       <td class="num">{{ p.version }}</td>
       <td class="num">{{ p.semesters }}</td>

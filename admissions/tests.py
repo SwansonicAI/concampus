@@ -12,7 +12,7 @@ from core.testing import Seeded, flashes
 from courses.models import Course, Participation, Score
 from students.models import Document, DocumentType, Study, StudyTerm
 from .retention import forget
-from .views import checklist, incomplete, vacancies
+from .views import checklist, incomplete, recommendations, vacancies
 
 PANEL = {'X-Panel': '1'}
 
@@ -26,7 +26,7 @@ class DecisionTest(Seeded):
         asa = self.login('asa')
         study = Study.objects.filter(status='applied').exclude(person__username='bewerbung').first()
         asa.post(f'/aufnahme/bewerbung/{study.pk}/entscheidung/', {'status': 'admitted'})
-        self.assertTrue(Message.objects.filter(person=study.person, subject='Zulassungsbescheid').exists())
+        self.assertTrue(Message.objects.filter(person=study.person, subject='Bescheid über die Eignungsprüfung: Studienplatzangebot').exists())
         applicant = Client()
         applicant.force_login(study.person)
         self.assertTrue(flashes(applicant.post(f'/aufnahme/meine/{study.pk}/annahme/', {'decision': 'yes'}, follow=True)))
@@ -40,6 +40,21 @@ class DecisionTest(Seeded):
         self.assertEqual(study.status, Study.Status.ENROLLED)
 
 
+    def test_results_decide_many_at_once_down_the_ranking(self):
+        term, asa = Term.objects.get(name='SoSe 2027'), Person.objects.get(username='asa')
+        intake = Course.objects.get(term=term, kind='audition', program__degree='B.Mus.', subject__name='Violoncello', program__isnull=False)
+        hall = Participation.objects.filter(course__term=term, course__kind='audition', course__video=False, study__program=intake.program, study__subject=intake.subject)
+        hall.update(passed=True, grade=20)
+        Course.objects.filter(participations__in=hall).update(released=timezone.now())
+        advised = recommendations(term, asa)
+        passed = [s.advice for s in advised if s.program_id == intake.program_id and s.subject_id == intake.subject_id and s.advice != Study.Status.REJECTED]
+        free = min(intake.capacity, len(passed))
+        self.assertEqual(passed, [Study.Status.ADMITTED] * free + [Study.Status.WAITLISTED] * (len(passed) - free))
+        failed = [s.pk for s in advised if s.advice == Study.Status.REJECTED]
+        self.login('asa').post('/aufnahme/bewerbungen/entscheiden/', {'semester': term.pk, 'study': failed})
+        self.assertEqual(set(Study.objects.filter(pk__in=failed).values_list('status', flat=True)), {Study.Status.REJECTED})
+
+
 class MoveUpTest(Seeded):
     def test_an_offer_not_accepted_in_time_goes_down_the_list(self):
         term = Term.current()
@@ -51,7 +66,7 @@ class MoveUpTest(Seeded):
         self.login('asa').post(f'/aufnahme/pruefung/{intake.pk}/nachruecken/')
         self.assertEqual(Study.objects.get(pk=late.pk).status, Study.Status.LEFT)
         self.assertEqual(Study.objects.get(pk=behind.pk).status, Study.Status.ADMITTED)
-        self.assertTrue(Message.objects.filter(person=behind.person, subject='Zulassungsbescheid').exists())
+        self.assertTrue(Message.objects.filter(person=behind.person, subject='Bescheid über die Eignungsprüfung: Studienplatzangebot').exists())
         self.assertEqual(vacancies(term, Person.objects.get(username='asa')), [])
 
 

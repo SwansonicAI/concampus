@@ -1,4 +1,7 @@
+from collections import Counter
+
 from django.apps import AppConfig
+from django.db.models import Prefetch
 from django.urls import reverse
 from django.utils import timezone
 
@@ -13,7 +16,7 @@ class AdmissionsConfig(Tile, AppConfig):
     url = 'admissions:index'
 
     def title(self, roles):
-        if roles & {'view_applications', 'teacher'}:
+        if roles & {'view_applications', 'juror'}:
             return 'Aufnahme'
         if 'applicant' in roles or not roles:
             return 'Meine Bewerbung'
@@ -24,7 +27,7 @@ class AdmissionsConfig(Tile, AppConfig):
 
         if 'view_applications' in person.roles:
             return f'{person.within(Study.objects.filter(status=Study.Status.APPLIED), "view_applications").count()} offene Bewerbungen'
-        if 'teacher' in person.roles:
+        if 'juror' in person.roles:
             juries = person.teaching.filter(kind=Course.Kind.AUDITION, released=None).count()
             return f'{plural(juries, "Eignungsprüfung", "Eignungsprüfungen")} als Kommission'
         latest = person.studies.filter(status__in=Study.APPLICATION).first()
@@ -34,7 +37,7 @@ class AdmissionsConfig(Tile, AppConfig):
         roles, found = person.roles, []
         if 'view_applications' in roles:
             found.append(feature('Bewerbungen', reverse('admissions:board'), 'eignungsprüfung aufnahmeprüfung zulassung bewerber entscheiden'))
-        if 'teacher' in roles:
+        if 'juror' in roles:
             found.append(feature('Meine Kommissionen', reverse('admissions:juries'), 'eignungsprüfung aufnahmeprüfung jury bewerten'))
         if 'applicant' in roles or not roles:
             found += [
@@ -51,7 +54,7 @@ class AdmissionsConfig(Tile, AppConfig):
         from students.models import Study
 
         found = []
-        if 'teacher' in person.roles:
+        if 'juror' in person.roles:
             open_ = person.teaching.filter(kind=Course.Kind.AUDITION, released=None)
             for course in open_.exclude(participations=None).distinct():
                 missing = course.participations.exclude(scores__examiner=person).count()
@@ -59,16 +62,15 @@ class AdmissionsConfig(Tile, AppConfig):
                 if missing and started:
                     url = reverse('admissions:review', args=[course.pk]) if course.video else course.get_absolute_url()
                     found.append(task(f'{course.title}: Ihre Wertung fehlt für {plural(missing, "Bewerbung", "Bewerbungen")}', url, course.deadline))
+        from .views import accept_by, document_types, incomplete, stages, uploads_open, vacancies, verdict
+
         if 'decide_applications' in person.roles:
-            ready = [
-                s for s in person.within(Study.objects.filter(status=Study.Status.APPLIED), 'decide_applications').prefetch_related('participations__course')
-                if (stages := [p for p in s.participations.all() if p.course.kind == Course.Kind.AUDITION])
-                and all(p.passed is not None for p in stages)
-                and (any(p.passed is False for p in stages) or any(p.course.stage == 'Hauptfach' for p in stages))
-            ]
-            if ready:
-                found.append(task(f'{plural(len(ready), "Bewerbung", "Bewerbungen")} entscheiden', reverse('admissions:board')))
-        from .views import accept_by, document_types, incomplete, uploads_open, vacancies
+            ready = Counter(
+                s.start_term for s in person.within(Study.objects.filter(status=Study.Status.APPLIED), 'decide_applications')
+                .select_related('start_term').prefetch_related(Prefetch('participations', stages(), to_attr='stages')) if verdict(s.stages)
+            )
+            for term, n in sorted(ready.items(), key=lambda item: item[0].start):
+                found.append(task(f'{plural(n, "Bewerbung", "Bewerbungen")} zum {term} entscheiden', f"{reverse('admissions:board')}?semester={term.pk}#entscheiden"))
 
         if 'decide_applications' in person.roles:
             for term in filter(None, [Term.current(), Term.upcoming()]):

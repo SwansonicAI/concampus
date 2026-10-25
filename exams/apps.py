@@ -4,6 +4,7 @@ from django.apps import AppConfig
 from django.db.models import Count, Exists, F, Min, OuterRef, Q
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 
 from core.apps import Tile, feature, plural, task
 
@@ -22,15 +23,16 @@ class ExamsConfig(Tile, AppConfig):
     def figure(self, person):
         from core.models import Term
         from courses.models import Course, Participation
+        from .views import EXAMS
 
         term = Term.current()
         if not term:
             return ''
-        if person.roles & {'manage_exams', 'decide_results'}:
-            exams = person.within(term.courses.filter(kind=Course.Kind.EXAM), 'manage_exams', 'decide_results')
+        if person.roles & {'manage_exams', 'decide_results'}:  # counted as the list of Prüfungen counts them, theses included
+            exams = person.within(term.courses.filter(kind__in=EXAMS), 'manage_exams', 'decide_results')
             return f'{plural(exams.count(), "Prüfung", "Prüfungen")} im {term}'
         if 'teacher' in person.roles:
-            return f'{plural(person.teaching.filter(term=term, kind=Course.Kind.EXAM).count(), "Kommission", "Kommissionen")} im {term}'
+            return f'{plural(person.teaching.filter(term=term, kind__in=EXAMS).count(), "Kommission", "Kommissionen")} im {term}'
         open_ = Participation.objects.filter(study__person=person, course__kind=Course.Kind.EXAM, course__released=None)
         return f'{plural(open_.count(), "Prüfung", "Prüfungen")} angemeldet'
 
@@ -87,7 +89,9 @@ class ExamsConfig(Tile, AppConfig):
 
             if exams := list(offered(person)):
                 due = min(e.deadline for e in exams if e.deadline)
-                found.append(task(f'Prüfungsanmeldung: {plural(len(exams), "Prüfung", "Prüfungen")} möglich', reverse('exams:index'), due))
+                opens = None if any(e.is_open for e in exams) else min(e.opens for e in exams)
+                when = f' ab {date_format(opens, "j.n.")}' if opens else ''
+                found.append(task(f'Prüfungsanmeldung{when}: {plural(len(exams), "Prüfung", "Prüfungen")}', reverse('exams:index'), due))
             for p in Participation.objects.filter(study__person=person, course__kind=Course.Kind.THESIS, course__released=None).select_related('course', 'study'):
                 if not handed_in(p):
                     found.append(task(f'Abschlussarbeit abgeben: {p.course.title}', reverse('exams:index'), p.course.deadline))

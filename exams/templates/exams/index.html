@@ -57,18 +57,19 @@
 </div>
 {% endfor %}
 
-<h2>Anmeldung möglich</h2>
+<h2>Zur Anmeldung</h2>
 <table>
-  <thead><tr><th>Datum</th><th>Prüfung</th><th>Anmeldeschluss</th><th></th></tr></thead>
+  <thead><tr><th>Datum</th><th>Prüfung</th><th>Anmeldung</th><th></th></tr></thead>
   <tbody>
     {% for c in offered %}
     <tr>
       <td>{{ c.date|date:"D j.n.Y"|default:"–" }}</td>
       <td><b>{{ c.title }}</b></td>
-      <td>{{ c.deadline|date:"D j.n.Y"|default:"–" }}</td>
+      <td>{% if c.opens %}{{ c.opens|date:"j.n." }}–{% else %}bis {% endif %}{{ c.deadline|date:"j.n.Y"|default:"–" }}</td>
       <td class="num">
         {% if c.is_open %}
         <form method="post" action="{% url 'exams:register' c.pk %}">{% csrf_token %}<input type="hidden" name="study" value="{{ studies.0.pk }}"><button class="btn small">Anmelden</button></form>
+        {% elif c.upcoming %}<span class="muted">ab {{ c.opens|date:"j.n." }}</span>
         {% else %}<span class="muted">Frist abgelaufen</span>{% endif %}
       </td>
     </tr>
@@ -91,7 +92,7 @@
         <td class="num">{% if p.course.released and p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</td>
         <td>
           {% if p.course.released %}{% if p.passed %}<span class="badge yes">bestanden</span>{% elif p.passed is False %}<span class="badge no">nicht bestanden</span>{% else %}<span class="badge wait">entschuldigt</span>{% endif %}{% if p.remark %} <small class="muted">{{ p.get_remark_display }}</small>{% endif %}
-          {% elif p.course.is_open %}<form method="post" action="{% url 'exams:withdraw' p.pk %}">{% csrf_token %}<button class="btn ghost small">Rücktritt</button></form>
+          {% elif p.course.withdrawable %}<form method="post" action="{% url 'exams:withdraw' p.pk %}" title="Bis {{ p.course.withdraw_by|date:'j.n.Y' }}">{% csrf_token %}<button class="btn ghost small">Abmelden</button></form>
           {% else %}<span class="badge open">angemeldet</span>{% endif %}
         </td>
       </tr>

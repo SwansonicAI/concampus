@@ -14,6 +14,7 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.views.decorators.http import require_POST
 
 from core import texts
@@ -69,13 +70,35 @@ def due(p):
     return p.passed is None and p.remark != Participation.Remark.EXCUSED
 
 
+def register_resits(course):
+    """Register for an exam everyone who failed one of its modules, may try again and is not registered elsewhere: the
+    Wiederholungsprüfung needs no Anmeldung (RPSO § 19). Returns the new participations."""
+    modules = course.modules.all()
+    failed = Counter(
+        Participation.objects.filter(module__in=modules, passed=False, course__released__isnull=False, study__status=Study.Status.ENROLLED)
+        .values_list('study', 'module')
+    )
+    settled = set(Participation.objects.filter(module__in=modules).filter(Q(passed=True) | Q(course__released=None)).values_list('study', 'module'))
+    studies = Study.objects.select_related('program', 'person').in_bulk({study for study, _ in failed})
+    taken, new = set(course.participations.values_list('study', flat=True)), []
+    for (study, module), n in failed.items():
+        s = studies[study]
+        if (study, module) not in settled and study not in taken and n < s.program.attempts and course.subject_id in (None, s.subject_id):
+            taken.add(study)
+            new.append(Participation(course=course, study=s, module_id=module))
+    Participation.objects.bulk_create(new)
+    for p in new:
+        texts.send('pruefungsanmeldung', p.study.person, reverse('exams:index'), pruefung=course.title, modul=p.module)
+    return new
+
+
 def offered(person):
     """Exams of this term the person may still register for: their programme's modules, due by now, not yet passed;
     artistic exams held per Hauptfach only in their own."""
     studies = person.studies.filter(status=Study.Status.ENROLLED)
     passed = Participation.objects.filter(study__in=studies, passed=True, module__isnull=False).values('module')  # NOT IN with a NULL matches nothing
     semester = max((s.semester for s in studies), default=0)
-    return (
+    return (  # with those whose registration opens later in the term
         Course.objects.filter(term=Term.current(), kind=Course.Kind.EXAM, modules__program__studies__in=studies, deadline__gte=timezone.localdate())
         .filter(Q(subject=None) | Q(subject__in=studies.values('subject')))
         .filter(modules__semester__lte=semester).exclude(participations__study__in=studies).exclude(modules__in=passed)
@@ -86,7 +109,7 @@ def offered(person):
 def index(request):
     person = request.user
     term = Term.pick(request.GET.get('semester'))
-    context = {'term': term, 'terms': Term.objects.filter(courses__kind=Course.Kind.EXAM).distinct()}
+    context = {'term': term, 'terms': Term.objects.filter(courses__kind=Course.Kind.EXAM).distinct().order_by('-start')}
     exams = (
         Course.objects.filter(term=term, kind__in=EXAMS).select_related('subject').prefetch_related('staff')
         .annotate(date=Min('bookings__start'), size=Count('participations', distinct=True), candidate=Min('participations__study__person__last_name'))
@@ -104,7 +127,7 @@ def index(request):
         for c in exams:
             c.state = 'freigegeben' if c.released else 'bewertung' if c.graded else 'offen'
         context.update(
-            exams=[c for c in exams if not stand or c.state == stand], q=q, stand=stand, program=program, programs=Program.objects.all(),
+            exams=[c for c in exams if not stand or c.state == stand], q=q, stand=stand, program=program, programs=Program.planned(),
             states=[(key, label, sum(c.state == key for c in exams)) for key, label in STATES],
         )
     if 'student' in person.roles:
@@ -158,6 +181,7 @@ def exam(request, pk):
         'adding': AddForm(),
         'importing': not course.released and course.kind == Course.Kind.EXAM and (decide or person in staff),
         'enrolled': enrolled() if office else [],
+        'reachable': Study.reachable(person, Study.objects.filter(participations__course=course)),
     })
 
 
@@ -172,7 +196,9 @@ def edit(request, pk=None):
         if thesis and 'deadline' in form.changed_data:
             study = course.participations.select_related('study__person', 'study__program', 'study__subject', 'study__start_term').get().study
             study.notify('verlaengerung', reverse('exams:index'), thema=course.title, frist=f'{course.deadline:%d.%m.%Y}')
-        messages.success(request, 'Gespeichert.' if pk else 'Gespeichert. Kandidat:innen melden sich bis zum Anmeldeschluss selbst an.')
+        resits = [] if thesis else register_resits(course)
+        messages.success(request, ('Gespeichert.' if pk else 'Gespeichert. Kandidat:innen melden sich bis zum Anmeldeschluss selbst an.')
+                         + (f' {plural(len(resits), "Person", "Personen")} zur Wiederholung automatisch angemeldet.' if resits else ''))
         return redirect(course)
     back = course.get_absolute_url() if pk else reverse('exams:index')
     return render(request, 'courses/form.html', {'form': form, 'course': course, 'menu': 'exams/_nav.html', 'heading': 'Neue Prüfung', 'back': back})
@@ -258,7 +284,7 @@ def roster(request, pk):
         writer.writerow(['Matrikelnummer', 'Nachname', 'Vorname', 'Studiengang', 'Hauptfach', 'Termin', *(e.last_name for e in staff), 'Note', 'Ergebnis', 'Vermerk'])
         for p in rows:
             writer.writerow([
-                p.study.person.matriculation, p.study.person.last_name, p.study.person.first_name, f'{p.study.program.degree} {p.study.program.name}',
+                p.study.person.matriculation, p.study.person.last_name, p.study.person.first_name, p.study.program.title,
                 p.study.subject, f'{timezone.localtime(p.slot):%d.%m.%Y %H:%M}' if p.slot else '', *(str(v or '').replace('.', ',') for _, v in p.marks),
                 str(p.grade if p.grade is not None else '').replace('.', ','), outcome(p), p.remark.upper(),
             ])
@@ -330,6 +356,13 @@ def release(request, pk):
                 final += 1
         messages.success(request, 'Ergebnisse freigegeben und gesperrt.' + (f' {plural(final, "Bescheid", "Bescheide")} über endgültiges Nichtbestehen versandt.' if final else ''))
     course.save(update_fields=['released'])
+    if course.released:  # who failed is registered for the next exam of the module already planned
+        later = (
+            Course.objects.filter(kind=Course.Kind.EXAM, released=None, modules__in=course.modules.all())
+            .filter(Q(deadline=None) | Q(deadline__gte=timezone.localdate())).exclude(pk=course.pk).distinct()
+        )
+        if resits := [p for c in later for p in register_resits(c)]:
+            messages.info(request, f'{plural(len(resits), "Person", "Personen")} zur Wiederholung automatisch angemeldet.')
     return redirect(course)
 
 
@@ -338,7 +371,9 @@ def register(request, pk):
     course = get_object_or_404(Course, pk=pk, kind=Course.Kind.EXAM)
     study = get_object_or_404(Study, pk=request.POST.get('study'), person=request.user, status=Study.Status.ENROLLED)
     module = course.modules.filter(program=study.program).first()
-    if not course.is_open:
+    if course.upcoming:
+        messages.error(request, f'Die Anmeldung beginnt am {date_format(course.opens, "j.n.Y")}.')
+    elif not course.is_open:
         messages.error(request, 'Die Anmeldefrist ist abgelaufen.')
     elif module is None:
         messages.error(request, 'Diese Prüfung gehört nicht zu Ihrem Studiengang.')
@@ -358,11 +393,11 @@ def register(request, pk):
 @require_POST
 def withdraw(request, pk):
     participation = get_object_or_404(Participation, pk=pk, study__person=request.user, course__kind=Course.Kind.EXAM)
-    if participation.course.is_open and participation.passed is None:
+    if participation.course.withdrawable and participation.passed is None:
         participation.delete()
         messages.success(request, 'Abgemeldet.')
     else:
-        messages.error(request, 'Rücktritt ist nur bis zum Ende der Anmeldefrist möglich.')
+        messages.error(request, f'Abmelden ging nur bis zum {date_format(participation.course.withdraw_by, "j.n.Y")}. Bei triftigem Grund ist ein Rücktritt mit Nachweis möglich.')
     return redirect('exams:index')
 
 

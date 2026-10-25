@@ -3,6 +3,7 @@ from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.views.decorators.http import require_POST
 
 from core import texts
@@ -70,7 +71,7 @@ def lend(request, pk):
     else:
         loan = Loan.objects.create(instrument=instrument, person=form.cleaned_data['who'], due=form.cleaned_data['due'], note=form.cleaned_data['note'])
         texts.send('leihe', loan.person, reverse('instruments:mine'), instrument=instrument.name, frist=f'{loan.due:%d.%m.%Y}')
-        messages.success(request, f'{instrument.name} an {loan.person} verliehen, zurück bis {loan.due:%d.%m.%Y}.')
+        messages.success(request, f'{instrument.name} an {loan.person} verliehen, zurück bis {date_format(loan.due, "j.n.Y")}.')
     return redirect('instruments:instrument', pk=instrument.pk)
 
 

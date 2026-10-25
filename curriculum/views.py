@@ -61,5 +61,6 @@ def program(request, pk):
     figures = bool(request.user.roles & OVERSIGHT)
     return render(request, 'curriculum/program.html', {
         'program': program, 'rows': rows, 'semesters': range(1, program.semesters + 1), 'term': term, 'edit': request.user.may('edit_curriculum', program),
+        'reachable': Course.reachable(request.user, Course.objects.filter(pk__in=[c.pk for found in offers.values() for c in found])),
         'total': sum(m.credits for m in tree), 'figures': figures, 'students': figures and program.studies.filter(status='enrolled').count(),
     })

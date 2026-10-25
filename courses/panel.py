@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core import history, texts
-from curriculum.models import rounded
+from curriculum.models import Rounding, rounded
 from rooms.models import Booking, BookingCategory
 from .models import Course, Participation, Score
 
@@ -27,6 +27,12 @@ def mean(values, rounding):
     return rounded(sum(values) / len(values), rounding) if values else None
 
 
+def rounding(p):
+    """How a participation's mean is cut to one decimal: as Eignungsprüfungsordnungen do for auditions, after the first
+    decimal; otherwise as the candidate's Prüfungsordnung says."""
+    return Rounding.CUT if p.course.kind == Course.Kind.AUDITION else p.study.program.mean_rounding
+
+
 def sheet(course):
     """(staff, participations). Each participation gets `marks` [(examiner, value)], `mean` of the marks so far,
     `auto` (the mean once every examiner has marked) and `override` (a grade set by hand instead); in an exam also
@@ -40,7 +46,7 @@ def sheet(course):
     for p in rows:
         values = {s.examiner_id: s.value for s in p.scores.all()}
         p.marks = [(e, values.get(e.pk)) for e in staff]
-        p.mean = mean(list(values.values()), p.study.program.mean_rounding)
+        p.mean = mean(list(values.values()), rounding(p))
         p.auto = p.mean if panel and staff and len(values) == len(staff) else None
         p.override = p.grade if p.grade is not None and p.grade != p.auto and not p.remark else None
     if course.kind in (Course.Kind.EXAM, Course.Kind.THESIS):
@@ -80,7 +86,7 @@ def save(post, rows, columns, decide):
             values = [v for v in marks.values() if v is not None]
             if p.course.max_points is not None and any(v > p.course.max_points for v in values):
                 raise InvalidOperation
-            auto = mean(values, p.study.program.mean_rounding) if marks and len(values) == len(marks) else None
+            auto = mean(values, rounding(p)) if marks and len(values) == len(marks) else None
             override = number(post.get(f'grade-{p.pk}')) if decide else p.override
             p.grade = override if override is not None else auto
             p.passed = p.course.passes(p.grade) if p.grade is not None else None

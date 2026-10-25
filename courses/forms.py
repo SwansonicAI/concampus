@@ -4,9 +4,9 @@ from django import forms
 from django.db.models import F
 
 from core.dates import ClockField, DayField, MomentField
-from core.models import Person
-from curriculum.models import Module
-from rooms.forms import bookable
+from core.models import Institution, Person
+from curriculum.models import Module, Program
+from rooms.forms import RoomField, bookable
 from students.models import Study
 from .models import Course
 
@@ -20,7 +20,7 @@ class PlanForm(forms.Form):
     )
     time = ClockField(label='Beginn')
     minutes = forms.IntegerField(label='Dauer (Min.)', min_value=15, max_value=480, initial=90)
-    room = forms.ModelChoiceField(label='Raum', queryset=None, empty_label='Bitte wählen')
+    room = RoomField(label='Raum', queryset=None, empty_label='Bitte wählen')
 
     def __init__(self, *args, person, **kwargs):
         super().__init__(*args, **kwargs)
@@ -33,7 +33,7 @@ class DateForm(forms.Form):
     day = DayField(label='Tag')
     begin = ClockField(label='Von')
     until = ClockField(label='Bis')
-    room = forms.ModelChoiceField(label='Raum', queryset=None, empty_label='Bitte wählen')
+    room = RoomField(label='Raum', queryset=None, empty_label='Bitte wählen')
 
     def __init__(self, *args, person, **kwargs):
         super().__init__(*args, **kwargs)
@@ -51,7 +51,7 @@ class SlotForm(forms.Form):
 
     start = MomentField(label='Beginn')
     minutes = forms.IntegerField(label='Minuten je Person', min_value=5, max_value=120, initial=20)
-    room = forms.ModelChoiceField(label='Raum', queryset=None, empty_label='Bitte wählen')
+    room = RoomField(label='Raum', queryset=None, empty_label='Bitte wählen')
 
     def __init__(self, *args, person, **kwargs):
         super().__init__(*args, **kwargs)
@@ -74,6 +74,7 @@ class CourseForm(forms.ModelForm):
     class Meta:
         model = Course
         fields = ['title', 'kind', 'area', 'format', 'subject', 'staff', 'modules', 'hours', 'capacity', 'allocation', 'opens', 'deadline', 'description']
+        labels = {'staff': 'Lehrende'}
         widgets = {
             'staff': forms.CheckboxSelectMultiple,
             'modules': forms.CheckboxSelectMultiple,
@@ -91,14 +92,22 @@ class CourseForm(forms.ModelForm):
             self.fields['modules'].choices = leaf_modules()
         if 'subject' in self.fields:
             self.fields['subject'].empty_label = 'Keines'
+        if 'program' in self.fields:
+            self.fields['program'].queryset = Program.planned()
+        if 'term' in self.fields:
+            self.fields['term'].queryset = self.fields['term'].queryset.order_by('-start')
         if 'area' in self.fields:
             self.fields['area'].empty_label = 'Keines'
 
 
 class ExamForm(CourseForm):
     class Meta(CourseForm.Meta):
-        fields = ['title', 'staff', 'modules', 'deadline', 'pass_mark', 'max_points', 'description']
+        fields = ['title', 'staff', 'modules', 'opens', 'deadline', 'pass_mark', 'max_points', 'description']
         labels = {'staff': 'Kommission', 'modules': 'Prüft das Modul'}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['deadline'].help_text = f'Letzter Tag der Anmeldung. Abmelden geht bis {Institution.get().withdraw_weeks} Wochen vor dem Prüfungszeitraum.'
 
 
 class ThesisForm(CourseForm):
@@ -130,7 +139,10 @@ class AuditionForm(CourseForm):
     class Meta(CourseForm.Meta):
         fields = ['title', 'term', 'program', 'subject', 'video', 'staff', 'deadline', 'capacity', 'pass_mark', 'max_points', 'accompaniment', 'description']
         labels = {'staff': 'Kommission', 'capacity': 'Studienplätze'}
-        help_texts = {'program': 'Nur bei der ersten Stufe: der Studiengang, für den man sich hier bewirbt.'}
+        help_texts = {
+            'program': 'Nur bei der ersten Stufe: der Studiengang, für den man sich hier bewirbt.',
+            'video': 'Bewerbende reichen ein Video ein, die Kommission wertet online.',
+        }
 
 
 class EnsembleForm(forms.Form):

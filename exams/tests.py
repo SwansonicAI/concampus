@@ -15,13 +15,17 @@ from students.models import Study
 class ExamTest(Seeded):
     def test_register(self):
         exam = Course.objects.get(title__startswith='Musikgeschichte I · Mündliche', term__name='WiSe 2026/27')
+        exam.opens = None  # registration under way, whatever day the tests run
+        exam.save()
         study = Study.objects.get(person__username='student')
         r = self.login('student').post(f'/pruefungen/{exam.pk}/anmelden/', {'study': study.pk}, follow=True)
         self.assertEqual(flashes(r), ['Angemeldet. Die Bestätigung liegt in Ihrem Postfach.'])
         self.assertTrue(exam.participations.filter(study=study).exists())
 
     def test_exams_of_a_hauptfach_are_for_its_students_only(self):
-        exam = Course.objects.filter(kind='exam', term__name='WiSe 2026/27', subject__isnull=False, participations__isnull=False).first()
+        exam = Course.objects.filter(kind='exam', term__name='WiSe 2026/27', subject__isnull=False).first()
+        exam.opens = None
+        exam.save()
         module = exam.modules.first()
         others = Study.objects.filter(status='enrolled', program=module.program).exclude(subject=exam.subject).exclude(participations__course=exam)
         study = next(s for s in others if s.semester >= module.semester)
@@ -65,7 +69,7 @@ class OfficeTest(Seeded):
         data |= {f'grade-{p.pk}': '' for p in rows} | {f'remark-{first.pk}': 'rt', f'remark-{last.pk}': 'ne'}
         office.post(f'/pruefungen/{resit.pk}/', data)
         r = office.post(f'/pruefungen/{resit.pk}/freigabe/', follow=True)
-        self.assertIn('1 Bescheid über endgültiges Nichtbestehen versandt.', flashes(r)[-1])
+        self.assertIn('1 Bescheid über endgültiges Nichtbestehen versandt.', ' '.join(flashes(r)))
         self.assertIn(last.module, exhausted(last.study))
         self.assertIn(f'Exmatrikulieren: {last.study.person}', self.login('asa').get('/').content.decode())
         self.assertEqual(attempts(first.study.person, first.module), 1)  # the withdrawal is no attempt
@@ -80,7 +84,9 @@ class OfficeTest(Seeded):
         self.assertEqual((recognised.count(), set(recognised.values_list('grade', flat=True))), (len(options) - 1, {Decimal('2.2')}))
 
     def test_marks_come_from_a_file(self):
-        exam = Course.objects.annotate(n=Count('staff', distinct=True)).filter(kind='exam', released=None, n=1, participations__isnull=False).distinct().first()
+        exam = Course.objects.annotate(n=Count('staff', distinct=True)).filter(kind='exam', released=None, n=1).first()
+        studies = Study.objects.filter(status='enrolled', program__modules__courses=exam).exclude(participations__course=exam).distinct()[:3]
+        Participation.objects.bulk_create(Participation(course=exam, study=s, module=exam.modules.filter(program=s.program).first()) for s in studies)
         lines = ['Matrikelnummer;Note', *(f'{p.study.person.matriculation};1,7' for p in exam.participations.select_related('study__person')), '999999;2,0']
         r = self.login(exam.staff.get().username).post(f'/pruefungen/{exam.pk}/noten/', {'file': SimpleUploadedFile('noten.csv', '\n'.join(lines).encode())}, follow=True)
         self.assertIn('Nicht angemeldet: 999999.', flashes(r)[0])
@@ -120,6 +126,8 @@ class RegulationTest(Seeded):
         study = Study.objects.get(person__username='student')
         study.program.attempts = 0
         study.program.save()
+        exam.opens = None
+        exam.save()
         r = self.login('student').post(f'/pruefungen/{exam.pk}/anmelden/', {'study': study.pk}, follow=True)
         self.assertIn('alle 0 Versuche', flashes(r)[0])
 

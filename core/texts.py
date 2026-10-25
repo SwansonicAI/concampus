@@ -29,19 +29,19 @@ class Spec:
 BESCHEID, NACHRICHT, BAUSTEIN = 'Bescheide', 'Nachrichten', 'Bausteine'
 TEXTS = {
     'zulassung': Spec(
-        BESCHEID, 'Zulassung', 'Zulassungsbescheid',
+        BESCHEID, 'Studienplatzangebot', 'Bescheid über die Eignungsprüfung: Studienplatzangebot',
         'Sie haben die Eignungsprüfung bestanden. Wir freuen uns, Ihnen einen Studienplatz im Studiengang {studiengang}, '
         'Hauptfach {hauptfach}, ab dem {semester} anzubieten.\n\nBitte nehmen Sie den Studienplatz bis zum {frist} im Portal an.',
         STUDY + ('frist',),
     ),
     'nachrueckliste': Spec(
-        BESCHEID, 'Nachrückliste', 'Bescheid: Nachrückliste',
+        BESCHEID, 'Nachrückliste', 'Bescheid über die Eignungsprüfung: Nachrückliste',
         'Sie haben die Eignungsprüfung bestanden. Alle Studienplätze im Hauptfach {hauptfach} sind derzeit vergeben; '
         'Sie stehen auf der Nachrückliste. Wird ein Platz frei, erhalten Sie umgehend Nachricht.',
         STUDY,
     ),
     'ablehnung': Spec(
-        BESCHEID, 'Ablehnung', 'Bescheid zur Eignungsprüfung',
+        BESCHEID, 'Ablehnung', 'Bescheid über die Eignungsprüfung',
         'Leider können wir Ihnen für den Studiengang {studiengang}, Hauptfach {hauptfach}, keinen Studienplatz anbieten. '
         'Wir danken Ihnen für Ihre Bewerbung und wünschen Ihnen für Ihren weiteren Weg alles Gute.',
         STUDY, appeal=True,
@@ -54,14 +54,14 @@ TEXTS = {
     ),
     'exmatrikulation': Spec(
         BESCHEID, 'Exmatrikulation', 'Exmatrikulationsbescheid',
-        'Sie sind zum {datum} aus dem Studiengang {studiengang}, Hauptfach {hauptfach}, exmatrikuliert. Grund: {grund}.',
-        STUDY + ('grund',),
+        'Sie sind zum {zum} aus dem Studiengang {studiengang}, Hauptfach {hauptfach}, exmatrikuliert. Grund: {grund}.',
+        STUDY + ('grund', 'zum'),
     ),
     'exmatrikulation_rueckmeldung': Spec(
         BESCHEID, 'Exmatrikulation ohne Rückmeldung', 'Exmatrikulationsbescheid',
-        'Sie haben sich nicht fristgerecht zum {rueckmeldesemester} zurückgemeldet und sind daher zum {datum} aus dem '
+        'Sie haben sich nicht fristgerecht zum {rueckmeldesemester} zurückgemeldet und sind daher zum {zum} aus dem '
         'Studiengang {studiengang}, Hauptfach {hauptfach}, exmatrikuliert.',
-        STUDY + ('rueckmeldesemester',), appeal=True,
+        STUDY + ('rueckmeldesemester', 'zum'), appeal=True,
     ),
     'abschlussarbeit': Spec(
         BESCHEID, 'Abschlussarbeit angemeldet', 'Ausgabe des Themas der Abschlussarbeit',
@@ -147,7 +147,7 @@ TEXTS = {
     'absender_bescheide': Spec(BAUSTEIN, 'Absender der Bescheide', '', '{hochschule}'),
     'absender_bescheinigungen': Spec(BAUSTEIN, 'Absender der Immatrikulationsbescheinigung', '', '{hochschule}'),
     'absender_leistungen': Spec(BAUSTEIN, 'Absender der Leistungsübersichten und Zeugnisse', '', '{hochschule}'),
-    'unterschrift_zeugnisse': Spec(BAUSTEIN, 'Unterschrift auf Zeugnissen', '', 'Vorsitz Prüfungsausschuss'),
+    'unterschrift_zeugnisse': Spec(BAUSTEIN, 'Unterschriften auf Zeugnissen', '', 'Vorsitz Prüfungsausschuss'),  # one per line
     'ds_hochschule': Spec(BAUSTEIN, 'Diploma Supplement: Hochschule und Status', '', '{hochschule}\nUniversity of Music, state institution'),
     'ds_hochschulsystem': Spec(
         BAUSTEIN, 'Diploma Supplement: Hochschulsystem (Abschnitt 8)', '',

@@ -1,4 +1,5 @@
 import uuid
+from collections import defaultdict
 from datetime import datetime, timedelta
 
 from django import forms
@@ -31,6 +32,23 @@ def quota(person, day, exclude=None):
     return round(sum((b.end - b.start).total_seconds() for b in counted if b.start - b.created > last_minute) / 3600, 1)
 
 
+class RoomField(forms.ModelChoiceField):
+    """Rooms grouped by building, each with what it is for: a room number alone tells few people anything."""
+
+    def label_from_instance(self, room):
+        return f'{room.name} · {room.purpose}' if room.purpose else room.name
+
+    def _get_choices(self):
+        if self.queryset is None:  # until the form sets the rooms the person may book
+            return []
+        groups = defaultdict(list)
+        for room in self.queryset:
+            groups[room.building].append((room.pk, self.label_from_instance(room)))
+        return ([('', self.empty_label)] if self.empty_label is not None else []) + list(groups.items())
+
+    choices = property(_get_choices, forms.ChoiceField.choices.fset)
+
+
 class Participants(forms.ModelMultipleChoiceField):
     def label_from_instance(self, person):  # the Hauptfach tells namesakes apart without showing anyone's Matrikel
         return f'{person.name} · {person.subject}'
@@ -50,6 +68,7 @@ class BookingForm(forms.ModelForm):
     class Meta:
         model = Booking
         fields = ['room', 'category', 'title', 'description', 'participants']
+        field_classes = {'room': RoomField}
         widgets = {'description': forms.Textarea(attrs={'rows': 3})}
 
     def __init__(self, *args, person, **kwargs):
@@ -60,8 +79,8 @@ class BookingForm(forms.ModelForm):
         self.person, roles = person, person.roles
         self.office = 'book_any_room' in roles
         self.student = not (self.office or 'teacher' in roles)
-        self.fields['room'].queryset = bookable(person)
         self.fields['room'].empty_label = 'Bitte wählen'
+        self.fields['room'].queryset = bookable(person)
         allowed = BookingCategory.objects.all()
         if not self.office:
             allowed = allowed.filter(teachers=True) if 'teacher' in roles else allowed.filter(students=True)

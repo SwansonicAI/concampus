@@ -1,4 +1,5 @@
 import csv
+from datetime import timedelta
 
 from django import forms
 from django.contrib import messages
@@ -8,10 +9,11 @@ from django.db.models import Count, F, Prefetch, Q
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
+from django.utils.formats import date_format, number_format
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from core import destatis, texts
+from core import dates, texts
 from core.access import require
 from core.history import tables
 from core.apps import plural
@@ -22,7 +24,8 @@ from curriculum.models import Program, Subject
 from curriculum.views import plan
 from exams.views import exhausted
 from instruments.models import Loan
-from .models import Document, Study, StudyTerm
+from . import payments
+from .models import EXITS, FIRST_TERM_LEAVES, LEAVE_TERMS, LEAVES, Document, Study, StudyTerm
 
 class ChangeForm(forms.Form):
     program = forms.ModelChoiceField(label='Neuer Studiengang', queryset=Program.objects.all(), empty_label='Bitte wählen')
@@ -53,7 +56,7 @@ def index(request):
 
 
 COLUMNS = [  # heading, sort key, field; the server sorts, since the list may be longer than shown
-    ('Matrikel', 'matrikel', 'person__matriculation'), ('Name', 'name', 'person__last_name'), ('Studiengang', 'studiengang', 'program__name'),
+    ('Matrikelnr.', 'matrikel', 'person__matriculation'), ('Name', 'name', 'person__last_name'), ('Studiengang', 'studiengang', 'program__name'),
     ('Hauptfach', 'hauptfach', 'subject__name'), ('Klasse', 'klasse', 'teacher__last_name'), ('FS', 'fs', 'fs'), ('Status', 'status', 'status'),
 ]
 
@@ -79,7 +82,7 @@ def roster(request):
         response['Content-Disposition'] = 'attachment; filename="studierende.csv"'
         response.write('﻿')
         writer = csv.writer(response, delimiter=';')
-        writer.writerow(['Matrikel', 'Nachname', 'Vorname', 'Geschlecht', 'Staatsangehörigkeit', 'E-Mail', 'Studiengang', 'Hauptfach', 'Fachsemester', 'Status'])
+        writer.writerow(['Matrikelnummer', 'Nachname', 'Vorname', 'Geschlecht', 'Staatsangehörigkeit', 'E-Mail', 'Studiengang', 'Hauptfach', 'Fachsemester', 'Status'])
         for s in studies:
             writer.writerow([
                 s.person.matriculation, s.person.last_name, s.person.first_name, s.person.get_gender_display(), s.person.get_nationality_display(),
@@ -125,29 +128,35 @@ def compose(request):
 def study(request, pk):
     person = request.user
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term', 'teacher', 'focus'), pk=pk)
-    office = person.may('manage_students', study)
-    if not (study.person == person or study.teacher == person or person.may('view_files', study)):
+    if study.pk not in Study.reachable(person, Study.objects.filter(pk=study.pk)):
         raise PermissionDenied
+    own, office, files = study.person == person, person.may('manage_students', study), person.may('view_files', study)
     tree, average = study.progress()
-    upcoming = Term.upcoming()
+    upcoming, late_fee, today = Term.upcoming(), Institution.get().late_fee, timezone.localdate()
+    terms = list(study.terms.select_related('term').order_by('-term__start'))
+    for t in terms:
+        t.due = t.term.due(t.paid or today, late_fee)
     return render(request, 'students/study.html', {
         'study': study,
         'office': office,
-        'own': study.person == person,
+        'own': own,
+        'files': own or files,  # Leistungsübersicht and Unterlagen
+        'certify': own or office,  # Bescheinigungen
         'rows': plan(tree, study.program.semesters),
         'semesters': range(1, study.program.semesters + 1),
         'average': average,
         'earned': sum(m.earned for m in tree),
         'total': sum(m.credits for m in tree),
-        'terms': study.terms.select_related('term').order_by('-term__start'),
-        'upcoming': upcoming,
+        'terms': terms,
+        'upcoming': upcoming, 'late_fee': late_fee, 'leave_terms': LEAVE_TERMS,
         'next': study.terms.filter(term=upcoming).first(),
         'paid': StudyTerm.objects.filter(study__person=study.person, term=upcoming, paid__isnull=False).exists(),
         'missing': study.person.missing(),
         'documents': study.documents.all(),
         'others': study.person.studies.exclude(pk=study.pk).select_related('program', 'subject'),
+        'reachable': Study.reachable(person, study.person.studies.exclude(pk=study.pk)),
         'change': ChangeForm() if office else None,
-        'exits': destatis.EXITS, 'leaves': destatis.LEAVES,
+        'exits': EXITS, 'leaves': LEAVES,
         'exhausted': exhausted(study) if study.status == Study.Status.ENROLLED else [],
         'recognise': study.status == Study.Status.ENROLLED and person.may('recognise', study),
         'thesis': study.status == Study.Status.ENROLLED and person.may('manage_exams', study),
@@ -162,15 +171,9 @@ def next_matriculation():
     return max(numbers, default=Institution.get().matriculation_start - 1) + 1
 
 
-@require('manage_students')
-@require_POST
-def enrol(request, pk):
-    """Immatrikulation of an admitted applicant: matriculation number and first registered term."""
-    study = get_object_or_404(request.user.within(Study.objects.select_related('person', 'start_term'), 'manage_students'), pk=pk, status=Study.Status.ADMITTED)
+def matriculate(study):
+    """Immatrikulation of an admitted applicant with nothing missing: Matrikelnummer, first registered term, Bescheid."""
     person = study.person
-    if missing := study.missing():
-        messages.error(request, f'Noch nicht immatrikuliert: {", ".join(missing)}.')
-        return redirect(study.get_absolute_url())
     with transaction.atomic():
         if not person.matriculation:
             person.matriculation = str(next_matriculation())
@@ -180,8 +183,31 @@ def enrol(request, pk):
         registration.save(update_fields=['paid'])
         study.set_status(Study.Status.ENROLLED)
     study.notify('immatrikulation', study.get_absolute_url())
-    messages.success(request, f'{person} immatrikuliert, Matrikelnummer {person.matriculation}. Bescheid versandt.')
+
+
+@require('manage_students')
+@require_POST
+def enrol(request, pk):
+    study = get_object_or_404(request.user.within(Study.objects.select_related('person', 'start_term'), 'manage_students'), pk=pk, status=Study.Status.ADMITTED)
+    if missing := study.missing():
+        messages.error(request, f'Noch nicht immatrikuliert: {", ".join(missing)}.')
+        return redirect(study.get_absolute_url())
+    matriculate(study)
+    messages.success(request, f'{study.person} immatrikuliert, Matrikelnummer {study.person.matriculation}. Bescheid versandt.')
     return redirect(study.get_absolute_url())
+
+
+@require('manage_students')
+@require_POST
+def enrol_many(request):
+    """Immatrikulation of the ticked applicants whose places are taken up and complete."""
+    studies = request.user.within(Study.objects.filter(pk__in=request.POST.getlist('study'), status=Study.Status.ADMITTED), 'manage_students')
+    ready = [s for s in studies.select_related('person', 'program', 'subject', 'start_term') if not s.missing()]
+    for study in ready:
+        matriculate(study)
+    messages.success(request, f'{plural(len(ready), "Person", "Personen")} immatrikuliert. Bescheide versandt.')
+    back = request.POST.get('next', '')
+    return redirect(back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else 'admissions:board')
 
 
 @require('manage_students')
@@ -197,16 +223,26 @@ def insured(request, pk):
 
 @require_POST
 def leave(request, pk):
-    """Urlaubssemester for the upcoming term, requested by the student or recorded by the office."""
+    """Urlaubssemester for the upcoming term. Students ask within the Rückmeldung, never afterwards, for at most two
+    semesters, and in the first Fachsemester only for illness or Mutterschutz; the office decides beyond that."""
     study = get_object_or_404(Study, pk=pk, status=Study.Status.ENROLLED)
-    if not (study.person == request.user or request.user.may('manage_students', study)):
+    office = request.user.may('manage_students', study)
+    if not (study.person == request.user or office):
         raise PermissionDenied
     term = Term.upcoming()
     registration = StudyTerm.objects.filter(study=study, term=term).first()
     leave = not (registration and registration.leave)
     reason = request.POST.get('reason', '') if leave else ''
-    if leave and reason not in dict(destatis.LEAVES):
-        messages.error(request, 'Bitte den Grund der Beurlaubung wählen.')
+    refusal = leave and (
+        'Bitte den Grund der Beurlaubung wählen.' if reason not in dict(LEAVES)
+        else None if office
+        else f'Urlaubssemester für das {term} lassen sich nur bis zum {date_format(term.closes, "j.n.Y")} beantragen.' if not term.reregistration_start <= timezone.localdate() <= term.closes
+        else f'In der Regel sind höchstens {LEAVE_TERMS} Urlaubssemester möglich. Einen weiteren beantragen Sie bitte schriftlich.' if study.terms.filter(leave=True).count() >= LEAVE_TERMS
+        else 'Im ersten Fachsemester ist eine Beurlaubung nur bei Erkrankung oder Mutterschutz und Elternzeit möglich.' if not study.semester and reason not in FIRST_TERM_LEAVES
+        else None
+    )
+    if refusal:
+        messages.error(request, refusal)
         return redirect(study.get_absolute_url())
     registration, _ = StudyTerm.objects.get_or_create(study=study, term=term)
     registration.leave, registration.leave_reason = leave, reason
@@ -218,14 +254,19 @@ def leave(request, pk):
 @require('manage_students')
 @require_POST
 def exmatriculate(request, pk):
+    """Exmatrikulation as of a day in the semester under way: on request the day asked for, up to the end of the semester;
+    after the Abschluss the end of the semester; otherwise today."""
     study = get_object_or_404(request.user.within(Study.objects.select_related('person'), 'manage_students'), pk=pk, status=Study.Status.ENROLLED)
-    reason = request.POST.get('reason', '')
-    if reason not in dict(destatis.EXITS):
+    reason, term, asked = request.POST.get('reason', ''), Term.current(), request.POST.get('zum', '').strip()
+    on = dates.day(asked) if asked else term.end if reason == '1' else timezone.localdate()
+    if reason not in dict(EXITS):
         messages.error(request, 'Bitte den Grund der Exmatrikulation wählen.')
-        return redirect(study.get_absolute_url())
-    study.set_status(Study.Status.GRADUATED if reason == '1' else Study.Status.LEFT, reason)
-    study.notify('exmatrikulation', grund=dict(destatis.EXITS)[reason])
-    messages.success(request, f'{study.person} exmatrikuliert. Bescheid versandt.')
+    elif not on or not term.start <= on <= term.end:
+        messages.error(request, f'Bitte einen Tag im {term} angeben, spätestens den {date_format(term.end, "j.n.Y")}.')
+    else:
+        study.set_status(Study.Status.GRADUATED if reason == '1' else Study.Status.LEFT, reason, on)
+        study.notify('exmatrikulation', grund=dict(EXITS)[reason], zum=date_format(on, 'j. F Y'))
+        messages.success(request, f'{study.person} zum {date_format(on, "j.n.Y")} exmatrikuliert. Bescheid versandt.')
     return redirect(study.get_absolute_url())
 
 
@@ -260,9 +301,22 @@ def hold(request, pk):
     return redirect(study.get_absolute_url())
 
 
+def book(term, enrolled, paid):
+    """Book the Semesterbeitrag {person: day paid} for all their studies and tell each where their Rückmeldung stands."""
+    with transaction.atomic():
+        for s in enrolled.filter(person__in=paid):
+            StudyTerm.objects.update_or_create(study=s, term=term, defaults={'paid': paid[s.person]})
+    for p in paid:
+        if missing := p.missing():
+            texts.send('rueckmeldung_offen', p, rueckmeldesemester=term, fehlt=', '.join(missing))
+        else:
+            texts.send('rueckmeldung', p, rueckmeldesemester=term)
+
+
 @require('manage_reregistration')
 def reregistration(request):
-    """Rückmeldung for the upcoming term: book payments; after the deadline, exmatriculate whoever has not paid."""
+    """Rückmeldung for the upcoming term: book payments by hand or from the bank statement; after the Nachfrist,
+    exmatriculate whoever has not paid, at the end of the semester under way."""
     term, today = Term.upcoming(), timezone.localdate()
     if term is None:
         return without_term(request, 'das nächste Semester, für das sich Studierende zurückmelden')
@@ -272,36 +326,48 @@ def reregistration(request):
     )
     registrations = {r.study_id: r for r in StudyTerm.objects.filter(term=term)}
     paid = {r.study.person_id for r in StudyTerm.objects.filter(term=term, paid__isnull=False).select_related('study')}
+    late_fee = Institution.get().late_fee
     if request.method == 'POST':
         if 'pay' in request.POST:
-            people = set(map(int, request.POST.getlist('person')))
-            with transaction.atomic():
-                for s in enrolled.filter(person__in=people):
-                    StudyTerm.objects.update_or_create(study=s, term=term, defaults={'paid': today})
-            for p in {s.person for s in enrolled.filter(person__in=people)}:
-                if missing := p.missing():
-                    texts.send('rueckmeldung_offen', p, rueckmeldesemester=term, fehlt=', '.join(missing))
-                else:
-                    texts.send('rueckmeldung', p, rueckmeldesemester=term)
+            people = {s.person: today for s in enrolled.filter(person__in=request.POST.getlist('person'))}
+            book(term, enrolled, people)
             messages.success(request, f'Zahlung für {plural(len(people), "Person", "Personen")} verbucht.')
-        elif 'exmatriculate' in request.POST and today > term.deadline:
+        elif statement := request.FILES.get('statement'):
+            unpaid = {s.person.matriculation: s.person for s in enrolled.exclude(person__in=paid)}
+            found, short, unknown = {}, [], 0
+            for day, amount, text in payments.credits(statement.read()):
+                person = next((unpaid[n] for n in payments.numbers(text) if n in unpaid), None)
+                if person is None:
+                    unknown += 1
+                elif amount < term.due(day, late_fee):
+                    short.append(f'{person.name} ({number_format(amount, 2)} €)')
+                else:
+                    found[person] = day
+            book(term, enrolled, found)
+            messages.success(request, ' '.join(filter(None, [
+                f'{plural(len(found), "Zahlung", "Zahlungen")} verbucht.', short and f'Zu wenig überwiesen: {", ".join(short)}.',
+                unknown and f'{plural(unknown, "Buchung", "Buchungen")} ohne offene Matrikelnummer im Verwendungszweck.',
+            ])))
+        elif 'exmatriculate' in request.POST and today > term.closes:
             unpaid = list(enrolled.exclude(person__in=paid))
+            ends = term.start - timedelta(days=1)  # with the semester under way
             for s in unpaid:
-                s.set_status(Study.Status.LEFT, '7')
-                s.notify('exmatrikulation_rueckmeldung', rueckmeldesemester=term)
-            messages.success(request, f'{len(unpaid)} Studien wegen fehlender Rückmeldung beendet. Bescheide versandt.')
+                s.set_status(Study.Status.LEFT, '7', ends)
+                s.notify('exmatrikulation_rueckmeldung', rueckmeldesemester=term, zum=date_format(ends, 'j. F Y'))
+            messages.success(request, f'{len(unpaid)} Studien wegen fehlender Rückmeldung zum {date_format(ends, "j.n.Y")} beendet. Bescheide versandt.')
         return redirect('students:reregistration')
     rows = [(s, registrations.get(s.pk), s.person_id in paid, s.person.missing()) for s in enrolled]
-    states = {'offen': ('offen', lambda row: not row[2]), 'bezahlt': ('bezahlt', lambda row: row[2]), 'hindernis': ('mit Hindernis', lambda row: row[3])}
+    states = {'offen': ('offen', lambda row: not row[2]), 'bezahlt': ('bezahlt', lambda row: row[2]), 'gesperrt': ('gesperrt', lambda row: row[3])}  # a Sperre or a missing Nachweis holds the Rückmeldung back
     stand, q = request.GET.get('stand', ''), request.GET.get('q', '').strip()
     words = fold(q).split()
     shown = [
         row for row in rows if (stand not in states or states[stand][1](row))
         and all(w in fold(f'{row[0].person.name} {row[0].person.matriculation}') for w in words)
     ]
-    counts = {key: sum(1 for row in rows if test(row)) for key, (_, test) in states.items()}
+    counts = {key: len({row[0].person_id for row in rows if test(row)}) for key, (_, test) in states.items()}  # people: the fee is theirs
     return render(request, 'students/reregistration.html', {
-        'term': term, 'rows': shown, 'total': len(rows), 'open': counts['offen'], 'blocked': counts['hindernis'], 'overdue': today > term.deadline,
+        'term': term, 'rows': shown, 'total': len({row[0].person_id for row in rows}), 'open': counts['offen'], 'blocked': counts['gesperrt'], 'overdue': today > term.closes,
+        'late_fee': late_fee,
         'q': q, 'stand': stand, 'states': [(key, label, counts[key]) for key, (label, _) in states.items()],
     })
 

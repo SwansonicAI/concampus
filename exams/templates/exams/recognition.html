@@ -4,7 +4,7 @@
 {% block content %}
 <h1>Anerkennung{% if study %} · {{ study.person.name }}{% endif %}</h1>
 {% if study %}
-<p class="lead">{{ study.person.matriculation }} · {{ study.program.degree }} {{ study.program.name }} · {{ study.subject }} · <a href="{{ study.get_absolute_url }}">Studienakte</a> · <a href="{% url 'exams:recognition' %}">andere Person</a></p>
+<p class="lead">{{ study.person.matriculation }} · {{ study.program.title }} · {{ study.subject }} · <a href="{{ study.get_absolute_url }}">Studienakte</a> · <a href="{% url 'exams:recognition' %}">andere Person</a></p>
 {% else %}
 <p class="lead">Leistungen aus anderen Hochschulen oder Studiengängen auf Module anrechnen. Jede Anerkennung erscheint sofort in der Leistungsübersicht.</p>
 {% endif %}

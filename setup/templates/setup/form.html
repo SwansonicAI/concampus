@@ -6,7 +6,8 @@
 {% if form.note %}<p class="lead">{{ form.note }}</p>{% endif %}
 <form method="post" class="form">
   {% csrf_token %}
-  {{ form }}
+  {% if sections %}{{ form.non_field_errors }}{% for heading, fields in sections %}<h2>{{ heading }}</h2>{% for field in fields %}<div>{{ field.as_field_group }}</div>{% endfor %}{% endfor %}
+  {% else %}{{ form }}{% endif %}
   <div class="actions">
     <button class="btn">Speichern</button>
     <a class="btn ghost" href="{{ back }}">Abbrechen</a>

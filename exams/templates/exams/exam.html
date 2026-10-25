@@ -41,7 +41,7 @@
     <dt>Anmeldeschluss</dt><dd>{{ course.deadline|date:"j. F Y"|default:"–" }}</dd>
     {% endif %}
     <dt>Bewertung</dt><dd>{% if course.points %}Punkte, bestanden ab {{ course.pass_mark }}{% else %}Noten 1,0–5,0, bestanden bis 4,0{% endif %}</dd>
-    <dt>Module</dt><dd>{% for title, programs in modules %}{{ title }}<br><small class="muted">{% for program, codes in programs %}{{ program.degree }} {{ program.name }} {{ codes|join:", " }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</small><br>{% empty %}–{% endfor %}</dd>
+    <dt>Module</dt><dd>{% for title, programs in modules %}{{ title }}<br><small class="muted">{% for program, codes in programs %}{{ program.title }} {{ codes|join:", " }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</small><br>{% empty %}–{% endfor %}</dd>
     {% if course.kind != 'thesis' %}<dt>Räume</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, <a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a><br>{% empty %}–{% endfor %}</dd>{% endif %}
   </dl>
   {% if slots and not course.released and course.kind == 'exam' %}

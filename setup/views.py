@@ -92,6 +92,7 @@ def edit(request, key, pk=None):
         return redirect(back(request, e))
     return render(request, 'setup/form.html', {
         'editor': e, 'form': form, 'object': obj, 'back': back(request, e),
+        'sections': [(heading, [form[name] for name in names]) for heading, names in e.sections or []],
         'history': pk and e.model.visible_to(request.user.roles), 'table': e.model._meta.label_lower,
     })
 

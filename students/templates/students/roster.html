@@ -9,7 +9,7 @@
 <p class="lead">{{ count }} Studien</p>
 <form class="toolbar">
   <div class="inline">
-    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name, E-Mail, Matrikel"></label>
+    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name, E-Mail, Matrikelnummer"></label>
     <input type="hidden" name="sortierung" value="{{ sort }}">
     <label>Status<select name="status" onchange="this.form.requestSubmit()">{% for value, label in statuses %}<option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
     <label>Studiengang<select name="studiengang" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for p in programs %}<option value="{{ p.pk }}"{% if p.pk|stringformat:'s' == studiengang %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
@@ -33,7 +33,7 @@
         <td><input type="checkbox" name="study" value="{{ s.pk }}" aria-label="{{ s.person.name }}"></td>
         <td>{{ s.person.matriculation|default:"–" }}</td>
         <td><a href="{% url 'students:study' s.pk %}"><b>{{ s.person.name }}</b></a>{% if s.person.hold %} <span class="badge hold">Sperre</span>{% endif %}</td>
-        <td>{{ s.program.degree }} {{ s.program.name }}</td>
+        <td>{{ s.program.title }}</td>
         <td>{{ s.subject }}</td>
         <td>{{ s.teacher.last_name|default:"–" }}</td>
         <td class="num">{{ s.fs }}</td>

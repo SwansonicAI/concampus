@@ -1,5 +1,5 @@
 {% extends base %}
-{% block title %}Meine Lehre{% endblock %}
+{% block title %}{% if teaching is not None %}Meine Lehre{% else %}Meine Veranstaltungen{% endif %}{% endblock %}
 {% block subnav %}{% include "courses/_nav.html" %}{% endblock %}
 {% block content %}
 <div class="head">

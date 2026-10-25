@@ -28,6 +28,7 @@ class Editor:
     capability: str
     section: str = ''  # where the start page of the settings lists it; empty: opened from elsewhere only
     fields: list = None
+    sections: list = None  # (heading, field names): a long form in parts; its fields follow from them
     form: type = forms.ModelForm
     columns: list = field(default_factory=list)  # (heading, attribute)
     search: list = field(default_factory=list)
@@ -37,6 +38,10 @@ class Editor:
     deletable: bool = True  # people are deactivated, not deleted: their records hang on them
     single: bool = False  # one record only, like the Hochschule's own data
     invite: bool = False  # people: its form offers to send a sign-in invitation
+
+    def __post_init__(self):
+        if self.sections:
+            self.fields = [name for _, names in self.sections for name in names]
 
     def objects(self, person):
         """The records the person keeps up: all, or those of the Institute and Studiengänge their office is limited to."""
@@ -55,9 +60,12 @@ class Editor:
 
 
 def formfield(model_field, **kwargs):
-    """Date fields that understand 'morgen' and '12.11.'; ticks instead of multiple selects."""
+    """Date fields that understand '12.11.' and 'morgen' but ask for a full date, as records keep one; ticks instead of
+    multiple selects."""
     if type(model_field) is models.DateField:
-        return model_field.formfield(form_class=DayField, **kwargs)
+        field = model_field.formfield(form_class=DayField, **kwargs)
+        field.widget.attrs['placeholder'] = 'TT.MM.JJJJ'
+        return field
     if isinstance(model_field, models.ManyToManyField):
         kwargs.setdefault('widget', forms.CheckboxSelectMultiple)
     return model_field.formfield(**kwargs)
@@ -138,10 +146,12 @@ def new_module(request):
 EDITORS = {e.key: e for e in [
     Editor(
         'hochschule', Institution, 'Hochschule', 'manage_institution', 'Verwaltung', single=True, deletable=False,
-        fields=[
-            'name', 'short_name', 'address', 'place', 'email', 'website', 'imprint', 'privacy', 'accessibility',
-            'matriculation_start', 'accept_days', 'retention_months', 'signup', 'insurers',
-            'student_daily_hours', 'student_ahead_hours', 'last_minute_hours', 'teacher_ahead_days', 'university', 'region', 'report_id',
+        sections=[
+            ('Briefkopf und Website', ['name', 'short_name', 'address', 'place', 'email', 'website', 'imprint', 'privacy', 'accessibility']),
+            ('Aufnahme und Immatrikulation', ['matriculation_start', 'accept_days', 'retention_months', 'signup', 'insurers']),
+            ('Rückmeldung und Prüfungen', ['late_fee', 'withdraw_weeks']),
+            ('Raumbuchung', ['student_daily_hours', 'student_ahead_hours', 'last_minute_hours', 'teacher_ahead_days']),
+            ('Amtliche Statistik', ['university', 'region', 'report_id']),
         ],
         columns=[('Name', 'name'), ('Ort', 'place')],
         words='hochschuldaten anschrift regeln buchungsregeln matrikelnummer fristen löschfristen datenschutz hochschulnummer statistik landesamt',
@@ -163,14 +173,14 @@ EDITORS = {e.key: e for e in [
     ),
     Editor(
         'semester', Term, 'Semester', 'manage_terms', 'Verwaltung',
-        fields=['name', 'start', 'end', 'lectures_start', 'lectures_end', 'reregistration_start', 'deadline', 'fee'],
+        fields=['name', 'start', 'end', 'lectures_start', 'lectures_end', 'exams_start', 'reregistration_start', 'deadline', 'late_deadline', 'fee'],
         columns=[('Semester', 'name'), ('Beginn', 'start'), ('Ende', 'end'), ('Rückmeldefrist', 'deadline'), ('Beitrag', 'fee')],
-        search=['name'], words='vorlesungszeit rückmeldefrist semesterbeitrag termine',
+        search=['name'], words='unterrichtszeit vorlesungszeit rückmeldefrist semesterbeitrag termine',
         queryset=lambda: Term.objects.order_by('-start'),
     ),
     Editor(
-        'vorlesungsfrei', Holiday, 'Vorlesungsfreie Tage', 'manage_terms', 'Verwaltung', fields=['name', 'first', 'last'],
-        columns=[('Bezeichnung', 'name'), ('Von', 'first'), ('Bis', 'last')], search=['name'], words='feiertage ferien weihnachtspause semesterplanung',
+        'unterrichtsfrei', Holiday, 'Unterrichtsfreie Tage', 'manage_terms', 'Verwaltung', fields=['name', 'first', 'last'],
+        columns=[('Bezeichnung', 'name'), ('Von', 'first'), ('Bis', 'last')], search=['name'], words='feiertage ferien vorlesungsfrei weihnachten semesterplanung',
         queryset=lambda: Holiday.objects.order_by('-first'),
     ),
     Editor('institute', Institute, 'Institute', 'manage_institution', 'Verwaltung', fields=['name'], columns=[('Institut', 'name')], search=['name']),
@@ -229,6 +239,7 @@ EDITORS = {e.key: e for e in [
         fields=['name', 'condition', 'subjects', 'required', 'note', 'file_types', 'max_mb', 'single', 'order'],
         columns=[('Unterlagen', 'name'), ('In der Checkliste', 'condition'), ('Pflicht', 'required')],
         search=['name'], words='checkliste bewerbung video zeugnis nachweis hochladen',
+        queryset=lambda: DocumentType.objects.exclude(key__in=DocumentType.SYSTEM),  # Bescheide and theses are filed by the system
     ),
     Editor(
         'raumfunktionen', RoomFunction, 'Raumfunktionen', 'manage_rooms', 'Räume', fields=['name', 'central', 'order'],

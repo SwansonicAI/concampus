@@ -16,8 +16,8 @@
       <tr class="part{% if r.exam %} exam{% endif %}">
         <td style="padding-left: calc(10px + {{ r.depth }} * 16px)">
           {% if r.exam %}<span class="tag-exam">Prüfung</span> {% endif %}{% if edit %}<a href="{% url 'setup:edit' 'module' r.items.0.pk %}?next={{ request.path|urlencode }}">{{ r.title }}</a>{% else %}{{ r.title }}{% endif %}
-          {% if r.offers|length > 3 %}<details class="tail"><summary><small>{{ r.offers|length }} Veranstaltungen</small></summary>{% for c in r.offers %}<small><a href="{{ c.get_absolute_url }}">{{ c.title }}</a></small><br>{% endfor %}</details>
-          {% else %}{% for c in r.offers %}<br><small><a href="{{ c.get_absolute_url }}">{{ c.title }}</a></small>{% endfor %}{% endif %}
+          {% if r.offers|length > 3 %}<details class="tail"><summary><small>{{ r.offers|length }} Veranstaltungen</small></summary>{% for c in r.offers %}<small>{% if c.pk in reachable %}<a href="{{ c.get_absolute_url }}">{{ c.title }}</a>{% else %}{{ c.title }}{% endif %}</small><br>{% endfor %}</details>
+          {% else %}{% for c in r.offers %}<br><small>{% if c.pk in reachable %}<a href="{{ c.get_absolute_url }}">{{ c.title }}</a>{% else %}{{ c.title }}{% endif %}</small>{% endfor %}{% endif %}
         </td>
         <td class="muted"><small>{{ r.form }}</small></td>
         {% for cell in r.cells %}

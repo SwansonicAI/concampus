@@ -15,8 +15,8 @@
       <dt>Umfang</dt><dd>{{ course.hours|default_if_none:"–" }} SWS{% if course.kind == 'lesson' %} je Teilnahme{% endif %}</dd>
       <dt>Teilnahmen</dt><dd>{{ count }}{% if course.capacity %} von {{ course.capacity }} Plätzen{% endif %}</dd>
       <dt>Platzvergabe</dt><dd>{{ course.get_allocation_display|capfirst }}</dd>
-      <dt>Anmeldung</dt><dd>{% if course.opens %}vom {{ course.opens|date:"j. F" }} {% endif %}{% if course.deadline %}bis {{ course.deadline|date:"j. F Y" }}{% elif not course.opens %}–{% endif %}</dd>
-      <dt>Anrechenbar für</dt><dd>{% for title, programs in modules %}{{ title }}<br><small>{% for program, codes in programs %}<a href="{{ program.get_absolute_url }}">{{ program.degree }} {{ program.name }}</a> <span class="muted">{{ codes|join:", " }}</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}</small><br>{% empty %}–{% endfor %}</dd>
+      {% if course.allocation != 'staff' %}<dt>Anmeldung</dt><dd>{% if course.opens %}vom {{ course.opens|date:"j. F" }} {% endif %}{% if course.deadline %}bis {{ course.deadline|date:"j. F Y" }}{% elif not course.opens %}–{% endif %}</dd>{% endif %}
+      <dt>Anrechenbar für</dt><dd>{% for title, programs in modules %}{{ title }}<br><small>{% for program, codes in programs %}<a href="{{ program.get_absolute_url }}">{{ program.title }}</a> <span class="muted">{{ codes|join:", " }}</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}</small><br>{% empty %}–{% endfor %}</dd>
     </dl>
     {% if course.description %}<p style="margin-top: 24px">{{ course.description|linebreaksbr }}</p>{% endif %}
   </div>
@@ -30,7 +30,7 @@
       {% csrf_token %}
       <h3>Wöchentlich planen</h3>
       <div class="inline">{% for field in plan %}<label>{{ field.label }}{{ field }}</label>{% endfor %}</div>
-      <p class="muted" style="margin: 12px 0"><small>Bucht den Raum über die ganze Vorlesungszeit ({{ course.term.lectures_start|date:"j.n." }}–{{ course.term.lectures_end|date:"j.n.Y" }}) ohne die vorlesungsfreien Tage, nur wenn alle Termine frei sind.</small></p>
+      <p class="muted" style="margin: 12px 0"><small>Bucht den Raum über die ganze Unterrichtszeit ({{ course.term.lectures_start|date:"j.n." }}–{{ course.term.lectures_end|date:"j.n.Y" }}) ohne die unterrichtsfreien Tage, nur wenn alle Termine frei sind.</small></p>
       <button class="btn">Termine buchen</button>
     </form>
     <form method="post" action="{% url 'courses:date' course.pk %}" class="panel" style="margin-top: 24px">
@@ -119,7 +119,7 @@
     <tbody>
       {% for s in signups %}
       <tr>
-        <td><a href="{{ s.study.get_absolute_url }}">{{ s.study.person.name }}</a></td>
+        <td>{% if s.study_id in reachable %}<a href="{{ s.study.get_absolute_url }}">{{ s.study.person.name }}</a>{% else %}{{ s.study.person.name }}{% endif %}</td>
         <td><small>{{ s.study.subject }} · {{ s.study.program.degree }}</small></td>
         <td><small>{{ s.note|linebreaksbr }}</small></td>
         <td data-value="{{ s.created|date:'c' }}">{{ s.created|date:"j.n. H:i" }}</td>

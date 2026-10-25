@@ -1,0 +1,1 @@
+{% for p in s.stages %}<span class="chip{% if p.passed %} yes{% elif p.passed is False %} no{% endif %}" title="{{ p.course.title }}">{{ p.course.stage }}{% if p.grade is not None and p.course.stage != 'Video' %} {{ p.grade|floatformat:1 }}{% endif %}</span>{% endfor %}

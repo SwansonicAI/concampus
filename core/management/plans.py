@@ -537,8 +537,8 @@ PROGRAMS = [  # name, degree, version, semesters, subjects, plan
     ('Musik an Gymnasien (Doppelfach)', 'M.Ed.', 2026, 4, TEACHING, MED),
     ('Lehramt an Gymnasien, Studienfach Musik', 'Staatsexamen', 2025, 10, TEACHING, STEX),
     ('Kirchenmusik A', 'Diplom', 2012, 10, ['Orgel'], CHURCH),
-    ('Konzertexamen', 'Konzertdiplom', 2007, 4, STRINGS + WINDS + ['Gesang', 'Klavier', 'Orgel'], CONCERT),
-    ('Promotion', 'Dr. phil.', 2017, 6, RESEARCH, DOCTORATE),
+    ('Konzertexamen', 'Konzertexamen', 2007, 4, STRINGS + WINDS + ['Gesang', 'Klavier', 'Orgel'], CONCERT),
+    ('Promotion (Dr. phil.)', 'Dr. phil.', 2017, 6, RESEARCH, DOCTORATE),
     ('Thüringer Opernstudio', 'Zertifikat', 2025, 2, ['Gesang'], OPERA),
-    ('ohne Abschluss', 'Gasthörerschaft', 2007, 1, ['Musikwissenschaft'], []),
+    ('Gasthörerschaft', 'Gasthörerschaft', 2007, 1, ['Musikwissenschaft'], []),
 ]

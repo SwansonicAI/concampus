@@ -6,7 +6,7 @@
   <h1>{{ course.title }}</h1>
   <div class="actions">
     {% if course.video %}<a class="btn" href="{% url 'admissions:review' course.pk %}" data-panel>Videos sichten</a>{% endif %}
-    <a class="btn ghost" href="{% if request.GET.sortierung %}?{% else %}?sortierung=punkte{% endif %}">{% if request.GET.sortierung %}Nach Termin{% else %}Rangliste{% endif %}</a>
+    {% if not course.video %}<a class="btn ghost" href="{% if request.GET.sortierung %}?{% else %}?sortierung=punkte{% endif %}">{% if request.GET.sortierung %}Nach Termin{% else %}Rangliste{% endif %}</a>{% endif %}
     {% if office %}<a class="btn ghost" href="{% url 'setup:edit' 'eignungspruefungen' course.pk %}?next={{ request.path|urlencode }}" data-panel>Bearbeiten</a>{% endif %}
     {% if history %}<a class="btn ghost" href="{% url 'history' 'courses.course' course.pk %}" data-panel>Verlauf</a>{% endif %}
     {% if office %}<form method="post" action="{% url 'admissions:close' course.pk %}">{% csrf_token %}<button class="btn{% if course.released %} ghost{% endif %}">{% if course.released %}Wieder öffnen{% else %}Abschließen{% endif %}</button></form>{% endif %}
@@ -44,7 +44,7 @@
 
 <section>
   <h2>Bewerbende</h2>
-  {% if not office %}<p class="lead">Sie tragen nur Ihre eigene Wertung ein. Über die Zulassung wird nach der Sitzung entschieden.</p>{% endif %}
+  {% if not office %}<p class="lead">Sie tragen nur Ihre eigene Wertung ein. {% if course.video %}Wer zur nächsten Stufe eingeladen wird, folgt aus dem Mittel der Kommission.{% else %}Über die Zulassung wird nach der Sitzung entschieden.{% endif %}</p>{% endif %}
   <div data-panel>{% include "courses/_sheet.html" with panel=True decide=office review=course.video %}</div>
 </section>
 {% endblock %}

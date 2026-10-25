@@ -13,6 +13,7 @@ urlpatterns = [
     path('meine/<int:pk>/annahme/', views.accept, name='accept'),
     path('bewerbung/<int:pk>/', views.application, name='application'),
     path('bewerbung/<int:pk>/entscheidung/', views.decide, name='decide'),
+    path('bewerbungen/entscheiden/', views.decide_many, name='decide_many'),
     path('bewerbung/<int:pk>/unterlagen/', views.upload, name='upload'),
     path('unterlagen/<int:pk>/', views.document, name='document'),
     path('unterlagen/<int:pk>/entfernen/', views.discard, name='discard'),

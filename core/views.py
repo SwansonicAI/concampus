@@ -22,7 +22,7 @@ from courses.models import Course
 from curriculum.models import Module, Program
 from rooms.models import Booking, BookingCategory, Room
 from rooms.views import agenda
-from students.models import Study
+from students.models import Document, Study
 from . import dates
 from .apps import feature, tile_apps, tiles
 from .days import busy, strip
@@ -133,9 +133,11 @@ def message(request, pk):
 
 
 def letter(request, pk):
-    """A Bescheid from the Postfach as a printable letter, for its recipient and the office managing students."""
+    """A message from the Postfach as a printable letter, for its recipient; a Bescheid in the student file also for the
+    offices that see or manage that file."""
     letter = get_object_or_404(Message.objects.select_related('person'), pk=pk)
-    if not (letter.person == request.user or request.user.may('manage_students', letter.person)):
+    filed = Document.objects.filter(message=letter).first()
+    if not (letter.person == request.user or filed and any(request.user.may(c, filed) for c in ('view_files', 'manage_students'))):
         raise PermissionDenied
     return render(request, 'core/letter.html', {'letters': [letter]})
 

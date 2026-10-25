@@ -93,6 +93,10 @@ class Institution(Tracked, models.Model):
     region = models.CharField('Kreis', max_length=5, choices=destatis.districts, blank=True, help_text='Sitz der Hochschule, für die amtliche Statistik.')
     report_id = models.CharField('BerichtseinheitID', max_length=8, blank=True, help_text='Vom Statistischen Landesamt vergeben, für die Lieferung.')
     accept_days = models.PositiveSmallIntegerField('Frist zur Annahme eines Studienplatzes (Tage)', default=14)
+    late_fee = models.DecimalField('Säumnisgebühr', max_digits=6, decimal_places=2, default=15, help_text='Zum Semesterbeitrag, wer sich in der Nachfrist zurückmeldet.')
+    withdraw_weeks = models.PositiveSmallIntegerField(
+        'Abmeldung von Prüfungen (Wochen)', default=3, help_text='So viele Wochen vor Beginn des Prüfungszeitraums endet die Abmeldung.',
+    )
     retention_months = models.PositiveSmallIntegerField(
         'Bewerbungen ohne Studium aufbewahren (Monate)', default=6,
         help_text='Danach werden ihre Unterlagen gelöscht und wer nur beworben war, wird anonymisiert; die Statistik zählt weiter. 0: nie.',
@@ -163,7 +167,7 @@ class Person(Tracked, AbstractUser):
     second_nationality = models.CharField('Weitere Staatsangehörigkeit', max_length=60, choices=destatis.countries, blank=True)
     address = models.TextField('Anschrift', blank=True)
     home = models.CharField('Heimatwohnsitz', max_length=5, choices=destatis.places, blank=True, help_text='Kreis, im Ausland der Staat.')
-    residence = models.CharField('Semesterwohnsitz', max_length=5, choices=destatis.places, blank=True, help_text='Während der Vorlesungszeit; leer: wie der Heimatwohnsitz.')
+    residence = models.CharField('Semesterwohnsitz', max_length=5, choices=destatis.places, blank=True, help_text='Während der Unterrichtszeit; leer: wie der Heimatwohnsitz.')
     entrance = models.CharField(
         'Hochschulzugangsberechtigung', max_length=10, choices=destatis.ENTRANCE, blank=True,
         help_text='Die erste, mit der ein Studium in Deutschland möglich war.',
@@ -291,8 +295,8 @@ class Person(Tracked, AbstractUser):
 
     @cached_property
     def roles(self):
-        """The capabilities of the person's offices, plus 'student', 'applicant', 'alumni' (studied here, graduated or not)
-        and 'teacher' as derived from studies and teaching."""
+        """The capabilities of the person's offices, plus 'student', 'applicant', 'alumni' (studied here, graduated or not),
+        'teacher' and 'juror' (on the jury of an Eignungsprüfung) as derived from studies and teaching."""
         roles = set(self.reach)
         studies = list(self.studies.annotate(registered=models.Count('terms')).values_list('status', 'registered'))
         statuses = {status for status, _ in studies}
@@ -302,8 +306,11 @@ class Person(Tracked, AbstractUser):
             roles.add('applicant')
         if any(status in ('graduated', 'left') and registered for status, registered in studies):
             roles.add('alumni')
-        if self.teaching.exists():
+        kinds = set(self.teaching.values_list('kind', flat=True).distinct())
+        if kinds:
             roles.add('teacher')
+        if 'audition' in kinds:
+            roles.add('juror')
         return roles
 
 
@@ -341,11 +348,13 @@ class Term(Tracked, models.Model):
     name = models.CharField('Name', max_length=40, unique=True)
     start = models.DateField('Beginn')
     end = models.DateField('Ende')
-    lectures_start = models.DateField('Vorlesungsbeginn')
-    lectures_end = models.DateField('Vorlesungsende')
+    lectures_start = models.DateField('Beginn des Unterrichts')
+    lectures_end = models.DateField('Ende des Unterrichts')
     reregistration_start = models.DateField('Rückmeldung ab')
     deadline = models.DateField('Rückmeldefrist')
+    late_deadline = models.DateField('Nachfrist bis', null=True, blank=True, help_text='Rückmeldung mit Säumnisgebühr; leer: keine Nachfrist.')
     fee = models.DecimalField('Semesterbeitrag', max_digits=7, decimal_places=2)
+    exams_start = models.DateField('Beginn des Prüfungszeitraums', null=True, blank=True, help_text='Bis einige Wochen davor melden sich Studierende von Prüfungen ab.')
 
     class Meta:
         ordering = ['start']
@@ -358,6 +367,15 @@ class Term(Tracked, models.Model):
     @property
     def reregistration_open(self):
         return self.reregistration_start <= timezone.localdate()
+
+    @property
+    def closes(self):
+        """The last day of the Rückmeldung: the end of the Nachfrist, else the Rückmeldefrist."""
+        return self.late_deadline or self.deadline
+
+    def due(self, day, late_fee):
+        """The Semesterbeitrag paid on `day`: with the Säumnisgebühr in the Nachfrist."""
+        return self.fee + (late_fee if self.late_deadline and day > self.deadline else 0)
 
     @classmethod
     def current(cls):
@@ -372,9 +390,11 @@ class Term(Tracked, models.Model):
         if self.start and self.end and self.start >= self.end:
             raise ValidationError({'end': 'Das Semester endet nach seinem Beginn.'})
         if self.lectures_start and self.lectures_end and self.lectures_start >= self.lectures_end:
-            raise ValidationError({'lectures_end': 'Die Vorlesungszeit endet nach ihrem Beginn.'})
+            raise ValidationError({'lectures_end': 'Der Unterricht endet nach seinem Beginn.'})
         if self.reregistration_start and self.deadline and self.reregistration_start > self.deadline:
             raise ValidationError({'deadline': 'Die Rückmeldefrist endet nach dem Beginn der Rückmeldung.'})
+        if self.late_deadline and self.deadline and self.late_deadline <= self.deadline:
+            raise ValidationError({'late_deadline': 'Die Nachfrist endet nach der Rückmeldefrist.'})
 
     @classmethod
     def pick(cls, pk):
@@ -383,7 +403,7 @@ class Term(Tracked, models.Model):
 
 
 class Holiday(Tracked, models.Model):
-    """Days without lectures: public holidays, the Christmas break. Weekly course dates leave them out."""
+    """Unterrichtsfreie Tage: public holidays, Christmas, the Dies Academicus. Weekly course dates leave them out."""
 
     capabilities = ('manage_terms',)
 
@@ -393,8 +413,8 @@ class Holiday(Tracked, models.Model):
 
     class Meta:
         ordering = ['first']
-        verbose_name = 'Vorlesungsfreier Tag'
-        verbose_name_plural = 'Vorlesungsfreie Tage'
+        verbose_name = 'Unterrichtsfreier Tag'
+        verbose_name_plural = 'Unterrichtsfreie Tage'
 
     def __str__(self):
         return self.name

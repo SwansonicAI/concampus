@@ -1,4 +1,4 @@
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import timedelta
 from decimal import InvalidOperation
 
@@ -12,7 +12,7 @@ from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.formats import number_format
+from django.utils.formats import date_format, number_format
 from django.views.decorators.http import require_POST
 
 from core import texts
@@ -30,13 +30,18 @@ from .forms import AcceptForm, ApplicationForm, SignupForm
 BOARD = [Study.Status.APPLIED, Study.Status.ADMITTED, Study.Status.WAITLISTED, Study.Status.REJECTED, Study.Status.ENROLLED]
 Condition = DocumentType.Condition
 DECISIONS = {Study.Status.ADMITTED: 'zulassung', Study.Status.WAITLISTED: 'nachrueckliste', Study.Status.REJECTED: 'ablehnung'}  # their Bescheide
+VERBS = {Study.Status.ADMITTED: 'Studienplatz anbieten', Study.Status.WAITLISTED: 'Auf die Nachrückliste', Study.Status.REJECTED: 'Ablehnen'}  # the buttons that decide
+BESCHEIDE = {  # how a decision is counted
+    Study.Status.ADMITTED: ('Studienplatzangebot', 'Studienplatzangebote'), Study.Status.WAITLISTED: ('Platz auf der Nachrückliste', 'Plätze auf der Nachrückliste'),
+    Study.Status.REJECTED: ('Ablehnung', 'Ablehnungen'),
+}
 
 
 def index(request):
     roles = request.user.roles
     if 'view_applications' in roles:
         return redirect('admissions:board')
-    if 'teacher' in roles:
+    if 'juror' in roles:
         return redirect('admissions:juries')
     return redirect('admissions:mine')
 
@@ -98,11 +103,56 @@ def lapsed(study, days):
 
 
 def ranked(studies):
-    """Studies best first by their points in the Hauptfach stages, each with whether its place is accepted."""
-    hall = Q(participations__course__kind=Course.Kind.AUDITION, participations__course__subject__isnull=False)
+    """Studies best first by their points in the Hauptfach stages, on a tie by the mean of the other parts (the lot after
+    that is drawn by hand), each with whether its place is accepted."""
+    audition = Q(participations__course__kind=Course.Kind.AUDITION)
+    hall = audition & Q(participations__course__subject__isnull=False)
     return studies.annotate(
-        points=Avg('participations__grade', filter=hall), accepted=Exists(StudyTerm.objects.filter(study=OuterRef('pk'), term=OuterRef('start_term'))),
-    ).order_by(F('points').desc(nulls_last=True), 'person__last_name')
+        points=Avg('participations__grade', filter=hall), others=Avg('participations__grade', filter=audition & Q(participations__course__subject=None)),
+        accepted=Exists(StudyTerm.objects.filter(study=OuterRef('pk'), term=OuterRef('start_term'))),
+    ).order_by(F('points').desc(nulls_last=True), F('others').desc(nulls_last=True), 'person__last_name')
+
+
+def verdict(steps):
+    """What the audition stages say once closed: rejected once one is failed, passed once all are and the Hauptfach is
+    among them, None while results are missing."""
+    results = [p.passed if p.course.released else None for p in steps]
+    if False in results:
+        return Study.Status.REJECTED
+    if steps and all(results) and any(p.course.stage == 'Hauptfach' for p in steps):
+        return Study.Status.ADMITTED
+    return None
+
+
+def recommendations(term, person):
+    """The applications of the term the person decides that their results settle, each with `advice`: a failed stage
+    means rejection; who passed gets a free place in the order of the ranking, the others the Nachrückliste, once
+    everyone in the intake has all results."""
+    days = Institution.get().accept_days
+    studies = ranked(
+        person.within(Study.objects.filter(start_term=term, status__in=[Study.Status.APPLIED, Study.Status.ADMITTED, Study.Status.ENROLLED]), 'decide_applications')
+        .select_related('person', 'program', 'subject').prefetch_related(Prefetch('participations', stages(), to_attr='stages'))
+    )
+    places = {(c.program_id, c.subject_id): c.capacity for c in Course.objects.filter(term=term, kind=Course.Kind.AUDITION, program__isnull=False)}
+    taken, passed, pending, found = Counter(), defaultdict(list), set(), []
+    for s in studies:
+        key = (s.program_id, s.subject_id)
+        if s.status != Study.Status.APPLIED:
+            taken[key] += not lapsed(s, days)
+            continue
+        s.advice = verdict(s.stages)
+        if s.advice == Study.Status.REJECTED:
+            found.append(s)
+        elif s.advice:
+            passed[key].append(s)  # in the order of the ranking
+        else:
+            pending.add(key)
+    for key, ranking in passed.items():
+        free = len(ranking) if places.get(key) is None else max(0, places[key] - taken[key])
+        for n, s in enumerate(ranking):
+            s.advice = None if key in pending else Study.Status.ADMITTED if n < free else Study.Status.WAITLISTED
+        found += ranking
+    return sorted(found, key=lambda s: (str(s.program), str(s.subject)))
 
 
 def vacancies(term, person):
@@ -135,7 +185,7 @@ def offer(study, status):
 
 @require('view_applications')
 def board(request):
-    terms = Term.objects.filter(courses__kind=Course.Kind.AUDITION).distinct()
+    terms = Term.objects.filter(courses__kind=Course.Kind.AUDITION).distinct().order_by('-start')
     picked = request.GET.get('semester', '')
     term = (picked.isdigit() and terms.filter(pk=picked).first()) or terms.filter(start__gt=timezone.localdate()).first() or terms.last()
     studies = ranked(
@@ -159,6 +209,15 @@ def board(request):
     )
     if subject.isdigit():  # its own auditions and those everyone takes
         auditions = auditions.filter(Q(subject=subject) | Q(subject__isnull=True))
+    decidable = recommendations(term, request.user) if 'decide_applications' in request.user.roles else []
+    for s in decidable:
+        s.verb = VERBS.get(s.advice)
+    accepted = (  # places taken up, waiting for the Immatrikulation
+        request.user.within(Study.objects.filter(start_term=term, status=Study.Status.ADMITTED, terms__term=F('start_term')), 'manage_students')
+        .select_related('person', 'program', 'subject').order_by('person__last_name')
+    )
+    for s in accepted:
+        s.waiting = s.missing()
     return render(request, 'admissions/board.html', {
         'term': term,
         'terms': terms,
@@ -168,6 +227,8 @@ def board(request):
         'columns': [(Study.Status(status), [s for s in studies if s.status == status]) for status in BOARD],
         'auditions': auditions,
         'vacancies': vacancies(term, request.user),
+        'decidable': decidable, 'verbs': VERBS,
+        'accepted': accepted,
     })
 
 
@@ -220,6 +281,7 @@ def audition(request, pk):
         'stages': next_stages(course) if office else [],
         'ready': sum(1 for p in rows if p.passed and p.study.status == Study.Status.APPLIED),
         'bookings': course.bookings.select_related('room'),
+        'reachable': Study.reachable(person, Study.objects.filter(participations__course=course)),
     })
 
 
@@ -277,14 +339,10 @@ def application(request, pk):
     if not (office or juror or study.person == person):
         raise PermissionDenied
     steps = study.stages = list(stages().filter(study=study))
-    hall = next((p for p in steps if p.course.stage == 'Hauptfach'), None)
-    recommendation = None
-    if hall and hall.passed is not None and all(p.passed is not None for p in steps):
-        recommendation = Study.Status.ADMITTED if all(p.passed for p in steps) else Study.Status.REJECTED
     return render(request, 'admissions/application.html', {
         'study': study,
         'stages': steps,
-        'recommendation': recommendation,
+        'recommendation': verdict(steps),
         'show_results': office or juror,
         'checklist': checklist(study),
         'documents': study.documents.exclude(message=None),
@@ -292,7 +350,7 @@ def application(request, pk):
         'enrol': person.may('manage_students', study),
         'history': bool(tables(person.roles)),
         'accepted': study.terms.filter(term=study.start_term).first(),
-        'decisions': [Study.Status(s) for s in DECISIONS],
+        'decisions': VERBS.items(),
         'missing': study.missing() if study.status == Study.Status.ADMITTED else [],
     })
 
@@ -307,6 +365,31 @@ def decide(request, pk):
     offer(study, status)
     messages.success(request, f'{study.person}: {study.get_status_display()}. Bescheid versandt.')
     return redirect(study.get_absolute_url())
+
+
+@require('decide_applications')
+@require_POST
+def decide_many(request):
+    """Decide the ticked applications at once, each as its results advise or all alike; each gets its Bescheid."""
+    term = get_object_or_404(Term, pk=request.POST.get('semester'))
+    chosen = request.POST.get('status', '')
+    if chosen and chosen not in DECISIONS:
+        raise PermissionDenied
+    advice = {s.pk: s.advice for s in recommendations(term, request.user)}
+    ticked = set(map(int, request.POST.getlist('study')))
+    decided, skipped = Counter(), 0
+    for study in request.user.within(Study.objects.filter(pk__in=ticked & advice.keys()), 'decide_applications').select_related('person', 'program', 'subject', 'start_term'):
+        if status := chosen or advice[study.pk]:
+            offer(study, status)
+            decided[status] += 1
+        else:
+            skipped += 1
+    counts = [plural(decided[s], *forms) for s, forms in BESCHEIDE.items() if decided[s]]
+    messages.success(request, ' '.join(filter(None, [
+        f'Bescheide versandt: {", ".join(counts)}.' if counts else 'Nichts entschieden.',
+        skipped and f'{plural(skipped, "Bewerbung wartet", "Bewerbungen warten")} noch auf die Ergebnisse der anderen im selben Hauptfach.',
+    ])))
+    return redirect(f"{reverse('admissions:board')}?semester={term.pk}#entscheiden")
 
 
 @require('decide_applications')
@@ -360,10 +443,10 @@ def apply(request):
             if data['accompanist'] and audition.accompaniment:
                 Participation.objects.create(course=audition.accompaniment, study=study)
         texts.send(
-            'bewerbung', person, reverse('admissions:mine'), studiengang=f'{audition.program.degree} {audition.program.name}',
+            'bewerbung', person, reverse('admissions:mine'), studiengang=audition.program.title,
             hauptfach=audition.subject, frist=f'{audition.deadline:%d.%m.%Y}',
         )
-        messages.success(request, f'Bewerbung angelegt. Laden Sie jetzt bis zum {audition.deadline:%d.%m.%Y} Ihr Video und Ihre Unterlagen hoch.')
+        messages.success(request, f'Bewerbung angelegt. Laden Sie jetzt bis zum {date_format(audition.deadline, "j.n.Y")} Ihr Video und Ihre Unterlagen hoch.')
         return redirect('admissions:mine')
     return render(request, 'admissions/apply.html', {'form': form})
 
@@ -386,6 +469,8 @@ def mine(request):
         study.open = uploads_open(study)
         study.deadline = next((p.course.deadline for p in study.stages if p.course.program_id), None)
         study.stages = list(study.stages)
+        for p in study.stages:  # where an appointment takes place: the course's booking around it
+            p.room = p.slot and next((b.room for b in p.course.bookings.select_related('room') if b.start <= p.slot < b.end), None)
     return render(request, 'admissions/mine.html', {
         'studies': studies, 'documents': person.documents.exclude(message=None), 'accept': AcceptForm(instance=person),
         'insurers': Institution.get().insurers.splitlines(),
@@ -416,14 +501,14 @@ def upload(request, pk):
 
 
 def document(request, pk):
-    """A handed-in file: for its owner, whoever sees all files or applications, and the candidate's examiners: of the
-    audition while applying, of the thesis for the thesis."""
+    """A handed-in file: for its owner, whoever sees or manages the student file or sees applications, and the candidate's
+    examiners: of the audition while applying, of the thesis for the thesis."""
     d = get_object_or_404(Document.objects.select_related('study'), pk=pk)
     person = request.user
     applying = d.study_id and d.study.status in Study.APPLICATION
     examining = Course.objects.filter(staff=person, participations__study=d.study_id)
     if not (
-        d.person_id == person.pk or person.may('view_files', d) or applying and person.may('view_applications', d)
+        d.person_id == person.pk or person.may('view_files', d) or person.may('manage_students', d) or applying and person.may('view_applications', d)
         or applying and examining.filter(kind=Course.Kind.AUDITION).exists()
         or d.kind_id == 'abschlussarbeit' and examining.filter(kind=Course.Kind.THESIS).exists()
     ):

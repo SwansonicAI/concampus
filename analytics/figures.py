@@ -10,6 +10,7 @@ from django.db.models.functions import Coalesce, ExtractIsoWeekDay, ExtractYear
 from django.db.models.lookups import GreaterThan, LessThan
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.utils.choices import flatten_choices
 
 from core import destatis
@@ -82,7 +83,7 @@ class Measure:
 def of_study(to=''):
     p = f'{to}__' if to else ''
     return {
-        'studiengang': Dimension('Studiengang', f'{p}program', named(Program, lambda o: f'{o.degree} {o.name}')),
+        'studiengang': Dimension('Studiengang', f'{p}program', named(Program, lambda o: o.title)),
         'abschluss': Dimension('Abschluss', f'{p}program__degree'),
         'hauptfach': Dimension('Hauptfach', f'{p}subject', named(Subject)),
         'institut': Dimension('Institut', f'{p}subject__institute', named(Institute)),
@@ -123,7 +124,7 @@ def studies(rows):
 
 
 def study(s):
-    return s.person.name, f'{s.program.degree} {s.program.name} · {s.subject} · {s.get_status_display()}', s.get_absolute_url()
+    return s.person.name, f'{s.program.title} · {s.subject} · {s.get_status_display()}', s.get_absolute_url()
 
 
 def participations(rows):
@@ -222,7 +223,7 @@ MEASURES = {m.key: m for m in [
         value=Sum(F('end') - F('start')), default='funktion', drill='raum', capability='view_bookings', unit='Std.', records='Buchungen',
         convert=lambda span: round(span.total_seconds() / 3600) if span else 0,
         objects=lambda rows: rows.select_related('room', 'category', 'course').order_by('start'),
-        describe=lambda b: (b.label, f'{b.room} · {timezone.localtime(b.start):%d.%m.%Y %H:%M}', reverse('rooms:booking', args=[b.pk])),
+        describe=lambda b: (b.label, f'{b.room} · {date_format(timezone.localtime(b.start), "j.n.Y H:i")}', reverse('rooms:booking', args=[b.pk])),
         dimensions={
             'funktion': Dimension('Raumfunktion', 'room__function', named(RoomFunction, key='key')),
             'gebaeude': Dimension('Gebäude', 'room__building'),

@@ -65,17 +65,26 @@ class StudentsConfig(Tile, AppConfig):
         return found
 
     def tasks(self, person):
-        from core.models import Term
+        from django.utils import timezone
+
+        from core.models import Institution, Term
         from .models import Study, StudyTerm
 
-        term = Term.upcoming()
+        term, today = Term.upcoming(), timezone.localdate()
+        due = term and (term.deadline if today <= term.deadline else term.closes)  # in the Nachfrist, its end
         paid = StudyTerm.objects.filter(term=term, paid__isnull=False).values('study__person')
         enrolled = Study.objects.filter(status=Study.Status.ENROLLED)
         found = []
         if 'manage_students' in person.roles:
-            accepted = person.within(Study.objects.filter(status=Study.Status.ADMITTED, terms__isnull=False), 'manage_students').distinct().count()
-            if accepted:
-                found.append(task(f'{plural(accepted, "angenommenen Studienplatz", "angenommene Studienplätze")} immatrikulieren', reverse('admissions:board')))
+            accepted = (
+                person.within(Study.objects.filter(status=Study.Status.ADMITTED, terms__term=F('start_term')), 'manage_students')
+                .values('start_term', 'start_term__name').annotate(n=Count('pk', distinct=True)).order_by('start_term__start')
+            )
+            for row in accepted:
+                found.append(task(
+                    f'{plural(row["n"], "angenommenen Studienplatz", "angenommene Studienplätze")} zum {row["start_term__name"]} immatrikulieren',
+                    f"{reverse('admissions:board')}?semester={row['start_term']}#immatrikulieren",
+                ))
             from courses.models import Participation
 
             fails = (  # a module failed as often as the Prüfungsordnung allows
@@ -88,8 +97,9 @@ class StudentsConfig(Tile, AppConfig):
         if 'manage_reregistration' in person.roles:
             unpaid = enrolled.exclude(person__in=paid).values('person').distinct().count()
             if unpaid and term and term.reregistration_open:
-                found.append(task(f'Rückmeldung {term}: {plural(unpaid, "Zahlung", "Zahlungen")} ausstehend', reverse('students:reregistration'), term.deadline))
+                found.append(task(f'Rückmeldung {term}: {plural(unpaid, "Zahlung", "Zahlungen")} ausstehend', reverse('students:reregistration'), due))
         study = enrolled.filter(person=person).first()
         if study and term and term.reregistration_open and not paid.filter(study__person=person).exists():
-            found.append(task(f'Rückmeldung {term}: Semesterbeitrag {number_format(term.fee, 2)} € überweisen', study.get_absolute_url(), term.deadline))
+            fee = term.due(today, Institution.get().late_fee)
+            found.append(task(f'Rückmeldung {term}: {number_format(fee, 2)} € überweisen' + (' (Nachfrist, mit Säumnisgebühr)' if fee > term.fee else ''), study.get_absolute_url(), due))
         return found

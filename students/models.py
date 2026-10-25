@@ -7,10 +7,25 @@ from django.utils.formats import number_format
 from django.urls import reverse
 from django.utils import timezone
 
-from core import destatis, texts
+from core import texts
 from core.models import Keyed, Message, Person, Term, Tracked
 from core.text import matching
 from curriculum.models import Program, Subject, weighted
+
+EXITS = [  # grounds of Exmatrikulation as Immatrikulationsordnungen word them, keyed as the official statistics count them (destatis.EXITS)
+    ('1', 'Abschluss des Studiums'), ('4', 'Auf Antrag: Wechsel an eine andere Hochschule'), ('6', 'Auf Antrag: Abbruch des Studiums'),
+    ('2', 'Auf Antrag: Unterbrechung des Studiums'), ('5', 'Auf Antrag: Freiwilligendienst'), ('9', 'Auf Antrag: anderer Grund'),
+    ('7', 'Keine Rückmeldung, Krankenversicherung oder Beiträge nicht nachgewiesen'), ('8', 'Prüfung endgültig nicht bestanden'),
+    ('0', 'Von Amts wegen: anderer Grund'),
+]
+LEAVES = [  # grounds of Beurlaubung, likewise (destatis.LEAVES)
+    ('1', 'Erkrankung'), ('7', 'Mutterschutz, Elternzeit oder Pflege von Angehörigen'), ('4', 'Studienbedingter Auslandsaufenthalt'),
+    ('3', 'Praktische Tätigkeit'), ('2', 'Vorbereitung auf eine Abschlussprüfung'), ('5', 'Freiwilligendienst'),
+    ('9', 'Anderer wichtiger Grund, z. B. Mitarbeit in Gremien'),
+]
+LEAVE_TERMS = 2  # Urlaubssemester a student may take in the rule; more only through the office
+FIRST_TERM_LEAVES = {'1', '7'}  # the grounds that allow leave in the first Fachsemester
+
 
 class Study(Tracked, models.Model):
     """One person's path through one programme, from application to graduation."""
@@ -47,7 +62,7 @@ class Study(Tracked, models.Model):
         verbose_name='Hauptfachlehrer:in', help_text='Bis zur Zulassung der Wunsch aus der Bewerbung.',
     )
     prior_terms = models.PositiveSmallIntegerField('Angerechnete Semester', default=0)
-    exit_reason = models.CharField('Grund der Exmatrikulation', max_length=1, choices=destatis.EXITS, blank=True)
+    exit_reason = models.CharField('Grund der Exmatrikulation', max_length=1, choices=EXITS, blank=True)
     structured = models.BooleanField('In einem strukturierten Promotionsprogramm', default=False)  # these three for a Promotion
     employed = models.BooleanField('An der Hochschule beschäftigt', default=False)
     cumulative = models.BooleanField('Kumulative Dissertation', default=False, help_text='Aus Veröffentlichungen statt einer Monografie.')
@@ -75,15 +90,31 @@ class Study(Tracked, models.Model):
                 return exact
         return list(matching(studies, text, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__email')[:5])
 
-    def set_status(self, status, reason=''):
-        """A new status from today; `reason` says why a study ended, as the official statistics count it."""
-        self.status, self.since, self.exit_reason = status, timezone.localdate(), reason
+    @classmethod
+    def reachable(cls, person, studies):
+        """The pks of `studies` whose page (get_absolute_url) the person may open: their own; a study for its Hauptfachlehrer:in
+        and the offices that see or manage files (students:study); an application for the offices that see applications
+        and its jury (admissions:application)."""
+        from courses.models import Course
+
+        base = cls.objects.filter(pk__in=studies.values('pk'))
+        applying, studying = base.filter(status__in=cls.APPLICATION), base.exclude(status__in=cls.APPLICATION)
+        found = (
+            base.filter(person=person) | studying.filter(teacher=person) | person.within(studying, 'view_files', 'manage_students')
+            | person.within(applying, 'view_applications')
+            | applying.filter(participations__course__kind=Course.Kind.AUDITION, participations__course__staff=person)
+        )
+        return set(found.values_list('pk', flat=True))
+
+    def set_status(self, status, reason='', since=None):
+        """A new status from `since`, else today; `reason` says why a study ended, as the official statistics count it."""
+        self.status, self.since, self.exit_reason = status, since or timezone.localdate(), reason
         self.save(update_fields=['status', 'since', 'exit_reason'])
 
     def wording(self, key, **values):
         """(subject, body) of a text about this study, its placeholders filled in (core.texts)."""
         return texts.render(
-            key, vorname=self.person.first_name, nachname=self.person.last_name, studiengang=f'{self.program.degree} {self.program.name}',
+            key, vorname=self.person.first_name, nachname=self.person.last_name, studiengang=self.program.title,
             hauptfach=self.subject, semester=self.start_term, matrikelnummer=self.person.matriculation or '', **values,
         )
 
@@ -145,7 +176,7 @@ class StudyTerm(Tracked, models.Model):
     study = models.ForeignKey(Study, models.CASCADE, related_name='terms', verbose_name='Studium')
     term = models.ForeignKey(Term, models.PROTECT, related_name='registrations', verbose_name='Semester')
     leave = models.BooleanField('Urlaubssemester', default=False)
-    leave_reason = models.CharField('Grund der Beurlaubung', max_length=1, choices=destatis.LEAVES, blank=True)
+    leave_reason = models.CharField('Grund der Beurlaubung', max_length=1, choices=LEAVES, blank=True)
     paid = models.DateField('Beitrag bezahlt am', null=True, blank=True)
 
     class Meta:

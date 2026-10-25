@@ -19,7 +19,7 @@
         <tr>
           <td class="nowrap">{{ term }}</td>
           <td class="nowrap">{{ term.start|date:"d.m.Y" }} bis {{ term.end|date:"d.m.Y" }}</td>
-          <td>{{ s.program.degree }} {{ s.program.name }}, {{ s.subject }}</td>
+          <td>{{ s.program.title }}, {{ s.subject }}</td>
           <td class="num">{% if leave %}Urlaubssemester{% else %}{{ semester }}{% endif %}</td>
         </tr>
         {% empty %}<tr><td colspan="4" class="empty">Keine Semester.</td></tr>
@@ -29,7 +29,7 @@
   </section>
   <dl class="facts" style="margin-top: 16px">
     {% for s in studies %}
-    <dt>{{ s.program.degree }} {{ s.program.name }}, {{ s.subject }}</dt>
+    <dt>{{ s.program.title }}, {{ s.subject }}</dt>
     <dd>{% if s.status == 'enrolled' %}immatrikuliert{% elif s.status == 'graduated' %}abgeschlossen zum {{ s.since|date:"j. F Y" }}{% else %}ohne Abschluss beendet zum {{ s.since|date:"j. F Y" }}{% endif %}</dd>
     {% endfor %}
     <dt>Semester an dieser Hochschule</dt><dd>{{ count }}{% if leave %}, davon {{ leave }} Urlaubssemester{% endif %}</dd>

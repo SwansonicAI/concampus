@@ -11,6 +11,7 @@ urlpatterns = [
     path('nachricht/', views.compose, name='compose'),
     path('<int:pk>/', views.study, name='study'),
     path('<int:pk>/immatrikulieren/', views.enrol, name='enrol'),
+    path('immatrikulieren/', views.enrol_many, name='enrol_many'),
     path('<int:pk>/versicherung/', views.insured, name='insured'),
     path('<int:pk>/urlaub/', views.leave, name='leave'),
     path('<int:pk>/exmatrikulieren/', views.exmatriculate, name='exmatriculate'),

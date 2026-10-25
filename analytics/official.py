@@ -131,7 +131,7 @@ class Report:
         """Abschlussprüfung with the Studienart before it; an Erststudium after a degree is a Zweitstudium."""
         program = study.program
         if not program.exam:
-            self.needs(f'Abschlussprüfung des Studiengangs {program.degree} {program.name}', 'studiengaenge', program)
+            self.needs(f'Abschlussprüfung des Studiengangs {program.title}', 'studiengaenge', program)
         degree = person.degree_exam or any(s.status == Study.Status.GRADUATED and s.since < study.start_term.start for s in person.studies.all())
         return ('2' if program.kind == '1' and degree else program.kind) + program.exam
 

@@ -1,9 +1,11 @@
+from datetime import timedelta
+
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Person, Term, Tracked
+from core.models import Institution, Person, Term, Tracked
 from curriculum.models import Module, Program, Subject
 from students.models import Study
 
@@ -115,6 +117,19 @@ class Course(Tracked, models.Model):
             | models.Q(table='courses.score', row__in=Score.objects.filter(participation__course=pk).values('pk'))
         )
 
+    @classmethod
+    def reachable(cls, person, courses):
+        """The pks of `courses` whose page (get_absolute_url) the person may open: any course or lesson; an exam,
+        recognition or thesis for the offices that manage or decide them and its examiners (exams:exam); an audition
+        for the offices that run them and its jury (admissions:audition)."""
+        base = cls.objects.filter(pk__in=courses.values('pk'))
+        found = (
+            base.filter(kind__in=[cls.Kind.COURSE, cls.Kind.LESSON]) | base.filter(staff=person)
+            | person.within(base.filter(kind__in=[cls.Kind.EXAM, cls.Kind.RECOGNITION, cls.Kind.THESIS]), 'manage_exams', 'decide_results')
+            | person.within(base.filter(kind=cls.Kind.AUDITION), 'run_auditions')
+        )
+        return set(found.values_list('pk', flat=True))
+
     def get_absolute_url(self):
         app = {self.Kind.EXAM: 'exams:exam', self.Kind.RECOGNITION: 'exams:exam', self.Kind.THESIS: 'exams:exam', self.Kind.AUDITION: 'admissions:audition'}
         return reverse(app.get(self.kind, 'courses:course'), args=[self.pk])
@@ -128,6 +143,17 @@ class Course(Tracked, models.Model):
     def upcoming(self):
         """Registration has yet to open."""
         return self.opens is not None and timezone.localdate() < self.opens
+
+    @property
+    def withdraw_by(self):
+        """The last day to withdraw from an exam: some weeks before the term's Prüfungszeitraum, else the Anmeldeschluss."""
+        if self.term.exams_start:
+            return self.term.exams_start - timedelta(weeks=Institution.get().withdraw_weeks)
+        return self.deadline
+
+    @property
+    def withdrawable(self):
+        return self.withdraw_by is None or timezone.localdate() <= self.withdraw_by
 
     @property
     def points(self):

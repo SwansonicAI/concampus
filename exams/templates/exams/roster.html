@@ -1,4 +1,5 @@
 {% extends base %}
+{% load marks %}
 {% block title %}{% if notice %}Aushang{% else %}Notenliste{% endif %} {{ course.title }}{% endblock %}
 {% block content %}
 <div class="document">
@@ -12,14 +13,14 @@
     {% if not notice %}<dt>Kommission</dt><dd>{{ staff|join:", " }}</dd>{% endif %}
   </dl>
   <table>
-    <thead><tr><th>Matrikel</th>{% if not notice %}<th>Name</th>{% for e in staff %}<th class="num">{{ e.last_name }}</th>{% endfor %}{% endif %}<th class="num">{% if course.points %}Punkte{% else %}Note{% endif %}</th><th>Ergebnis</th></tr></thead>
+    <thead><tr><th>Matrikelnr.</th>{% if not notice %}<th>Name</th>{% for e in staff %}<th class="num">{{ e.last_name }}</th>{% endfor %}{% endif %}<th class="num">{% if course.points %}Punkte{% else %}Note{% endif %}</th><th>Ergebnis</th></tr></thead>
     <tbody>
       {% for p in rows %}
       <tr>
         <td class="nowrap">{{ p.study.person.matriculation }}</td>
         {% if not notice %}
         <td>{{ p.study.person.name }}<br><small class="muted">{{ p.study.subject }} · {{ p.study.program.degree }}{% if p.attempt > 1 %} · {{ p.attempt }}. Versuch{% endif %}</small></td>
-        {% for e, value in p.marks %}<td class="num">{{ value|default_if_none:"" }}</td>{% endfor %}
+        {% for e, value in p.marks %}<td class="num">{{ value|mark }}</td>{% endfor %}
         {% endif %}
         <td class="num">{% if p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</td>
         <td>{% if p.passed %}bestanden{% elif p.passed is False %}nicht bestanden{% elif p.remark %}entschuldigt{% endif %}{% if p.remark %} ({{ p.remark|upper }}){% endif %}</td>

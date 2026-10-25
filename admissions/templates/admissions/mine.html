@@ -1,11 +1,12 @@
 {% extends base %}
+{% load marks %}
 {% block title %}Meine Bewerbung{% endblock %}
 {% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
 {% block content %}
 <h1>Meine Bewerbung</h1>
 {% for s in studies %}
 <section>
-  <h2>{{ s.program.degree }} {{ s.program.name }} · {{ s.subject }}</h2>
+  <h2>{{ s.program.title }} · {{ s.subject }}</h2>
   <p class="lead">Studienbeginn {{ s.start_term }} · <span class="badge {{ s.status }}">{{ s.get_status_display }}</span></p>
   <table>
     <thead><tr><th>Stufe</th><th>Termin</th><th>Ergebnis</th></tr></thead>
@@ -13,8 +14,8 @@
       {% for p in s.stages %}
       <tr>
         <td>{{ p.course.title }}</td>
-        <td>{% if p.slot %}{{ p.slot|date:"l, j. F Y, H:i" }}{% elif p.course.video %}online{% else %}wird mitgeteilt{% endif %}</td>
-        <td>{% if p.course.released %}{% if p.passed %}<span class="badge yes">bestanden</span>{% else %}<span class="badge no">nicht bestanden</span>{% endif %}{% else %}<span class="muted">ausstehend</span>{% endif %}</td>
+        <td>{% if p.slot %}{{ p.slot|date:"l, j. F Y, H:i" }}{% if p.room %}, {{ p.room }} ({{ p.room.building }}){% endif %}{% elif p.course.video %}online{% else %}wird mitgeteilt{% endif %}</td>
+        <td>{% if p.course.released %}{% if p.passed %}<span class="badge yes">bestanden</span>{% else %}<span class="badge no">nicht bestanden</span>{% if p.course.video and p.grade is not None %} <small class="muted">{{ p.grade|mark }} Punkte</small>{% endif %}{% endif %}{% else %}<span class="muted">ausstehend</span>{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>

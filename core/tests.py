@@ -213,7 +213,7 @@ class TextTest(Seeded):
 
     def test_own_wording_then_back_to_standard(self):
         campus = self.login('campus')
-        old = Message.objects.filter(subject='Zulassungsbescheid').first()
+        old = Message.objects.filter(subject='Bescheid über die Eignungsprüfung: Studienplatzangebot').first()
         before = old.body
         campus.post('/einstellungen/texte/zulassung/', {'subject': 'Ihre Zulassung', 'body': 'Willkommen, {vorname}, zum {semester}.'})
         study = Study.objects.filter(status='applied').exclude(person__username='bewerbung').select_related('person').first()

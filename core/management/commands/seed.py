@@ -25,7 +25,7 @@ from admissions.views import DECISIONS
 from core import destatis, history, texts
 from core.models import Change, Holiday, Institute, Institution, Message, Office, Person, Term, Text
 from courses.models import Area, Course, Ensemble, Format, Participation, Score, Signup
-from courses.panel import mean
+from courses.panel import mean, rounding
 from curriculum.models import Module, Program, Subject
 from instruments.models import Instrument, Loan
 from rooms.models import Booking, BookingCategory, Room, RoomFunction
@@ -36,7 +36,7 @@ FEE = Decimal('341.30')  # Semesterbeitrag WiSe 2026/27: Studierendenwerk 95,00 
 FEES = {  # published Semesterbeiträge from WiSe 2023/24; earlier ones approximated, SoSe 2027 as WiSe 2026/27
     'SoSe 2022': Decimal('205.30'), 'WiSe 2022/23': Decimal('211.30'), 'SoSe 2023': Decimal('219.80'), 'WiSe 2023/24': Decimal('230.30'),
     'SoSe 2024': Decimal('223.80'), 'WiSe 2024/25': Decimal('279.40'), 'SoSe 2025': Decimal('279.40'), 'WiSe 2025/26': Decimal('313.30'),
-    'SoSe 2026': Decimal('323.30'),
+    'SoSe 2026': Decimal('323.30'), 'WiSe 2026/27': FEE,
 }
 FEMALE = {
     'Anna', 'Clara', 'Lea', 'Nora', 'Hannah', 'Ida', 'Greta', 'Svea', 'Maja', 'Frieda', 'Marlene', 'Mei Lin', 'Xinyi', 'Jiayi', 'Seo-yeon', 'Ha-eun',
@@ -61,7 +61,7 @@ KREISE = {  # the Kreise of the German places students come from (core.destatis)
 }
 OFFICIAL = {  # Abschlussprüfung, Studienart, Studienfach and Prüfungsamt of each degree, as the official statistics code them
     'B.Mus.': ('83', '1', '', ''), 'M.Mus.': ('89', '7', '', ''), 'B.Ed.': ('38', '1', '113', ''), 'M.Ed.': ('64', '7', '113', ''),
-    'Staatsexamen': ('25', '1', '113', '5091601'), 'Diplom': ('73', '1', '193', ''), 'Konzertdiplom': ('71', '3', '', ''), 'Zertifikat': ('80', '3', '', ''),
+    'Staatsexamen': ('25', '1', '113', '5091601'), 'Diplom': ('73', '1', '193', ''), 'Konzertexamen': ('71', '3', '', ''), 'Zertifikat': ('80', '3', '', ''),
     'Dr. phil.': ('06', '5', '', ''), 'Gasthörerschaft': ('97', '9', '', ''),
 }
 SUBJECT_FIELDS = {  # Studienfach of each Hauptfach
@@ -69,13 +69,15 @@ SUBJECT_FIELDS = {  # Studienfach of each Hauptfach
     'Musikwissenschaft': '114', 'Kulturmanagement': '040',
 }
 EARLIER = ['2740', '2800', '2520', '2500', '2720', '2620', '0580']  # where postgraduates from Germany took their first degree
-HOLIDAYS = [  # Thuringia's public holidays in this year's terms and the Christmas break: name, first day, last day
+HOLIDAYS = [  # the Unterrichtsfreie Tage of the Studienjahresrahmenplan 2026/27: name, first day, last day
     ('Tag der Deutschen Einheit', date(2026, 10, 3), None), ('Reformationstag', date(2026, 10, 31), None),
-    ('Weihnachtspause', date(2026, 12, 21), date(2027, 1, 3)), ('Karfreitag', date(2027, 3, 26), None), ('Ostermontag', date(2027, 3, 29), None),
+    ('Weihnachten und Neujahr', date(2026, 12, 21), date(2027, 1, 3)), ('Karfreitag', date(2027, 3, 26), None), ('Ostermontag', date(2027, 3, 29), None),
     ('Tag der Arbeit', date(2027, 5, 1), None), ('Christi Himmelfahrt', date(2027, 5, 6), None), ('Pfingstmontag', date(2027, 5, 17), None),
-    ('Weltkindertag', date(2027, 6, 1), None),
+    ('Dies Academicus', date(2027, 6, 24), None), ('Weltkindertag', date(2027, 9, 20), None),
 ]
 EXAM_DAYS = [d for d in (date(2027, 2, 8) + timedelta(days=n) for n in range(19)) if d.weekday() < 5]  # Prüfungszeitraum 08.–26.02.2027
+EXAMS_START = {'WiSe 2026/27': date(2027, 2, 8), 'SoSe 2027': date(2027, 7, 14)}  # published Prüfungszeiträume
+EXAM_SIGNUP = (date(2026, 11, 1), date(2026, 11, 15))  # Prüfungsanmeldung WiSe 2026/27
 LECTURES = {  # published lecture periods; other terms are approximated
     'WiSe 2025/26': (date(2025, 10, 8), date(2026, 2, 10)), 'SoSe 2026': (date(2026, 4, 8), date(2026, 7, 14)),
     'WiSe 2026/27': (date(2026, 10, 5), date(2027, 2, 5)), 'SoSe 2027': (date(2027, 4, 7), date(2027, 7, 13)),
@@ -384,7 +386,7 @@ TEACHERS = [  # key, title, first, last, Hauptfach taught
     ('brueck', 'Prof.', 'Johannes', 'Brück', None), ('sander', 'Prof.', 'Christoph', 'Sander', 'Orgel'),
     ('okafor', 'Prof.', 'Ada', 'Okafor', 'Jazz-Gesang'), ('wiegand', 'KMD', 'Peter', 'Wiegand', None), ('hausmann', 'Prof. Dr.', 'Eva', 'Hausmann', None),
 ]
-POSTGRADUATE = ['M.Mus.', 'M.Ed.', 'Konzertdiplom', 'Zertifikat', 'Dr. phil.']
+POSTGRADUATE = ['M.Mus.', 'M.Ed.', 'Konzertexamen', 'Zertifikat', 'Dr. phil.']
 VIDEO_NOTE = (
     'Eine Datei, ungeschnitten, 10–15 Minuten, beginnend mit einer kurzen Vorstellung; die Kamera 3–5 m entfernt, '
     'eine professionelle Aufnahme ist nicht nötig. Nicht älter als ein Jahr. Höchstens 1,5 GB als .mp4, .mov, .webm, .m4v, .ogg, .ogv oder .qt.'
@@ -405,16 +407,19 @@ TEXTS = {  # where the HfM words things its own way (core.texts has the defaults
     'absender_bescheide': 'Akademische und Studentische Angelegenheiten',
     'absender_bescheinigungen': 'Akademische und Studentische Angelegenheiten',
     'absender_leistungen': 'Prüfungsamt',
+    'unterschrift_zeugnisse': 'Präsidentin\nDekanin oder Dekan der Fakultät',  # RPSO 2026 § 23
     'einladung': 'Ihr Termin: {termin} Uhr, {raum}.\n\nBitte erscheinen Sie 30 Minuten vorher. Einspielräume stehen bereit.',
     'bewerbung_hinweise': (
         'Pro Studiengang und Hauptfach ist eine Bewerbung möglich. Nach dem Absenden laden Sie unter „Meine Bewerbung“ Ihr Video und Ihre '
         'Unterlagen hoch: Lebenslauf, Schulzeugnis, Einzahlungsbeleg der Prüfungsgebühr (50 €), für einen Master auch Ihr Bachelorzeugnis. '
         'Bis zur Frist können Sie alles ändern.\n\n'
         'Wo eine Videostufe vorgesehen ist, ist sie die erste Prüfungsstufe: ein ungeschnittenes Video von 10–15 Minuten in einer Datei, '
-        'beginnend mit einer kurzen Vorstellung, nicht älter als ein Jahr, höchstens 1,5 GB. Eine professionelle Aufnahme ist nicht nötig.\n\n'
+        'beginnend mit einer kurzen Vorstellung, nicht älter als ein Jahr, höchstens 1,5 GB. Eine professionelle Aufnahme ist nicht nötig. '
+        'Die Videostufe wird mit „bestanden“ oder „nicht bestanden“ bewertet.\n\n'
         'Ihr Ergebnis erhalten Sie spätestens drei Wochen nach der Prüfung im Portal.\n\n'
-        'Die Kommission besteht aus mindestens drei Lehrenden des Hauptfachs. Jedes Mitglied wertet mit 0 bis 25 Punkten; bestanden ist '
-        'das Hauptfach ab 16,1 Punkten, die übrigen Teile ab 11,6.\n\n'
+        'Die Kommission besteht aus mindestens drei Lehrenden des Hauptfachs. Jedes Mitglied wertet mit 0 bis 25 Punkten; es zählt das '
+        'nach der ersten Nachkommastelle abgeschnittene Mittel. Bestanden ist im Bachelor das Hauptfach ab 16,1 Punkten, die übrigen Teile '
+        'ab 11,6; im Master das Hauptfach ab 19,1, die übrigen Teile ab 16,1.\n\n'
         'Einladungen und Bescheide erhalten Sie in Ihr Postfach.'
     ),
 }
@@ -428,7 +433,7 @@ BY_STUDENTS, BY_TEACHERS, COUNTED = {'students': True}, {'teachers': True}, {'qu
 PUBLIC = {'public': True}
 CATEGORIES = [  # key, name, colour, settings: the HfM's booking categories as its Asimut has them
     ('unterricht', 'Unterricht', 'teach', BY_TEACHERS), ('uebung', 'Übebuchung', 'practice', BY_STUDENTS | BY_TEACHERS | COUNTED),
-    ('kammermusik', 'Kammermusik-Probe', 'practice', BY_STUDENTS | COUNTED | {'ahead_hours': 240, 'participants': 1}),
+    ('kammermusik', 'Kammermusikprobe', 'practice', BY_STUDENTS | COUNTED | {'ahead_hours': 240, 'participants': 1}),
     ('probe', 'Probe', 'teach', BY_TEACHERS), ('orchesterprobe', 'Orchesterprobe', 'teach', {}), ('registerprobe', 'Registerprobe', 'teach', BY_TEACHERS),
     ('pruefung', 'Prüfung', 'exam', BY_TEACHERS), ('eignungspruefung', 'Eignungsprüfung', 'exam', {}), ('vorspiel', 'Vorspiel', 'exam', BY_TEACHERS | PUBLIC),
     ('klassenabend', 'Klassenabend', 'event', BY_TEACHERS | PUBLIC), ('konzert', 'Konzert', 'event', PUBLIC), ('veranstaltung', 'Veranstaltung', 'event', PUBLIC),
@@ -529,8 +534,8 @@ INTAKE = {  # applications a year by Hauptfach as of 2026, admission rate, share
     ('M.Ed.', 'Musik an Gymnasien (Doppelfach)'): (dict(zip(TEACHING, (10, 9, 5, 5, 3, 3, 2, 2))), 0.7, 0),
     ('Staatsexamen', 'Lehramt an Gymnasien, Studienfach Musik'): (dict(zip(TEACHING, (20, 16, 9, 9, 6, 6, 5, 4))), 0.41, 0),
     ('Diplom', 'Kirchenmusik A'): ({'Orgel': 7}, 0.54, 0),
-    ('Konzertdiplom', 'Konzertexamen'): ({'Klavier': 20, 'Violine': 18, 'Gesang': 12, 'Violoncello': 8, 'Flöte': 4, 'Klarinette': 3, 'Orgel': 2}, 0.22, 0.3),
-    ('Dr. phil.', 'Promotion'): ({'Musikwissenschaft': 10, 'Musikpädagogik': 6, 'Kulturmanagement': 4}, 0.54, 0.4),
+    ('Konzertexamen', 'Konzertexamen'): ({'Klavier': 20, 'Violine': 18, 'Gesang': 12, 'Violoncello': 8, 'Flöte': 4, 'Klarinette': 3, 'Orgel': 2}, 0.22, 0.3),
+    ('Dr. phil.', 'Promotion (Dr. phil.)'): ({'Musikwissenschaft': 10, 'Musikpädagogik': 6, 'Kulturmanagement': 4}, 0.54, 0.4),
     ('Zertifikat', 'Thüringer Opernstudio'): ({'Gesang': 60}, 0.16, 0),
 }
 WINTER_ONLY = {'Horn', 'Posaune', 'Tuba'}  # no summer intake, nor for Gesang and Klavier
@@ -661,6 +666,8 @@ class Command(BaseCommand):
                 terms.append(Term(name=name, start=october, end=date(year + 1, 3, 31), lectures_start=lectures[0], lectures_end=lectures[1], deadline=date(year, 6, 15), fee=FEES.get(name, fee)))
         for term in terms:
             term.reregistration_start = term.deadline - timedelta(days=14)  # Rückmeldung SoSe 2027: 04.–18.01.2027
+            term.late_deadline = term.deadline + timedelta(days=8)  # Nachfrist with Säumnisgebühr: 19.–26.01.2027
+            term.exams_start = EXAMS_START.get(term.name)
         Term.objects.bulk_create(terms)
         self.calendar = list(Term.objects.order_by('start'))
         self.now = next(i for i, t in enumerate(self.calendar) if t.name == 'WiSe 2026/27')
@@ -710,7 +717,7 @@ class Command(BaseCommand):
         self.bmgm = self.programs[('B.Mus.', 'Gesang | Musiktheater')]
         self.bmkl = self.programs[('B.Mus.', 'Klavier')]
         self.mm = self.programs[('M.Mus.', 'Streichinstrumente')]
-        self.guest = self.programs[('Gasthörerschaft', 'ohne Abschluss')]
+        self.guest = self.programs[('Gasthörerschaft', 'Gasthörerschaft')]
         self.rooms = {}
         for building, entries in ROOMS.items():
             for entry in entries.split('; '):
@@ -812,15 +819,17 @@ class Command(BaseCommand):
         born = date(year - age, rng.randint(1, 12), rng.randint(1, 28))
         german = nationality == '000'
         talent = german and age < 19 and rng.random() < 0.5  # admitted for artistic talent, before the Abitur
+        school = None if talent else date(born.year + 19, 6, rng.randint(20, 30))
+        at_school = school and school > timezone.localdate()  # applies before the Abitur: no Hochschulzugang yet
         person = Person(
             username=name, first_name=first, last_name=last, password=self.password, email=f'{name}@stud.hfm-weimar.de', gender=gender,
             given_names=f'{first} {rng.choice(MIDDLE[gender])}' if german and gender in MIDDLE and rng.random() < 0.3 else '',
             birth_name=rng.choice(lasts) if age > 24 and gender == 'w' and rng.random() < 0.3 else '',
             birth_date=born, birth_place=rng.choice(places), nationality=nationality,
             second_nationality='000' if not german and rng.random() < 0.15 else '', residence='16055',
-            entrance='33' if talent else '03' if german else '39',  # Eignungsprüfung here, Abitur, or a school abroad
-            entrance_date=date(year, 2, 20) if talent else date(born.year + 19, 6, rng.randint(20, 30)),
-            entrance_region='16055' if talent else KREISE[rng.choice(places)] if german else '99' + nationality,
+            entrance='' if at_school else '33' if talent else '03' if german else '39',  # Eignungsprüfung here, Abitur, or a school abroad
+            entrance_date=None if at_school else date(year, 2, 20) if talent else school,
+            entrance_region='' if at_school else '16055' if talent else KREISE[rng.choice(places)] if german else '99' + nationality,
             address=f'{rng.choice(["Marienstraße", "Steubenstraße", "Trierer Straße", "Humboldtstraße", "Bauhausstraße"])} {rng.randint(1, 60)}\n99423 Weimar',
         )
         person.home = KREISE[person.birth_place] if german else '99' + nationality
@@ -848,7 +857,7 @@ class Command(BaseCommand):
         self.demo, organist = self.candidate(2024, 20, chen, 'Mei Lin', 'Chen', 'student'), self.candidate(2023, 20)
         self.applicant = self.candidate(2027, 19, ORIGINS[0], 'Jonas', 'Becker', 'bewerbung')
         people, studies = [self.demo, organist, self.applicant], []
-        foci = {program: list(program.modules.filter(code__regex=r'^(ME-PR|KM-IV)-')) for program in self.programs.values()}
+        foci = {program: list(program.modules.filter(code__regex=r'^(ME-PR|KM-IV)-', children__isnull=False).distinct()) for program in self.programs.values()}  # Profile and Schwerpunkte, not their modules
 
         def apply(person, program, subject, start, accepted, outcome=None):
             """One application; for whoever was admitted and accepted, the terms they were registered and how it ended."""
@@ -1124,7 +1133,7 @@ class Command(BaseCommand):
         """How places are given: lessons by their teachers, two electives by choosing among requests (the demo student
         waits for one), Kammermusik in ensembles, and Liturgik as a block seminar on three Mondays."""
         now = Course.objects.filter(term=self.current)
-        now.filter(models.Q(kind=Course.Kind.LESSON) | models.Q(format=self.formats['E+x'])).update(allocation=Course.Allocation.STAFF)
+        now.filter(models.Q(kind=Course.Kind.LESSON) | models.Q(format=self.formats['E+x'])).update(allocation=Course.Allocation.STAFF, opens=None, deadline=None)
         notes = ['Ich spiele im Februar Probespiele und möchte vorher Auftrittspraxis sammeln.', '', 'Ich hatte mich im Sommer schon angemeldet.', '']
         for title in ['Auftrittstraining', 'Alexander-Technik']:
             course = now.filter(title=title).first()
@@ -1329,10 +1338,11 @@ class Command(BaseCommand):
                 due[(self.titles[leaf.parent_id], leaf.title, study.subject.name if artistic else '')].append((study, leaf))
         stages, written = ['Festsaal', 'Saal Am Palais', 'FH 106'], ['HzH 313', 'HzH 316', 'HzH 320']
         free = defaultdict(int)  # the next free exam day of each stage
+        signed = (timezone.localdate() - EXAM_SIGNUP[0]).days  # days of Prüfungsanmeldung so far: who registered depends on the day of seeding
         for n, ((module, title, subject), entries) in enumerate(sorted(due.items())):
             course = Course.objects.create(
                 term=now, kind=Course.Kind.EXAM, title=f'{module} · {title}' + (f' · {subject}' if subject else ''),
-                subject=self.subjects.get(subject), deadline=date(2026, 11, 15),
+                subject=self.subjects.get(subject), opens=EXAM_SIGNUP[0], deadline=EXAM_SIGNUP[1],
             )
             course.staff.set(self.panel(subject) if subject else [self.teachers[lecturer(self.first_course.get(entries[0][1].parent_id, ''))]])
             course.modules.set({leaf for _, leaf in entries})
@@ -1351,18 +1361,19 @@ class Command(BaseCommand):
                 slots = [start] * len(entries)
                 if not Booking(room=room, start=start, end=start + timedelta(minutes=120)).clashes().exists():
                     Booking.objects.create(room=room, start=start, end=start + timedelta(minutes=120), person=self.staff['pruefungsamt'], course=course, category_id='pruefung')
-            Participation.objects.bulk_create(
-                Participation(
-                    course=course, study=study, module=leaf, slot=slot,
-                    note=self.repertoire(study.subject.name) if subject else '', created=at(date(2026, 11, rng.randint(1, 14)), hour=10),
+            if signed >= 0:
+                Participation.objects.bulk_create(
+                    Participation(
+                        course=course, study=study, module=leaf, slot=slot, note=self.repertoire(study.subject.name) if subject else '',
+                        created=at(EXAM_SIGNUP[0] + timedelta(days=rng.randint(0, min(signed, 14))), hour=10),
+                    )
+                    for slot, (study, leaf) in zip(slots, entries)
                 )
-                for slot, (study, leaf) in zip(slots, entries)
-            )
         self.theses(theses)
         demo_study = self.demo_study()
         owed = Module.objects.get(program=demo_study.program, parent__code='BM-XX-MW-01', exam=True)
         if not Course.objects.filter(term=now, modules=owed).exists():  # the exam Mei Lin still owes is on offer this term
-            course = Course.objects.create(term=now, kind=Course.Kind.EXAM, title=f'Musikgeschichte I · {owed.title}', deadline=date(2026, 11, 15))
+            course = Course.objects.create(term=now, kind=Course.Kind.EXAM, title=f'Musikgeschichte I · {owed.title}', opens=EXAM_SIGNUP[0], deadline=EXAM_SIGNUP[1])
             course.staff.set([self.teachers['voss']])
             course.modules.set(Module.objects.filter(parent__code='BM-XX-MW-01', exam=True))
             start = at(date(2027, 2, 10), hour=10)
@@ -1471,7 +1482,7 @@ class Command(BaseCommand):
                 marked = []
             p = Participation(course=course, study=study, note=note, created=at(study.since, hour=12))
             if marked and len(marked) == len(jury):
-                p.grade = mean(marks, study.program.mean_rounding)
+                p.grade = mean(marks, rounding(p))
                 p.passed = course.passes(p.grade)
             rows.append(p)
             scores.extend((p, e, v) for e, v in zip(marked, marks))
@@ -1490,7 +1501,7 @@ class Command(BaseCommand):
                     places = max(1, round(subjects[subject] * rate * (sose if summer else 1 - sose)))
                 intake = {'program': study.program, 'deadline': video_deadline, 'capacity': places, 'accompaniment': accompanist}  # the course one applies to
                 video = Course.objects.create(
-                    term=term, kind=Course.Kind.AUDITION, title=f'Videostufe {subject}{level}', subject=study.subject, video=True, pass_mark=Decimal('16.1'), max_points=25,
+                    term=term, kind=Course.Kind.AUDITION, title=f'Videostufe {subject}{level}', subject=study.subject, video=True, pass_mark=Decimal('19.1' if master else '16.1'), max_points=25,
                     released=at(video_deadline + timedelta(days=30) if finished else date(2026, 10, 20), hour=12) if decided else None, **intake,
                 ) if subject in VIDEO_SUBJECTS else None
                 hall = Course.objects.create(
@@ -1552,8 +1563,8 @@ class Command(BaseCommand):
         Participation.objects.bulk_create(rows)
         Score.objects.bulk_create(Score(participation=p, examiner=e, value=v) for p, e, v in scores)
         Document.objects.bulk_create(documents)
-        if not finished:
-            failed = Study.objects.filter(start_term=term, participations__course__released__isnull=False, participations__passed=False)
+        if not finished:  # the Bachelor's Bescheide after the Videostufe are out; the Master's are still to send
+            failed = Study.objects.filter(start_term=term, participations__course__released__isnull=False, participations__passed=False).exclude(program__degree='M.Mus.')
             Study.objects.filter(pk__in=failed.values('pk')).update(status=Study.Status.REJECTED, since=date(2026, 10, 21))
 
     # Practice rooms and the Postfach
@@ -1669,7 +1680,7 @@ class Command(BaseCommand):
         demo, applicant, wendt = self.demo, self.applicant, self.teachers['wendt']
         Message.objects.bulk_create([
             Message(person=demo, subject='Prüfungsanmeldung vom 01. bis 15.11.2026', created=at(date(2026, 10, 15), hour=9),
-                    body='Melden Sie sich bitte im Campus zu den Prüfungen dieses Semesters an. Abmeldung ist bis zum 18.01.2027 möglich.',
+                    body='Melden Sie sich bitte vom 01. bis 15.11.2026 im Campus zu den Prüfungen dieses Semesters an. Abmelden können Sie sich bis zum 18.01.2027.',
                     link='/pruefungen/'),
             Message(person=demo, subject='Ergebnis: Künstlerische Präsentation I · Künstlerisch-praktische Prüfung (20 Min.) · Violine', created=at(date(2026, 7, 30), hour=12),
                     body='Ihr Prüfungsergebnis ist freigegeben.', link='/pruefungen/', read=at(date(2026, 7, 30), hour=18)),

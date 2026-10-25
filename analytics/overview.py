@@ -3,7 +3,7 @@ from datetime import datetime, time, timedelta
 
 from django.db.models import Count, Exists, OuterRef, Q
 from django.utils import timezone
-from django.utils.formats import number_format
+from django.utils.formats import date_format, number_format
 
 from core.models import Term
 from courses.models import Course, Participation
@@ -206,7 +206,7 @@ def rooms(person):
         ]
 
     return {
-        'title': 'Räume', 'when': f'{days[0]:%d.%m.} bis {days[-1]:%d.%m.%Y}, {HOURS[0]}–{HOURS[-1] + 1} Uhr',
+        'title': 'Räume', 'when': f'{date_format(days[0], "j.n.")} bis {date_format(days[-1], "j.n.Y")}, {HOURS[0]}–{HOURS[-1] + 1} Uhr',
         'stats': [
             stat('belegt im Durchschnitt', percent(sum(by_room.values()), open_ * len(rooms)), unit=' %'),
             stat('gebuchte Stunden', round(booked)),

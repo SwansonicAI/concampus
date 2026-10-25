@@ -1,4 +1,5 @@
 {% extends base %}
+{% load marks %}
 {% block title %}Bewerbung {{ study.person.name }}{% endblock %}
 {% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
 {% block content %}
@@ -29,10 +30,10 @@
   <div class="panel">
     {% if decide %}
     <h3>Entscheidung</h3>
-    {% if recommendation %}<p>Nach den Prüfungsergebnissen: <b>{% if recommendation == 'admitted' %}zulassen{% else %}ablehnen{% endif %}</b>.</p>{% else %}<p class="muted">Noch nicht alle Prüfungsstufen bewertet.</p>{% endif %}
+    {% if recommendation == 'admitted' %}<p>Nach den Prüfungsergebnissen: <b>bestanden</b>. Studienplatz oder Nachrückliste nach der Rangliste.</p>{% elif recommendation %}<p>Nach den Prüfungsergebnissen: <b>nicht bestanden</b>.</p>{% else %}<p class="muted">Noch nicht alle Prüfungsstufen abgeschlossen.</p>{% endif %}
     <form method="post" action="{% url 'admissions:decide' study.pk %}" class="actions">
       {% csrf_token %}
-      {% for status in decisions %}<button class="btn{% if status != recommendation %} ghost{% endif %}" name="status" value="{{ status }}"{% if study.status == status %} disabled{% endif %}>{{ status.label }}</button>{% endfor %}
+      {% for status, verb in decisions %}<button class="btn{% if status != recommendation %} ghost{% endif %}" name="status" value="{{ status }}"{% if study.status == status %} disabled{% endif %}>{{ verb }}</button>{% endfor %}
     </form>
     <p class="muted" style="margin-top: 12px"><small>Der Bescheid geht sofort ins Postfach der Person.</small></p>
     {% endif %}
@@ -70,7 +71,7 @@
         <td>{{ p.slot|date:"D j.n.Y, H:i"|default:"–" }}</td>
         <td><small>{{ p.note|linebreaksbr }}</small></td>
         {% if show_results %}
-        <td class="num">{{ p.grade|default_if_none:"" }}</td>
+        <td class="num">{% if p.grade is not None and not p.course.video or p.passed is False %}{{ p.grade|mark }}{% endif %}</td>
         <td>{% if p.passed %}<span class="badge yes">ja</span>{% elif p.passed is False %}<span class="badge no">nein</span>{% endif %}</td>
         {% endif %}
       </tr>

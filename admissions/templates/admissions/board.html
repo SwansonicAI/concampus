@@ -15,12 +15,12 @@
 
 <h2>Eignungsprüfungen</h2>
 <table>
-  <thead><tr><th>Datum</th><th>Prüfung</th><th>Bewerbungsfrist</th><th class="num">Teilnahmen</th><th>Stand</th></tr></thead>
+  <thead><tr><th>Datum</th><th>Prüfung</th><th>Bewerbungsfrist</th><th class="num">Bewerbende</th><th>Stand</th></tr></thead>
   <tbody>
     {% for c in auditions %}
     <tr>
       <td data-value="{{ c.date|date:'c' }}">{% if c.date %}{{ c.date|date:"D j.n.Y" }}{% elif c.program %}online{% else %}–{% endif %}</td>
-      <td><a href="{% url 'admissions:audition' c.pk %}"><b>{{ c.title }}</b></a>{% if c.program %}<br><small class="muted">Bewerbung für {{ c.program.degree }} {{ c.program.name }}</small>{% endif %}</td>
+      <td><a href="{% url 'admissions:audition' c.pk %}"><b>{{ c.title }}</b></a>{% if c.program %}<br><small class="muted">Bewerbung für {{ c.program.title }}</small>{% endif %}</td>
       <td>{{ c.deadline|date:"j.n.Y"|default:"" }}</td>
       <td class="num">{{ c.size }}</td>
       <td>{% if c.released %}<span class="badge green">abgeschlossen</span>{% else %}<span class="badge open">offen</span>{% endif %}</td>
@@ -33,13 +33,13 @@
 {% if vacancies %}
 <section>
   <h2>Nachrücken</h2>
-  <p class="lead">Zulassungen, die bis zur Frist nicht angenommen sind, erlöschen. Freie Plätze gehen nach Punkten an die Nachrückliste.</p>
+  <p class="lead">Zulassungen, die bis zur Frist nicht angenommen sind, erlöschen. Freie Plätze gehen nach den Punkten im Hauptfach an die Nachrückliste, bei Gleichstand nach dem Mittel der übrigen Prüfungsteile, dann durch Los.</p>
   <table>
     <thead><tr><th>Studiengang und Hauptfach</th><th class="num">Studienplätze</th><th>Frist verstrichen</th><th>Rückt nach</th><th></th></tr></thead>
     <tbody>
       {% for intake, lapsed, waiting in vacancies %}
       <tr>
-        <td><b>{{ intake.program.degree }} {{ intake.program.name }}</b><br><small class="muted">{{ intake.subject }}</small></td>
+        <td><b>{{ intake.program.title }}</b><br><small class="muted">{{ intake.subject }}</small></td>
         <td class="num">{{ intake.capacity }}</td>
         <td>{% for s in lapsed %}<a href="{% url 'admissions:application' s.pk %}" data-panel>{{ s.person.name }}</a><br>{% empty %}–{% endfor %}</td>
         <td>{% for s in waiting %}<a href="{% url 'admissions:application' s.pk %}" data-panel>{{ s.person.name }}</a> <small class="muted">{{ s.points|floatformat:1 }} Punkte</small><br>{% empty %}<span class="muted">Niemand auf der Nachrückliste</span>{% endfor %}</td>
@@ -48,6 +48,61 @@
       {% endfor %}
     </tbody>
   </table>
+</section>
+{% endif %}
+
+{% if decidable %}
+<section id="entscheiden">
+  <h2>Zu entscheiden</h2>
+  <p class="lead">Wer eine Prüfungsstufe nicht bestanden hat, wird abgelehnt. Wer bestanden hat, erhält nach der Rangliste einen freien Studienplatz, sonst einen Platz auf der Nachrückliste, sobald im selben Hauptfach alle Ergebnisse vorliegen.</p>
+  <form method="post" action="{% url 'admissions:decide_many' %}">
+    {% csrf_token %}<input type="hidden" name="semester" value="{{ term.pk }}">
+    <table data-panel>
+      <thead><tr><th><input type="checkbox" onchange="this.form.querySelectorAll('[name=study]').forEach(box => box.checked = this.checked)" aria-label="Alle ankreuzen"></th><th>Name</th><th>Studiengang und Hauptfach</th><th>Prüfungsstufen</th><th>Empfehlung</th></tr></thead>
+      <tbody>
+        {% for s in decidable %}
+        <tr>
+          <td class="mid"><input type="checkbox" name="study" value="{{ s.pk }}" aria-label="{{ s.person.name }}"></td>
+          <td class="mid"><a href="{% url 'admissions:application' s.pk %}">{{ s.person.name }}</a></td>
+          <td class="mid">{{ s.program.title }} · {{ s.subject }}</td>
+          <td class="mid"><span class="chips">{% include "admissions/_stages.html" %}</span></td>
+          <td class="mid">{{ s.verb|default:"wartet auf die übrigen Ergebnisse" }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="actions" style="margin-top: 16px">
+      <select name="status" aria-label="Entscheidung"><option value="">Wie empfohlen</option>{% for status, verb in verbs.items %}<option value="{{ status }}">{{ verb }}</option>{% endfor %}</select>
+      <button class="btn">Für die Angekreuzten entscheiden</button>
+      <small class="muted">Die Bescheide gehen sofort ins Postfach.</small>
+    </div>
+  </form>
+</section>
+{% endif %}
+
+{% if accepted %}
+<section id="immatrikulieren">
+  <h2>Zu immatrikulieren</h2>
+  <form method="post" action="{% url 'students:enrol_many' %}">
+    {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <table data-panel>
+      <thead><tr><th><input type="checkbox" onchange="this.form.querySelectorAll('[name=study]').forEach(box => box.checked = this.checked)" aria-label="Alle ankreuzen"></th><th>Name</th><th>Studiengang und Hauptfach</th><th>Es fehlt noch</th></tr></thead>
+      <tbody>
+        {% for s in accepted %}
+        <tr>
+          <td class="mid">{% if not s.waiting %}<input type="checkbox" name="study" value="{{ s.pk }}" aria-label="{{ s.person.name }}">{% endif %}</td>
+          <td class="mid"><a href="{% url 'admissions:application' s.pk %}">{{ s.person.name }}</a></td>
+          <td class="mid">{{ s.program.title }} · {{ s.subject }}</td>
+          <td class="mid">{% if s.waiting %}<small class="fail">{{ s.waiting|join:" · " }}</small>{% else %}–{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="actions" style="margin-top: 16px">
+      <button class="btn">Angekreuzte immatrikulieren</button>
+      <small class="muted">Vergibt die Matrikelnummern, verbucht den Semesterbeitrag und versendet die Immatrikulationsbescheide.</small>
+    </div>
+  </form>
 </section>
 {% endif %}
 
@@ -71,7 +126,7 @@
           {{ s.subject }} · {{ s.program.degree }}<br>
           {% if s.slot %}<small class="muted">Nächster Termin {{ s.slot|date:"j.n. H:i" }}</small>{% endif %}
           {% if s.accepted and s.status == 'admitted' %}<small class="muted">Platz angenommen</small>{% elif s.lapsed %}<small class="fail">Annahmefrist verstrichen</small>{% endif %}
-          <span class="chips">{% for p in s.stages %}<span class="chip{% if p.passed %} yes{% elif p.passed is False %} no{% endif %}" title="{{ p.course.title }}">{{ p.course.stage }}{% if p.grade is not None and p.course.stage != 'Video' %} {{ p.grade|floatformat:1 }}{% endif %}</span>{% endfor %}{% if s.incomplete %}<span class="chip no" title="Fehlt: {{ s.incomplete|join:', ' }}">unvollständig</span>{% endif %}</span>
+          <span class="chips">{% include "admissions/_stages.html" %}{% if s.incomplete %}<span class="chip no" title="Fehlt: {{ s.incomplete|join:', ' }}">unvollständig</span>{% endif %}</span>
         </a>
         {% empty %}<p class="empty">–</p>{% endfor %}
       </div>
