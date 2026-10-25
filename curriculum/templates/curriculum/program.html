@@ -8,7 +8,7 @@
     <a class="btn ghost" href="{% url 'setup:edit' 'studiengaenge' program.pk %}?next={{ request.path|urlencode }}">Bearbeiten</a>
   </div>{% endif %}
 </div>
-<p class="lead">Prüfungsordnung {{ program.version }} · {{ program.semesters }} Semester · {{ total }} CP · {{ students }} Studierende</p>
+<p class="lead">Prüfungsordnung {{ program.version }} · {{ program.semesters }} Semester · {{ total }} CP{% if figures %} · {{ students }} Studierende{% endif %}</p>
 <p>{% for s in program.subjects.all %}<span class="badge">{{ s }}</span> {% endfor %}</p>
 <section>
   <h2>Studienverlaufs- und Prüfungsplan</h2>

@@ -3,10 +3,10 @@ from collections import defaultdict
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, render
 
-from core.access import require
 from core.models import Term
 from courses.models import Course
 from students.models import Study
+from .apps import OVERSIGHT
 from .models import Program
 
 
@@ -37,16 +37,16 @@ def plan(tree, semesters):
     return rows
 
 
-@require('view_curriculum', 'teacher')
 def index(request):
     programs = list(Program.objects.annotate(size=Count('modules', filter=Q(modules__parent=None))).prefetch_related('subjects'))
-    counts = {(row['program'], row['status']): row['n'] for row in Study.objects.values('program', 'status').annotate(n=Count('pk'))}
-    for p in programs:  # counted apart: joining studies and modules in one query multiplies them
-        p.students, p.applicants = counts.get((p.pk, Study.Status.ENROLLED), 0), counts.get((p.pk, Study.Status.APPLIED), 0)
-    return render(request, 'curriculum/index.html', {'programs': programs})
+    figures = bool(request.user.roles & OVERSIGHT)
+    if figures:
+        counts = {(row['program'], row['status']): row['n'] for row in Study.objects.values('program', 'status').annotate(n=Count('pk'))}
+        for p in programs:  # counted apart: joining studies and modules in one query multiplies them
+            p.students, p.applicants = counts.get((p.pk, Study.Status.ENROLLED), 0), counts.get((p.pk, Study.Status.APPLIED), 0)
+    return render(request, 'curriculum/index.html', {'programs': programs, 'figures': figures})
 
 
-@require('view_curriculum', 'teacher')
 def program(request, pk):
     program = get_object_or_404(Program.objects.prefetch_related('subjects'), pk=pk)
     term = Term.current()
@@ -58,7 +58,8 @@ def program(request, pk):
     for row in rows:
         if row['kind'] == 'part':
             row['offers'] = sorted({c for i in row['items'] for c in offers[i.pk]}, key=lambda c: c.title)
+    figures = bool(request.user.roles & OVERSIGHT)
     return render(request, 'curriculum/program.html', {
         'program': program, 'rows': rows, 'semesters': range(1, program.semesters + 1), 'term': term, 'edit': 'edit_curriculum' in request.user.roles,
-        'total': sum(m.credits for m in tree), 'students': program.studies.filter(status='enrolled').count(),
+        'total': sum(m.credits for m in tree), 'figures': figures, 'students': figures and program.studies.filter(status='enrolled').count(),
     })

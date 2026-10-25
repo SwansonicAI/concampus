@@ -115,7 +115,6 @@ class CapabilityTest(Seeded):
             'manage_courses': '/lehre/neu/',
             'view_teaching_load': '/lehre/deputat/',
             'roll_over': '/lehre/semesterwechsel/',
-            'view_curriculum': '/studiengaenge/',
             'view_statistics': '/auswertungen/',
         }
 
@@ -219,8 +218,8 @@ class SearchTest(Seeded):
         self.assertTrue(student.get('/datum/', {'q': 'nächsten fr 9'}).json()['iso'])
 
     def test_any_form_of_a_word_and_what_is_sought(self):
-        groups = dict(found(Person.objects.get(username='lehre'), 'Studienpläne', 30))
-        self.assertIn('Studiengänge', [h['title'] for h in groups['Funktionen']])
+        groups = dict(found(Person.objects.get(username='student'), 'Studienpläne', 30))  # open to all, not only offices
+        self.assertLessEqual({'Studiengänge', 'Mein Studienplan Violine'}, {h['title'] for h in groups['Funktionen']})
         self.assertEqual(len(groups['Studiengänge']), Program.objects.count())
         rooms = {h['title'] for h in dict(found(Person.objects.get(username='lehre'), 'Räume Orgel', 30))['Räume']}
         self.assertLessEqual(set(Room.objects.filter(purpose__icontains='orgel').values_list('name', flat=True)), rooms)

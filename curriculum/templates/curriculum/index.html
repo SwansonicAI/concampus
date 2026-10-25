@@ -7,7 +7,7 @@
 </div>
 <p class="lead">Jeder Studiengang ist ein Baum aus Modulen. Pflicht und Wahl folgen aus den ECTS: Ein Bereich ist erfüllt, sobald seine bestandenen Module seine ECTS erreichen.</p>
 <table>
-  <thead><tr><th>Studiengang</th><th>Hauptfächer</th><th class="num">PO</th><th class="num">Semester</th><th class="num">Module</th><th class="num">Studierende</th><th class="num">Bewerbungen</th></tr></thead>
+  <thead><tr><th>Studiengang</th><th>Hauptfächer</th><th class="num">PO</th><th class="num">Semester</th><th class="num">Module</th>{% if figures %}<th class="num">Studierende</th><th class="num">Bewerbungen</th>{% endif %}</tr></thead>
   <tbody>
     {% for p in programs %}
     <tr>
@@ -16,8 +16,8 @@
       <td class="num">{{ p.version }}</td>
       <td class="num">{{ p.semesters }}</td>
       <td class="num">{{ p.size }}</td>
-      <td class="num">{{ p.students }}</td>
-      <td class="num">{{ p.applicants }}</td>
+      {% if figures %}<td class="num">{{ p.students }}</td>
+      <td class="num">{{ p.applicants }}</td>{% endif %}
     </tr>
     {% endfor %}
   </tbody>

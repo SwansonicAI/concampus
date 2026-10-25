@@ -26,7 +26,7 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
         ('roll_over', 'Semesterwechsel'),
     ]),
     ('Studiengänge', [
-        ('view_curriculum', 'Studiengänge einsehen'),
+        ('view_curriculum', 'Studiengänge mit Zahlen der Studierenden und Bewerbungen, als Kachel'),
         ('edit_curriculum', 'Studiengänge, Module und Hauptfächer bearbeiten'),
     ]),
     ('Räume', [

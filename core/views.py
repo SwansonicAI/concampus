@@ -195,12 +195,11 @@ def found(person, q, limit):
         papers |= Q(kind=Course.Kind.AUDITION)
     exams = courses.exclude(kind__in=teaching).filter(papers).distinct()
     groups.append(('Prüfungen', [hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in exams[:limit]]))
-    if roles & {'view_curriculum', 'teacher'}:
-        groups.append(('Studiengänge', [hit(str(p), p.get_absolute_url()) for p in matching(Program.objects.all(), q, 'name', 'degree', names='studiengang studienplan')[:limit]]))
-        groups.append(('Module', [
-            hit(f'{m.code} {m.title}', m.program.get_absolute_url(), str(m.program))
-            for m in matching(Module.objects.select_related('program'), q, 'code', 'title', names='modul')[:limit]
-        ]))
+    groups.append(('Studiengänge', [hit(str(p), p.get_absolute_url()) for p in matching(Program.objects.all(), q, 'name', 'degree', names='studiengang studienplan')[:limit]]))
+    groups.append(('Module', [
+        hit(f'{m.code} {m.title}', m.program.get_absolute_url(), str(m.program))
+        for m in matching(Module.objects.select_related('program'), q, 'code', 'title', names='modul')[:limit]
+    ]))
     if roles - {'applicant'}:
         groups.append(('Räume', [
             hit(r.name, reverse('rooms:room', args=[r.pk]), ' · '.join(filter(None, [r.purpose, r.building, f'{r.capacity} Plätze'])))
