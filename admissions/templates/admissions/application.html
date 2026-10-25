@@ -17,8 +17,8 @@
     <dt>E-Mail</dt><dd>{{ p.email }}</dd>
     <dt>Geschlecht</dt><dd>{{ p.get_gender_display|default:"–" }}</dd>
     <dt>Geboren</dt><dd>{{ p.birth_date|date:"j. F Y" }}{% if p.birth_place %} in {{ p.birth_place }}{% endif %}</dd>
-    <dt>Staatsangehörigkeit</dt><dd>{{ p.nationality|default:"–" }}{% if p.second_nationality %}, {{ p.second_nationality }}{% endif %}</dd>
-    <dt>Hochschulzugang</dt><dd>{{ p.get_entrance_display|default:"–" }}{% if p.entrance_date %}, {{ p.entrance_date|date:"j.n.Y" }}{% endif %}{% if p.entrance_place %}, {{ p.entrance_place }}{% endif %}</dd>
+    <dt>Staatsangehörigkeit</dt><dd>{{ p.get_nationality_display|default:"–" }}{% if p.second_nationality %}, {{ p.get_second_nationality_display }}{% endif %}</dd>
+    <dt>Hochschulzugang</dt><dd>{{ p.get_entrance_display|default:"–" }}{% if p.entrance_date %}, {{ p.entrance_date|date:"j.n.Y" }}{% endif %}{% if p.entrance_region %}, {{ p.get_entrance_region_display }}{% endif %}</dd>
     {% if p.insurer %}<dt>Krankenversicherung</dt><dd>{{ p.insurer }}{% if p.insurance %} · {{ p.get_insurance_display }}{% endif %}</dd>{% endif %}
     <dt>Wunschlehrer:in</dt><dd>{{ study.teacher|default:"–" }}</dd>
     {% if documents %}<dt>Bescheide</dt><dd>{% for d in documents %}<a href="{{ d.href }}">{{ d.title }}</a> <small class="muted">{{ d.created|date:"j.n.Y" }}</small><br>{% endfor %}</dd>{% endif %}

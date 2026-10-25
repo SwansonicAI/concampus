@@ -1,0 +1,27 @@
+{% extends base %}
+{% block title %}Amtliche Statistik{% endblock %}
+{% block subnav %}{% include "analytics/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Amtliche Statistik {{ term }}</h1>
+  <div class="actions">
+    <a class="btn" href="?semester={{ term.pk }}&amp;datei=studierende">Studierende ({{ report.students|length }})</a>
+    <a class="btn ghost" href="?semester={{ term.pk }}&amp;datei=pruefungen">Prüfungen ({{ report.examined|length }})</a>
+    <a class="btn ghost" href="?semester={{ term.pk }}&amp;datei=gasthoerer">Gasthörer ({{ report.guests|length }})</a>
+    <a class="btn ghost" href="?semester={{ term.pk }}&amp;datei=promovierende">Promovierende {{ report.year }} ({{ report.doctoral|length }})</a>
+  </div>
+</div>
+<p class="lead">Für das Statistische Landesamt, zum Hochladen in eSTATISTIK.core: Studierende und Prüfungen je Semester, Gasthörer und Promovierende (Stichtag 1. Dezember) je Jahr.</p>
+<form class="toolbar">
+  <div class="inline">
+    <label>Berichtssemester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+  </div>
+</form>
+<h2>Noch offen</h2>
+<ul class="todo">
+  {% for what, url in setup %}<li><a href="{{ url }}?next={{ request.get_full_path|urlencode }}" data-panel><span class="what">{{ what }}</span><span class="where">Einstellungen</span><span class="due"></span></a></li>{% endfor %}
+  {% for person, lacking in missing %}<li><a href="{% url 'setup:edit' 'personen' person.pk %}?next={{ request.get_full_path|urlencode }}" data-panel><span class="what">{{ person.name }}</span><span class="where">{{ lacking|join:" · " }}</span><span class="due">{{ person.matriculation|default:"" }}</span></a></li>
+  {% empty %}{% if not setup %}<li class="empty">Nichts: alle Dateien sind vollständig.</li>{% endif %}{% endfor %}
+</ul>
+{% if count > missing|length %}<p class="calm">{{ missing|length }} von {{ count }} Personen mit fehlenden Angaben.</p>{% endif %}
+{% endblock %}

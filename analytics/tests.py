@@ -1,3 +1,5 @@
+import csv
+import io
 import re
 from dataclasses import replace
 from html import unescape
@@ -5,8 +7,10 @@ from html import unescape
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
+from core import destatis
 from core.models import Term
 from core.testing import Seeded
+from students.models import Study
 from .figures import MEASURES, OTHERS, table, window
 
 
@@ -57,3 +61,23 @@ class AccessTest(Seeded):
         lines = asa.get('/auswertungen/abfrage/?was=bewerbungen&nach=studienjahr&und=ergebnis&darstellung=linien').context['chart']['data']
         self.assertEqual({s['label'] for s in lines['series']} >= {'abgelehnt', 'immatrikuliert'}, True)
         self.assertEqual({len(s['values']) for s in lines['series']}, {len(lines['x'])})
+
+
+class OfficialTest(Seeded):
+    def test_records_fit_the_layout_and_gaps_are_named(self):
+        asa, summer, winter = self.login('asa'), Term.objects.get(name='SoSe 2026'), Term.objects.get(name='WiSe 2026/27')
+        for term, key, layout in [
+            (winter, 'studierende', destatis.RECORD), (summer, 'pruefungen', destatis.RECORD), (winter, 'gasthoerer', destatis.GUESTS),
+            (winter, 'promovierende', destatis.DOCTORAL),
+        ]:
+            with self.subTest(file=key):
+                rows = list(csv.reader(io.StringIO(asa.get(f'/auswertungen/amtlich/?semester={term.pk}&datei={key}').content.decode()), delimiter=';'))
+                self.assertEqual(rows[0], [name for _, name, _ in layout])
+                self.assertTrue(rows[1:])
+                for row in rows[1:]:  # every value as long as its field, or empty
+                    self.assertEqual([len(value) in (0, length) for value, (_, _, length) in zip(row, layout, strict=True)], [True] * len(row))
+        term = summer
+        person = Study.objects.filter(status='enrolled', terms__term=term).first().person
+        person.home = ''
+        person.save()
+        self.assertContains(asa.get(f'/auswertungen/amtlich/?semester={term.pk}'), 'Heimatwohnsitz')

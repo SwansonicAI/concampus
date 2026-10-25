@@ -21,7 +21,7 @@ from django.utils import timezone
 
 from admissions.retention import forget, months_before
 from admissions.views import DECISIONS
-from core import history, texts
+from core import destatis, history, texts
 from core.models import Change, Holiday, Institute, Institution, Message, Office, Person, Term, Text
 from courses.models import Area, Course, Ensemble, Format, Participation, Score, Signup
 from courses.panel import mean
@@ -54,10 +54,20 @@ DEMO_VIDEO = (  # stand-in for every audition video: a real performance under CC
 VIDEO_SUBJECTS = {  # where the HfM's Eignungsprüfung starts with a video (Alles über die Eignungsprüfung)
     'Violine', 'Viola', 'Violoncello', 'Flöte', 'Oboe', 'Klarinette', 'Posaune', 'Schlagwerk', 'Gesang', 'Klavier', 'Jazz-Gesang', 'Orgel',
 }
-COUNTRIES = {
-    'chinesisch': 'China', 'südkoreanisch': 'Südkorea', 'japanisch': 'Japan', 'polnisch': 'Polen', 'italienisch': 'Italien', 'ukrainisch': 'Ukraine',
-    'österreichisch': 'Österreich', 'französisch': 'Frankreich', 'spanisch': 'Spanien', 'US-amerikanisch': 'USA',
+KREISE = {  # the Kreise of the German places students come from (core.destatis)
+    'Weimar': '16055', 'Erfurt': '16051', 'Jena': '16053', 'Leipzig': '14713', 'Dresden': '14612', 'Berlin': '11000', 'Hamburg': '02000',
+    'München': '09162', 'Köln': '05315', 'Halle (Saale)': '15002', 'Gotha': '16067', 'Kassel': '06611', 'Nürnberg': '09564',
 }
+OFFICIAL = {  # Abschlussprüfung, Studienart, Studienfach and Prüfungsamt of each degree, as the official statistics code them
+    'B.Mus.': ('83', '1', '', ''), 'M.Mus.': ('89', '7', '', ''), 'B.Ed.': ('38', '1', '113', ''), 'M.Ed.': ('64', '7', '113', ''),
+    'Staatsexamen': ('25', '1', '113', '5091601'), 'Diplom': ('73', '1', '193', ''), 'Konzertdiplom': ('71', '3', '', ''), 'Zertifikat': ('80', '3', '', ''),
+    'Dr. phil.': ('06', '5', '', ''), 'Gasthörerschaft': ('97', '9', '', ''),
+}
+SUBJECT_FIELDS = {  # Studienfach of each Hauptfach
+    **dict.fromkeys(STRINGS + WINDS, '165'), 'Gesang': '230', 'Jazz-Gesang': '164', 'Klavier': '080', 'Orgel': '080', 'Musikpädagogik': '113',
+    'Musikwissenschaft': '114', 'Kulturmanagement': '040',
+}
+EARLIER = ['2740', '2800', '2520', '2500', '2720', '2620', '0580']  # where postgraduates from Germany took their first degree
 HOLIDAYS = [  # Thuringia's public holidays in this year's terms and the Christmas break: name, first day, last day
     ('Tag der Deutschen Einheit', date(2026, 10, 3), None), ('Reformationstag', date(2026, 10, 31), None),
     ('Weihnachtspause', date(2026, 12, 21), date(2027, 1, 3)), ('Karfreitag', date(2027, 3, 26), None), ('Ostermontag', date(2027, 3, 29), None),
@@ -434,7 +444,7 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
     'ASA': [  # Akademische und Studentische Angelegenheiten
         'view_students', 'view_files', 'manage_students', 'manage_reregistration', 'message_students',
         'view_applications', 'decide_applications', 'run_auditions', 'manage_courses', 'view_teaching_load',
-        'view_curriculum', 'book_any_room', 'view_bookings', 'manage_terms', 'view_statistics',
+        'view_curriculum', 'book_any_room', 'view_bookings', 'manage_terms', 'view_statistics', 'report_statistics',
     ],
     'Prüfungsamt': [
         'view_files', 'manage_exams', 'decide_results', 'recognise', 'manage_courses', 'view_teaching_load',
@@ -494,18 +504,18 @@ ORIGINS = [  # weight, first names, last names, nationality, places
            'Mia', 'Ben', 'Emma', 'Finn', 'Sophie', 'Elias', 'Lina', 'Noah', 'Johanna', 'Theo', 'Charlotte', 'Anton', 'Helena', 'Karl', 'Mathilda', 'Julius', 'Paula', 'Henri', 'Luise', 'Jonathan'],
      ['Müller', 'Schmidt', 'Fischer', 'Hoffmann', 'Lehmann', 'Wagner', 'Richter', 'Klein', 'Wolf', 'Schröder', 'Schwarz', 'Zimmermann', 'Braun', 'Hartmann', 'Lange', 'Werner', 'Krause', 'Meier', 'Becker', 'Schulz', 'Koch', 'Bauer', 'Schäfer', 'Schmitt', 'Meyer', 'Walter', 'Graf', 'Kaiser', 'Sommer', 'Ernst', 'Kühn',
      'Nagel', 'Stein', 'Jäger', 'Otto', 'Simon', 'Berger', 'Frank', 'Thiele', 'Sauerbrey', 'Reinhardt', 'Ullrich', 'Kretschmer', 'Köhler', 'Herrmann', 'König', 'Fuchs', 'Peters', 'Möller', 'Jung', 'Hahn', 'Vogel', 'Friedrich', 'Günther', 'Winkler', 'Lorenz', 'Baumann', 'Franke', 'Schuster', 'Ludwig', 'Böhm', 'Winter', 'Seidel', 'Haas', 'Dietrich', 'Ziegler', 'Kuhn', 'Pohl', 'Busch', 'Bergmann', 'Voigt', 'Arnold', 'Pfeiffer'],
-     'deutsch', ['Weimar', 'Erfurt', 'Jena', 'Leipzig', 'Dresden', 'Berlin', 'Hamburg', 'München', 'Köln', 'Halle (Saale)', 'Gotha', 'Kassel', 'Nürnberg']),
+     '000', ['Weimar', 'Erfurt', 'Jena', 'Leipzig', 'Dresden', 'Berlin', 'Hamburg', 'München', 'Köln', 'Halle (Saale)', 'Gotha', 'Kassel', 'Nürnberg']),
     (2.5, ['Mei Lin', 'Yuxuan', 'Hao', 'Xinyi', 'Zihan', 'Jiayi', 'Yiming', 'Ruoxi', 'Haoran', 'Shuang', 'Wenjie', 'Qing'],
-     ['Chen', 'Wang', 'Li', 'Zhang', 'Liu', 'Zhao', 'Huang', 'Zhou', 'Wu', 'Xu', 'Sun', 'Ma'], 'chinesisch', ['Shanghai', 'Peking', 'Chengdu', 'Wuhan']),
-    (2, ['Hyun-woo', 'Ji-ho', 'Seo-yeon', 'Min-jun', 'Ha-eun', 'Ji-woo', 'Soo-ah', 'Do-yun'], ['Park', 'Kim', 'Lee', 'Choi', 'Yoon', 'Jung', 'Kang', 'Cho'], 'südkoreanisch', ['Seoul', 'Busan', 'Daegu']),
-    (1, ['Yuki', 'Aiko', 'Kaito', 'Haruka', 'Ren', 'Mio', 'Riku'], ['Tanaka', 'Sato', 'Suzuki', 'Takahashi', 'Ito', 'Yamamoto', 'Nakamura', 'Kobayashi'], 'japanisch', ['Tokio', 'Osaka', 'Nagoya']),
-    (1, ['Zofia', 'Tomasz', 'Marta', 'Jakub', 'Aleksandra', 'Julia', 'Piotr', 'Katarzyna'], ['Nowak', 'Mazur', 'Krawczyk', 'Kaczmarek', 'Wójcik'], 'polnisch', ['Krakau', 'Warschau', 'Breslau']),
-    (1, ['Chiara', 'Matteo', 'Valentina', 'Lorenzo', 'Giulia', 'Francesca', 'Alessandro', 'Sofia'], ['Rossi', 'Bianchi', 'Romano', 'Ricci', 'Marino', 'Colombo', 'Greco', 'Conti'], 'italienisch', ['Mailand', 'Rom', 'Turin', 'Bologna']),
-    (1, ['Daniil', 'Sofiia', 'Anastasiia', 'Artem', 'Kateryna', 'Oleksandr', 'Iryna', 'Yuliia'], ['Shevchenko', 'Bondarenko', 'Kovalenko', 'Tkachenko', 'Melnyk', 'Boyko', 'Kravchenko'], 'ukrainisch', ['Kyjiw', 'Lwiw', 'Odesa']),
-    (1, ['Lena', 'Florian', 'Magdalena', 'Sebastian', 'Theresa', 'Lorenz'], ['Gruber', 'Huber', 'Pichler', 'Steiner', 'Moser', 'Hofer'], 'österreichisch', ['Wien', 'Graz', 'Salzburg', 'Linz']),
-    (0.5, ['Camille', 'Louis', 'Léa', 'Hugo', 'Manon', 'Gabriel'], ['Moreau', 'Laurent', 'Lefebvre', 'Garnier', 'Bernard'], 'französisch', ['Paris', 'Lyon', 'Straßburg']),
-    (0.5, ['Lucía', 'Pablo', 'Carmen', 'Diego', 'Elena', 'Javier'], ['García', 'Fernández', 'López', 'Martínez', 'Sánchez'], 'spanisch', ['Madrid', 'Barcelona', 'Valencia']),
-    (0.5, ['Emily', 'Michael', 'Sarah', 'Daniel', 'Olivia', 'Ethan'], ['Smith', 'Johnson', 'Miller', 'Davis', 'Wilson'], 'US-amerikanisch', ['New York', 'Boston', 'Chicago']),
+     ['Chen', 'Wang', 'Li', 'Zhang', 'Liu', 'Zhao', 'Huang', 'Zhou', 'Wu', 'Xu', 'Sun', 'Ma'], '479', ['Shanghai', 'Peking', 'Chengdu', 'Wuhan']),
+    (2, ['Hyun-woo', 'Ji-ho', 'Seo-yeon', 'Min-jun', 'Ha-eun', 'Ji-woo', 'Soo-ah', 'Do-yun'], ['Park', 'Kim', 'Lee', 'Choi', 'Yoon', 'Jung', 'Kang', 'Cho'], '467', ['Seoul', 'Busan', 'Daegu']),
+    (1, ['Yuki', 'Aiko', 'Kaito', 'Haruka', 'Ren', 'Mio', 'Riku'], ['Tanaka', 'Sato', 'Suzuki', 'Takahashi', 'Ito', 'Yamamoto', 'Nakamura', 'Kobayashi'], '442', ['Tokio', 'Osaka', 'Nagoya']),
+    (1, ['Zofia', 'Tomasz', 'Marta', 'Jakub', 'Aleksandra', 'Julia', 'Piotr', 'Katarzyna'], ['Nowak', 'Mazur', 'Krawczyk', 'Kaczmarek', 'Wójcik'], '152', ['Krakau', 'Warschau', 'Breslau']),
+    (1, ['Chiara', 'Matteo', 'Valentina', 'Lorenzo', 'Giulia', 'Francesca', 'Alessandro', 'Sofia'], ['Rossi', 'Bianchi', 'Romano', 'Ricci', 'Marino', 'Colombo', 'Greco', 'Conti'], '137', ['Mailand', 'Rom', 'Turin', 'Bologna']),
+    (1, ['Daniil', 'Sofiia', 'Anastasiia', 'Artem', 'Kateryna', 'Oleksandr', 'Iryna', 'Yuliia'], ['Shevchenko', 'Bondarenko', 'Kovalenko', 'Tkachenko', 'Melnyk', 'Boyko', 'Kravchenko'], '166', ['Kyjiw', 'Lwiw', 'Odesa']),
+    (1, ['Lena', 'Florian', 'Magdalena', 'Sebastian', 'Theresa', 'Lorenz'], ['Gruber', 'Huber', 'Pichler', 'Steiner', 'Moser', 'Hofer'], '151', ['Wien', 'Graz', 'Salzburg', 'Linz']),
+    (0.5, ['Camille', 'Louis', 'Léa', 'Hugo', 'Manon', 'Gabriel'], ['Moreau', 'Laurent', 'Lefebvre', 'Garnier', 'Bernard'], '129', ['Paris', 'Lyon', 'Straßburg']),
+    (0.5, ['Lucía', 'Pablo', 'Carmen', 'Diego', 'Elena', 'Javier'], ['García', 'Fernández', 'López', 'Martínez', 'Sánchez'], '161', ['Madrid', 'Barcelona', 'Valencia']),
+    (0.5, ['Emily', 'Michael', 'Sarah', 'Daniel', 'Olivia', 'Ethan'], ['Smith', 'Johnson', 'Miller', 'Davis', 'Wilson'], '368', ['New York', 'Boston', 'Chicago']),
 ]
 INTAKE = {  # applications a year by Hauptfach as of 2026, admission rate, share of the summer round
     ('B.Mus.', 'Streichinstrumente und Harfe'): ({'Violine': 150, 'Viola': 50, 'Violoncello': 80, 'Kontrabass': 30, 'Harfe': 18}, 0.11, 0.25),
@@ -586,6 +596,19 @@ def lecturer(title):
     return next((key for start, key in sorted(LECTURERS.items(), key=lambda kv: -len(kv[0])) if title.startswith(start)), 'brandauer')
 
 
+def studied_before(person, study, semesters):
+    """A first degree elsewhere for someone starting a postgraduate study `semesters` after they first enrolled: in Germany,
+    or abroad for whoever came from there. A generator of its own leaves the rest of the demo as it was."""
+    pick, start = random.Random(person.username), study.start_term.start
+    person.first_university = person.degree_university = pick.choice(EARLIER) if person.nationality == '000' else destatis.ABROAD + person.nationality
+    k = start.year * 2 + (start.month > 6) - semesters
+    person.first_term = f'WiSe {k // 2}/{(k // 2 + 1) % 100:02d}' if k % 2 else f'SoSe {k // 2}'
+    person.degree_exam = {'M.Mus.': '83', 'M.Ed.': '38'}.get(study.program.degree, '89')
+    person.degree_field = study.program.field or study.subject.field
+    person.degree_date = start - timedelta(days=pick.randint(60, 100))
+    person.degree_grade = pick.choice('1122')
+
+
 class Command(BaseCommand):
     help = 'Fill an empty database with demo data (fictional people, HfM Weimar structure). Password for every account: demo.'
 
@@ -647,7 +670,7 @@ class Command(BaseCommand):
             name='Hochschule für Musik FRANZ LISZT Weimar', short_name='HfM Weimar', address='Platz der Demokratie 2/3\n99423 Weimar', place='Weimar',
             email='campus@hfm-weimar.de', website='https://www.hfm-weimar.de', imprint='https://www.hfm-weimar.de/footer/impressum',
             privacy='https://www.hfm-weimar.de/footer/datenschutz', accessibility='https://www.hfm-weimar.de/footer/barrierefreiheit',
-            insurers='\n'.join(INSURERS),
+            insurers='\n'.join(INSURERS), university='2850', region='16055', report_id='28500000',
         )
         Text.objects.bulk_create(Text(key=key, subject=texts.TEXTS[key].subject, body=body) for key, body in TEXTS.items())
         RoomFunction.objects.bulk_create(RoomFunction(key=key, name=name, central=central, order=n) for n, (key, name, central) in enumerate(FUNCTIONS))
@@ -663,7 +686,7 @@ class Command(BaseCommand):
             for key, items in INSTRUMENTS.items() for n, (name, maker, note, available) in enumerate(items, 1)
         ]
         self.subjects = {
-            name: Subject.objects.create(name=name, institute=self.institutes[SUBJECT_INSTITUTE[name]], english=SUBJECTS_EN[name])
+            name: Subject.objects.create(name=name, institute=self.institutes[SUBJECT_INSTITUTE[name]], english=SUBJECTS_EN[name], field=SUBJECT_FIELDS[name])
             for name in STRINGS + WINDS + ['Gesang', 'Jazz-Gesang', 'Klavier', 'Orgel'] + RESEARCH
         }
         self.programs, self.teach, self.first_course = {}, {}, {}
@@ -671,6 +694,7 @@ class Command(BaseCommand):
             program = Program.objects.create(
                 name=name, degree=degree, version=version, semesters=semesters, postgraduate=degree in POSTGRADUATE, honours=Decimal('1.0'),
                 thesis_weeks=THESIS_WEEKS.get(degree), **dict(zip(['qualification', 'english', 'level', 'outcomes'], SUPPLEMENT.get((degree, name), ()))),
+                **dict(zip(['exam', 'kind', 'field', 'exam_office'], OFFICIAL[degree])),
             )
             program.subjects.set(self.subjects[s] for s in subjects)
             self.build(program, plan)
@@ -785,19 +809,21 @@ class Command(BaseCommand):
         name = username or self.login(first, last)
         gender = 'd' if rng.random() < 0.004 else 'w' if first in FEMALE else 'm'
         born = date(year - age, rng.randint(1, 12), rng.randint(1, 28))
-        german = nationality == 'deutsch'
+        german = nationality == '000'
         talent = german and age < 19 and rng.random() < 0.5  # admitted for artistic talent, before the Abitur
-        return Person(
+        person = Person(
             username=name, first_name=first, last_name=last, password=self.password, email=f'{name}@stud.hfm-weimar.de', gender=gender,
             given_names=f'{first} {rng.choice(MIDDLE[gender])}' if german and gender in MIDDLE and rng.random() < 0.3 else '',
             birth_name=rng.choice(lasts) if age > 24 and gender == 'w' and rng.random() < 0.3 else '',
             birth_date=born, birth_place=rng.choice(places), nationality=nationality,
-            second_nationality='deutsch' if not german and rng.random() < 0.15 else '',
-            entrance=Person.Entrance.TALENT if talent else Person.Entrance.GENERAL if german else Person.Entrance.FOREIGN,
-            entrance_date=None if talent else date(born.year + 19, 6, rng.randint(20, 30)),
-            entrance_place='' if talent else f'{rng.choice(places)}, Deutschland' if german else COUNTRIES[nationality],
+            second_nationality='000' if not german and rng.random() < 0.15 else '', residence='16055',
+            entrance='33' if talent else '03' if german else '39',  # Eignungsprüfung here, Abitur, or a school abroad
+            entrance_date=date(year, 2, 20) if talent else date(born.year + 19, 6, rng.randint(20, 30)),
+            entrance_region='16055' if talent else KREISE[rng.choice(places)] if german else '99' + nationality,
             address=f'{rng.choice(["Marienstraße", "Steubenstraße", "Trierer Straße", "Humboldtstraße", "Bauhausstraße"])} {rng.randint(1, 60)}\n99423 Weimar',
         )
+        person.home = KREISE[person.birth_place] if german else '99' + nationality
+        return person
 
     def newcomer(self, username=None, first=None, last=None, origin=None):
         person = self.candidate(2026, self.rng.randint(19, 26), origin, first, last, username)
@@ -816,7 +842,7 @@ class Command(BaseCommand):
         """Every application since the first term, and the students they brought. Whoever studies now gets the full record
         (teaching() adds it); the past keeps what the statistics need: who applied, was admitted, graduated or left."""
         rng = self.rng
-        chen = next(o for o in ORIGINS if o[3] == 'chinesisch')
+        chen = next(o for o in ORIGINS if o[3] == '479')
         church = self.programs[('Diplom', 'Kirchenmusik A')]
         self.demo, organist = self.candidate(2024, 20, chen, 'Mei Lin', 'Chen', 'student'), self.candidate(2023, 20)
         self.applicant = self.candidate(2027, 19, ORIGINS[0], 'Jonas', 'Becker', 'bewerbung')
@@ -826,6 +852,9 @@ class Command(BaseCommand):
         def apply(person, program, subject, start, accepted, outcome=None):
             """One application; for whoever was admitted and accepted, the terms they were registered and how it ended."""
             study = Study(person=person, program=program, subject=self.subjects[subject], start_term=self.calendar[start], focus=rng.choice(foci[program] or [None]))
+            if program.kind == '5':  # a Promotion; a generator of its own leaves the rest of the demo as it was
+                pick = random.Random(person.username)
+                study.structured, study.employed, study.cumulative = pick.random() < 0.3, pick.random() < 0.4, pick.random() < 0.2
             study.terms_, study.leave_ = [], None
             if start > self.now:
                 study.status, study.since = Study.Status.APPLIED, date(2026, 10, rng.randint(1, 20))
@@ -845,6 +874,7 @@ class Command(BaseCommand):
                     study.status, study.since = Study.Status.ENROLLED, self.calendar[start].start
                 else:
                     study.status = Study.Status.GRADUATED if count >= program.semesters else Study.Status.LEFT
+                    study.exit_reason = '1' if count >= program.semesters else random.Random(person.username).choices('64728', [4, 4, 2, 1, 1])[0]
                     study.since = self.calendar[last].end
             else:
                 study.status = Study.Status.WAITLISTED if start == self.now and rng.random() < 0.03 else Study.Status.REJECTED
@@ -905,7 +935,9 @@ class Command(BaseCommand):
                 continue
             person.matriculation, number = str(number), number + 1
             if study.program.degree in POSTGRADUATE:
-                person.external_terms = rng.choice([6, 8, 10])  # earlier degree elsewhere
+                semesters = rng.choice([6, 8, 10])  # earlier degree elsewhere
+                person.external_terms = semesters if person.nationality == '000' else 0  # only German semesters count
+                studied_before(person, study, semesters)
         Person.objects.bulk_create(people, batch_size=2000)
 
         # Hauptfach classes of at most fourteen: Lehrbeauftragte take whoever the professors cannot
@@ -931,6 +963,7 @@ class Command(BaseCommand):
         StudyTerm.objects.bulk_create(  # paid at enrolment, then within each Rückmeldung period
             (StudyTerm(
                 study=study, term=term, leave=k == study.leave_,
+                leave_reason=random.Random(study.person.username).choice('41729') if k == study.leave_ else '',
                 paid=(term.start - timedelta(days=rng.randint(20, 60))) if k == study.terms_[0] else term.deadline - timedelta(days=rng.randint(0, 14)),
             ) for study in studies for k in study.terms_ for term in [self.calendar[k]]),
             batch_size=2000,
@@ -1462,7 +1495,7 @@ class Command(BaseCommand):
             handed = ['cv', 'school'] + ['degree'] * master
             if finished or study.since.day < 15 or study.person == applicant:  # the latest applicants still owe the fee receipt
                 handed.append('fee')
-            if study.person.nationality != 'deutsch' and rng.random() < 0.5:
+            if study.person.nationality != '000' and rng.random() < 0.5:
                 handed.append('language')
             if video:
                 documents.append(Document(person=study.person, study=study, kind_id='video', title=DEMO_VIDEO[0], url=DEMO_VIDEO[1], created=at(study.since, hour=11)))

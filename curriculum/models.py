@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
 
+from core import destatis
 from core.models import Tracked
 
 
@@ -35,6 +36,7 @@ class Subject(Tracked, models.Model):
     name = models.CharField('Name', max_length=80, unique=True)
     institute = models.ForeignKey('core.Institute', models.SET_NULL, null=True, blank=True, related_name='subjects', verbose_name='Institut')
     english = models.CharField('Englisch', max_length=80, blank=True, help_text='Für das Diploma Supplement.')
+    field = models.CharField('Studienfach', max_length=3, choices=destatis.fields, blank=True, help_text='Für die amtliche Statistik, z. B. Orchestermusik.')
 
     class Meta:
         ordering = ['name']
@@ -76,6 +78,18 @@ class Program(Tracked, models.Model):
     qualification = models.CharField('Abschluss ausgeschrieben', max_length=120, blank=True, help_text='Wie im Diploma Supplement, z. B. „Bachelor of Music (B.Mus.)“.')
     english = models.CharField('Studiengang auf Englisch', max_length=120, blank=True)
     outcomes = models.TextField('Lernergebnisse auf Englisch', blank=True, help_text='Abschnitt 4.2 des Diploma Supplement.')
+    exam = models.CharField('Abschlussprüfung', max_length=2, choices=destatis.degrees, blank=True, help_text='Für die amtliche Statistik.')
+    kind = models.CharField(
+        'Studienart', max_length=1, choices=destatis.KINDS, default='1',
+        help_text='Für die amtliche Statistik; wer schon einen Abschluss hat, studiert ein Erststudium als Zweitstudium.',
+    )
+    field = models.CharField(
+        'Studienfach', max_length=3, choices=destatis.fields, blank=True, help_text='Für die amtliche Statistik; leer: das des Hauptfachs.',
+    )
+    exam_office = models.CharField(
+        'Schlüssel des Prüfungsamts', max_length=7, blank=True,
+        help_text='Für die amtliche Statistik, siebenstellig, z. B. 5091601 für das Landesprüfungsamt in Thüringen; leer: das der Hochschule.',
+    )
 
     class Meta:
         ordering = ['-degree', 'name', '-version']

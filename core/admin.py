@@ -9,8 +9,9 @@ admin.site.has_permission = lambda request: request.user.is_active and request.u
 @admin.register(Person)
 class PersonAdmin(UserAdmin):
     fieldsets = UserAdmin.fieldsets + (
-        ('Person', {'fields': ['title', 'given_names', 'birth_name', 'gender', 'birth_date', 'birth_place', 'nationality', 'second_nationality', 'address']}),
-        ('Hochschulzugang', {'fields': ['entrance', 'entrance_date', 'entrance_place', 'external_terms']}),
+        ('Person', {'fields': ['title', 'given_names', 'birth_name', 'gender', 'birth_date', 'birth_place', 'nationality', 'second_nationality', 'address', 'home', 'residence']}),
+        ('Hochschulzugang', {'fields': ['entrance', 'entrance_date', 'entrance_region', 'first_university', 'first_term', 'external_terms']}),
+        ('Letzter Abschluss', {'fields': ['degree_university', 'degree_exam', 'degree_field', 'degree_date', 'degree_grade', 'vocational', 'internship']}),
         ('Krankenversicherung', {'fields': ['insurer', 'insurance', 'insurance_confirmed']}),
         ('Hochschule', {'fields': ['matriculation', 'hold']}),
     )

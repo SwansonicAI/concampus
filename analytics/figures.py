@@ -10,7 +10,9 @@ from django.db.models.functions import Coalesce, ExtractIsoWeekDay, ExtractYear
 from django.db.models.lookups import GreaterThan, LessThan
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.choices import flatten_choices
 
+from core import destatis
 from core.models import Institute, Person, Term
 from courses.models import Course, Participation
 from curriculum.models import Program, Subject
@@ -86,10 +88,10 @@ def of_study(to=''):
         'institut': Dimension('Institut', f'{p}subject__institute', named(Institute)),
         'geschlecht': Dimension('Geschlecht', f'{p}person__gender', listed(Person.Gender.choices)),
         'herkunft': Dimension('Staatsangehörigkeit', expression=Case(
-            When(**{f'{p}person__nationality': 'deutsch'}, then=Value('deutsch')), default=Value('international'), output_field=CharField(),
+            When(**{f'{p}person__nationality': '000'}, then=Value('deutsch')), default=Value('international'), output_field=CharField(),
         )),
-        'staat': Dimension('Staatsangehörigkeit (einzeln)', f'{p}person__nationality', top=10),
-        'zugang': Dimension('Hochschulzugang', f'{p}person__entrance', listed(Person.Entrance.choices)),
+        'staat': Dimension('Staatsangehörigkeit (einzeln)', f'{p}person__nationality', listed(destatis.COUNTRIES), top=10),
+        'zugang': Dimension('Hochschulzugang', f'{p}person__entrance', listed(flatten_choices(destatis.ENTRANCE)), top=8),
     }
 
 

@@ -67,7 +67,7 @@ def checklist(study, types=None):
         Condition.VIDEO: video,
         Condition.DEGREE: study.program.postgraduate,
         Condition.MINOR: bool(person.birth_date) and (today - person.birth_date).days < 18 * 365.25,
-        Condition.FOREIGN: person.nationality != 'deutsch',
+        Condition.FOREIGN: person.nationality != '000',
     }
     return [
         {'kind': t, 'label': t.name, 'note': t.note, 'required': t.required, 'documents': handed[t.key]}
@@ -341,7 +341,7 @@ def signup(request):
 
 def apply(request):
     person = request.user
-    entrance = ['entrance', 'entrance_date', 'entrance_place']
+    entrance = ['entrance', 'entrance_date', 'entrance_region']
     form = ApplicationForm(request.POST or None, request.FILES or None, initial={field: getattr(person, field) for field in entrance})
     if form.is_valid():
         data, audition = form.cleaned_data, form.cleaned_data['audition']
@@ -387,7 +387,7 @@ def mine(request):
         study.deadline = next((p.course.deadline for p in study.stages if p.course.program_id), None)
         study.stages = list(study.stages)
     return render(request, 'admissions/mine.html', {
-        'studies': studies, 'documents': person.documents.exclude(message=None), 'accept': AcceptForm(),
+        'studies': studies, 'documents': person.documents.exclude(message=None), 'accept': AcceptForm(instance=person),
         'insurers': Institution.get().insurers.splitlines(),
     })
 
@@ -496,13 +496,11 @@ def accept(request, pk):
     if accept_by(study, Institution.get().accept_days) < timezone.localdate():
         messages.error(request, 'Die Frist zur Annahme ist abgelaufen.')
         return redirect('admissions:mine')
-    form = AcceptForm(request.POST)
+    form = AcceptForm(request.POST, instance=request.user)
     if not form.is_valid():
-        messages.error(request, 'Bitte Krankenkasse und Versicherungsstatus angeben.')
+        messages.error(request, ' '.join(e for errors in form.errors.values() for e in errors))
         return redirect('admissions:mine')
-    person = request.user
-    person.insurer, person.insurance = form.cleaned_data['insurer'], form.cleaned_data['insurance']
-    person.save(update_fields=['insurer', 'insurance'])
+    person = form.save()
     StudyTerm.objects.get_or_create(study=study, term=study.start_term)
     texts.send('studienplatz_angenommen', person, beitrag=number_format(study.start_term.fee, 2), frist=f'{study.start_term.deadline:%d.%m.%Y}')
     messages.success(request, 'Studienplatz angenommen.')

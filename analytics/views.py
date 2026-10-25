@@ -1,17 +1,20 @@
-"""Auswertungen: how the Hochschule is doing at a glance, a free query over everything counted, and the records
-behind any number for whoever may see them."""
+"""Auswertungen: how the Hochschule is doing at a glance, a free query over everything counted, the records behind any
+number for whoever may see them, and the official statistics for the Statistisches Landesamt."""
 import csv
 
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
 from django.shortcuts import render
+from django.utils import timezone
 from django.utils.formats import number_format
+from django.utils.text import slugify
 
 from core.access import require
 from core.models import Term
 from core.views import SHOWN, without_term
 from .charts import SPANS, Query, chart, label, lines
 from .figures import MEASURES, narrowed, semesters, table
+from .official import Report
 from .overview import overview
 
 
@@ -54,6 +57,24 @@ def export(q):
         writer.writerows([label, *(t.cells.get((r, c), 0) for c in t.cols), t.row_totals.get(r, 0)] for r, label in t.rows.items())
     writer.writerow(['Gesamt', *(t.col_totals.get(c, 0) for c in t.cols), t.total] if len(q.keys) > 1 else ['Gesamt', t.total])
     return response
+
+
+@require('report_statistics')
+def official(request):
+    """Amtliche Statistik of a Berichtssemester: what is still missing, and the two files for the Statistisches Landesamt."""
+    terms = list(Term.objects.filter(start__lte=timezone.localdate()).order_by('-start')[:6])
+    if not terms:
+        return without_term(request, 'mindestens ein Semester')
+    term = next((t for t in terms if str(t.pk) == request.GET.get('semester')), terms[0])
+    report = Report(term)
+    if (kind := request.GET.get('datei')) in report.files:
+        response = HttpResponse(report.csv(kind), content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = f'attachment; filename="{kind}-{report.year if kind == "promovierende" else slugify(term.name)}.csv"'
+        return response
+    missing = sorted(report.missing.items(), key=lambda item: item[0].name)
+    return render(request, 'analytics/official.html', {
+        'report': report, 'term': term, 'terms': terms, 'setup': report.setup.items(), 'missing': missing[:SHOWN], 'count': len(missing),
+    })
 
 
 @require('view_statistics')

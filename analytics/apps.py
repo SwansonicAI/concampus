@@ -31,12 +31,15 @@ class AnalyticsConfig(Tile, AppConfig):
         return found
 
     def features(self, person):
+        found = [
+            feature('Amtliche Statistik', reverse('analytics:official'), 'statistisches landesamt destatis studierendenstatistik prüfungsstatistik lieferung estatistik'),
+        ] if 'report_statistics' in person.roles else []
         if not self.title(person.roles):
-            return []
+            return found
         from .charts import Query
         from .figures import MEASURES
 
-        return [
+        return found + [
             feature('Auswertungen', reverse('analytics:index'), 'statistik kennzahlen überblick zahlen entwicklung trend diagramm bericht'),
             feature('Abfrage', reverse('analytics:query'), 'auswertung statistik zählen kreuztabelle pivot export csv'),
             *(feature(f'{m.title} auswerten', Query(m, [m.default]).url(), f'statistik zahlen {m.title.lower()}') for m in MEASURES.values()),

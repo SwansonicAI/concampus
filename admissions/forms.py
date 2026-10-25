@@ -3,6 +3,7 @@ from django.contrib.auth.forms import BaseUserCreationForm
 from django.db import models
 from django.utils import timezone
 
+from core import destatis
 from core.dates import DayField
 from core.models import Person
 from courses.models import Course
@@ -46,9 +47,12 @@ class ApplicationForm(forms.Form):
         label='Prüfungsprogramm', widget=forms.Textarea(attrs={'rows': 5}),
         help_text='Werke mit Komponist:in, Satz und ungefährer Dauer.',
     )
-    entrance = forms.ChoiceField(label='Hochschulzugangsberechtigung', choices=[('', 'Noch nicht erworben')] + Person.Entrance.choices, required=False)
+    entrance = forms.ChoiceField(
+        label='Hochschulzugangsberechtigung', choices=[('', 'Noch nicht erworben')] + destatis.ENTRANCE, required=False,
+        help_text='Die erste, mit der ein Studium in Deutschland möglich war.',
+    )
     entrance_date = DayField(label='Erworben am', required=False, widget=forms.DateInput(format='%d.%m.%Y', attrs={'data-day': '', 'placeholder': 'TT.MM.JJJJ'}))
-    entrance_place = forms.CharField(label='Erworben in', required=False, help_text='Kreis und Land, im Ausland der Staat.')
+    entrance_region = forms.ChoiceField(label='Erworben in', choices=[('', '–')] + destatis.places(), required=False, help_text='Kreis, im Ausland der Staat.')
     accompanist = forms.BooleanField(label='Ich wünsche Korrepetition für die Prüfung.', required=False)
     declaration = forms.BooleanField(
         label='Ich versichere, dass meine Angaben vollständig und richtig sind.', help_text='Ersetzt den unterschriebenen Bewerbungsantrag.',
@@ -65,6 +69,27 @@ class ApplicationForm(forms.Form):
 
 
 
-class AcceptForm(forms.Form):
-    insurer = forms.CharField(label='Krankenkasse', max_length=80, widget=forms.TextInput(attrs={'list': 'insurers'}))
-    insurance = forms.ChoiceField(label='Versicherungsstatus', choices=Person.Insurance.choices)
+class AcceptForm(forms.ModelForm):
+    """Immatrikulationsantrag: the health insurance, and what the official statistics ask about where the person lives and
+    studied before."""
+
+    degree_date = DayField(label='Abgeschlossen am', required=False, widget=forms.DateInput(format='%d.%m.%Y', attrs={'data-day': '', 'placeholder': 'TT.MM.JJJJ'}))
+
+    class Meta:
+        model = Person
+        fields = [
+            'insurer', 'insurance', 'home', 'residence', 'first_university', 'first_term', 'external_terms',
+            'degree_university', 'degree_exam', 'degree_field', 'degree_date', 'degree_grade', 'vocational', 'internship',
+        ]
+        widgets = {'insurer': forms.TextInput(attrs={'list': 'insurers'})}
+        help_texts = {
+            'first_university': 'Wo Sie zum ersten Mal studiert haben; leer, wenn Sie jetzt zum ersten Mal studieren.',
+            'first_term': 'Z. B. WiSe 2019/20; leer, wenn Sie jetzt zum ersten Mal studieren.',
+            'external_terms': 'An anderen deutschen Hochschulen, Urlaubssemester eingeschlossen.',
+            'degree_university': 'Nur wenn Sie schon einen Hochschulabschluss haben.',
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for field in ['insurer', 'insurance', 'home']:
+            self.fields[field].required = True

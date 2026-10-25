@@ -141,9 +141,10 @@ EDITORS = {e.key: e for e in [
         fields=[
             'name', 'short_name', 'address', 'place', 'email', 'website', 'imprint', 'privacy', 'accessibility',
             'matriculation_start', 'accept_days', 'retention_months', 'signup', 'insurers',
-            'student_daily_hours', 'student_ahead_hours', 'last_minute_hours', 'teacher_ahead_days',
+            'student_daily_hours', 'student_ahead_hours', 'last_minute_hours', 'teacher_ahead_days', 'university', 'region', 'report_id',
         ],
-        columns=[('Name', 'name'), ('Ort', 'place')], words='hochschuldaten anschrift regeln buchungsregeln matrikelnummer fristen löschfristen datenschutz',
+        columns=[('Name', 'name'), ('Ort', 'place')],
+        words='hochschuldaten anschrift regeln buchungsregeln matrikelnummer fristen löschfristen datenschutz hochschulnummer statistik landesamt',
     ),
     Editor(
         'aemter', Office, 'Ämter und Rechte', 'manage_accounts', 'Verwaltung', form=OfficeForm,
@@ -177,17 +178,18 @@ EDITORS = {e.key: e for e in [
         'personen', Person, 'Stammdaten', 'manage_students', deletable=False,
         fields=[
             'title', 'first_name', 'given_names', 'last_name', 'birth_name', 'gender', 'birth_date', 'birth_place', 'nationality',
-            'second_nationality', 'address', 'email', 'entrance', 'entrance_date', 'entrance_place', 'external_terms', 'insurer', 'insurance',
+            'second_nationality', 'address', 'home', 'residence', 'email', 'entrance', 'entrance_date', 'entrance_region', 'first_university', 'first_term',
+            'external_terms', 'degree_university', 'degree_exam', 'degree_field', 'degree_date', 'degree_grade', 'vocational', 'internship', 'insurer', 'insurance',
         ],
     ),
     Editor(
         'studiengaenge', Program, 'Studiengänge', 'edit_curriculum', 'Studium und Lehre',
         fields=[
             'degree', 'name', 'version', 'semesters', 'subjects', 'postgraduate', 'attempts', 'rounding', 'mean_rounding', 'honours', 'thesis_weeks',
-            'level', 'qualification', 'english', 'outcomes',
+            'level', 'qualification', 'english', 'outcomes', 'exam', 'kind', 'field', 'exam_office',
         ],
         columns=[('Abschluss', 'degree'), ('Studiengang', 'name'), ('PO-Version', 'version'), ('Regelstudienzeit', 'semesters')],
-        search=['degree', 'name'], words='prüfungsordnung po fpso diploma supplement abschlussarbeit bearbeitungszeit',
+        search=['degree', 'name'], words='prüfungsordnung po fpso diploma supplement abschlussarbeit bearbeitungszeit statistik abschlussprüfung studienfach',
     ),
     Editor('module', Module, 'Module', 'edit_curriculum', form=ModuleForm, new=new_module),
     Editor(
@@ -199,7 +201,7 @@ EDITORS = {e.key: e for e in [
         columns=[('Lehrform', 'name'), ('Kürzel', 'short')], search=['name', 'short'], words='vorlesung seminar übung einzelunterricht veranstaltungsart',
     ),
     Editor(
-        'hauptfaecher', Subject, 'Hauptfächer', 'edit_curriculum', 'Studium und Lehre', fields=['name', 'institute', 'english'],
+        'hauptfaecher', Subject, 'Hauptfächer', 'edit_curriculum', 'Studium und Lehre', fields=['name', 'institute', 'english', 'field'],
         columns=[('Hauptfach', 'name'), ('Institut', 'institute')], search=['name'], queryset=lambda: Subject.objects.select_related('institute'),
     ),
     Editor('studien', Study, 'Studium', 'manage_students', form=StudyForm, deletable=False),

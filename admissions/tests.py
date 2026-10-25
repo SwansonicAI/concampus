@@ -30,7 +30,7 @@ class DecisionTest(Seeded):
         applicant = Client()
         applicant.force_login(study.person)
         self.assertTrue(flashes(applicant.post(f'/aufnahme/meine/{study.pk}/annahme/', {'decision': 'yes'}, follow=True)))
-        applicant.post(f'/aufnahme/meine/{study.pk}/annahme/', {'decision': 'yes', 'insurer': 'BARMER', 'insurance': 'gesetzlich'})
+        applicant.post(f'/aufnahme/meine/{study.pk}/annahme/', {'decision': 'yes', 'insurer': 'BARMER', 'insurance': 'gesetzlich', 'home': '16055', 'external_terms': 0})
         study.person.refresh_from_db()
         self.assertEqual(study.person.insurer, 'BARMER')
         self.assertTrue(StudyTerm.objects.filter(study=study).exists())
@@ -46,7 +46,7 @@ class MoveUpTest(Seeded):
         intake, (late,), (behind,) = vacancies(term, Person.objects.get(username='asa'))[0]
         applicant = Client()
         applicant.force_login(late.person)
-        applicant.post(f'/aufnahme/meine/{late.pk}/annahme/', {'decision': 'yes', 'insurer': 'BARMER', 'insurance': 'gesetzlich'})
+        applicant.post(f'/aufnahme/meine/{late.pk}/annahme/', {'decision': 'yes', 'insurer': 'BARMER', 'insurance': 'gesetzlich', 'home': '16055', 'external_terms': 0})
         self.assertFalse(late.terms.exists())
         self.login('asa').post(f'/aufnahme/pruefung/{intake.pk}/nachruecken/')
         self.assertEqual(Study.objects.get(pk=late.pk).status, Study.Status.LEFT)
@@ -60,7 +60,7 @@ class ApplicationTest(Seeded):
         anon = Client()
         r = anon.post('/aufnahme/konto/', {
             'first_name': 'Ida', 'last_name': 'Testfall', 'email': 'ida@example.org', 'gender': 'w', 'birth_date': '2005-05-05',
-            'birth_place': 'Erfurt', 'nationality': 'deutsch', 'password1': 'Geige-Weimar-2026', 'password2': 'Geige-Weimar-2026',
+            'birth_place': 'Erfurt', 'nationality': '000', 'password1': 'Geige-Weimar-2026', 'password2': 'Geige-Weimar-2026',
         }, follow=True)
         audition = r.context['form'].fields['audition'].queryset.filter(video=True).first()
         anon.post('/aufnahme/bewerben/', {'audition': audition.pk, 'repertoire': 'Bach, Partita Nr. 2', 'accompanist': 'on', 'declaration': 'on'})

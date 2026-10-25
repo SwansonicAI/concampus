@@ -4,6 +4,7 @@ from django.apps import apps
 from django.contrib.auth.models import AbstractUser, Group
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
+from django.core.validators import RegexValidator
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models, transaction
 from django.urls import reverse
@@ -11,6 +12,7 @@ from django.utils import timezone
 from django.utils.functional import cached_property
 from django.utils.text import slugify
 
+from . import destatis
 from .access import CAPABILITIES, CODENAMES
 
 
@@ -85,6 +87,11 @@ class Institution(Tracked, models.Model):
     privacy = models.URLField('Datenschutz', blank=True)
     accessibility = models.URLField('Barrierefreiheit', blank=True)
     matriculation_start = models.PositiveIntegerField('Erste Matrikelnummer', default=100001, help_text='Danach fortlaufend.')
+    university = models.CharField(
+        'Hochschulnummer', max_length=4, choices=destatis.german, blank=True, help_text='Für die amtliche Statistik, aus dem Schlüsselverzeichnis.',
+    )
+    region = models.CharField('Kreis', max_length=5, choices=destatis.districts, blank=True, help_text='Sitz der Hochschule, für die amtliche Statistik.')
+    report_id = models.CharField('BerichtseinheitID', max_length=8, blank=True, help_text='Vom Statistischen Landesamt vergeben, für die Lieferung.')
     accept_days = models.PositiveSmallIntegerField('Frist zur Annahme eines Studienplatzes (Tage)', default=14)
     retention_months = models.PositiveSmallIntegerField(
         'Bewerbungen ohne Studium aufbewahren (Monate)', default=6,
@@ -142,13 +149,6 @@ class Person(Tracked, AbstractUser):
         DIVERSE = 'd', 'divers'
         UNSTATED = 'x', 'ohne Angabe'
 
-    class Entrance(models.TextChoices):
-        GENERAL = 'ahr', 'Allgemeine Hochschulreife'
-        SUBJECT = 'fgh', 'Fachgebundene Hochschulreife'
-        FOREIGN = 'ausland', 'Ausländische Hochschulzugangsberechtigung'
-        TALENT = 'begabung', 'Besondere künstlerische Begabung, ohne Hochschulreife'
-        VOCATIONAL = 'beruf', 'Beruflich qualifiziert'
-
     class Insurance(models.TextChoices):
         STATUTORY = 'gesetzlich', 'gesetzlich versichert'
         EXEMPT = 'befreit', 'von der Versicherungspflicht befreit'
@@ -159,13 +159,34 @@ class Person(Tracked, AbstractUser):
     gender = models.CharField('Geschlecht', max_length=1, choices=Gender, blank=True)
     birth_date = models.DateField('Geburtsdatum', null=True, blank=True)
     birth_place = models.CharField('Geburtsort', max_length=80, blank=True)
-    nationality = models.CharField('Staatsangehörigkeit', max_length=60, blank=True)
-    second_nationality = models.CharField('Weitere Staatsangehörigkeit', max_length=60, blank=True)
+    nationality = models.CharField('Staatsangehörigkeit', max_length=60, choices=destatis.countries, blank=True)
+    second_nationality = models.CharField('Weitere Staatsangehörigkeit', max_length=60, choices=destatis.countries, blank=True)
     address = models.TextField('Anschrift', blank=True)
-    entrance = models.CharField('Hochschulzugangsberechtigung', max_length=10, choices=Entrance, blank=True)
+    home = models.CharField('Heimatwohnsitz', max_length=5, choices=destatis.places, blank=True, help_text='Kreis, im Ausland der Staat.')
+    residence = models.CharField('Semesterwohnsitz', max_length=5, choices=destatis.places, blank=True, help_text='Während der Vorlesungszeit; leer: wie der Heimatwohnsitz.')
+    entrance = models.CharField(
+        'Hochschulzugangsberechtigung', max_length=10, choices=destatis.ENTRANCE, blank=True,
+        help_text='Die erste, mit der ein Studium in Deutschland möglich war.',
+    )
     entrance_date = models.DateField('Erworben am', null=True, blank=True)
-    entrance_place = models.CharField('Erworben in', max_length=80, blank=True, help_text='Kreis und Land, im Ausland der Staat.')
-    external_terms = models.PositiveSmallIntegerField('Semester an anderen Hochschulen', default=0, help_text='Zählen zu den Hochschulsemestern.')
+    entrance_region = models.CharField('Erworben in', max_length=5, choices=destatis.places, blank=True, help_text='Kreis, im Ausland der Staat.')
+    first_university = models.CharField(
+        'Hochschule der Ersteinschreibung', max_length=7, choices=destatis.universities, blank=True, help_text='Leer: diese Hochschule.',
+    )
+    first_term = models.CharField(
+        'Semester der Ersteinschreibung', max_length=12, blank=True, help_text='Z. B. WiSe 2019/20 oder SoSe 2020; leer: das erste Semester hier.',
+        validators=[RegexValidator(r'^(WiSe \d{4}/\d{2}|SoSe \d{4})$', 'Z. B. WiSe 2019/20 oder SoSe 2020.')],
+    )
+    external_terms = models.PositiveSmallIntegerField('Semester an anderen deutschen Hochschulen', default=0, help_text='Zählen zu den Hochschulsemestern.')
+    degree_university = models.CharField(
+        'Hochschule des letzten Abschlusses', max_length=7, choices=destatis.universities, blank=True, help_text='Nur für einen Abschluss anderswo.',
+    )
+    degree_exam = models.CharField('Letzter Abschluss', max_length=2, choices=destatis.degrees, blank=True)
+    degree_field = models.CharField('Im Studienfach', max_length=3, choices=destatis.fields, blank=True)
+    degree_date = models.DateField('Abgeschlossen am', null=True, blank=True)
+    degree_grade = models.CharField('Gesamtnote', max_length=1, choices=destatis.GRADES, blank=True)
+    vocational = models.BooleanField('Berufsausbildung mit Abschluss vor dem Studium', default=False)
+    internship = models.BooleanField('Praktikum oder Volontariat für dieses Studium', default=False)
     insurer = models.CharField('Krankenkasse', max_length=80, blank=True)
     insurance = models.CharField('Versicherungsstatus', max_length=10, choices=Insurance, blank=True)
     insurance_confirmed = models.DateField(

@@ -33,10 +33,10 @@
       {% if p.birth_name %}<dt>Geburtsname</dt><dd>{{ p.birth_name }}</dd>{% endif %}
       <dt>Geschlecht</dt><dd>{{ p.get_gender_display|default:"–" }}</dd>
       <dt>Geboren</dt><dd>{{ p.birth_date|date:"j. F Y"|default:"–" }}{% if p.birth_place %} in {{ p.birth_place }}{% endif %}</dd>
-      <dt>Staatsangehörigkeit</dt><dd>{{ p.nationality|default:"–" }}{% if p.second_nationality %}, {{ p.second_nationality }}{% endif %}</dd>
+      <dt>Staatsangehörigkeit</dt><dd>{{ p.get_nationality_display|default:"–" }}{% if p.second_nationality %}, {{ p.get_second_nationality_display }}{% endif %}</dd>
       <dt>E-Mail</dt><dd>{{ p.email }}</dd>
       <dt>Anschrift</dt><dd>{{ p.address|linebreaksbr|default:"–" }}</dd>
-      <dt>Hochschulzugang</dt><dd>{{ p.get_entrance_display|default:"–" }}{% if p.entrance_date %}, {{ p.entrance_date|date:"j.n.Y" }}{% endif %}{% if p.entrance_place %}, {{ p.entrance_place }}{% endif %}</dd>
+      <dt>Hochschulzugang</dt><dd>{{ p.get_entrance_display|default:"–" }}{% if p.entrance_date %}, {{ p.entrance_date|date:"j.n.Y" }}{% endif %}{% if p.entrance_region %}, {{ p.get_entrance_region_display }}{% endif %}</dd>
       <dt>Krankenversicherung</dt>
       <dd>
         {{ p.insurer|default:"–" }}{% if p.insurance %} · {{ p.get_insurance_display }}{% endif %}<br>
@@ -58,7 +58,11 @@
     <h2>Rückmeldung {{ upcoming }}</h2>
     <p>{% if paid and not missing %}<span class="badge green">zurückgemeldet</span>{% elif paid %}<span class="badge wait">bezahlt</span>{% elif upcoming.reregistration_open %}<span class="badge wait">offen</span> Semesterbeitrag {{ upcoming.fee }} € bis {{ upcoming.deadline|date:"j. F Y" }}{% else %}Semesterbeitrag {{ upcoming.fee }} € vom {{ upcoming.reregistration_start|date:"j. F" }} bis {{ upcoming.deadline|date:"j. F Y" }}{% endif %}{% if next.leave %} · <span class="badge">Urlaubssemester</span>{% endif %}</p>
     {% if missing %}<p class="fail">Für die Rückmeldung fehlt noch: {{ missing|join:" · " }}</p>{% endif %}
-    <form method="post" action="{% url 'students:leave' study.pk %}">{% csrf_token %}<button class="btn ghost small">{% if next.leave %}Urlaubssemester zurücknehmen{% else %}Urlaubssemester {% if own %}beantragen{% else %}eintragen{% endif %}{% endif %}</button></form>
+    <form method="post" action="{% url 'students:leave' study.pk %}" class="inline">
+      {% csrf_token %}
+      {% if not next.leave %}<label>Grund<select name="reason" required><option value="">–</option>{% for code, name in leaves %}<option value="{{ code }}">{{ name }}</option>{% endfor %}</select></label>{% endif %}
+      <button class="btn ghost small">{% if next.leave %}Urlaubssemester zurücknehmen{% else %}Urlaubssemester {% if own %}beantragen{% else %}eintragen{% endif %}{% endif %}</button>
+    </form>
     {% endif %}
     {% if office %}
     <div class="panel" style="margin-top: 28px">
@@ -68,7 +72,7 @@
       {% elif study.status == 'enrolled' %}
       <form method="post" action="{% url 'students:exmatriculate' study.pk %}" class="inline">
         {% csrf_token %}
-        <label>Exmatrikulation<select name="reason"><option value="graduated">Abschluss</option><option value="left">Abbruch / Wechsel</option></select></label>
+        <label>Exmatrikulation<select name="reason" required><option value="">Grund wählen</option>{% for code, name in exits %}<option value="{{ code }}">{{ name }}</option>{% endfor %}</select></label>
         <button class="btn danger">Exmatrikulieren</button>
       </form>
       <form method="post" action="{% url 'students:change' study.pk %}" class="inline" style="margin-top: 16px">

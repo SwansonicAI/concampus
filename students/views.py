@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from core import texts
+from core import destatis, texts
 from core.access import require
 from core.history import tables
 from core.apps import plural
@@ -81,7 +81,7 @@ def roster(request):
         writer.writerow(['Matrikel', 'Nachname', 'Vorname', 'Geschlecht', 'Staatsangehörigkeit', 'E-Mail', 'Studiengang', 'Hauptfach', 'Fachsemester', 'Status'])
         for s in studies:
             writer.writerow([
-                s.person.matriculation, s.person.last_name, s.person.first_name, s.person.get_gender_display(), s.person.nationality,
+                s.person.matriculation, s.person.last_name, s.person.first_name, s.person.get_gender_display(), s.person.get_nationality_display(),
                 s.person.email, s.program, s.subject, s.fs, s.get_status_display(),
             ])
         return response
@@ -146,6 +146,7 @@ def study(request, pk):
         'documents': study.documents.all(),
         'others': study.person.studies.exclude(pk=study.pk).select_related('program', 'subject'),
         'change': ChangeForm() if office else None,
+        'exits': destatis.EXITS, 'leaves': destatis.LEAVES,
         'thesis': study.status == Study.Status.ENROLLED and person.may('manage_exams', study),
         'loans': study.person.loans.filter(returned=None).select_related('instrument'),
         'history': bool(tables(person.roles)),
@@ -198,9 +199,15 @@ def leave(request, pk):
     if not (study.person == request.user or request.user.may('manage_students', study)):
         raise PermissionDenied
     term = Term.upcoming()
+    registration = StudyTerm.objects.filter(study=study, term=term).first()
+    leave = not (registration and registration.leave)
+    reason = request.POST.get('reason', '') if leave else ''
+    if leave and reason not in dict(destatis.LEAVES):
+        messages.error(request, 'Bitte den Grund der Beurlaubung wählen.')
+        return redirect(study.get_absolute_url())
     registration, _ = StudyTerm.objects.get_or_create(study=study, term=term)
-    registration.leave = not registration.leave
-    registration.save(update_fields=['leave'])
+    registration.leave, registration.leave_reason = leave, reason
+    registration.save(update_fields=['leave', 'leave_reason'])
     messages.success(request, f'{term}: {"Urlaubssemester eingetragen" if registration.leave else "Urlaubssemester zurückgenommen"}.')
     return redirect(study.get_absolute_url())
 
@@ -209,10 +216,12 @@ def leave(request, pk):
 @require_POST
 def exmatriculate(request, pk):
     study = get_object_or_404(request.user.within(Study.objects.select_related('person'), 'manage_students'), pk=pk, status=Study.Status.ENROLLED)
-    status = Study.Status.GRADUATED if request.POST.get('reason') == 'graduated' else Study.Status.LEFT
-    study.set_status(status)
-    reason = 'Abschluss des Studiums' if status == Study.Status.GRADUATED else 'Abbruch oder Wechsel des Studiums'
-    study.notify('exmatrikulation', grund=reason)
+    reason = request.POST.get('reason', '')
+    if reason not in dict(destatis.EXITS):
+        messages.error(request, 'Bitte den Grund der Exmatrikulation wählen.')
+        return redirect(study.get_absolute_url())
+    study.set_status(Study.Status.GRADUATED if reason == '1' else Study.Status.LEFT, reason)
+    study.notify('exmatrikulation', grund=dict(destatis.EXITS)[reason])
     messages.success(request, f'{study.person} exmatrikuliert. Bescheid versandt.')
     return redirect(study.get_absolute_url())
 
@@ -275,7 +284,7 @@ def reregistration(request):
         elif 'exmatriculate' in request.POST and today > term.deadline:
             unpaid = list(enrolled.exclude(person__in=paid))
             for s in unpaid:
-                s.set_status(Study.Status.LEFT)
+                s.set_status(Study.Status.LEFT, '7')
                 s.notify('exmatrikulation_rueckmeldung', rueckmeldesemester=term)
             messages.success(request, f'{len(unpaid)} Studien wegen fehlender Rückmeldung beendet. Bescheide versandt.')
         return redirect('students:reregistration')

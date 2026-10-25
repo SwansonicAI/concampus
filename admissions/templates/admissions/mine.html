@@ -34,7 +34,7 @@
     <p>Sie hätten den Studienplatz bis zum {{ s.accept_by|date:"j. F Y" }} annehmen können. Bitte wenden Sie sich an die Hochschule.</p>
     {% else %}
     <h3>Sie haben einen Studienplatz</h3>
-    <p>Bitte nehmen Sie ihn bis zum <b>{{ s.accept_by|date:"j. F Y" }}</b> an. Dazu brauchen wir Ihre Krankenversicherung: Die Kasse meldet Ihren Status anschließend elektronisch an die Hochschule.</p>
+    <p>Bitte nehmen Sie ihn bis zum <b>{{ s.accept_by|date:"j. F Y" }}</b> an. Dazu brauchen wir Ihre Krankenversicherung, deren Kasse Ihren Status anschließend elektronisch an die Hochschule meldet, und einige Angaben für die amtliche Statistik.</p>
     <form method="post" action="{% url 'admissions:accept' s.pk %}" class="form">
       {% csrf_token %}
       {{ accept }}

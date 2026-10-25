@@ -57,7 +57,7 @@ class ReregistrationTest(Seeded):
 
 class FileTest(Seeded):
     def test_student_file_shows_what_the_office_needs(self):
-        study = Study.objects.filter(status='enrolled', focus__isnull=False).select_related('focus').first()
+        study = Study.objects.filter(status='enrolled', focus__isnull=False, person__external_terms__gt=0).select_related('focus').first()
         r = self.login('asa').get(f'/studierende/{study.pk}/')
         for text in ['Geschlecht', 'Hochschulzugang', 'Krankenversicherung', 'Hochschulsemester', f'Schwerpunkt {study.focus.title}']:
             self.assertIn(text, r.text)

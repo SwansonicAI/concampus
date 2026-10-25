@@ -153,7 +153,7 @@ class CapabilityTest(Seeded):
         """Neither its offices nor its name and address are written into the code; the demo data brings them."""
         root = Path(__file__).resolve().parent.parent
         names = re.compile(r'\b(ASA|Prüfungsamt|Dekanat|Veranstaltungsbüro|HfM|Weimar|Liszt|LISZT|hfm-weimar|Platz der Demokratie|99423)\b')
-        branding = {'hfm.css', 'base.html', '_letterhead.html', 'settings.py'}  # the design and the deployment, done separately
+        branding = {'hfm.css', 'base.html', '_letterhead.html', 'settings.py', 'destatis.py'}  # the design and the deployment, done separately; the official key lists name every Hochschule
         for path in root.glob('*/**/*'):
             if path.suffix in ('.py', '.html', '.js', '.css') and not {'.venv', 'migrations', 'management'} & set(path.parts) and path.name not in branding and 'test' not in path.name:
                 with self.subTest(path=str(path.relative_to(root))):

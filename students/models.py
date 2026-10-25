@@ -7,7 +7,7 @@ from django.utils.formats import number_format
 from django.urls import reverse
 from django.utils import timezone
 
-from core import texts
+from core import destatis, texts
 from core.models import Keyed, Message, Person, Term, Tracked
 from core.text import matching
 from curriculum.models import Program, Subject, weighted
@@ -47,6 +47,10 @@ class Study(Tracked, models.Model):
         verbose_name='Hauptfachlehrer:in', help_text='Bis zur Zulassung der Wunsch aus der Bewerbung.',
     )
     prior_terms = models.PositiveSmallIntegerField('Angerechnete Semester', default=0)
+    exit_reason = models.CharField('Grund der Exmatrikulation', max_length=1, choices=destatis.EXITS, blank=True)
+    structured = models.BooleanField('In einem strukturierten Promotionsprogramm', default=False)  # these three for a Promotion
+    employed = models.BooleanField('An der Hochschule beschäftigt', default=False)
+    cumulative = models.BooleanField('Kumulative Dissertation', default=False, help_text='Aus Veröffentlichungen statt einer Monografie.')
 
     class Meta:
         ordering = ['-start_term__start', 'person__last_name']
@@ -71,9 +75,10 @@ class Study(Tracked, models.Model):
                 return exact
         return list(matching(studies, text, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__email')[:5])
 
-    def set_status(self, status):
-        self.status, self.since = status, timezone.localdate()
-        self.save(update_fields=['status', 'since'])
+    def set_status(self, status, reason=''):
+        """A new status from today; `reason` says why a study ended, as the official statistics count it."""
+        self.status, self.since, self.exit_reason = status, timezone.localdate(), reason
+        self.save(update_fields=['status', 'since', 'exit_reason'])
 
     def wording(self, key, **values):
         """(subject, body) of a text about this study, its placeholders filled in (core.texts)."""
@@ -140,6 +145,7 @@ class StudyTerm(Tracked, models.Model):
     study = models.ForeignKey(Study, models.CASCADE, related_name='terms', verbose_name='Studium')
     term = models.ForeignKey(Term, models.PROTECT, related_name='registrations', verbose_name='Semester')
     leave = models.BooleanField('Urlaubssemester', default=False)
+    leave_reason = models.CharField('Grund der Beurlaubung', max_length=1, choices=destatis.LEAVES, blank=True)
     paid = models.DateField('Beitrag bezahlt am', null=True, blank=True)
 
     class Meta:
