@@ -11,7 +11,7 @@ from django.test.runner import DiscoverRunner
 
 from .models import Person
 
-MEDIA = tempfile.mkdtemp(prefix='hochadmin-test-')
+MEDIA = tempfile.mkdtemp(prefix='concampus-test-')
 
 
 class Runner(DiscoverRunner):
