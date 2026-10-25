@@ -214,7 +214,7 @@ class Document(Tracked, models.Model):
     kind = models.ForeignKey(DocumentType, models.PROTECT, to_field='key', related_name='documents', verbose_name='Art')
     title = models.CharField('Titel', max_length=120)
     file = models.FileField('Datei', upload_to=stored, blank=True)
-    url = models.URLField('Link', blank=True)
+    url = models.URLField('Link', max_length=2000, blank=True)  # shared video links run long
     message = models.ForeignKey(Message, models.CASCADE, null=True, blank=True, related_name='+', verbose_name='Bescheid')
     created = models.DateTimeField('Eingegangen', default=timezone.now)
 
