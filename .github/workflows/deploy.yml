@@ -1,0 +1,35 @@
+name: Test and deploy
+
+on:
+  push:
+    branches: [main]
+
+env:
+  SERVER: 46.224.56.49
+  SERVER_KEY: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKW8bQN5tMkWkFrmRXH3lnxoEkcsjnvIt2l39n5OPFme  # so nothing else can pose as the server
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python manage.py test
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    concurrency: deploy
+    steps:
+      - name: Run deploy.sh on the server  # the key may do nothing else there
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$DEPLOY_KEY" > ~/.ssh/id_ed25519 && chmod 600 ~/.ssh/id_ed25519
+          echo "$SERVER $SERVER_KEY" > ~/.ssh/known_hosts
+          ssh -T deploy@$SERVER
