@@ -207,10 +207,33 @@ def add(request, pk):
         return redirect(course)
     study = found[0]
     module = course.modules.filter(program=study.program).order_by('semester').first()
-    _, created = Participation.objects.get_or_create(course=course, study=study, module=module)
-    if created:
+    exam = course.kind == Course.Kind.EXAM
+    if exam and (refused := course.refuses(study, module)):
+        messages.error(request, f'{study.person} nicht eingetragen: {refused}')
+        return redirect(course)
+    participation, created = Participation.objects.get_or_create(course=course, study=study, module=module)
+    if not created:
+        messages.success(request, f'{study.person} ist bereits eingetragen.')
+    elif exam:  # the office registers whoever the regulations allow, in the registration period or not
+        texts.send('pruefungsanmeldung', study.person, reverse('exams:index'), pruefung=course.title, modul=module)
+        attempt = next(p.attempt for p in panel.sheet(course)[1] if p.pk == participation.pk)
+        messages.success(request, f'{study.person} eingetragen, {attempt}. Versuch{"" if course.is_open else ", außerhalb der Anmeldefrist"}.')
+    else:
         texts.send('eingetragen', study.person, course.get_absolute_url(), veranstaltung=course.title, semester=course.term)
-    messages.success(request, f'{study.person} eingetragen.' if created else f'{study.person} ist bereits eingetragen.')
+        messages.success(request, f'{study.person} eingetragen.')
+    return redirect(course)
+
+
+@require_POST
+def drop(request, pk):
+    """Take someone out of an exam the office entered them in by mistake, while no mark is given; the Verlauf keeps it."""
+    course = get_object_or_404(Course, pk=pk, kind=Course.Kind.EXAM, released=None)
+    if not request.user.may('manage_exams', course):
+        raise PermissionDenied
+    participation = get_object_or_404(course.participations.select_related('study__person'), pk=request.POST.get('participation'), scores=None, grade=None)
+    participation.delete()
+    texts.send('ausgetragen', participation.study.person, reverse('exams:index'), veranstaltung=course.title, semester=course.term)
+    messages.success(request, f'{participation.study.person} ausgetragen.')
     return redirect(course)
 
 

@@ -17,7 +17,7 @@
     <label>Klasse<select name="klasse" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for t in classes %}<option value="{{ t.pk }}"{% if t.pk|stringformat:'s' == klasse %} selected{% endif %}>{{ t.last_name }}, {{ t.first_name }}</option>{% endfor %}</select></label>
     <label>Fachsemester<select name="fs" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for n in semesters %}<option value="{{ n }}"{% if n|stringformat:'s' == fs %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
     <label>Studienbeginn<select name="beginn" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for t in terms %}<option value="{{ t.pk }}"{% if t.pk|stringformat:'s' == beginn %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
-    <label>Einzelunterricht<select name="unterricht" onchange="this.form.requestSubmit()"><option value="">Alle</option><option value="ohne"{% if unterricht == 'ohne' %} selected{% endif %}>Ohne Unterrichtszeit</option></select></label>
+    <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for key, label in cases %}<option value="{{ key }}"{% if key == stand %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
   </div>
 </form>
 <form>

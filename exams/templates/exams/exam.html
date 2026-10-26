@@ -12,7 +12,7 @@
     <form method="post" action="{% url 'exams:release' course.pk %}">
       {% csrf_token %}
       {% if course.released %}{% if decide %}<button class="btn ghost">Wieder öffnen</button>{% endif %}
-      {% else %}<button class="btn" data-confirm="Freigeben, sperren und benachrichtigen?"{% if missing %} title="Noch {{ missing }} ohne Ergebnis" disabled{% endif %}>Ergebnisse freigeben</button>{% endif %}
+      {% else %}<button class="btn" data-confirm="Freigeben, sperren und benachrichtigen?"{% if missing %} title="Noch {{ missing }} ohne Ergebnis" disabled{% elif not rows %} title="Niemand ist angemeldet" disabled{% endif %}>Ergebnisse freigeben</button>{% endif %}
     </form>
     {% endif %}
   </div>
@@ -37,7 +37,8 @@
     </dd>
     {% if course.description %}<dt>Notiz</dt><dd>{{ course.description|linebreaksbr }}</dd>{% endif %}
     {% else %}
-    <dt>Kommission</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
+    <dt>Kommission</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}{% if short %}<br><small class="fail">{{ short }}</small>{% endif %}</dd>
+    {% if course.assessor %}<dt>Beisitz</dt><dd>{{ course.assessor }}</dd>{% endif %}
     <dt>Anmeldeschluss</dt><dd>{{ course.deadline|date:"j. F Y"|default:"–" }}</dd>
     {% endif %}
     <dt>Bewertung</dt><dd>{% if course.points %}Punkte, bestanden ab {{ course.pass_mark }}{% else %}Noten 1,0–5,0, bestanden bis 4,0{% endif %}</dd>
@@ -62,6 +63,7 @@
   </div>
   {% if not decide %}<p class="lead">Sie tragen Ihre eigene Wertung ein. Das Ergebnis ergibt sich aus den Wertungen der ganzen Kommission.</p>{% endif %}
   {% include "courses/_sheet.html" with decide=decide %}
+  {% if dropping %}<form id="austragen" method="post" action="{% url 'courses:drop' course.pk %}">{% csrf_token %}</form>{% endif %}
   {% if rows and course.kind == 'exam' %}
   <div class="inline" style="margin-top: 16px">
     <a class="more" href="{% url 'exams:roster' course.pk %}?format=csv">Als CSV</a>

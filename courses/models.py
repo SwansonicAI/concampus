@@ -83,6 +83,10 @@ class Course(Tracked, models.Model):
     subject = models.ForeignKey(Subject, models.PROTECT, null=True, blank=True, related_name='courses', verbose_name='Hauptfach')
     modules = models.ManyToManyField(Module, blank=True, related_name='courses', verbose_name='Anrechenbar für')
     staff = models.ManyToManyField(Person, blank=True, related_name='teaching', verbose_name='Lehrende / Kommission')
+    oral = models.BooleanField('Mündlich oder praktisch', default=False, help_text='Abgenommen von zwei Prüfenden, oder von einer Person mit Beisitz.')
+    assessor = models.ForeignKey(
+        Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Beisitz', help_text='Führt das Protokoll, wo nur eine Person prüft.',
+    )
     hours = models.DecimalField('SWS', max_digits=4, decimal_places=1, null=True, blank=True, help_text='Bei Einzelunterricht je Teilnahme.')
     capacity = models.PositiveSmallIntegerField('Plätze', null=True, blank=True)
     allocation = models.CharField('Platzvergabe', max_length=8, choices=Allocation, default=Allocation.ORDER)
@@ -158,6 +162,21 @@ class Course(Tracked, models.Model):
             return self.term.exams_start - timedelta(weeks=Institution.get().withdraw_weeks)
         return self.deadline
 
+    def refuses(self, study, module):
+        """Why `study` cannot sit this exam for `module` (the one it counts for in its programme), or ''."""
+        if module is None:
+            return f'Diese Prüfung gehört nicht zum Studiengang {study.program}.'
+        if self.subject_id not in (None, study.subject_id):
+            return f'Diese Prüfung ist für das Hauptfach {self.subject}.'
+        if attempts(study.person_id, module) >= study.program.attempts:
+            return f'Alle {study.program.attempts} Versuche für {module.code} sind ausgeschöpft.'
+        return ''
+
+    @classmethod
+    def short_panels(cls):
+        """Oral or practical exams with one examiner and nobody sitting in."""
+        return cls.objects.filter(kind=cls.Kind.EXAM, oral=True, assessor=None).annotate(examiners=models.Count('staff')).filter(examiners__lt=2)
+
     @property
     def withdrawable(self):
         return self.withdraw_by is None or timezone.localdate() <= self.withdraw_by
@@ -221,6 +240,11 @@ class Participation(Tracked, models.Model):
 
     def __str__(self):
         return f'{self.study.person} · {self.course}'
+
+
+def attempts(person, module):
+    """Times a person has failed the exam of `module`; a withdrawal for good reason is none."""
+    return Participation.objects.filter(study__person=person, module=module, passed=False, course__released__isnull=False).count()
 
 
 class Signup(Tracked, models.Model):

@@ -76,6 +76,18 @@ def sheet(course):
     return staff, rows
 
 
+def short(course, staff, rows):
+    """Why the panel is too small for the exam, or '': an oral or practical one needs two examiners or one with an
+    assessor, a repeat attempt two examiners."""
+    if course.kind != Course.Kind.EXAM or len(staff) > 1:
+        return ''
+    if any(getattr(p, 'attempt', 1) > 1 for p in rows):
+        return 'Wiederholungsprüfungen bewerten mindestens zwei Prüfende.'
+    if course.oral and not course.assessor_id:
+        return 'Mündliche und praktische Prüfungen nehmen zwei Prüfende ab, oder eine Person mit Beisitz.'
+    return ''
+
+
 def due(p):
     """Whether a result is still to be entered: a withdrawal for good reason needs none."""
     return p.passed is None and p.remark != Participation.Remark.EXCUSED
@@ -161,16 +173,21 @@ def save(post, rows, columns, decide):
         history.saved([*rows, *new, *changed])
 
 
-def schedule(course, rows, start, minutes, room, person):
-    """Give each row a slot of `minutes`, one after another from `start`, book `room` for the block and invite everyone.
+def schedule(course, rows, start, minutes, room, person, pause=0):
+    """Give each row a slot of `minutes`, one after another from `start` with `pause` between, and invite everyone. The
+    room is booked for the block; where the course has booked it already, that booking holds the block, lengthened if needed.
 
     Raises ValidationError if the room is taken.
     """
     category = BookingCategory.system('eignungspruefung' if course.kind == course.Kind.AUDITION else 'pruefung')
-    booking = Booking(room=room, start=start, end=start + timedelta(minutes=minutes * len(rows)), person=person, course=course, category=category)
+    end = start + timedelta(minutes=(minutes + pause) * len(rows) - pause)
+    booking = course.bookings.filter(room=room, start__lte=start, end__gt=start).first() or Booking(room=room, start=start, person=person, course=course, category=category)
+    if booking.end and booking.end < end and booking.clashes().filter(start__lt=end).exists():
+        raise ValidationError(f'Der Raum ist bis {timezone.localtime(booking.end):%H:%M} gebucht und danach belegt; {len(rows)} Termine brauchen ihn bis {timezone.localtime(end):%H:%M}.')
+    booking.end = max(booking.end or end, end)
     booking.full_clean()
     for n, p in enumerate(rows):
-        p.slot = start + timedelta(minutes=minutes * n)
+        p.slot = start + timedelta(minutes=(minutes + pause) * n)
     with transaction.atomic():
         booking.save()
         Participation.objects.bulk_update(rows, ['slot'])

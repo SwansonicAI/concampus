@@ -173,6 +173,7 @@ td.mid { vertical-align: middle; }
 tr.wait td { color: var(--muted); }
 tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 700; }
 .scroll { overflow-x: auto; }
+main[aria-busy] :is(table, .todo, .tickets, .results) { opacity: 0.45; cursor: progress; }
 
 /* Start page: tasks first, then a compact launcher */
 .todo { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border-top: 2px solid var(--ink); }

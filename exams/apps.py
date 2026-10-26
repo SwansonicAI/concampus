@@ -1,7 +1,8 @@
 from datetime import timedelta
 
 from django.apps import AppConfig
-from django.db.models import Count, Exists, F, Min, OuterRef, Q
+from django.db.models import Count, Exists, F, Min, OuterRef, Q, Subquery
+from django.db.models.functions import Coalesce
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
@@ -73,7 +74,19 @@ class ExamsConfig(Tile, AppConfig):
                 ))
         if 'manage_exams' in person.roles:
             from core.models import Term
+            from courses.models import Participation
             from students.models import Document
+
+            if short := person.within(Course.short_panels(), 'manage_exams').filter(released=None).count():
+                found.append(task(f'{plural(short, "Prüfung", "Prüfungen")}: Kommission zu klein', f"{reverse('exams:index')}?stand=kommission"))
+            failed = Participation.objects.filter(study__person=OuterRef('study__person'), module=OuterRef('module'), passed=False, course__released__isnull=False)
+            last = (
+                person.within(Participation.objects.filter(course__kind=Course.Kind.EXAM, course__released=None), 'manage_exams')
+                .annotate(failed=Coalesce(Subquery(failed.values('module').annotate(n=Count('pk')).values('n')[:1]), 0)).filter(failed__gte=F('study__program__attempts') - 1)
+                .values('course', 'course__title').annotate(n=Count('pk'))
+            )
+            for row in last:
+                found.append(task(f'{row["course__title"]}: {plural(row["n"], "Anmeldung", "Anmeldungen")} im letzten Versuch', reverse('exams:exam', args=[row['course']])))
 
             undated = person.within(Course.objects.filter(kind=Course.Kind.EXAM, term=Term.current(), bookings=None, released=None), 'manage_exams')
             if soon := list(undated.filter(Q(opens=None) | Q(opens__lte=timezone.localdate() + timedelta(days=14))).values_list('opens', flat=True)):  # registration open or near

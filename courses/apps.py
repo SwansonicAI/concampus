@@ -84,7 +84,7 @@ class CoursesConfig(Tile, AppConfig):
                 found.append(task(f'{course.title}: {plural(course.n, "Ensemble", "Ensembles")} ohne Betreuung', course.get_absolute_url()))
         if 'manage_courses' in person.roles and not person.everywhere('manage_courses'):  # an Institut's office
             if n := person.within(untimed(Participation.objects.all()), 'manage_courses').values('study').distinct().count():
-                found.append(task(f'Einzelunterricht: {plural(n, "Person", "Personen")} ohne Unterrichtszeit', f"{reverse('students:list')}?unterricht=ohne"))
+                found.append(task(f'Einzelunterricht: {plural(n, "Person", "Personen")} ohne Unterrichtszeit', f"{reverse('students:list')}?stand=unterricht"))
         if 'roll_over' in person.roles:
             from .views import missing
 

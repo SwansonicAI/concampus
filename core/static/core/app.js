@@ -391,6 +391,7 @@ document.addEventListener('submit', event => {
 
 async function swap(url) {
   const field = document.activeElement, typed = field.value;
+  document.querySelector('main').setAttribute('aria-busy', 'true');  // the new page replaces it, and the mark with it
   const html = await (await fetch(url)).text();
   if (field.value !== typed) return;  // typing went on; its own request follows
   const main = new DOMParser().parseFromString(html, 'text/html').querySelector('main');

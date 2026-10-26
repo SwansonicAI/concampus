@@ -88,6 +88,17 @@ class OfficeTest(Seeded):
         self.assertIn(f'{last.study.person}, Prüfung endgültig nicht bestanden', self.login('asa').get('/').content.decode())
         self.assertEqual(attempts(first.study.person, first.module), 1)  # the withdrawal is no attempt
 
+    def test_the_office_enters_only_whom_the_exam_is_for_and_takes_a_mistake_back(self):
+        exam = Course.objects.filter(kind='exam', released=None, subject=None, modules__program__degree='B.Mus.').first()
+        other = Study.objects.filter(status='enrolled').exclude(program__modules__courses=exam).select_related('person').first()
+        fits = Study.objects.filter(status='enrolled', program__modules__courses=exam).exclude(participations__course=exam).select_related('person').first()
+        office = self.login('pruefungsamt')
+        self.assertIn('nicht eingetragen', ' '.join(flashes(office.post(f'/lehre/{exam.pk}/hinzufuegen/', {'who': other.person.matriculation}, follow=True))))
+        office.post(f'/lehre/{exam.pk}/hinzufuegen/', {'who': fits.person.matriculation})
+        entered = exam.participations.get(study=fits)
+        office.post(f'/lehre/{exam.pk}/austragen/', {'participation': entered.pk})
+        self.assertFalse(exam.participations.filter(study__in=[other, fits]).exists())
+
     def test_a_whole_module_is_recognised_with_a_converted_grade(self):
         study = Study.objects.filter(status='enrolled', program__degree='B.Mus.').first()
         office = self.login('pruefungsamt')
@@ -151,7 +162,7 @@ class RegulationTest(Seeded):
         exam.opens = None
         exam.save()
         r = self.login('student').post(f'/pruefungen/{exam.pk}/anmelden/', {'study': study.pk}, follow=True)
-        self.assertIn('alle 0 Versuche', flashes(r)[0])
+        self.assertIn('Alle 0 Versuche', flashes(r)[0])
 
     def test_rounding(self):
         program = Program(rounding=Rounding.CUT)

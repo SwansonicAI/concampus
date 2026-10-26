@@ -1,7 +1,9 @@
+import re
 from collections import defaultdict
 
 from django import forms
 from django.db.models import F, Q
+from django.utils import timezone
 
 from core.dates import ClockField, DayField, MomentField
 from core.models import Institution, Person
@@ -84,29 +86,36 @@ class SlotForm(forms.Form):
 
     start = MomentField(label='Beginn')
     minutes = forms.IntegerField(label='Minuten je Person', min_value=5, max_value=120, initial=20)
+    pause = forms.IntegerField(label='Wechsel dazwischen', min_value=0, max_value=60, initial=5, help_text='Minuten')
     room = RoomField(label='Raum', queryset=None, empty_label='Bitte wählen')
 
     def __init__(self, *args, person, course, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['room'].queryset = Room.objects.filter(Q(pk__in=bookable(person).values('pk')) | Q(bookings__course=course)).distinct()
-        self.fields['room'].initial = course.bookings.order_by('-start').values_list('room', flat=True).first()
+        booked = course.bookings.order_by('start').first()
+        if booked:  # the block starts where the exam is booked
+            self.fields['room'].initial, self.fields['start'].initial = booked.room_id, timezone.localtime(booked.start)
+        if length := re.findall(r'(\d+) Min\.', ' '.join([course.title, *course.modules.values_list('title', flat=True)])):  # e.g. '(15–25 Min.)': the longest
+            self.fields['minutes'].initial = max(int(n) for n in length)
 
 
-def teachers(subject=None, institutes=()):
-    """Teachers as choices, the likely ones first: those teaching the Hauptfach, then those of the Institute in question,
-    then every other Institut's."""
+def teachers(subject=None, institutes=(), module=()):
+    """Teachers as choices, the likely ones first: those teaching the Hauptfach, then those teaching the courses of the
+    modules in question, then those of the Institute in question, then every other Institut's."""
     hauptfach = set(Course.objects.filter(kind=Course.Kind.LESSON, subject=subject).values_list('staff', flat=True)) if subject else set()
+    teaching = set(Course.objects.filter(kind=Course.Kind.COURSE, modules__parent__in=module).values_list('staff', flat=True)) if module else set()
     groups = defaultdict(list)
     for t in Person.teachers().select_related('institute'):
-        rank = 0 if t.pk in hauptfach else 1 if t.institute_id in institutes else 2
-        groups[rank, f'Hauptfach {subject}' if rank == 0 else str(t.institute or 'Ohne Institut')].append((t.pk, str(t)))
+        rank = 0 if t.pk in hauptfach else 1 if t.pk in teaching else 2 if t.institute_id in institutes else 3
+        label = f'Hauptfach {subject}' if rank == 0 else 'Lehrende des Moduls' if rank == 1 else str(t.institute or 'Ohne Institut')
+        groups[rank, label].append((t.pk, str(t)))
     return [(label, people) for (_, label), people in sorted(groups.items())]
 
 
-def leaf_modules():
-    """Modules a course can count for, as choices grouped by programme in study-plan order."""
+def leaf_modules(exams=False):
+    """Modules a course can count for, or only the exams of the plans, as choices grouped by programme in study-plan order."""
     groups = defaultdict(list)
-    leaves = Module.objects.filter(children=None).select_related('program').order_by('program', F('semester').asc(nulls_last=True), 'code')
+    leaves = Module.objects.filter(children=None, **({'exam': True} if exams else {})).select_related('program').order_by('program', F('semester').asc(nulls_last=True), 'code')
     for m in leaves:
         groups[str(m.program)].append((m.pk, f'{m.code} {m.title}'))
     return list(groups.items())
@@ -161,12 +170,17 @@ class CourseForm(forms.ModelForm):
 
 class ExamForm(CourseForm):
     class Meta(CourseForm.Meta):
-        fields = ['title', 'staff', 'modules', 'opens', 'deadline', 'pass_mark', 'max_points', 'description']
+        fields = ['title', 'staff', 'oral', 'assessor', 'modules', 'opens', 'deadline', 'pass_mark', 'max_points', 'description']
         labels = {'staff': 'Kommission', 'modules': 'Prüft das Modul'}
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, *args, person=None, **kwargs):
+        super().__init__(*args, person=person, **kwargs)
         self.fields['deadline'].help_text = f'Letzter Tag der Anmeldung. Abmelden geht bis {Institution.get().withdraw_weeks} Wochen vor dem Prüfungszeitraum.'
+        modules = self.instance.modules.values('parent') if self.instance.pk else ()
+        self.fields['staff'].choices = teachers(self.instance.subject, person.ours('manage_exams') if person else (), modules)
+        self.fields['assessor'].queryset = Person.teachers()
+        self.fields['assessor'].choices = [('', 'Keiner'), *teachers(self.instance.subject, person.ours('manage_exams') if person else (), modules)]
+        self.fields['modules'].choices = leaf_modules(exams=True)
 
 
 class ThesisForm(CourseForm):

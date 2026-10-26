@@ -1,4 +1,5 @@
 import csv
+from collections import defaultdict
 from datetime import timedelta
 
 from django import forms
@@ -22,7 +23,7 @@ from core.text import fold, matching
 from core.views import SHOWN, without_term
 from courses.models import Participation
 from courses.views import untimed
-from curriculum.models import Program, Subject
+from curriculum.models import Module, Program, Subject
 from curriculum.views import plan
 from exams.views import exhausted
 from instruments.models import Loan
@@ -74,6 +75,40 @@ COLUMNS = [  # heading, sort key, field; the server sorts, since the list may be
 ]
 
 
+CASES = [
+    ('unterricht', 'Ohne Unterrichtszeit'), ('pruefung', 'Prüfung laut Plan überfällig'), ('regelstudienzeit', 'Über der Regelstudienzeit'),
+    ('schwerpunkt', 'Schwerpunkt nicht gewählt'),
+]
+
+
+def cases(studies, case):
+    """The studies in one of the situations an office keeps an eye on; `studies` carries its Fachsemester as `fs`."""
+    if case == 'unterricht':
+        return studies.filter(pk__in=untimed(Participation.objects.all()).values('study'))
+    if case == 'regelstudienzeit':
+        return studies.filter(fs__gt=F('program__semesters'))
+    if case == 'schwerpunkt':
+        due = Q(pk__in=[])
+        for program in Program.objects.filter(pk__in=studies.values('program')):
+            if choices := program.choices():
+                due |= Q(program=program, fs__gte=min(c.first or 99 for c in choices))
+        return studies.filter(due, focus=None)
+    if case == 'pruefung':  # an exam of a module under way that the plan recommends for an earlier semester
+        rows = list(studies.values_list('pk', 'program', 'subject', 'fs'))
+        exams = defaultdict(list)
+        for m in Module.objects.filter(exam=True, semester__isnull=False, program__in={r[1] for r in rows}).prefetch_related('waived'):
+            exams[m.program_id].append(m)
+        seen = defaultdict(set)  # each study's modules passed or taken now, and ('under', parent) for the modules under way
+        for study, module, parent, passed in Participation.objects.filter(study__in=[r[0] for r in rows]).exclude(passed=False).values_list('study', 'module', 'module__parent', 'passed'):
+            seen[study] |= {module, ('under', parent)} if passed else {module}
+        late = [
+            pk for pk, program, subject, fs in rows for m in exams[program]
+            if m.semester < fs and m.pk not in seen[pk] and ('under', m.parent_id) in seen[pk] and subject not in {s.pk for s in m.waived.all()}
+        ]
+        return studies.filter(pk__in=late)
+    return studies
+
+
 @require('view_students')
 def roster(request):
     today = timezone.localdate()
@@ -87,8 +122,7 @@ def roster(request):
     for key, field in [('studiengang', 'program'), ('fach', 'subject'), ('klasse', 'teacher'), ('fs', 'fs'), ('beginn', 'start_term')]:
         if (value := request.GET.get(key, '')).isdigit():
             studies = studies.filter(**{field: value})
-    if request.GET.get('unterricht') == 'ohne':
-        studies = studies.filter(pk__in=untimed(Participation.objects.all()).values('study'))
+    studies = cases(studies, request.GET.get('stand', ''))
     q, sort = request.GET.get('q', '').strip(), request.GET.get('sortierung', '')
     studies = matching(studies, q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__email', 'person__matriculation', 'teacher__last_name')
     if field := next((f for _, key, f in COLUMNS if key == sort.removeprefix('-')), None):
@@ -113,7 +147,8 @@ def roster(request):
         'programs': request.user.within(Program.objects.all(), 'view_students'), 'subjects': request.user.within(Subject.objects.all(), 'view_students'),
         'terms': Term.objects.filter(intake__isnull=False).distinct().order_by('-start'), 'semesters': range(1, 13),
         'classes': Person.objects.filter(class_studies__in=scoped).distinct().order_by('last_name', 'first_name'),
-        **{key: request.GET.get(key, '') for key in ['studiengang', 'fach', 'klasse', 'fs', 'beginn', 'unterricht']},
+        'cases': CASES,
+        **{key: request.GET.get(key, '') for key in ['studiengang', 'fach', 'klasse', 'fs', 'beginn', 'stand']},
     })
 
 

@@ -464,7 +464,7 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
         'view_curriculum', 'book_any_room', 'view_bookings', 'manage_terms', 'view_statistics', 'report_statistics',
     ],
     'Prüfungsamt': [
-        'view_files', 'manage_exams', 'decide_results', 'recognise', 'manage_courses', 'view_teaching_load',
+        'view_students', 'view_files', 'manage_exams', 'decide_results', 'recognise', 'manage_courses', 'view_teaching_load',
         'view_curriculum', 'book_any_room', 'view_bookings',
     ],
     'Dekanat': ['manage_courses', 'view_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings', 'view_statistics'],
@@ -791,6 +791,7 @@ class Command(BaseCommand):
             self.guests()
             self.loans()
             self.exams()
+            self.assessors()
             self.admissions()
             self.events()
             self.practice()
@@ -1650,6 +1651,22 @@ class Command(BaseCommand):
                 url=f'https://upload.hfm-weimar.de/{uuid.uuid4().hex[:10]}.pdf', created=at(date(2026, 10, 22), hour=16),
             )
             Score.objects.create(participation=early, examiner=second, value=Decimal('1.7'))
+
+    def assessors(self):
+        """Oral and practical exams marked as such; with one examiner, a colleague of their Institut sits in. The demo
+        student's Musikgeschichte exam still lacks one, for the office to find."""
+        oral = Course.objects.filter(kind=Course.Kind.EXAM).filter(
+            models.Q(title__contains='Mündliche') | models.Q(title__contains='Künstlerisch-praktische') | models.Q(title__contains='Lehrprobe') | models.Q(title__contains='Rezital')
+        )
+        oral.update(oral=True)
+        alone = oral.annotate(n=models.Count('staff')).filter(n=1).exclude(term=self.current, title__startswith='Musikgeschichte').prefetch_related('staff')
+        colleagues = defaultdict(list)
+        for t in Person.objects.filter(teaching__isnull=False).exclude(institute=None).distinct():
+            colleagues[t.institute_id].append(t)
+        for course in alone:
+            examiner = course.staff.all()[0]
+            course.assessor = next((t for t in colleagues[examiner.institute_id] if t != examiner), None)
+        Course.objects.bulk_update(alone, ['assessor'])
 
     def held(self, leaf, subject):
         """(Hauptfach an exam is played in, its course title): the Pflichtfach Klavier on the piano, other artistic exams in

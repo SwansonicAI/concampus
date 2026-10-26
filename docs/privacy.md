@@ -39,7 +39,7 @@ not mean seeing every field on it.
 | Examiner | staff of an exam | names, programme and results of that exam | – |
 | Jury | staff of an audition | – | name, Studiengang, Hauptfach, Wunschlehrer:in, Prüfungsprogramm, documents marked for the jury |
 | Institut office | `view_students`, `view_files`, `view_applications`, `run_auditions` | 1, 2 | all |
-| Prüfungsamt | `decide_results` | 1, 2, 3 | – |
+| Prüfungsamt | `decide_results`, `view_students` for the list | 1, 2, 3 | – |
 | Student office | `manage_students` | 1 to 4 | all with `view_applications` |
 
 Grounded in practice: teachers see their own students' Leistungsdaten (KH Berlin-Weißensee, Dienstvereinbarung CMS 2017);

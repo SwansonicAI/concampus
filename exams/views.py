@@ -27,7 +27,7 @@ from core.views import without_term
 from courses import panel
 from courses.forms import AddForm, ExamForm, SlotForm, ThesisForm
 from courses.views import credited, enrolled
-from courses.models import Course, Participation
+from courses.models import Course, Participation, attempts
 from curriculum.models import Module, Program
 from curriculum.views import plan as study_plan
 from students.models import Document, DocumentType, Study
@@ -48,10 +48,6 @@ def verbal(grade, english=False):
 def handed_in(participation):
     """The file handed in for a thesis: the latest since it was registered."""
     return participation.study.documents.filter(kind='abschlussarbeit', created__gte=participation.created).last()
-
-
-def attempts(person, module):
-    return Participation.objects.filter(study__person=person, module=module, passed=False, course__released__isnull=False).count()
 
 
 def exhausted(study):
@@ -114,7 +110,7 @@ def index(request):
     term = Term.pick(request.GET.get('semester'))
     context = {'term': term, 'terms': Term.objects.filter(courses__kind=Course.Kind.EXAM).distinct().order_by('-start')}
     exams = (
-        Course.objects.filter(term=term, kind__in=EXAMS).select_related('subject').prefetch_related('staff')
+        Course.objects.filter(term=term, kind__in=[Course.Kind.EXAM, Course.Kind.THESIS]).select_related('subject').prefetch_related('staff')
         .annotate(date=Min('bookings__start'), size=Count('participations', distinct=True), candidate=Min('participations__study__person__last_name'))
         .annotate(graded=Count('participations', filter=Q(participations__passed__isnull=False), distinct=True))
         .order_by(Coalesce('date', Cast('deadline', DateTimeField())).asc(nulls_last=True), 'title')  # a thesis by when it is due
@@ -122,6 +118,8 @@ def index(request):
     office = bool(person.roles & {'manage_exams', 'decide_results'})
     if office or 'teacher' in person.roles:
         program, stand, q = (request.GET.get(key, '').strip() for key in ('studiengang', 'stand', 'q'))
+        if stand == 'kommission':
+            exams = exams.filter(pk__in=Course.short_panels().values('pk'))
         exams = exams.filter(pk__in=person.within(Course.objects.all(), 'manage_exams', 'decide_results').values('pk')) if office else exams.filter(staff=person)
         if program.isdigit():
             exams = exams.filter(pk__in=Course.objects.filter(modules__program=program).values('pk'))
@@ -130,7 +128,7 @@ def index(request):
         for c in exams:
             c.state = 'freigegeben' if c.released else 'bewertung' if c.graded or c.date and c.date <= timezone.now() else 'offen'  # held: marks are due
         context.update(
-            exams=[c for c in exams if not stand or c.state == stand], q=q, stand=stand, program=program, programs=Program.planned(),
+            exams=[c for c in exams if stand in ('', 'kommission') or c.state == stand], q=q, stand=stand, program=program, programs=Program.planned(),
             states=[(key, label, sum(c.state == key for c in exams)) for key, label in STATES],
         )
     if 'student' in person.roles:
@@ -190,6 +188,8 @@ def exam(request, pk):
         'modules': credited(course),
         'bookings': course.bookings.select_related('room'),
         'missing': sum(1 for p in rows if panel.due(p)),
+        'short': panel.short(course, staff, rows),
+        'dropping': office and not course.released and course.kind == Course.Kind.EXAM,
         'waiting': panel.waiting(rows) if (office or decide) and held and not course.released else [],
         'remarks': Participation.Remark.choices if decide and course.kind in (Course.Kind.EXAM, Course.Kind.THESIS) else [],
         'handed': handed,
@@ -276,7 +276,7 @@ def plan(request, pk):
         messages.error(request, 'Bitte Beginn, Dauer und Raum angeben; alle Teilnehmenden haben schon Termine.' if rows else 'Alle Teilnehmenden haben schon Termine.')
         return redirect(course)
     try:
-        panel.schedule(course, rows, form.cleaned_data['start'], form.cleaned_data['minutes'], form.cleaned_data['room'], request.user)
+        panel.schedule(course, rows, form.cleaned_data['start'], form.cleaned_data['minutes'], form.cleaned_data['room'], request.user, form.cleaned_data['pause'])
     except ValidationError as error:
         messages.error(request, ' '.join(error.messages))
     else:
@@ -360,7 +360,7 @@ def release(request, pk):
         messages.success(request, 'Ergebnisse wieder zur Bearbeitung geöffnet.')
     else:
         _, rows = panel.sheet(course)
-        if missing := panel.gaps(rows) or panel.off_scale(rows):
+        if missing := panel.gaps(rows) or panel.off_scale(rows) or (not rows and 'Niemand ist angemeldet.'):
             messages.error(request, missing)
             return redirect(course)
         course.released = timezone.now()
@@ -409,14 +409,10 @@ def register(request, pk):
         messages.error(request, f'Die Anmeldung beginnt am {date_format(course.opens, "j.n.Y")}.')
     elif not course.is_open:
         messages.error(request, 'Die Anmeldefrist ist abgelaufen.')
-    elif module is None:
-        messages.error(request, 'Diese Prüfung gehört nicht zu Ihrem Studiengang.')
-    elif course.subject_id not in (None, study.subject_id):
-        messages.error(request, f'Diese Prüfung ist für das Hauptfach {course.subject}.')
+    elif refused := course.refuses(study, module):
+        messages.error(request, refused)
     elif (module.semester or 0) > study.semester:
         messages.error(request, f'{module.code} ist erst ab dem {module.semester}. Fachsemester vorgesehen.')
-    elif attempts(request.user, module) >= study.program.attempts:
-        messages.error(request, f'Sie haben alle {study.program.attempts} Versuche für {module.code} ausgeschöpft.')
     else:
         Participation.objects.get_or_create(course=course, study=study, module=module)
         texts.send('pruefungsanmeldung', request.user, reverse('exams:index'), pruefung=course.title, modul=module)
@@ -479,6 +475,8 @@ class RecognitionForm(forms.Form):
         given = [data.get(name) for name in ('foreign', 'best', 'worst')]
         if 'module' in self.fields and any(v is not None for v in given):
             foreign, best, worst = given
+            if data.get('grade') is not None:
+                raise forms.ValidationError('Entweder eine Note eintragen oder umrechnen, nicht beides.')
             if None in given or best == worst:
                 raise forms.ValidationError('Zum Umrechnen erzielte, beste und schlechteste bestandene Note angeben.')
             grade = 1 + 3 * (best - foreign) / (best - worst)  # 1,0 for the best, 4,0 for the worst passing grade

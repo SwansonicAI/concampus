@@ -138,6 +138,7 @@ TEXTS = {
         NACHRICHT, 'Kein Platz in einer Veranstaltung', 'Kein Platz: {veranstaltung}',
         'Für „{veranstaltung}“ im {semester} konnten wir Ihnen leider keinen Platz geben.', ('veranstaltung', 'semester'),
     ),
+    'ausgetragen': Spec(NACHRICHT, 'Aus einer Prüfung ausgetragen', 'Ausgetragen: {veranstaltung}', 'Ihre Anmeldung zu „{veranstaltung}“ im {semester} ist gelöscht.', ('veranstaltung', 'semester')),
     'pruefungsanmeldung': Spec(NACHRICHT, 'Prüfungsanmeldung', 'Prüfungsanmeldung: {pruefung}', 'Sie sind zur Prüfung {pruefung} ({modul}) angemeldet.', ('pruefung', 'modul')),
     'ergebnis': Spec(NACHRICHT, 'Ergebnis freigegeben', 'Ergebnis: {pruefung}', 'Ihr Prüfungsergebnis ist freigegeben.', ('pruefung',)),
     'wertung_fehlt': Spec(
