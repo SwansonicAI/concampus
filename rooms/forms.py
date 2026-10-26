@@ -32,21 +32,25 @@ def quota(person, day, exclude=None):
     return round(sum((b.end - b.start).total_seconds() for b in counted if b.start - b.created > last_minute) / 3600, 1)
 
 
+class Buildings(forms.models.ModelChoiceIterator):
+    """Rooms grouped by building, read only when the choices are shown."""
+
+    def __iter__(self):
+        if self.field.empty_label is not None:
+            yield '', self.field.empty_label
+        groups = defaultdict(list)
+        for room in self.queryset:
+            groups[room.building].append(self.choice(room))
+        yield from groups.items()
+
+
 class RoomField(forms.ModelChoiceField):
-    """Rooms grouped by building, each with what it is for: a room number alone tells few people anything."""
+    """Rooms by building, each with what it is for: a room number alone tells few people anything."""
+
+    iterator = Buildings
 
     def label_from_instance(self, room):
         return f'{room.name} · {room.purpose}' if room.purpose else room.name
-
-    def _get_choices(self):
-        if self.queryset is None:  # until the form sets the rooms the person may book
-            return []
-        groups = defaultdict(list)
-        for room in self.queryset:
-            groups[room.building].append((room.pk, self.label_from_instance(room)))
-        return ([('', self.empty_label)] if self.empty_label is not None else []) + list(groups.items())
-
-    choices = property(_get_choices, forms.ChoiceField.choices.fset)
 
 
 class Participants(forms.ModelMultipleChoiceField):
