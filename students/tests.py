@@ -55,6 +55,20 @@ class ReregistrationTest(Seeded):
         self.assertTrue(StudyTerm.objects.filter(study__person=held, term=Term.upcoming(), paid__isnull=False).exists())
 
 
+class FocusTest(Seeded):
+    def test_the_student_chooses_on_advice_and_keeps_it_once_begun(self):
+        study = Study.objects.get(person__username='student')
+        options = study.program.choices()
+        other = next(o for o in options if o.pk != study.advised_id)
+        student = self.login('student')
+        self.assertIn(f'{options[0].choice.title} wählen', student.get('/').text)
+        self.assertEqual(self.login('pruefungsamt').post(f'/studierende/{study.pk}/empfehlung/', {'advised': other.pk}).status_code, 403)
+        student.post(f'/studierende/{study.pk}/schwerpunkt/', {'focus': study.advised_id})
+        student.post(f'/studierende/{study.pk}/schwerpunkt/', {'focus': other.pk})  # under way: only the office changes it
+        study.refresh_from_db()
+        self.assertEqual(study.focus_id, study.advised_id)
+
+
 class FileTest(Seeded):
     def test_student_file_shows_what_the_office_needs(self):
         study = Study.objects.filter(status='enrolled', focus__isnull=False, person__external_terms__gt=0).select_related('focus').first()

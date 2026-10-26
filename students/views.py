@@ -145,7 +145,7 @@ def compose(request):
 
 def study(request, pk):
     person = request.user
-    study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term', 'teacher', 'focus'), pk=pk)
+    study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term', 'teacher', 'focus', 'advised'), pk=pk)
     if study.pk not in Study.reachable(person, Study.objects.filter(pk=study.pk)):
         raise PermissionDenied
     own, office, files = study.person == person, person.may('manage_students', study), person.may('view_files', study)
@@ -154,8 +154,10 @@ def study(request, pk):
     tree, average = study.progress()
     upcoming, late_fee, today = Term.upcoming(), Institution.get().late_fee, timezone.localdate()
     fs, late = study.semester, set()
+    others = set(study.program.foci()) - {study.focus_id} if study.focus_id else set()
 
-    def overdue(node):  # exams of modules under way that the plan put in an earlier semester
+    def overdue(node):  # exams of modules under way that the plan recommends for an earlier semester; Schwerpunkte not chosen fold away
+        node.nodes = [n for n in node.nodes if n.pk not in others]
         leaves = [n for n in node.nodes if not n.nodes]
         if node.earned and any(n.credits for n in leaves):
             late.update(n.pk for n in leaves if n.exam and not n.done and n.semester and n.semester < fs)
@@ -168,6 +170,7 @@ def study(request, pk):
     for t in terms:  # the Säumnisgebühr is for a late Rückmeldung, never for the semester one enrols in
         t.due = t.term.fee if t.term_id == study.start_term_id else t.term.due(t.paid or today, late_fee)
     reachable = Study.reachable(person, study.person.studies.exclude(pk=study.pk))
+    options = study.options() if study.status == Study.Status.ENROLLED else []
     return render(request, 'students/study.html', {
         'study': study, 'today': today,
         'office': office,
@@ -194,7 +197,8 @@ def study(request, pk):
         'change': ChangeForm(study=study) if office else None,
         'exits': EXITS, 'leaves': LEAVES,
         'exhausted': exhausted(study) if study.status == Study.Status.ENROLLED else [],
-        'options': study.options() if own and study.status == Study.Status.ENROLLED else [],
+        'options': options if own else [], 'fs': fs,
+        'advising': options if (study.teacher_id == person.pk or office) and not study.focus_id else [],
         'changes': Office.holding('manage_students'),
         'recognise': study.status == Study.Status.ENROLLED and person.may('recognise', study),
         'thesis': study.status == Study.Status.ENROLLED and person.may('manage_exams', study),
@@ -205,15 +209,27 @@ def study(request, pk):
 
 @require_POST
 def focus(request, pk):
-    """The student's choice of Schwerpunkt, made once; changing it is for the student office."""
-    study = get_object_or_404(Study, pk=pk, person=request.user, status=Study.Status.ENROLLED, focus=None)
+    """The student's choice of Schwerpunkt, theirs to change until it begins; then changes are the student office's."""
+    study = get_object_or_404(Study, pk=pk, person=request.user, status=Study.Status.ENROLLED)
     chosen = next((o for o in study.options() if str(o.pk) == request.POST.get('focus')), None)
     if chosen is None:
-        messages.error(request, 'Bitte eine der Möglichkeiten wählen.')
+        messages.error(request, 'Die Wahl lässt sich hier nicht mehr ändern.' if study.focus_id else 'Bitte eine der Möglichkeiten wählen.')
     else:
         study.focus = chosen
         study.save(update_fields=['focus'])
         messages.success(request, f'Gewählt: {chosen.title}.')
+    return redirect(study)
+
+
+@require_POST
+def advise(request, pk):
+    """The teachers' recommendation of a Schwerpunkt, from the Studienfachberatung; the choice stays with the student."""
+    study = get_object_or_404(Study, pk=pk, status=Study.Status.ENROLLED, focus=None)
+    if not (study.teacher_id == request.user.pk or request.user.may('manage_students', study)):
+        raise PermissionDenied
+    study.advised = next((o for o in study.program.choices() if str(o.pk) == request.POST.get('advised')), None)
+    study.save(update_fields=['advised'])
+    messages.success(request, f'Empfohlen: {study.advised.title}.' if study.advised else 'Keine Empfehlung.')
     return redirect(study)
 
 

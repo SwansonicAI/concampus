@@ -54,6 +54,10 @@ class Study(Tracked, models.Model):
         'curriculum.Module', models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Schwerpunkt',
         help_text='Der gewählte Bereich des Studienplans, wo die Ordnung Schwerpunkte vorsieht.',
     )
+    advised = models.ForeignKey(
+        'curriculum.Module', models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Empfohlener Schwerpunkt',
+        help_text='Die Empfehlung der Lehrenden, etwa aus der Studienfachberatung; wählen wird die oder der Studierende.',
+    )
     start_term = models.ForeignKey(Term, models.PROTECT, related_name='intake', verbose_name='Studienbeginn')
     status = models.CharField('Status', max_length=10, choices=Status, default=Status.APPLIED)
     since = models.DateField('Status seit', default=timezone.localdate)
@@ -160,22 +164,16 @@ class Study(Tracked, models.Model):
                 best[p.module_id] = p
         return sorted(best.values(), key=lambda p: p.module.code)
 
+    @staticmethod
+    def choose_by(fs, first):
+        """When a Schwerpunkt beginning in semester `first` is chosen, `fs` being the Fachsemester now: before its term starts."""
+        return (fs < first and Term.upcoming() or Term.current()).start
+
     def options(self):
-        """While none is chosen, the Schwerpunkte the plan offers, each with `first`, the semester it begins in, and
-        `choice`, the area they are chosen in."""
-        if self.focus_id:
+        """The Schwerpunkte the student may choose between: until the chosen one has begun, then changes are the office's."""
+        found = self.program.choices()
+        if self.focus_id and (not found or self.semester >= min(o.first or 0 for o in found)):
             return []
-        foci, found = set(self.program.foci()), []
-
-        def walk(nodes, parent):
-            for node in nodes:
-                if node.pk in foci:
-                    node.choice = parent
-                    found.append(node)
-                else:
-                    walk(node.nodes, node)
-
-        walk(self.program.curriculum(), None)
         return found
 
     def progress(self):

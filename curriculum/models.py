@@ -109,16 +109,27 @@ class Program(Tracked, models.Model):
         return reverse('curriculum:program', args=[self.pk])
 
     def foci(self):
-        """The pks of the Schwerpunkte a student chooses between: areas of a choice where any one of them alone carries
-        its credits, like Künstlerische or Instrumentalpädagogische Vertiefung."""
-        modules = list(self.modules.all())
-        children = defaultdict(list)
-        for m in modules:
-            children[m.parent_id].append(m)
-        return [
-            kid.pk for m in modules if len(children[m.pk]) > 1 and all(k.credits >= m.credits for k in children[m.pk])
-            for kid in children[m.pk] if children[kid.pk]
-        ]
+        """The pks of the Schwerpunkte a student chooses between."""
+        return [c.pk for c in self.choices()]
+
+    def choices(self):
+        """The Schwerpunkte in plan order: areas of a choice where any one alone carries its credits over several
+        semesters, like Künstlerische or Instrumentalpädagogische Vertiefung; not a variant chosen anew each semester.
+        Each with `first`, the semester it begins in, and `choice`, the area it is chosen in."""
+        found = []
+
+        def walk(node):
+            if len(node.nodes) > 1 and all(kid.credits >= node.credits for kid in node.nodes):
+                for kid in node.nodes:
+                    if kid.nodes and kid.first != kid.last:
+                        kid.choice = node
+                        found.append(kid)
+            for kid in node.nodes:
+                walk(kid)
+
+        for root in self.curriculum():
+            walk(root)
+        return found
 
     @classmethod
     def planned(cls):

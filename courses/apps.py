@@ -1,7 +1,7 @@
 from collections import Counter
 
 from django.apps import AppConfig
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q
 from django.utils.formats import number_format
 
 from django.urls import reverse
@@ -56,7 +56,10 @@ class CoursesConfig(Tile, AppConfig):
         return found
 
     def tasks(self, person):
+        from django.utils import timezone
+
         from core.models import Term
+        from students.models import Study
         from .models import Course, Participation
         from .views import TEACHING, untimed
 
@@ -65,6 +68,14 @@ class CoursesConfig(Tile, AppConfig):
             waiting = Counter(untimed(Participation.objects.filter(course__staff=person)).values_list('course', flat=True))
             for course in Course.objects.filter(pk__in=waiting).order_by('title'):
                 found.append(task(f'{course.title}: {plural(waiting[course.pk], "Person", "Personen")} ohne Unterrichtszeit', course.get_absolute_url()))
+            choices, today = {}, timezone.localdate()
+            advising = (  # the class's Schwerpunkt, chosen by the student after a Studienfachberatung
+                person.class_studies.filter(status=Study.Status.ENROLLED, focus=None, advised=None).select_related('person', 'program')
+                .annotate(fs=F('prior_terms') + Count('terms', filter=Q(terms__leave=False, terms__term__start__lte=today)))
+            )
+            for s in advising:
+                if (options := choices.setdefault(s.program_id, s.program.choices())) and s.fs >= (first := min(o.first or 99 for o in options)) - 1:
+                    found.append(task(f'Studienfachberatung: {s.person} ({options[0].choice.title})', f'{s.get_absolute_url()}#studienverlauf', Study.choose_by(s.fs, first)))
             for course in person.teaching.filter(term=term, kind=TEACHING[0], bookings=None):
                 found.append(task(f'Termine planen: {course.title}', course.get_absolute_url()))
             for course in person.teaching.filter(term=term, signups__isnull=False).annotate(n=Count('signups')):

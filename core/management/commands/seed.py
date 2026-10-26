@@ -1209,8 +1209,11 @@ class Command(BaseCommand):
                 elif node.offered > node.credits:
                     if all(kid.credits >= node.credits for kid in kids):  # KV or IV, variant A, B or C: mostly the first
                         kids = [kids[0] if rng.random() < 0.75 else rng.choice(kids)]
-                        if kids[0].nodes and kids[0].first and kids[0].first <= study.fs and study.focus_id is None and study.person != self.demo:  # a Vertiefung, chosen by now; the demo student is about to
-                            study.focus = kids[0]
+                        if kids[0].pk in self.foci.setdefault(study.program_id, set(study.program.foci())) and kids[0].first <= study.fs and study.focus_id is None:  # a Vertiefung, chosen by now
+                            if study.person == self.demo:  # recommended to the demo student, whose choice is still to make
+                                study.advised = kids[0]
+                            else:
+                                study.focus = kids[0]
                             self.chose.append(study)
                     else:
                         picked, total = [], 0
@@ -1268,7 +1271,7 @@ class Command(BaseCommand):
         """Past results that make up each transcript, and this term's participations, lessons and bookings."""
         rng = self.rng
         self.courses, links, staff, rows, scores = {}, set(), set(), {}, []
-        self.chose = []  # studies whose Vertiefung plan() put on record
+        self.chose, self.foci = [], {}  # studies whose Vertiefung plan() put on record; the Schwerpunkte of each programme
         self.lessons, booked = [], set()  # weekly one-to-one lessons this term: (person, course, teacher, rooms, minutes)
         for study in [*self.enrolled, self.graduate]:  # and the graduate's whole record
             subject, enrolled = study.subject.name, study.status == Study.Status.ENROLLED
@@ -1318,7 +1321,7 @@ class Command(BaseCommand):
                         booked.add((study.person.pk, course.pk))
                         self.lessons.append((study.person, course, teacher, rooms, length(self.teach[leaf.pk][2])))
                 links.add((course.pk, leaf.pk))
-        Study.objects.bulk_update(self.chose, ['focus'])
+        Study.objects.bulk_update(self.chose, ['focus', 'advised'])
         created = {(p.course_id, p.study_id, p.module_id): p for p in Participation.objects.bulk_create(rows.values())}
         electives = Course.objects.filter(term=self.current, title__in=['Alexander-Technik', 'Auftrittstraining', 'Mentales Training', 'Selbstmanagement', 'Kammerorchester'])
         full = electives.annotate(size=models.Count('participations')).order_by('-size').first()

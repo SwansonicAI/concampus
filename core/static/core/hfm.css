@@ -238,7 +238,7 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .svpp td.num { width: 44px; }
 .svpp td.done { background: #e5f3e5; color: var(--green); font-weight: 700; }
 .svpp td.now { outline: 2px solid var(--green); outline-offset: -3px; font-weight: 700; }
-.svpp td.late { outline: 2px solid var(--red); outline-offset: -3px; }
+.svpp td.late { outline: 2px solid var(--amber); outline-offset: -3px; }
 .tag-exam { padding: 0 5px; border: 1px solid var(--amber); color: var(--amber); font-size: 11px; font-weight: 700; text-transform: uppercase; }
 
 /* Curriculum tree */
