@@ -15,6 +15,7 @@
 <div class="cols">
   {% with p=study.person %}
   <dl class="facts">
+    {% if personal %}
     <dt>E-Mail</dt><dd>{{ p.email }}</dd>
     {% if p.phone %}<dt>Telefon</dt><dd>{{ p.phone }}</dd>{% endif %}
     {% if p.address %}<dt>Anschrift</dt><dd>{{ p.address|linebreaksbr }}</dd>{% endif %}
@@ -23,9 +24,10 @@
     <dt>Staatsangehörigkeit</dt><dd>{{ p.get_nationality_display|default:"–" }}{% if p.second_nationality %}, {{ p.get_second_nationality_display }}{% endif %}</dd>
     <dt>Hochschulzugang</dt><dd>{{ p.get_entrance_display|default:"–" }}{% if p.entrance_date %}, {{ p.entrance_date|date:"j.n.Y" }}{% endif %}{% if p.entrance_region %}, {{ p.get_entrance_region_display }}{% endif %}</dd>
     {% if p.insurer %}<dt>Krankenversicherung</dt><dd>{{ p.insurer }}{% if p.insurance %} · {{ p.get_insurance_display }}{% endif %}</dd>{% endif %}
+    {% endif %}
     <dt>Wunschlehrer:in</dt><dd>{{ study.teacher|default:"–" }}</dd>
     {% if documents %}<dt>Bescheide</dt><dd>{% for d in documents %}<a href="{{ d.href }}">{{ d.title }}</a> <small class="muted">{{ d.created|date:"j.n.Y" }}</small><br>{% endfor %}</dd>{% endif %}
-    {% if accepted %}<dt>Annahme</dt><dd>Studienplatz angenommen{% if accepted.paid %}, Beitrag bezahlt am {{ accepted.paid|date:"j.n.Y" }}{% endif %}</dd>{% endif %}
+    {% if accepted and personal %}<dt>Annahme</dt><dd>Studienplatz angenommen{% if accepted.paid %}, Beitrag bezahlt am {{ accepted.paid|date:"j.n.Y" }}{% endif %}</dd>{% endif %}
   </dl>
   {% endwith %}
   {% if decide or enrol and study.status == 'admitted' %}

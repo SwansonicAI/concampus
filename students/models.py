@@ -212,6 +212,12 @@ class DocumentType(Tracked, Keyed):
     condition = models.CharField('In der Checkliste', max_length=10, choices=Condition, default=Condition.ALWAYS)
     subjects = models.ManyToManyField(Subject, blank=True, related_name='+', verbose_name='Hauptfächer', help_text='Nur für „bei den gewählten Hauptfächern“.')
     required = models.BooleanField('Pflicht', default=True, help_text='Ohne Haken freiwillig: die Bewerbung ist auch ohne vollständig.')
+    shared = models.BooleanField(
+        'Für alle Bewerbungen', default=False, help_text='Einmal hochgeladen, gilt es für jede Bewerbung der Person, etwa Lebenslauf oder Zeugnisse.',
+    )
+    jury = models.BooleanField(
+        'Für die Kommission', default=False, help_text='Die Prüfungskommission sieht es, etwa Video oder Lebenslauf; alles andere nur die Verwaltung.',
+    )
     note = models.TextField('Hinweis für Bewerbende', blank=True)
     file_types = models.CharField('Dateitypen', max_length=120, blank=True, help_text='Endungen, z. B. „.pdf, .jpg“; leer: PDF und Bilder.')
     max_mb = models.PositiveIntegerField('Höchstens (MB)', null=True, blank=True)

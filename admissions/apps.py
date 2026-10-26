@@ -77,7 +77,7 @@ class AdmissionsConfig(Tile, AppConfig):
                 if moves := vacancies(term, person):
                     found.append(task(f'Nachrücken zum {term}: {plural(len(moves), "Studiengang", "Studiengänge")}', f"{reverse('admissions:board')}?semester={term.pk}"))
         types = document_types()
-        for study in person.studies.filter(status=Study.Status.APPLIED).select_related('person', 'program', 'subject').prefetch_related('documents'):
+        for study in person.studies.filter(status=Study.Status.APPLIED).select_related('person', 'program', 'subject').prefetch_related('person__documents'):
             if uploads_open(study):
                 if missing := incomplete(study, types):
                     deadline = study.participations.filter(course__program__isnull=False).values_list('course__deadline', flat=True).first()

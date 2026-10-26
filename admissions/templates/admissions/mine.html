@@ -43,7 +43,7 @@
       <datalist id="insurers">{% for name in insurers %}<option value="{{ name }}">{% endfor %}</datalist>
       <div class="actions">
         <button class="btn" name="decision" value="yes">Studienplatz annehmen</button>
-        <button class="btn danger" name="decision" value="no" formnovalidate>Ablehnen</button>
+        <button class="btn danger" name="decision" value="no" formnovalidate data-confirm="Studienplatz wirklich ablehnen?">Ablehnen</button>
       </div>
     </form>
     {% endif %}

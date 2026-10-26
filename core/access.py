@@ -6,8 +6,8 @@ from django.db import transaction
 CAPABILITIES = [  # what an office may do; every Hochschule names its own offices and gives them these
     ('Studierende', [
         ('view_students', 'Studierende auflisten, suchen und exportieren'),
-        ('view_files', 'Alle Studienakten und Leistungsübersichten einsehen'),
-        ('manage_students', 'Immatrikulieren, exmatrikulieren, Fachwechsel, Sperren und Stammdaten; Bescheide und Bescheinigungen für andere'),
+        ('view_files', 'Studienakten mit Studienverlauf und Leistungen einsehen, ohne persönliche Daten'),
+        ('manage_students', 'Immatrikulieren, exmatrikulieren, Fachwechsel, Sperren und Stammdaten mit allen persönlichen Daten; Bescheide und Bescheinigungen für andere'),
         ('manage_reregistration', 'Rückmeldung verbuchen, bei fehlender Rückmeldung exmatrikulieren'),
         ('message_students', 'Nachrichten an ausgewählte Studierende senden'),
     ]),
@@ -18,7 +18,7 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
     ]),
     ('Prüfungen', [
         ('manage_exams', 'Alle Prüfungen sehen, anlegen, bearbeiten und Termine planen'),
-        ('decide_results', 'Ergebnisse festsetzen, freigeben und wieder öffnen; Zeugnisse'),
+        ('decide_results', 'Ergebnisse festsetzen, freigeben und wieder öffnen; Zeugnisse, mit Geburtsdaten, Anschrift und Unterlagen der Studierenden'),
         ('recognise', 'Leistungen anerkennen'),
     ]),
     ('Lehre', [

@@ -12,6 +12,13 @@ from curriculum.models import Rounding, rounded
 from rooms.models import Booking, BookingCategory
 from .models import Course, Participation, Score
 
+STEPS = {Decimal(n) for n in ('1.0', '1.3', '1.7', '2.0', '2.3', '2.7', '3.0', '3.3', '3.7', '4.0', '5.0')}  # a single examiner's grade; means fall between
+
+
+class OffScale(InvalidOperation):
+    """A grade between the steps one examiner may give."""
+
+
 def number(value):
     """Decimal from a form field, None if empty. Raises InvalidOperation unless 0 ≤ n < 100."""
     if not value:
@@ -19,6 +26,15 @@ def number(value):
     value = Decimal(value.replace(',', '.'))
     if not (value.is_finite() and 0 <= value < 100):
         raise InvalidOperation
+    return value
+
+
+def grade(value, course):
+    """A grade one examiner gives: in points as the course counts them, else a step of the scale (1,0 to 4,0 by 0,3, or
+    5,0). Raises OffScale."""
+    value = number(value)
+    if value is not None and not course.points and course.kind != Course.Kind.RECOGNITION and value not in STEPS:  # a grade recognised is converted
+        raise OffScale(f'{str(value).replace(".", ",")} ist keine Note: einzeln gegeben werden 1,0, 1,3, 1,7 … 4,0 und 5,0; Zwischenwerte entstehen erst als Mittel.')
     return value
 
 
@@ -74,6 +90,13 @@ def gaps(rows):
     return f'Noch ohne Ergebnis: {", ".join(names[:8])}{f" und {len(names) - 8} weitere" if len(names) > 8 else ""}.' if names else ''
 
 
+def blind(rows, examiner):
+    """Mark the rows `examiner` has still to mark: until then they see neither the others' marks nor the mean, so each
+    judges on their own."""
+    for p in rows:
+        p.blind = any(e == examiner and v is None for e, v in p.marks)
+
+
 def waiting(rows):
     """The examiners whose marks keep results open: [(examiner, how many)]."""
     return list(Counter(e for p in rows if due(p) for e, v in p.marks if v is None).items())
@@ -91,7 +114,7 @@ def save(post, rows, columns, decide):
     for p in rows:
         if p.course.kind in Course.PANEL:
             marks = {e.pk: value for e, value in p.marks}
-            marks.update({e.pk: number(post.get(f'score-{p.pk}-{e.pk}')) for e in columns})
+            marks.update({e.pk: grade(post.get(f'score-{p.pk}-{e.pk}'), p.course) for e in columns})
             scores = {s.examiner_id: s for s in p.scores.all()}
             for e in columns:  # only what changed, so the history shows who changed which mark
                 score, value = scores.get(e.pk), marks[e.pk]
@@ -117,7 +140,7 @@ def save(post, rows, columns, decide):
             elif p.remark:
                 p.grade, p.passed = None if p.course.points else Decimal('5.0'), False
         elif decide:
-            p.grade = number(post.get(f'grade-{p.pk}'))
+            p.grade = grade(post.get(f'grade-{p.pk}'), p.course)
             choice = {'1': True, '0': False}.get(post.get(f'passed-{p.pk}'))
             p.passed = p.course.passes(p.grade) if p.grade is not None else choice
     with transaction.atomic():

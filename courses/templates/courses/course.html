@@ -110,7 +110,7 @@
             {% csrf_token %}
             <select name="coach" aria-label="Betreuung"><option value="">Noch offen</option>{% for s in staff %}<option value="{{ s.pk }}"{% if s == e.coach %} selected{% endif %}>{{ s.last_name }}</option>{% endfor %}</select>
             <button class="btn ghost small">Speichern</button>
-            <button class="link" name="dissolve" value="1"><small>auflösen</small></button>
+            <button class="link" name="dissolve" value="1" data-confirm="Wirklich auflösen?"><small>auflösen</small></button>
           </form>
           {% else %}{{ e.coach|default:"noch offen" }}{% endif %}
         </td>

@@ -145,10 +145,10 @@ def message(request, pk):
 
 def letter(request, pk):
     """A message from the Postfach as a printable letter, for its recipient; a Bescheid in the student file also for the
-    offices that see or manage that file."""
+    student office and the office deciding results (docs/privacy.md)."""
     letter = get_object_or_404(Message.objects.select_related('person'), pk=pk)
     filed = Document.objects.filter(message=letter).first()
-    if not (letter.person == request.user or filed and any(request.user.may(c, filed) for c in ('view_files', 'manage_students'))):
+    if not (letter.person == request.user or filed and any(request.user.may(c, filed) for c in ('manage_students', 'decide_results'))):
         raise PermissionDenied
     return render(request, 'core/letter.html', {'letters': [letter]})
 
@@ -225,8 +225,9 @@ STANDING = [  # whose study a search for a name shows first
 
 def people(studies, limit, person):
     """One hit per person, at their most current study: the searcher's own first (their class, their courses, their
-    Institut's), enrolled before turned-down applications. The birth date tells namesakes apart."""
-    shown = {}
+    Institut's), enrolled before turned-down applications. The birth date tells namesakes apart, for the offices that
+    may see it (docs/privacy.md)."""
+    shown, dated = {}, bool(person.roles & {'manage_students', 'decide_results', 'view_applications'})
     taught = Participation.objects.filter(study=OuterRef('pk'), course__staff=person)
     own = Case(When(Q(teacher=person) | Q(Exists(taught)) | Q(subject__institute__in=person.ours('view_files')), then=0), default=1)
     rank = Case(*(When(status=status, then=n) for n, status in enumerate(STANDING)))
@@ -237,7 +238,7 @@ def people(studies, limit, person):
             shown[s.person_id] = [s, 0]
     return [
         hit(s.person.name, s.get_absolute_url(), ' · '.join(filter(None, [
-            s.person.birth_date and f'geb. {date_format(s.person.birth_date, "j.n.Y")}', s.person.matriculation, f'{s.subject} {s.program.degree}',
+            dated and s.person.birth_date and f'geb. {date_format(s.person.birth_date, "j.n.Y")}', s.person.matriculation, f'{s.subject} {s.program.degree}',
             s.get_status_display(), more and plural(more, 'weiteres Studium', 'weitere Studien'),
         ])))
         for s, more in shown.values()

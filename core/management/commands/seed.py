@@ -388,15 +388,15 @@ VIDEO_NOTE = (
     'Eine Datei, ungeschnitten, 10–15 Minuten, beginnend mit einer kurzen Vorstellung; die Kamera 3–5 m entfernt, '
     'eine professionelle Aufnahme ist nicht nötig. Nicht älter als ein Jahr. Höchstens 1,5 GB als .mp4, .mov, .webm, .m4v, .ogg, .ogv oder .qt.'
 )
-DOCUMENTS = [  # key, name, condition, settings: what a complete application holds, as the HfM lists it
-    ('video', 'Video', 'video', {'note': VIDEO_NOTE, 'file_types': '.mp4, .mov, .webm, .m4v, .ogg, .ogv, .qt', 'max_mb': 1536, 'single': True}),
-    ('cv', 'Lebenslauf', 'always', {}),
-    ('school', 'Abitur- oder letztes Schulzeugnis', 'always', {}),
-    ('degree', 'Bachelor- oder Masterzeugnis, Transcript', 'degree', {}),
+DOCUMENTS = [  # key, name, condition, settings: what a complete application holds, as the HfM lists it; the jury sees video and CV
+    ('video', 'Video', 'video', {'note': VIDEO_NOTE, 'file_types': '.mp4, .mov, .webm, .m4v, .ogg, .ogv, .qt', 'max_mb': 1536, 'single': True, 'jury': True}),
+    ('cv', 'Lebenslauf', 'always', {'shared': True, 'jury': True}),
+    ('school', 'Abitur- oder letztes Schulzeugnis', 'always', {'shared': True}),
+    ('degree', 'Bachelor- oder Masterzeugnis, Transcript', 'degree', {'shared': True}),
     ('fee', 'Einzahlungsbeleg Eignungsprüfungsgebühr', 'always', {'note': '50 €, Verwendungszweck: Eignungsprüfung, Name, Hauptfach.'}),
-    ('consent', 'Einwilligung der Erziehungsberechtigten', 'minor', {'note': 'Sie sind noch nicht volljährig.'}),
-    ('voice', 'Phoniatrisches Gutachten', 'subjects', {'required': False}),
-    ('language', 'Sprachnachweis Deutsch', 'foreign', {'required': False, 'note': 'Niveau B2.'}),
+    ('consent', 'Einwilligung der Erziehungsberechtigten', 'minor', {'note': 'Sie sind noch nicht volljährig.', 'shared': True}),
+    ('voice', 'Phoniatrisches Gutachten', 'subjects', {'required': False, 'shared': True}),
+    ('language', 'Sprachnachweis Deutsch', 'foreign', {'required': False, 'note': 'Niveau B2.', 'shared': True}),
     ('notice', 'Bescheid', 'never', {}),
     ('other', 'Sonstiges', 'never', {}),
 ]

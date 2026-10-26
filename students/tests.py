@@ -62,6 +62,24 @@ class FileTest(Seeded):
         for text in ['Geschlecht', 'Hochschulzugang', 'Krankenversicherung', 'Hochschulsemester', f'Schwerpunkt {study.focus.title}']:
             self.assertIn(text, r.text)
 
+    def test_each_sees_what_their_task_needs(self):
+        """docs/privacy.md: the Hauptfachlehrer:in the record, the office deciding results also identity, the jury only the
+        performance."""
+        wendt = Person.objects.get(username='lehre')
+        study = Study.objects.filter(status='enrolled', teacher=wendt).first()
+        study.terms.filter(pk=study.terms.order_by('term__start').first().pk).update(leave=True, leave_reason='1')  # Erkrankung
+        teacher = self.login('lehre').get(f'/studierende/{study.pk}/').text
+        exams = self.login('pruefungsamt').get(f'/studierende/{study.pk}/').text
+        self.assertIn('Urlaubssemester', teacher)
+        for hidden in ['Krankenversicherung', 'Staatsangehörigkeit', 'Geboren', 'Erkrankung']:
+            self.assertNotIn(hidden, teacher)
+        self.assertIn('Geboren', exams)
+        self.assertNotIn('Krankenversicherung', exams)
+        applicant = Study.objects.filter(status='applied', participations__course__staff=wendt).exclude(person__phone='').select_related('person').first()
+        jury = self.login('lehre').get(f'/aufnahme/bewerbung/{applicant.pk}/').text
+        self.assertNotIn(applicant.person.phone, jury)
+        self.assertNotIn('Abitur- oder letztes Schulzeugnis', jury)
+
     def test_programmes_beyond_the_bachelor(self):
         degrees = set(Study.objects.values_list('program__degree', flat=True))
         self.assertTrue({'B.Mus.', 'M.Mus.', 'B.Ed.', 'M.Ed.', 'Konzertexamen', 'Dr. phil.'} <= degrees)

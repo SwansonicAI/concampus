@@ -93,10 +93,11 @@ def roster(request):
         response['Content-Disposition'] = 'attachment; filename="studierende.csv"'
         response.write('﻿')
         writer = csv.writer(response, delimiter=';')
-        writer.writerow(['Matrikelnummer', 'Nachname', 'Vorname', 'Geschlecht', 'Staatsangehörigkeit', 'E-Mail', 'Studiengang', 'Hauptfach', 'Fachsemester', 'Status'])
+        personal = 'manage_students' in request.user.roles  # gender and nationality for the student office only (docs/privacy.md)
+        writer.writerow(['Matrikelnummer', 'Nachname', 'Vorname', *(['Geschlecht', 'Staatsangehörigkeit'] if personal else []), 'E-Mail', 'Studiengang', 'Hauptfach', 'Fachsemester', 'Status'])
         for s in studies:
             writer.writerow([
-                s.person.matriculation, s.person.last_name, s.person.first_name, s.person.get_gender_display(), s.person.get_nationality_display(),
+                s.person.matriculation, s.person.last_name, s.person.first_name, *([s.person.get_gender_display(), s.person.get_nationality_display()] if personal else []),
                 s.person.email, s.program, s.subject, s.fs, s.get_status_display(),
             ])
         return response
@@ -142,16 +143,20 @@ def study(request, pk):
     if study.pk not in Study.reachable(person, Study.objects.filter(pk=study.pk)):
         raise PermissionDenied
     own, office, files = study.person == person, person.may('manage_students', study), person.may('view_files', study)
+    personal = own or office  # health insurance, nationality, Hochschulzugang, fees, grounds of leave, Sperre: the student office only (docs/privacy.md)
+    identity = personal or person.may('decide_results', study)  # birth, address, phone, documents: also the office deciding results, for Zeugnisse and Bescheide
     tree, average = study.progress()
     upcoming, late_fee, today = Term.upcoming(), Institution.get().late_fee, timezone.localdate()
     terms = list(study.terms.select_related('term').order_by('-term__start'))
     for t in terms:
         t.due = t.term.due(t.paid or today, late_fee)
+    reachable = Study.reachable(person, study.person.studies.exclude(pk=study.pk))
     return render(request, 'students/study.html', {
         'study': study,
         'office': office,
         'own': own,
-        'files': own or files,  # Leistungsübersicht and Unterlagen
+        'personal': personal, 'identity': identity,
+        'files': own or files,  # Leistungsübersicht
         'certify': own or office,  # Bescheinigungen
         'rows': plan(tree, study.program.semesters),
         'semesters': range(1, study.program.semesters + 1),
@@ -162,16 +167,16 @@ def study(request, pk):
         'upcoming': upcoming, 'late_fee': late_fee, 'leave_terms': LEAVE_TERMS,
         'next': study.terms.filter(term=upcoming).first(),
         'paid': StudyTerm.objects.filter(study__person=study.person, term=upcoming, paid__isnull=False).exists(),
-        'missing': study.person.missing(),
-        'documents': study.documents.all(),
-        'others': study.person.studies.exclude(pk=study.pk).select_related('program', 'subject'),
-        'reachable': Study.reachable(person, study.person.studies.exclude(pk=study.pk)),
+        'missing': study.person.missing() if personal else [],
+        'documents': study.documents.all() if identity else [],
+        'others': [o for o in study.person.studies.exclude(pk=study.pk).select_related('program', 'subject') if personal or o.pk in reachable],
+        'reachable': reachable,
         'change': ChangeForm(study=study) if office else None,
         'exits': EXITS, 'leaves': LEAVES,
         'exhausted': exhausted(study) if study.status == Study.Status.ENROLLED else [],
         'recognise': study.status == Study.Status.ENROLLED and person.may('recognise', study),
         'thesis': study.status == Study.Status.ENROLLED and person.may('manage_exams', study),
-        'loans': study.person.loans.filter(returned=None).select_related('instrument'),
+        'loans': study.person.loans.filter(returned=None).select_related('instrument') if personal else [],
         'history': bool(tables(person.roles)),
     })
 

@@ -15,7 +15,7 @@
     {% if history %}<a class="btn ghost" href="{% url 'history' 'core.person' study.person.pk %}" data-panel>Verlauf</a>{% endif %}
   </div>
 </div>
-<p class="lead">{% if study.person.matriculation %}Matrikelnr. {{ study.person.matriculation }} · {% endif %}{{ study.program }} · {{ study.subject }}{% if study.focus %} · Schwerpunkt {{ study.focus.title }}{% endif %} · <span class="badge {{ study.status }}">{{ study.get_status_display }}</span>{% if study.person.hold %} <span class="badge hold">Sperre: {{ study.person.hold }}</span>{% endif %}</p>
+<p class="lead">{% if study.person.matriculation %}Matrikelnr. {{ study.person.matriculation }} · {% endif %}{{ study.program }} · {{ study.subject }}{% if study.focus %} · Schwerpunkt {{ study.focus.title }}{% endif %} · <span class="badge {{ study.status }}">{{ study.get_status_display }}</span>{% if study.person.hold and personal %} <span class="badge hold">Sperre: {{ study.person.hold }}</span>{% endif %}</p>
 {% if exhausted %}<p class="flash error">Prüfungsanspruch erloschen: {% for m in exhausted %}{{ m.code }} {{ m.title }}{% if not forloop.last %}, {% endif %}{% endfor %} endgültig nicht bestanden.</p>{% endif %}
 
 <div class="stats">
@@ -31,14 +31,19 @@
     <h2>Akte</h2>
     {% with p=study.person %}
     <dl class="facts">
+      {% if identity %}
       {% if p.given_names %}<dt>Alle Vornamen</dt><dd>{{ p.given_names }}</dd>{% endif %}
       {% if p.birth_name %}<dt>Geburtsname</dt><dd>{{ p.birth_name }}</dd>{% endif %}
       <dt>Geschlecht</dt><dd>{{ p.get_gender_display|default:"–" }}</dd>
       <dt>Geboren</dt><dd>{{ p.birth_date|date:"j. F Y"|default:"–" }}{% if p.birth_place %} in {{ p.birth_place }}{% endif %}</dd>
-      <dt>Staatsangehörigkeit</dt><dd>{{ p.get_nationality_display|default:"–" }}{% if p.second_nationality %}, {{ p.get_second_nationality_display }}{% endif %}</dd>
+      {% endif %}
+      {% if personal %}<dt>Staatsangehörigkeit</dt><dd>{{ p.get_nationality_display|default:"–" }}{% if p.second_nationality %}, {{ p.get_second_nationality_display }}{% endif %}</dd>{% endif %}
       <dt>E-Mail</dt><dd>{{ p.email }}</dd>
+      {% if identity %}
       <dt>Anschrift</dt><dd>{{ p.address|linebreaksbr|default:"–" }}{% if p == user %} <a href="{% url 'account' %}"><small>ändern</small></a>{% endif %}</dd>
       {% if p.phone %}<dt>Telefon</dt><dd>{{ p.phone }}</dd>{% endif %}
+      {% endif %}
+      {% if personal %}
       <dt>Hochschulzugang</dt><dd>{{ p.get_entrance_display|default:"–" }}{% if p.entrance_date %}, {{ p.entrance_date|date:"j.n.Y" }}{% endif %}{% if p.entrance_region %}, {{ p.get_entrance_region_display }}{% endif %}</dd>
       <dt>Krankenversicherung</dt>
       <dd>
@@ -46,18 +51,19 @@
         {% if p.insurance_confirmed %}<small class="muted">Versicherungsmeldung vom {{ p.insurance_confirmed|date:"j.n.Y" }}</small>
         {% else %}<small class="fail">Versicherungsmeldung fehlt</small>{% if office %} <form method="post" action="{% url 'students:insured' study.pk %}" style="display: inline">{% csrf_token %}<button class="link"><small>Eingang verbuchen</small></button></form>{% endif %}{% endif %}
       </dd>
+      {% endif %}
       <dt>Hauptfachlehrer:in</dt><dd>{{ study.teacher|default:"–" }}</dd>
       {% if study.focus %}<dt>Schwerpunkt</dt><dd>{{ study.focus.title }}</dd>{% endif %}
       <dt>Studienbeginn</dt><dd>{{ study.start_term }}{% if study.prior_terms %} · {{ study.prior_terms }} Semester angerechnet{% endif %}</dd>
       <dt>{% if study.status == 'graduated' or study.status == 'left' %}Beendet zum{% else %}Status seit{% endif %}</dt><dd>{{ study.since|date:"j. F Y" }}</dd>
       {% for o in others %}<dt>Weiteres Studium</dt><dd>{% if o.pk in reachable %}<a href="{{ o.get_absolute_url }}">{{ o.program }} · {{ o.subject }}</a>{% else %}{{ o.program }} · {{ o.subject }}{% endif %} <span class="badge {{ o.status }}">{{ o.get_status_display }}</span></dd>{% endfor %}
       {% if loans %}<dt>Leihinstrumente</dt><dd>{% for loan in loans %}{{ loan.instrument.name }} <small class="muted">bis {{ loan.due|date:"j.n.Y" }}</small>{% if loan.overdue %} <span class="badge no">überfällig</span>{% endif %}<br>{% endfor %}</dd>{% endif %}
-      {% if files or office %}<dt>Unterlagen</dt><dd>{% for d in documents %}<a href="{{ d.href }}">{{ d.title }}</a> <small class="muted">{{ d.created|date:"j.n.Y" }}</small><br>{% empty %}–{% endfor %}</dd>{% endif %}
+      {% if identity %}<dt>Unterlagen</dt><dd>{% for d in documents %}<a href="{{ d.href }}">{{ d.title }}</a> <small class="muted">{{ d.created|date:"j.n.Y" }}</small><br>{% empty %}–{% endfor %}</dd>{% endif %}
     </dl>
     {% endwith %}
   </section>
   <section>
-    {% if study.status == 'enrolled' %}
+    {% if study.status == 'enrolled' and personal %}
     <h2>Rückmeldung {{ upcoming }}</h2>
     <p>{% if paid and not missing %}<span class="badge green">zurückgemeldet</span>{% elif paid %}<span class="badge wait">bezahlt</span>{% elif upcoming.reregistration_open %}<span class="badge wait">offen</span> Semesterbeitrag {{ upcoming.fee }} € bis {{ upcoming.deadline|date:"j. F Y" }}{% else %}Semesterbeitrag {{ upcoming.fee }} € vom {{ upcoming.reregistration_start|date:"j. F" }} bis {{ upcoming.deadline|date:"j. F Y" }}{% endif %}{% if not paid and upcoming.late_deadline %}<br><small class="muted">Nachfrist bis {{ upcoming.late_deadline|date:"j. F" }} mit {{ late_fee }} € Säumnisgebühr; danach folgt die Exmatrikulation.</small>{% endif %}{% if next.leave %} · <span class="badge">Urlaubssemester</span>{% endif %}</p>
     {% if missing %}<p class="fail">Für die Rückmeldung fehlt noch: {{ missing|join:" · " }}</p>{% endif %}
@@ -80,7 +86,7 @@
         {% csrf_token %}
         <label>Exmatrikulation<select name="reason" required><option value="">Grund wählen</option>{% for code, name in exits %}<option value="{{ code }}"{% if exhausted and code == '8' %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
         <label>zum<input name="zum" data-day autocomplete="off" placeholder="TT.MM.JJJJ" size="11"></label>
-        <button class="btn danger">Exmatrikulieren</button>
+        <button class="btn danger" data-confirm="Wirklich exmatrikulieren?">Exmatrikulieren</button>
       </form>
       <p class="muted"><small>Auf Antrag zum gewünschten Tag, spätestens zum Ende des Semesters; leer: heute, nach dem Abschluss das Ende des Semesters.</small></p>
       <form method="post" action="{% url 'students:change' study.pk %}" class="inline" style="margin-top: 16px">
@@ -107,7 +113,7 @@
       {% for t in terms %}
       <tr>
         <td data-value="{{ t.term.start|date:'c' }}">{{ t.term }}</td>
-        <td>{% if t.leave %}Urlaubssemester{% if t.leave_reason %} <small class="muted">· {{ t.get_leave_reason_display }}</small>{% endif %}{% else %}immatrikuliert{% endif %}</td>
+        <td>{% if t.leave %}Urlaubssemester{% if t.leave_reason and personal %} <small class="muted">· {{ t.get_leave_reason_display }}</small>{% endif %}{% else %}immatrikuliert{% endif %}</td>
         {% if own or office %}
         <td class="num">{{ t.due }} €</td>
         <td>{% if t.term_id == study.start_term_id %}zur Immatrikulation{% else %}{{ t.term.deadline|date:"j.n.Y" }}{% endif %}</td>

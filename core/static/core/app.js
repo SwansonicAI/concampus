@@ -235,6 +235,18 @@ function lead(select) {
   narrow();
 }
 
+// What cannot be undone (data-confirm="Wirklich auflösen?") asks once more: the first click turns the button into the
+// question, a second within a few seconds does it.
+document.addEventListener('click', event => {
+  const button = event.target.closest('button[data-confirm]');
+  if (!button || button.dataset.armed) return;
+  event.preventDefault();
+  const label = button.innerHTML;
+  button.dataset.armed = '1';
+  button.textContent = button.dataset.confirm;
+  setTimeout(() => { delete button.dataset.armed; button.innerHTML = label; }, 4000);
+});
+
 // Fields that matter only for some choices of another (data-for="category:kammermusik") show only then.
 function conditional(form) {
   const rules = new Map();

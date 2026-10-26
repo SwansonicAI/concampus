@@ -8,7 +8,8 @@
       {% for d in item.documents %}
       <div class="handed">
         {% include "admissions/_document.html" %}
-        {% if upload %}<form method="post" action="{% url 'admissions:discard' d.pk %}">{% csrf_token %}<button class="link"><small>entfernen</small></button></form>{% endif %}
+        {% if d.study_id != study.pk %}<small class="muted">aus der Bewerbung {{ d.study.subject }}</small>
+        {% elif upload %}<form method="post" action="{% url 'admissions:discard' d.pk %}">{% csrf_token %}<button class="link" data-confirm="Wirklich entfernen?"><small>entfernen</small></button></form>{% endif %}
       </div>
       {% endfor %}
       {% if upload or item.late %}

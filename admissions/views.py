@@ -63,11 +63,17 @@ def document_types():
 
 
 def checklist(study, types=None):
-    """What a complete application holds, as the document types say: [{kind, label, note, required, documents}].
-    Reads `study.documents.all()`; prefetch them for many studies."""
-    person, handed, today = study.person, defaultdict(list), timezone.localdate()
-    for d in study.documents.all():
-        handed[d.kind_id].append(d)
+    """What a complete application holds, as the document types say: [{kind, label, note, required, documents}]. What
+    holds for all of a person's applications, like a CV, counts once handed in with any of them. Reads
+    `study.person.documents.all()`; prefetch them for many studies."""
+    person, handed, borrowed, today = study.person, defaultdict(list), defaultdict(list), timezone.localdate()
+    types = document_types() if types is None else types
+    shared = {t.key for t in types if t.shared}
+    for d in person.documents.all():
+        if d.study_id == study.pk:
+            handed[d.kind_id].append(d)
+        elif d.study_id and d.kind_id in shared:
+            borrowed[d.kind_id].append(d)
     steps = getattr(study, 'stages', None)
     video = any(p.course.video for p in steps) if steps is not None else Participation.objects.filter(study=study, course__video=True).exists()
     applies = {
@@ -78,9 +84,8 @@ def checklist(study, types=None):
         Condition.FOREIGN: person.nationality != '000',
     }
     return [
-        {'kind': t, 'label': t.name, 'note': t.note, 'required': t.required, 'documents': handed[t.key]}
-        for t in (document_types() if types is None else types)
-        if applies.get(t.condition) or t.condition == Condition.SUBJECTS and study.subject in t.subjects.all()
+        {'kind': t, 'label': t.name, 'note': t.note, 'required': t.required, 'documents': handed[t.key] or borrowed[t.key]}
+        for t in types if applies.get(t.condition) or t.condition == Condition.SUBJECTS and study.subject in t.subjects.all()
     ]
 
 
@@ -200,7 +205,7 @@ def board(request):
     studies = ranked(
         request.user.within(Study.objects.filter(start_term=term, status__in=BOARD), 'view_applications').select_related('person', 'program', 'subject')
         .annotate(slot=Min('participations__slot', filter=Q(participations__slot__gte=timezone.now(), participations__course__kind=Course.Kind.AUDITION)))
-        .prefetch_related(Prefetch('participations', stages(), to_attr='stages'), 'documents')
+        .prefetch_related(Prefetch('participations', stages(), to_attr='stages'), 'person__documents')
     )
     subject, q = request.GET.get('fach', ''), request.GET.get('q', '').strip()
     if subject.isdigit():
@@ -284,7 +289,9 @@ def audition(request, pk):
         else:
             messages.success(request, 'Wertungen gespeichert.')
         return redirect(course)
-    if request.GET.get('sortierung') == 'punkte':
+    if not office:
+        panel.blind(rows, person)
+    if request.GET.get('sortierung') == 'punkte' and not any(getattr(p, 'blind', False) for p in rows):  # a ranking would tell the others' marks
         rows.sort(key=lambda p: p.grade if p.grade is not None else (p.mean or 0), reverse=True)
     return render(request, 'admissions/audition.html', {
         'course': course,
@@ -362,15 +369,18 @@ def application(request, pk):
     steps = study.stages = list(stages().filter(study=study))
     missing = study.missing() if study.status == Study.Status.ADMITTED else []
     accepted = study.terms.filter(term=study.start_term).first()
+    personal = office or study.person == person  # the jury judges the performance: no contact or personal data
+    items = checklist(study)
     return render(request, 'admissions/application.html', {
         'study': study,
+        'personal': personal,
         'stages': steps,
         'recommendation': verdict(steps),
         'pending': bool(steps) and verdict(steps) is None,  # no place nor Nachrückliste before every stage has its result
         'remind': office and (accepted and missing or study.status == Study.Status.APPLIED and uploads_open(study) and incomplete(study)),
         'show_results': office or juror,
-        'checklist': checklist(study),
-        'documents': study.documents.exclude(message=None),
+        'checklist': items if personal else [item for item in items if item['kind'].jury],
+        'documents': study.documents.exclude(message=None) if personal else [],
         'decide': person.may('decide_applications', study),
         'enrol': person.may('manage_students', study),
         'history': bool(tables(person.roles)),
@@ -435,7 +445,7 @@ def remind(request):
         if (subject := request.POST.get('fach', '')).isdigit():
             studies = studies.filter(subject=subject)
     types, today, sent = document_types(), timezone.localdate(), 0
-    for study in studies.prefetch_related('documents', Prefetch('participations', stages(), to_attr='stages')):
+    for study in studies.prefetch_related('person__documents', Prefetch('participations', stages(), to_attr='stages')):
         if study.status == Study.Status.APPLIED and uploads_open(study):
             due = min(p.course.deadline for p in study.stages if p.course.program_id and p.course.deadline)
             key, items, values = 'unterlagen_fehlen', incomplete(study, types), {'frist': date_format(due, 'j. F Y')}
@@ -519,7 +529,7 @@ def mine(request):
     newly = Q(status=Study.Status.ENROLLED, start_term__start__gte=current.start) if current else Q(pk=None)  # just enrolled from an application
     studies = (
         person.studies.filter(Q(status__in=Study.APPLICATION) | newly)
-        .select_related('person', 'program', 'subject', 'start_term').prefetch_related('documents')
+        .select_related('person', 'program', 'subject', 'start_term').prefetch_related('person__documents')
     )
     types, days = document_types(), Institution.get().accept_days
     for study in studies:
@@ -566,16 +576,18 @@ def upload(request, pk):
 
 
 def document(request, pk):
-    """A handed-in file: for its owner, whoever sees or manages the student file or sees applications, and the candidate's
-    examiners: of the audition while applying, of the thesis for the thesis."""
-    d = get_object_or_404(Document.objects.select_related('study'), pk=pk)
+    """A handed-in file: for its owner, the student office and the office deciding results, whoever sees applications, and the candidate's
+    examiners: of the audition while applying what is meant for the jury, of the thesis for the thesis. A CV or certificate
+    counts for all of the person's applications."""
+    d = get_object_or_404(Document.objects.select_related('study', 'kind'), pk=pk)
     person = request.user
-    applying = d.study_id and d.study.status in Study.APPLICATION
-    examining = Course.objects.filter(staff=person, participations__study=d.study_id)
+    applications = Study.objects.filter(status__in=Study.APPLICATION)
+    applications = applications.filter(person=d.person_id) if d.kind.shared else applications.filter(pk=d.study_id)
+    examining = Course.objects.filter(staff=person)
     if not (
-        d.person_id == person.pk or person.may('view_files', d) or person.may('manage_students', d) or applying and person.may('view_applications', d)
-        or applying and examining.filter(kind=Course.Kind.AUDITION).exists()
-        or d.kind_id == 'abschlussarbeit' and examining.filter(kind=Course.Kind.THESIS).exists()
+        d.person_id == person.pk or person.may('decide_results', d) or person.may('manage_students', d) or person.within(applications, 'view_applications').exists()
+        or d.kind.jury and examining.filter(kind=Course.Kind.AUDITION, participations__study__in=applications).exists()
+        or d.kind_id == 'abschlussarbeit' and examining.filter(kind=Course.Kind.THESIS, participations__study=d.study_id).exists()
     ):
         raise PermissionDenied
     if not d.file:

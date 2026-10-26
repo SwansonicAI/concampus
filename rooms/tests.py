@@ -50,6 +50,15 @@ class BookingRulesTest(Seeded):
         self.refused(self.book(**times(start)), 'bereits belegt')
         self.refused(self.book(**times(slot(30))), 'höchstens 24 Stunden')
 
+    def test_a_taken_room_offers_another_or_a_later_time_in_one_click(self):
+        start = slot(5, 120)
+        self.book(**times(start))
+        instead = self.book(**times(start)).context['instead']
+        self.assertEqual(instead['later'][0], start + timedelta(hours=1))
+        other = instead['rooms'][0]
+        self.assertEqual(flashes(self.book(**times(start), instead=f'raum:{other.pk}', follow=True)), ['Buchung gespeichert.'])
+        self.assertTrue(Booking.objects.filter(room=other, start=start, person=self.mei).exists())
+
     def test_four_hours_a_day_but_last_minute_is_free(self):
         start = slot(5, 300)
         self.book(**times(start))

@@ -15,6 +15,7 @@ from django.views.decorators.http import require_POST
 
 from core.apps import plural
 from core.dates import day as understood
+from core.forms import again, sent
 from core.days import busy, strip
 from core import texts
 from core.models import Institute, Institution, Message, Office, Person
@@ -208,7 +209,14 @@ def booking(request, pk=None):
     if start := parse_datetime(request.GET.get('start', '')):
         end = parse_datetime(request.GET.get('ende', '')) or start + timedelta(hours=1)
         initial = {'room': request.GET.get('raum'), 'day': start.date(), 'begin': start.time(), 'until': end.time()}
-    form = BookingForm(request.POST or None, instance=booking, initial=initial, person=person)
+    data = request.POST.copy() or None
+    if data and (instead := data.pop('instead', [''])[0]):  # another room or a later time, offered when the room was taken
+        what, _, value = instead.partition(':')
+        if what == 'raum':
+            data['room'] = value
+        else:
+            data['begin'], data['until'] = value.split('-')
+    form = BookingForm(data, instance=booking, initial=initial, person=person)
     if form.is_valid():
         booking = form.save()
         if booking.person_id != person.pk:
@@ -225,7 +233,7 @@ def booking(request, pk=None):
         told = told if len(told) <= 3 else [f'alle {len(told)} Teilnehmenden']
     return render(request, 'rooms/booking.html', {
         'form': form, 'booking': booking, 'series': series, 'central': Office.holding('book_any_room'),
-        'told': told, 'cancel': CancelForm(person=person),
+        'told': told, 'cancel': CancelForm(sent(request, 'absagen'), person=person), 'instead': form.instead(),
         'rules': Institution.get(), 'special': BookingCategory.objects.filter(students=True).exclude(ahead_hours=None, participants=0),
         'history': booking.pk and Booking.visible_to(person.roles),
         'left': Institution.get().student_daily_hours - quota(person, timezone.localdate()) if form.student else None,
@@ -276,7 +284,7 @@ def cancel(request, pk):
     form = CancelForm(request.POST, person=request.user)
     if not form.is_valid():
         messages.error(request, ' '.join(e for errors in form.errors.values() for e in errors))
-        return redirect('rooms:booking', pk)
+        return again(request, reverse('rooms:booking', args=[pk]), 'absagen')
     data, makeup = form.cleaned_data, None
     if data['day']:
         makeup = Booking(
@@ -287,7 +295,7 @@ def cancel(request, pk):
             makeup.full_clean()
         except ValidationError as error:
             messages.error(request, f'Nachholtermin: {" ".join(error.messages)}')
-            return redirect('rooms:booking', pk)
+            return again(request, reverse('rooms:booking', args=[pk]), 'absagen')
     told = recipients(booking, request.user)
     booking.category = BookingCategory.system('abgesagt')
     booking.save(update_fields=['category'])

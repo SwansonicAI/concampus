@@ -148,6 +148,17 @@ class VideoTest(Seeded):
         self.assertFalse(auditions.filter(program=self.study.program, subject=self.study.subject).exists())
         self.assertEqual((auditions[0].subject.institute, auditions[0].program.postgraduate), (self.study.subject.institute, False))
 
+    def test_a_cv_handed_in_once_counts_for_every_application(self):
+        cello = Study.objects.get(person__username='bewerbung', subject__name='Violoncello')
+        with self.captureOnCommitCallbacks(execute=True):
+            cv = Document.objects.create(person=cello.person, study=cello, kind_id='cv', title='lebenslauf.pdf', file=SimpleUploadedFile('lebenslauf.pdf', b'%PDF-1.4'))
+        items = {i['label']: i['documents'] for i in checklist(self.study)}
+        self.assertIn(cv, items['Lebenslauf'])
+        self.assertFalse(items['Einzahlungsbeleg Eignungsprüfungsgebühr'])  # paid for each application
+        juror = Client()
+        juror.force_login(Course.objects.get(video=True, participations__study=self.study).staff.first())
+        self.assertEqual(juror.get(cv.href).status_code, 200)
+
     def test_others_cannot_upload(self):
         self.assertEqual(self.login('student').post(self.url, {'kind': 'cv', 'url': 'https://x.org/a.pdf'}).status_code, 403)
 

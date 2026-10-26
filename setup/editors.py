@@ -239,7 +239,7 @@ EDITORS = {e.key: e for e in [
     ),
     Editor(
         'unterlagen', DocumentType, 'Unterlagenarten', 'run_auditions', 'Aufnahme',
-        fields=['name', 'condition', 'subjects', 'required', 'note', 'file_types', 'max_mb', 'single', 'order'],
+        fields=['name', 'condition', 'subjects', 'required', 'shared', 'jury', 'note', 'file_types', 'max_mb', 'single', 'order'],
         columns=[('Unterlagen', 'name'), ('In der Checkliste', 'condition'), ('Pflicht', 'required')],
         search=['name'], words='checkliste bewerbung video zeugnis nachweis hochladen',
         queryset=lambda: DocumentType.objects.exclude(key__in=DocumentType.SYSTEM),  # Bescheide and theses are filed by the system

@@ -9,7 +9,7 @@
 <p class="lead">Ihr Kontingent heute: noch {{ left|floatformat:"-1" }} von {{ rules.student_daily_hours }} Stunden.</p>
 {% endif %}
 <div class="cols">
-  <form method="post" class="form">
+  <form method="post" class="form" id="buchung">
     {% csrf_token %}
     {{ form }}
     <div class="actions">
@@ -18,6 +18,15 @@
     </div>
   </form>
   <div>
+    {% if instead %}
+    <div class="panel" style="margin-bottom: 16px">
+      <h3>Stattdessen buchen</h3>
+      {% if instead.rooms %}<p class="muted"><small>Zur selben Zeit frei</small></p>
+      <div class="actions">{% for r in instead.rooms %}<button class="btn ghost small" form="buchung" name="instead" value="raum:{{ r.pk }}" title="{{ r.purpose }}">{{ r.name }}</button>{% endfor %}</div>{% endif %}
+      {% if instead.later %}<p class="muted" style="margin-top: 12px"><small>{{ form.instance.room.name }} ist wieder frei</small></p>
+      <div class="actions"><button class="btn ghost small" form="buchung" name="instead" value="zeit:{{ instead.later.0|time:'H:i' }}-{{ instead.later.1|time:'H:i' }}">{{ instead.later.0|time:"H:i" }}–{{ instead.later.1|time:"H:i" }} Uhr</button></div>{% endif %}
+    </div>
+    {% endif %}
     {% if booking.pk %}
     {% if told is not None and booking.category.blocks %}
     <form method="post" action="{% url 'rooms:cancel' booking.pk %}" class="panel">
@@ -32,8 +41,8 @@
       <h3>Stornieren</h3>
       <form method="post" action="{% url 'rooms:delete' booking.pk %}" class="actions">
         {% csrf_token %}
-        <button class="btn danger">Diesen Termin</button>
-        {% if series %}<button class="btn danger" name="serie" value="1">Diesen und alle folgenden</button>{% endif %}
+        <button class="btn danger" data-confirm="Wirklich stornieren?">Diesen Termin</button>
+        {% if series %}<button class="btn danger" name="serie" value="1" data-confirm="Alle folgenden stornieren?">Diesen und alle folgenden</button>{% endif %}
       </form>
       <p class="muted" style="margin: 12px 0 0"><small>Löscht die Buchung ganz.</small></p>
     </div>

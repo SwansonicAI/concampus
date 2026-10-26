@@ -152,11 +152,15 @@ def exam(request, pk):
             raise PermissionDenied
         try:
             panel.save(request.POST, rows, columns, decide=decide)
+        except panel.OffScale as error:
+            messages.error(request, str(error))
         except InvalidOperation:
             messages.error(request, 'Bitte nur Zahlen zwischen 0 und 99 eintragen.')
         else:
             messages.success(request, 'Ergebnisse gespeichert.')
         return redirect(course)
+    if not decide:
+        panel.blind(rows, person)
     handed = handed_in(rows[0]) if course.kind == Course.Kind.THESIS and rows else None
     held = handed or course.bookings.filter(start__lte=timezone.now()).exists()  # marks are owed from then on, slots no more
     return render(request, 'exams/exam.html', {
@@ -318,6 +322,8 @@ def marks(request, pk):
             post[f'score-{p.pk}-{person.pk}' if own else f'grade-{p.pk}'] = value
     try:
         panel.save(post, rows, [person] if own else [], decide=decide and not own)
+    except panel.OffScale as error:
+        messages.error(request, f'Nichts übernommen. {error}')
     except InvalidOperation:
         messages.error(request, 'Die Datei enthält eine Note, die keine Zahl zwischen 0 und 99 ist. Nichts übernommen.')
     else:

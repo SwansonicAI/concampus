@@ -1,6 +1,6 @@
 import uuid
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 
 from django import forms
 from django.db.models import Exists, Min, OuterRef, Q
@@ -133,6 +133,22 @@ class BookingForm(forms.ModelForm):
             if taken:
                 raise forms.ValidationError('Serie nicht möglich, belegt am ' + ', '.join(f'{t:%d.%m.}' for t in taken) + '.')
         return data
+
+    def instead(self):
+        """Where the room is taken: the rooms free then, like ones first, and when this one is free again that day for as
+        long. None while nothing is in the way."""
+        b = self.instance
+        if not (self.errors and b.room_id and b.start and b.end and b.clashes().exists()):
+            return None
+        taken = Booking.objects.filter(start__lt=b.end, end__gt=b.start, category__blocks=True).values('room')
+        rooms = sorted(self.fields['room'].queryset.exclude(pk__in=taken), key=lambda r: (r.function_id != b.room.function_id, r.building != b.room.building, r.name))
+        midnight = timezone.make_aware(datetime.combine(timezone.localtime(b.start).date() + timedelta(days=1), time()))
+        start, length = b.start, b.end - b.start
+        for other in Booking.objects.filter(room=b.room_id, category__blocks=True, end__gt=b.start, start__lt=midnight).exclude(pk=b.pk).order_by('start'):
+            if other.start >= start + length:
+                break
+            start = max(start, other.end)
+        return {'rooms': rooms[:4], 'later': (start, start + length) if start + length <= midnight else None}
 
     def check_rules(self, category, start, end, participants):
         """The Hochschule's booking rules (Institution) and those of the category."""

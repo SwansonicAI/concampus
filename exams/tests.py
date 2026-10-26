@@ -41,6 +41,19 @@ class ExamTest(Seeded):
         found = self.login('pruefungsamt').get('/pruefungen/', {'q': p.study.person.matriculation}).context['exams']
         self.assertEqual({c.pk for c in found}, set(p.study.participations.filter(course__kind__in=EXAMS, course__term__name='WiSe 2026/27').values_list('course', flat=True)))
 
+    def test_examiners_give_steps_and_judge_before_seeing_the_others(self):
+        resit = Course.objects.get(title__contains='Wiederholung')
+        hallmann = resit.staff.get(last_name='Hallmann')
+        examiner = Client()
+        examiner.force_login(hallmann)
+        rows = examiner.get(f'/pruefungen/{resit.pk}/').context['rows']
+        self.assertTrue(all(p.blind for p in rows))  # the others have marked, Hallmann not yet
+        first = rows[0].pk
+        refused = examiner.post(f'/pruefungen/{resit.pk}/', {f'score-{first}-{hallmann.pk}': '1,5'}, follow=True)
+        self.assertIn('keine Note', flashes(refused)[-1])
+        examiner.post(f'/pruefungen/{resit.pk}/', {f'score-{first}-{hallmann.pk}': '1,7'})
+        self.assertFalse(next(p for p in examiner.get(f'/pruefungen/{resit.pk}/').context['rows'] if p.pk == first).blind)
+
     def test_results_follow_the_panel_then_lock_on_release(self):
         resit = Course.objects.get(title__contains='Wiederholung')
         office = self.login('pruefungsamt')
