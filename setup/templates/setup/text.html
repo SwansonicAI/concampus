@@ -9,7 +9,7 @@
   {{ form }}
   <div class="actions">
     <button class="btn">Speichern</button>
-    <a class="btn ghost" href="{% url 'setup:texts' %}">Abbrechen</a>
+    <a class="btn ghost" data-close href="{% url 'setup:texts' %}">Abbrechen</a>
     {% if own %}<button class="link" name="standard" value="1">Auf Standard zurücksetzen</button>{% endif %}
     {% if own %}<a href="{% url 'history' 'core.text' record.pk %}">Verlauf</a>{% endif %}
   </div>

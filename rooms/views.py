@@ -149,7 +149,8 @@ def find(request):
         rooms = bookable(request.user).exclude(pk__in=taken).filter(capacity__gte=data['seats'] or 1)
         rooms = matching(rooms, data['equipment'], 'equipment', 'name', 'purpose', 'building')
         rooms = rooms.order_by('capacity', 'building', 'name')
-    return render(request, 'rooms/find.html', {'form': form, 'rooms': rooms, 'start': start, 'end': end})
+    busy = start and 'student' in request.user.roles and agenda(request.user).filter(start__lt=end, end__gt=start).select_related('room').first()
+    return render(request, 'rooms/find.html', {'form': form, 'rooms': rooms, 'start': start, 'end': end, 'busy': busy})
 
 
 def room(request, pk):
@@ -181,7 +182,9 @@ def mine(request):
         'feed': feed(request),
     }
     if 'student' in person.roles:
-        context['used'], context['daily'] = quota(person, today), Institution.get().student_daily_hours
+        rules, used = Institution.get(), quota(person, today)
+        booked = sum((b.end - b.start).total_seconds() for b in person.bookings.filter(category__quota=True, start__date=today)) / 3600
+        context.update(used=used, daily=rules.student_daily_hours, left=rules.student_daily_hours - used, extra=round(booked - used, 1), last_minute=rules.last_minute_hours)
     return render(request, 'rooms/mine.html', context)
 
 
@@ -224,9 +227,11 @@ def booking(request, pk=None):
                 'buchung_geaendert', booking.person, reverse('rooms:booking', args=[booking.pk]), buchung=booking.label, von=person, raum=booking.room,
                 termin=f'{timezone.localtime(booking.start):%d.%m.%Y %H:%M}–{timezone.localtime(booking.end):%H:%M}',
             )
+        rules = Institution.get()
         free = form.student and (  # say why the counter did not move
-            f'{booking.category} zählt nicht zum Kontingent.' if not booking.category.quota
-            else 'Kurzfristig: zählt nicht zum Kontingent.' if booking.start - booking.created <= timedelta(hours=Institution.get().last_minute_hours) else ''
+            f'{booking.category} zählt nicht zu Ihren {rules.student_daily_hours} Stunden Übezeit am Tag.' if not booking.category.quota
+            else f'Sie beginnt in weniger als {rules.last_minute_hours} Stunden und zählt deshalb nicht zu Ihren {rules.student_daily_hours} Stunden am Tag.'
+            if booking.start - booking.created <= timedelta(hours=rules.last_minute_hours) else ''
         )
         messages.success(request, f'Buchung gespeichert. {free or ""}'.strip())
         return redirect(f"{reverse('rooms:index')}?tag={timezone.localtime(booking.start):%Y-%m-%d}")
@@ -239,7 +244,7 @@ def booking(request, pk=None):
         'form': form, 'booking': booking, 'series': series, 'central': Office.holding('book_any_room'),
         'told': told, 'cancel': CancelForm(sent(request, 'absagen'), person=person), 'instead': form.instead(),
         'rules': Institution.get(), 'special': BookingCategory.objects.filter(students=True).exclude(ahead_hours=None, participants=0),
-        'history': booking.pk and Booking.visible_to(person.roles),
+        'history': booking.pk and Booking.visible_to(person.roles), 'now': timezone.now(),
         'left': Institution.get().student_daily_hours - quota(person, timezone.localdate()) if form.student else None,
     })
 

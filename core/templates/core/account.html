@@ -17,7 +17,7 @@
       {% if user.matriculation %}<dt>Matrikelnr.</dt><dd>{{ user.matriculation }}</dd>{% endif %}
       {% if user.birth_date %}<dt>Geboren</dt><dd>{{ user.birth_date|date:"j. F Y" }}{% if user.birth_place %} in {{ user.birth_place }}{% endif %}</dd>{% endif %}
     </dl>
-    <p class="muted"><small>Name, Geburtsdaten und Staatsangehörigkeit ändert {{ office|default:"die Hochschule" }} gegen Nachweis.</small></p>
+    <p class="muted"><small>Name, Geburtsdaten und Staatsangehörigkeit werden gegen Nachweis geändert, zuständig: {{ office|default:"die Hochschule" }}.</small></p>
   </div>
 </div>
 {% endblock %}

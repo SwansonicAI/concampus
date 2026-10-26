@@ -32,8 +32,9 @@ from courses.panel import mean, rounding
 from curriculum.models import Module, Program, Rounding, Subject
 from instruments.models import Instrument, Loan
 from rooms.models import Booking, BookingCategory, Room, RoomFunction
+from rooms.views import agenda
 from students.models import Document, DocumentType, Study, StudyTerm
-from ..plans import HF, JENA, PIANO, PROGRAMS, RESEARCH, SPEECH, STRINGS, TEACHING, WINDS, WS
+from ..plans import EARLY, HF, JENA, PIANO, PROGRAMS, RESEARCH, SECTION, SPEECH, STRINGS, TEACHING, VOCAL, WINDS, WS
 
 FEE = Decimal('341.30')  # Semesterbeitrag WiSe 2026/27: Studierendenwerk 95,00 + Deutschlandsemesterticket 226,80 + Studierendenrat 19,50
 FEES = {  # published Semesterbeiträge from WiSe 2023/24; earlier ones approximated, SoSe 2027 as WiSe 2026/27
@@ -209,7 +210,7 @@ INSTRUMENTS = {  # the Institute's instruments for lending: name, maker, conditi
 }
 TEACHER_INSTITUTE = {  # teachers without a Hauptfach of their own
     'brandt': 'MW', 'brandauer': 'MW', 'roth': 'MW', 'voss': 'MW', 'scholz': 'MW', 'hausmann': 'MW', 'schulte': 'KL', 'engel': 'KL',
-    'neumann': 'MK', 'hagen': 'MK', 'wiegand': 'MK', 'ferreira': 'DO', 'popescu': 'DO', 'hein': 'DO', 'martens': 'DO',
+    'neumann': 'MK', 'hagen': 'MK', 'wiegand': 'MK', 'lorenz': 'MK', 'kraft': 'MK', 'ferreira': 'DO', 'popescu': 'DO', 'hein': 'DO', 'martens': 'DO',
     'falk': 'GM', 'kessler': 'GM', 'bellini': 'GM', 'weber': 'NJ', 'brueck': 'AM',
 }
 
@@ -329,7 +330,8 @@ LESSON_ROOMS = {  # where each Hauptfach is taught, as the rooms are named
     'Gesang': ['BH 002', 'BH 006', 'BH 008', 'BH 102', 'BH 109', 'BH 112', 'BH 114', 'PA 105', 'PA 108', 'PA 207', 'PA 313', 'PA 314'],
     'Jazz-Gesang': ['HzH 119', 'HzH 121'], 'Klavier': ['FH 213', 'FH 214', 'FH 215', 'FH 216', 'FH 218', 'FH 315', 'FH 316', 'PA 101', 'PA 304', 'PA 305', 'PA 306'],
     'Orgel': ['PA 014', 'PA 209'], PIANO: ['PA 205', 'PA 206', 'PA 301', 'PA 307'],
-    WS: ['FH 307', 'FH 308', 'FH 319', 'HzH 009', 'HzH 016', 'HzH 120', 'BH 013', 'BH 108'], SPEECH: ['PA 310'],
+    WS: ['FH 307', 'FH 308', 'FH 319', 'HzH 009', 'HzH 016', 'HzH 120', 'BH 013', 'BH 108'], SPEECH: ['PA 310'], VOCAL: ['BH 005', 'BH 112', 'BH 114'],
+    EARLY: ['FH 106', 'FH 107'],
 }
 SEMINAR_ROOMS = ['HzH 316', 'HzH 320', 'HzH 204', 'HzH 205', 'PA 311', 'HzH 018', 'HzH 313']
 FIXED = {  # WiSe 2026/27 times from the Lehrveranstaltungsverzeichnisse: room, weekday, start, minutes
@@ -383,6 +385,7 @@ TEACHERS = [  # key, title, first, last, Hauptfach taught
     ('bellini', 'Dr.', 'Paola', 'Bellini', None), ('hagen', 'Prof.', 'Ulrike', 'Hagen', None),
     ('brueck', 'Prof.', 'Johannes', 'Brück', None), ('sander', 'Prof.', 'Christoph', 'Sander', 'Orgel'),
     ('okafor', 'Prof.', 'Ada', 'Okafor', 'Jazz-Gesang'), ('wiegand', 'KMD', 'Peter', 'Wiegand', None), ('hausmann', 'Prof. Dr.', 'Eva', 'Hausmann', None),
+    ('lorenz', 'Prof.', 'Ines', 'Lorenz', None), ('kraft', '', 'Simon', 'Kraft', None),
 ]
 POSTGRADUATE = ['M.Mus.', 'M.Ed.', 'Konzertexamen', 'Zertifikat', 'Dr. phil.']
 VIDEO_NOTE = (
@@ -455,7 +458,7 @@ CATEGORIES = [  # key, name, colour, settings: the HfM's booking categories as i
     ('allgemein', 'Allgemeine Buchung', 'practice', {}), ('blockiert', 'Blockiert', 'blocked', {}), ('abgesagt', 'Abgesagt', 'cancelled', {'blocks': False}),
 ]
 OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
-    'ASA': [  # Akademische und Studentische Angelegenheiten
+    'Akademische und Studentische Angelegenheiten (ASA)': [
         'view_students', 'view_files', 'manage_students', 'manage_reregistration', 'message_students',
         'view_applications', 'decide_applications', 'run_auditions', 'manage_courses', 'view_teaching_load',
         'view_curriculum', 'book_any_room', 'view_bookings', 'manage_terms', 'view_statistics', 'report_statistics',
@@ -470,7 +473,7 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
     'Präsidium': ['view_statistics', 'view_curriculum', 'view_teaching_load'],
     'Institut Streichinstrumente und Harfe': [
         'view_students', 'view_files', 'message_students', 'view_applications', 'run_auditions', 'manage_courses', 'view_teaching_load',
-        'view_curriculum', 'book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms', 'manage_instruments',
+        'view_curriculum', 'book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms', 'manage_instruments', 'roll_over',
     ],
     'Prüfungsausschuss Lehramt': ['view_files', 'manage_exams', 'decide_results', 'recognise', 'view_curriculum'],
 }
@@ -479,7 +482,7 @@ LIMITS = {  # offices for some Institute or Studiengänge only
     'Prüfungsausschuss Lehramt': ([], [('B.Ed.', 'Musik an Gymnasien (Doppelfach)'), ('M.Ed.', 'Musik an Gymnasien (Doppelfach)'), ('Staatsexamen', 'Lehramt an Gymnasien, Studienfach Musik')]),
 }
 STAFF = [  # username, title, first, last, office
-    ('asa', '', 'Sabine', 'Krüger', 'ASA'),
+    ('asa', '', 'Sabine', 'Krüger', 'Akademische und Studentische Angelegenheiten (ASA)'),
     ('pruefungsamt', '', 'Thomas', 'Albrecht', 'Prüfungsamt'),
     ('dekanat', 'Prof. Dr.', 'Johanna', 'Brandt', 'Dekanat'),
     ('veranstaltungsbuero', '', 'Michael', 'Görlitz', 'Veranstaltungsbüro'),
@@ -492,9 +495,9 @@ LECTURERS = {  # course title (or its start) → teacher key
     'Musikgeschichte im Überblick IV': 'voss', '„Pour la fin du temps“': 'voss', 'Kontrapunkt': 'roth', 'Formenlehre': 'brandauer',
     'Satztechniken': 'roth', 'Allgemeine Musiklehre': 'brandauer', 'Gehörbildung': 'roth', 'Instrumentenkunde': 'brandauer',
     'Höranalyse': 'brandauer', 'Werkanalyse 2': 'roth', 'Musikpädagogik': 'neumann', 'Fachdidaktik Gesang': 'hartung',
-    'Fachdidaktik': 'neumann', 'Lehrpraxis': 'neumann', 'Unterrichtspraktisches Klavierspiel': 'schulte', 'Rhetorik': 'kessler',
-    'Rhythmik': 'neumann', 'Elementare Musikpädagogik': 'neumann', 'Hochschulchor': 'hagen', 'Hochschulorchester': 'ferreira',
-    'Kammermusik': 'reinholdt', 'Orchesterstudien Streicher': 'sauer', 'Orchesterstudien Bläser': 'hallmann', 'Probespieltraining': 'ferreira',
+    'Fachdidaktik': 'neumann', 'Lehrpraxis': 'lorenz', 'Unterrichtspraktisches Klavierspiel': 'schulte', 'Rhetorik': 'kessler',
+    'Rhythmik': 'kraft', 'Elementare Musikpädagogik': 'kraft', 'Musikpädagogik 3': 'lorenz', 'Lehrpraxis/Hospitation': 'neumann', 'Hochschulchor': 'hagen', 'Hochschulorchester': 'ferreira',
+    'Kammermusik': 'reinholdt', 'Probespieltraining': 'ferreira',
     'Kammerorchester': 'sauer', 'Historische': 'brueck', 'Historisches Instrument': 'brueck', 'Ensemble für Alte Musik': 'brueck',
     'Liszt Brass Ensemble': 'ebert', 'Musik und Gesundheit': 'scholz', 'Alexander-Technik': 'scholz', 'Konditionstraining': 'scholz',
     'Auftrittstraining': 'scholz', 'Mentales Training': 'scholz', 'Selbstmanagement': 'scholz', 'Schreibwerkstatt': 'brandt',
@@ -508,9 +511,10 @@ LECTURERS = {  # course title (or its start) → teacher key
     'Einführung in die Korrepetitionspraxis': 'hein', 'Klavierauszugspiel': 'hein', 'Improvisation': 'weber', 'Geschichte des Klavierliedes': 'voss',
     'Tonstudiotechnik': 'weber', 'Einführung in die Musikvermittlung': 'neumann', 'Notationsgeschichte': 'voss', 'Historische Satzlehre': 'roth',
     'Zweitinstrument': 'morozova', 'Musikpädagogisches Orientierungspraktikum': 'neumann',
-    'Chorleitung': 'hagen', 'Grundlagen Dirigieren': 'ferreira', 'Grundlagen Bandleitung': 'weber', 'Stimmbildung': 'hartung', 'Instrumentenpool': 'neumann',
-    'Stimmphysiologie': 'scholz', 'Schulpraktisches Gruppenmusizieren': 'neumann', 'Musik und Performance': 'falk', 'Begleitseminar Praxissemester': 'neumann',
-    'Musikpädagogik: Forschungskolloquium': 'neumann', 'Liturgik': 'wiegand', 'Gregorianik': 'wiegand', 'Hymnologie': 'wiegand', 'Liturgisches Orgelspiel': 'sander',
+    'Chorleitung': 'hagen', 'Grundlagen Dirigieren': 'ferreira', 'Grundlagen Bandleitung': 'weber', 'Stimmbildung': 'hartung', 'Instrumentenpool': 'kraft',
+    'Stimmphysiologie': 'scholz', 'Schulpraktisches Gruppenmusizieren': 'kraft', 'Musik und Performance': 'falk', 'Begleitseminar Praxissemester': 'neumann',
+    'Musikpädagogik: Forschungskolloquium': 'neumann', 'Liturgik': 'wiegand', 'Gregorianik': 'wiegand', 'Hymnologie': 'wiegand', 'Liturgisches Orgelspiel': 'wiegand',
+    'Fachdidaktik Streicher': 'petersen', 'Fachdidaktik Bläser': 'brenner', 'Fachdidaktik Klavier': 'schulte', 'Lehrpraxis Klavier': 'engel',
     'Orgelexkursion': 'sander', 'Orchesterleitung': 'ferreira', 'Doktorandenkolloquium': 'voss', 'Proben und Aufführungen': 'falk',
 }
 class Origin(NamedTuple):
@@ -737,9 +741,12 @@ def area_of(title):
 
 
 def short(form, title):
-    """The Lehrform's abbreviation in a plan's form: 'S/Ü 90' → 'S', 'E+x 45' → 'E+x'; a Kolloquium by its title."""
+    """The Lehrform's abbreviation in a plan's form: 'S/Ü 90' → 'S', 'E+x 45' → 'E+x', 'E/G 360' → 'G' (one-to-one within a
+    group's work); a Kolloquium by its title."""
     if 'olloquium' in title:
         return 'K'
+    if form.startswith('E') and 'G' in form:
+        return 'G'
     return 'E+x' if form.startswith('E+x') else form[:1]
 
 
@@ -834,7 +841,7 @@ class Command(BaseCommand):
         self.institutes = {key: Institute.objects.create(name=name) for key, name in INSTITUTES.items()}
         Holiday.objects.bulk_create(Holiday(name=name, first=first, last=last) for name, first, last in HOLIDAYS)
         self.areas = {name: Area.objects.create(name=name, order=n) for n, name in enumerate(AREAS)}
-        self.formats = {code: Format.objects.create(name=name, short=code, order=n) for n, (name, code) in enumerate(FORMATS)}
+        self.formats = {code: Format.objects.create(name=name, short=code, per_head=code == 'E', order=n) for n, (name, code) in enumerate(FORMATS)}
         self.instruments = [
             Instrument.objects.create(number=f'{key}-{n:03d}', name=name, maker=maker, institute=self.institutes[key], note=note, available=available)
             for key, items in INSTRUMENTS.items() for n, (name, maker, note, available) in enumerate(items, 1)
@@ -843,7 +850,7 @@ class Command(BaseCommand):
             name: Subject.objects.create(name=name, institute=self.institutes[SUBJECT_INSTITUTE[name]], english=SUBJECTS_EN[name], field=SUBJECT_FIELDS[name])
             for name in STRINGS + WINDS + ['Gesang', 'Jazz-Gesang', 'Klavier', 'Orgel'] + RESEARCH
         }
-        self.programs, self.teach, self.first_course = {}, {}, {}
+        self.programs, self.teach, self.first_course, self.waived = {}, {}, {}, set()
         for name, degree, version, semesters, subjects, plan in PROGRAMS:
             program = Program.objects.create(
                 name=name, degree=degree, version=version, semesters=semesters, postgraduate=degree in POSTGRADUATE, honours=Decimal('1.0'), mean_rounding=Rounding.HALF_UP,  # RPSO 2026: kaufmännisch gerundet
@@ -879,7 +886,7 @@ class Command(BaseCommand):
             shape = node['shape']
             if shape == 'L':
                 leaf = Module.objects.create(program=program, parent=parent, code=node['code'], title=node['title'], credits=node['credits'], description=node['form'])
-                self.teach[leaf.pk] = (node['course'], 1, node['form'], None)
+                self.teach[leaf.pk] = (node['course'], 1, node['form'], node['taught'])
                 continue
             module = Module.objects.create(
                 program=program, parent=parent, code=node['code'], title=node['title'], credits=node['credits'],
@@ -892,10 +899,12 @@ class Command(BaseCommand):
                     continue
                 if part['shape'] == 'X':
                     n += 1
-                    Module.objects.create(
+                    exam = Module.objects.create(
                         program=program, parent=module, code=f"{node['code']}.{n:02d}", title=part['title'], credits=0,
                         semester=part['semester'], exam=True, weight=Decimal(str(part['weight'])), description=part['form'],
                     )
+                    exam.waived.set(self.subjects[s] for s in part['waived'])
+                    self.waived |= {(exam.pk, s) for s in part['waived']}
                     first.append(part['semester'])
                     continue
                 for k, (semester, credits) in enumerate(sorted(part['credits'].items()), part['start']):
@@ -938,14 +947,18 @@ class Command(BaseCommand):
         for key, title, first, last, subject in TEACHERS:
             institute = self.institutes[SUBJECT_INSTITUTE[subject] if subject else TEACHER_INSTITUTE[key]]
             login = {'wendt': 'lehre', 'hein': 'korrepetition'}.get(key) or handle(first, last)  # the demo's teacher and accompanist
-            self.teachers[key] = self.person(login, first, last, title, institute=institute)
+            employment = Person.Employment.LEHRAUFTRAG if key == 'hein' else Person.Employment.PROFESSUR if title.startswith('Prof.') else Person.Employment.MITARBEIT
+            obligation = {'Prof.': 18, 'Prof. Dr.': 9}.get(title)  # ThürLVVO § 4: artistic and academic subjects
+            self.teachers[key] = self.person(login, first, last, title, institute=institute, employment=employment, obligation=obligation)
             if subject:
                 self.by_subject[subject].append(self.teachers[key])
         self.logins |= set(Person.objects.values_list('username', flat=True))
         self.pools = {  # one-to-one lessons beside the Hauptfach, with Lehrbeauftragte where the plan needs more hours than the staff has
-            WS: [self.teachers[k] for k in ('popescu', 'hein', 'martens')] + [self.lecturer('DO') for _ in range(5)],
-            PIANO: [self.teachers[k] for k in ('schulte', 'engel')] + [self.lecturer('KL') for _ in range(6)],
+            WS: [self.teachers[k] for k in ('popescu', 'hein', 'martens')] + [self.lecturer('DO') for _ in range(13)],
+            PIANO: [self.lecturer('KL') for _ in range(14)],
             SPEECH: [self.teachers['kessler']] + [self.lecturer('GM') for _ in range(2)],
+            VOCAL: [self.lecturer('GM') for _ in range(4)],
+            EARLY: [self.teachers['brueck']] + [self.lecturer('AM') for _ in range(3)],
         }
 
     def login(self, first, last):
@@ -1129,11 +1142,11 @@ class Command(BaseCommand):
                 self.private(person)
         Person.objects.bulk_create(people, batch_size=2000)
 
-        # Hauptfach classes of at most fourteen: Lehrbeauftragte take whoever the professors cannot
+        # Hauptfach classes of at most twelve, 18 LVS at 90 minutes each: Lehrbeauftragte take whoever the professors cannot
         enrolled = [s for s in studies if s.status in (Study.Status.ENROLLED, Study.Status.ADMITTED)]
         for subject, teachers in self.by_subject.items():
             size = sum(1 for s in enrolled if s.subject.name == subject)
-            for _ in range(-(-size // 14) - len(teachers)):
+            for _ in range(-(-size // 12) - len(teachers)):
                 teachers.append(self.lecturer(SUBJECT_INSTITUTE[subject]))
         load = defaultdict(int)
         supervisors = {'Musikwissenschaft': 'voss', 'Musikpädagogik': 'neumann', 'Kulturmanagement': 'hausmann'}
@@ -1176,8 +1189,10 @@ class Command(BaseCommand):
         """A Lehrbeauftragte:r of an Institut."""
         origin = self.rng.choices(ORIGINS, weights=[o.weight for o in ORIGINS])[0]
         first, last = self.draw(origin, self.rng.choice('wm'))
+        while Person.objects.filter(last_name=last, institute__isnull=False).exists():  # classes go by their teacher's surname
+            first, last = self.draw(origin, self.rng.choice('wm'))
         login = self.login(first, last)
-        return self.person(login, first, last, email=f'{login}@hfm-weimar.de', institute=self.institutes[institute])
+        return self.person(login, first, last, email=f'{login}@hfm-weimar.de', institute=self.institutes[institute], employment=Person.Employment.LEHRAUFTRAG)
 
     def plan(self, study):
         """The leaves this study takes: everything required, and one pick wherever the plan offers a choice."""
@@ -1194,6 +1209,9 @@ class Command(BaseCommand):
                 elif node.offered > node.credits:
                     if all(kid.credits >= node.credits for kid in kids):  # KV or IV, variant A, B or C: mostly the first
                         kids = [kids[0] if rng.random() < 0.75 else rng.choice(kids)]
+                        if kids[0].nodes and kids[0].first and kids[0].first <= study.fs and study.focus_id is None and study.person != self.demo:  # a Vertiefung, chosen by now; the demo student is about to
+                            study.focus = kids[0]
+                            self.chose.append(study)
                     else:
                         picked, total = [], 0
                         for kid in rng.sample(kids, len(kids)):
@@ -1232,10 +1250,12 @@ class Command(BaseCommand):
             label = 'Gesang' if subject == 'Gesang' else f'Hauptfach {subject}'
             course = self.course(term, f'{label} · Klasse {study.teacher.last_name}', Course.Kind.LESSON, subject=study.subject, hours=sws(form), format=self.formats['E'])
             return course, study.teacher, LESSON_ROOMS[subject]
-        if taught in (WS, PIANO, SPEECH):
-            teacher = self.pools[taught][study.pk % len(self.pools[taught])]
-            label = {WS: 'Werkstudium', PIANO: 'Klavier (Pflichtfach)', SPEECH: 'Bühnensprechen'}[taught]
-            return self.course(term, f'{label} · {teacher.first_name} {teacher.last_name}', Course.Kind.LESSON, hours=sws(form), format=self.formats['E']), teacher, LESSON_ROOMS[taught]
+        if taught in self.pools or taught == SECTION:
+            pool = self.by_subject[subject] if taught == SECTION else self.pools[taught]
+            teacher = self.teachers['hein'] if taught == WS and study.person == self.demo else pool[study.pk % len(pool)]  # the demo's accompanist
+            label = {WS: 'Werkstudium', PIANO: 'Klavier (Pflichtfach)', SPEECH: 'Bühnensprechen'}.get(taught, title)
+            rooms = LESSON_ROOMS[subject if taught == SECTION else taught]
+            return self.course(term, f'{label} · {teacher.first_name} {teacher.last_name}', Course.Kind.LESSON, hours=sws(form), format=self.formats['E']), teacher, rooms
         now = term == self.current  # enrolment from early September to the second week of lectures
         course = self.course(
             term, title, hours=sws(form) if form else None, format=self.formats.get(short(form or '', title)),
@@ -1248,22 +1268,23 @@ class Command(BaseCommand):
         """Past results that make up each transcript, and this term's participations, lessons and bookings."""
         rng = self.rng
         self.courses, links, staff, rows, scores = {}, set(), set(), {}, []
+        self.chose = []  # studies whose Vertiefung plan() put on record
         self.lessons, booked = [], set()  # weekly one-to-one lessons this term: (person, course, teacher, rooms, minutes)
         for study in [*self.enrolled, self.graduate]:  # and the graduate's whole record
             subject, enrolled = study.subject.name, study.status == Study.Status.ENROLLED
-            behind = enrolled and study.fs > study.program.semesters and rng.random() < 0.6  # over the Regelstudienzeit: the last semester still open
+            behind = enrolled and study.fs > study.program.semesters  # over the Regelstudienzeit: the last semester taken now
             for leaf in self.plan(study):
-                if leaf.semester > study.fs or (behind and leaf.semester == study.program.semesters):
+                if leaf.semester > study.fs:
                     continue
-                term = self.calendar[self.now - study.fs + leaf.semester]
-                done = leaf.semester < study.fs
+                late = behind and leaf.semester == study.program.semesters
+                term = self.current if late else self.calendar[self.now - study.fs + leaf.semester]
+                done = leaf.semester < study.fs and not late
                 if leaf.exam:
-                    if not done or leaf.description == f'entfällt für {subject}' or (study.person == self.demo and leaf.code.startswith('BM-XX-MW-01')):
+                    if not done or (leaf.pk, subject) in self.waived or (study.person == self.demo and leaf.code.startswith('BM-XX-MW-01')):
                         continue  # this term's exams are arranged in exams(); the demo student still owes Musikgeschichte
-                    artistic = leaf.title.startswith(ARTISTIC)
-                    name = f'{self.titles[leaf.parent_id]} · {leaf.title}' + (f' · {subject}' if artistic else '')
-                    course = self.course(term, name, Course.Kind.EXAM, subject=study.subject if artistic else None, released=at(term.end - timedelta(days=45), hour=12))
-                    examiners = self.panel(subject) if artistic else [self.teachers[lecturer(self.first_course.get(leaf.parent_id, ''))]]
+                    played, name = self.held(leaf, subject)
+                    course = self.course(term, name, Course.Kind.EXAM, subject=self.subjects.get(played), released=at(term.end - timedelta(days=45), hour=12))
+                    examiners = self.panel(played) if played else [self.teachers[lecturer(self.first_course.get(leaf.parent_id, ''))]]
                     grade, index = self.grade(study), self.calendar.index(term)
                     if enrolled and study.person != self.demo and rng.random() < 0.06:  # failed; passed on retake the term after, or retaken this term
                         rows[(course.pk, study.pk, leaf.pk)] = Participation(course=course, study=study, module=leaf, grade=Decimal('5.0'), passed=False, created=at(term.start, hour=9))
@@ -1273,7 +1294,7 @@ class Command(BaseCommand):
                             links.add((course.pk, leaf.pk))
                             continue
                         term = self.calendar[index + 1]
-                        course = self.course(term, name, Course.Kind.EXAM, subject=study.subject if artistic else None, released=at(term.end - timedelta(days=45), hour=12))
+                        course = self.course(term, name, Course.Kind.EXAM, subject=self.subjects.get(played), released=at(term.end - timedelta(days=45), hour=12))
                     rows[(course.pk, study.pk, leaf.pk)] = Participation(course=course, study=study, module=leaf, grade=grade, passed=True, created=at(term.start, hour=9))
                     for examiner in examiners:
                         target = float(grade) + rng.gauss(0, 0.25)
@@ -1297,6 +1318,7 @@ class Command(BaseCommand):
                         booked.add((study.person.pk, course.pk))
                         self.lessons.append((study.person, course, teacher, rooms, length(self.teach[leaf.pk][2])))
                 links.add((course.pk, leaf.pk))
+        Study.objects.bulk_update(self.chose, ['focus'])
         created = {(p.course_id, p.study_id, p.module_id): p for p in Participation.objects.bulk_create(rows.values())}
         electives = Course.objects.filter(term=self.current, title__in=['Alexander-Technik', 'Auftrittstraining', 'Mentales Training', 'Selbstmanagement', 'Kammerorchester'])
         full = electives.annotate(size=models.Count('participations')).order_by('-size').first()
@@ -1355,9 +1377,11 @@ class Command(BaseCommand):
             return
         chamber.allocation = Course.Allocation.ENSEMBLE
         chamber.save(update_fields=['allocation'])
-        coaches = {family: self.by_subject[subject][0] for family, subject in [('strings', 'Violoncello'), ('piano', 'Klavier'), ('winds', 'Horn'), ('voice', 'Gesang')]}
-        coaches['strings'] = self.teachers['wendt']
-        chamber.staff.add(*coaches.values())
+        coaches = {  # the demo's teacher coaches the first quartet
+            family: [t for subject in subjects for t in self.by_subject[subject][:3]]
+            for family, subjects in [('strings', ['Violine', 'Violoncello', 'Viola']), ('piano', ['Klavier']), ('winds', ['Horn', 'Klarinette', 'Trompete', 'Flöte']), ('voice', ['Gesang'])]
+        }
+        chamber.staff.add(*{c for cs in coaches.values() for c in cs})
         pools = defaultdict(list)
         for p in chamber.participations.select_related('study__subject').order_by('created'):
             pools[p.study.subject.name].append(p.study)
@@ -1377,9 +1401,10 @@ class Command(BaseCommand):
         ]
         for k, (name, members, family, repertoire) in enumerate(groups):
             open_ = k >= len(groups) - 3  # registered last, coach not yet given
+            coach = coaches[family][k % len(coaches[family])]
             group = Ensemble.objects.create(
-                course=chamber, name=name, repertoire=repertoire, wish=coaches[family] if k % 3 == 0 else None,
-                coach=None if open_ else coaches[family], created=at(date(2026, 9, 8) + timedelta(days=k * 38 // len(groups)), hour=10 + k % 8),
+                course=chamber, name=name, repertoire=repertoire, wish=coach if k % 3 == 0 else None,
+                coach=None if open_ else coach, created=at(date(2026, 9, 8) + timedelta(days=k * 38 // len(groups)), hour=10 + k % 8),
             )
             group.members.set(members)
 
@@ -1511,21 +1536,19 @@ class Command(BaseCommand):
         taken = set(Participation.objects.filter(course__term=now).values_list('study_id', 'module__parent_id'))
         due, theses = defaultdict(list), []
         for study in self.enrolled:
-            for leaf in Module.objects.filter(program=study.program, exam=True, semester=study.fs):
-                if (study.pk, leaf.parent_id) not in taken or leaf.description == f'entfällt für {study.subject}':  # only exams of modules the study is doing
+            for leaf in Module.objects.filter(program=study.program, exam=True, semester=min(study.fs, study.program.semesters)):
+                if (study.pk, leaf.parent_id) not in taken or (leaf.pk, study.subject.name) in self.waived:  # only exams of modules the study is doing
                     continue
                 if leaf.title.startswith(THESES):
                     theses.append((study, leaf))
                     continue
-                artistic = leaf.title.startswith(ARTISTIC)
-                due[(self.titles[leaf.parent_id], leaf.title, study.subject.name if artistic else '')].append((study, leaf))
+                due[self.held(leaf, study.subject.name)].append((study, leaf))
         stages, written = ['Festsaal', 'Saal Am Palais', 'FH 106'], ['HzH 313', 'HzH 316', 'HzH 320']
         free = defaultdict(int)  # the next free exam day of each stage
         signed = (timezone.localdate() - EXAM_SIGNUP[0]).days  # days of Prüfungsanmeldung so far: who registered depends on the day of seeding
-        for n, ((module, title, subject), entries) in enumerate(sorted(due.items())):
+        for n, ((subject, title), entries) in enumerate(sorted(due.items(), key=lambda kv: kv[0][1])):
             course = Course.objects.create(
-                term=now, kind=Course.Kind.EXAM, title=f'{module} · {title}' + (f' · {subject}' if subject else ''),
-                subject=self.subjects.get(subject), opens=EXAM_SIGNUP[0], deadline=EXAM_SIGNUP[1],
+                term=now, kind=Course.Kind.EXAM, title=title, subject=self.subjects.get(subject), opens=EXAM_SIGNUP[0], deadline=EXAM_SIGNUP[1],
             )
             course.staff.set(self.panel(subject) if subject else [self.teachers[lecturer(self.first_course.get(entries[0][1].parent_id, ''))]])
             course.modules.set({leaf for _, leaf in entries})
@@ -1547,7 +1570,7 @@ class Command(BaseCommand):
             if signed >= 0:
                 Participation.objects.bulk_create(
                     Participation(
-                        course=course, study=study, module=leaf, slot=slot, note=self.repertoire(study.subject.name) if subject else '',
+                        course=course, study=study, module=leaf, slot=slot, note=self.repertoire(subject) if subject else '',
                         created=at(EXAM_SIGNUP[0] + timedelta(days=rng.randint(0, min(signed, 14))), hour=10),
                     )
                     for slot, (study, leaf) in zip(slots, entries)
@@ -1624,6 +1647,13 @@ class Command(BaseCommand):
                 url=f'https://upload.hfm-weimar.de/{uuid.uuid4().hex[:10]}.pdf', created=at(date(2026, 10, 22), hour=16),
             )
             Score.objects.create(participation=early, examiner=second, value=Decimal('1.7'))
+
+    def held(self, leaf, subject):
+        """(Hauptfach an exam is played in, its course title): the Pflichtfach Klavier on the piano, other artistic exams in
+        one's own; none for the rest."""
+        module = self.titles[leaf.parent_id]
+        played = '' if not leaf.title.startswith(ARTISTIC) else 'Klavier' if module.startswith('Klavier') else subject
+        return played, f'{module} · {leaf.title}' + (f' · {played}' if played and not module.startswith(played) else '')
 
     def repertoire(self, subject):
         return '\n'.join(w.format(i=subject) for w in self.rng.sample(REPERTOIRE[family(subject)], 3))
@@ -1781,9 +1811,14 @@ class Command(BaseCommand):
                 rooms[institute.pk].append(room)
         practising = [s for s in self.enrolled if s.person != self.demo and rooms[s.subject.institute_id]]
         bookings, used = [], defaultdict(float)
+        busy = list(agenda(self.demo).values_list('start', 'end'))
+
+        def clear(start, end):  # nothing else on for the demo student then
+            return all(end <= s or e <= start for s, e in busy)
+
         demo = self.rooms['FH 310']
-        start = at(today, 16 * 60)
-        if free(demo, start, start + timedelta(minutes=90)):
+        start = next((at(today, m) for m in (16 * 60, 14 * 60, 12 * 60, 18 * 60) if clear(at(today, m), at(today, m + 90)) and free(demo, at(today, m), at(today, m + 90))), None)
+        if start:
             bookings.append(Booking(room=demo, start=start, end=start + timedelta(minutes=90), person=self.demo, category_id='uebung', created=at(today, 9 * 60 + 12)))
         for offset in range(-6, 2):
             day = today + timedelta(days=offset)
@@ -1803,16 +1838,19 @@ class Command(BaseCommand):
         Booking.objects.bulk_create(bookings)
         ensembles = [s for s in self.enrolled if s.subject.institute_id in {self.institutes['SH'].pk, self.institutes['KL'].pk} and s.person != self.demo]
         mei = next(s for s in self.enrolled if s.person == self.demo)
+        rehearsed = False  # the demo student's quartet rehearses once, on an evening that is free for them
         for n, name in enumerate(['FH 110', 'FH 212', 'FH 311', 'FH 324', 'FH 212', 'FH 110']):
             day = today + timedelta(days=1 + n)
             begin = at(day, 18 * 60)
             room = self.rooms[name]
             if not free(room, begin, begin + timedelta(hours=2)):
                 continue
-            members = rng.sample(ensembles, 3) if n else [mei, *rng.sample(ensembles, 2)]
+            mine = not rehearsed and clear(begin, begin + timedelta(hours=2))
+            rehearsed |= mine
+            members = [mei, *rng.sample(ensembles, 2)] if mine else rng.sample(ensembles, 3)
             rehearsal = Booking.objects.create(
                 room=room, start=begin, end=begin + timedelta(hours=2), person=members[0].person, category_id='kammermusik',
-                title='Kammermusikprobe Klaviertrio' if n % 2 else 'Kammermusikprobe Streichquartett', created=at(today - timedelta(days=rng.randint(0, 3)), hour=10),
+                title='Kammermusikprobe Streichquartett' if mine else 'Kammermusikprobe Klaviertrio', created=at(today - timedelta(days=rng.randint(0, 3)), hour=10),
             )
             rehearsal.participants.set(m.person for m in members[1:])
 

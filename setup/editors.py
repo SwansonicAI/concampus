@@ -111,7 +111,8 @@ class OfficeForm(forms.ModelForm):
 class AccountForm(forms.ModelForm):
     class Meta:
         model = Person
-        fields = ['title', 'first_name', 'last_name', 'email', 'username', 'institute', 'groups', 'is_active']
+        fields = ['title', 'first_name', 'last_name', 'email', 'username', 'institute', 'employment', 'obligation', 'groups', 'is_active']
+        localized_fields = ['obligation']
         labels = {'groups': 'Ämter', 'is_active': 'Aktiv', 'username': 'Benutzername'}
         help_texts = {
             'groups': 'Was jemand darf, ergibt sich aus den Rechten der Ämter.',
@@ -212,7 +213,7 @@ EDITORS = {e.key: e for e in [
         columns=[('Fachgebiet', 'name'), ('Reihenfolge', 'order')], search=['name'], words='vorlesungsverzeichnis bereiche gliederung',
     ),
     Editor(
-        'lehrformen', Format, 'Lehrformen', 'manage_courses', 'Studium und Lehre', fields=['name', 'short', 'order'],
+        'lehrformen', Format, 'Lehrformen', 'manage_courses', 'Studium und Lehre', fields=['name', 'short', 'per_head', 'order'],
         columns=[('Lehrform', 'name'), ('Kürzel', 'short')], search=['name', 'short'], words='vorlesung seminar übung einzelunterricht veranstaltungsart',
     ),
     Editor(

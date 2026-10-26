@@ -6,7 +6,7 @@
   <h1>Vorlesungsverzeichnis</h1>
   {% if office %}<div class="actions"><a class="btn" href="{% url 'courses:new' %}?semester={{ term.pk }}">Neue Veranstaltung</a></div>{% endif %}
 </div>
-<p class="lead">{{ term }} · {{ courses|length }} Veranstaltungen</p>
+<p class="lead">{{ term }} · {{ courses|length }} Veranstaltung{{ courses|length|pluralize:"en" }}</p>
 <form class="toolbar">
   <div class="inline">
     <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>

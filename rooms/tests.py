@@ -71,8 +71,8 @@ class BookingRulesTest(Seeded):
     def test_four_hours_a_day_but_last_minute_is_free(self):
         start = slot(5, 300)
         self.book(**times(start))
-        self.refused(self.book(**times(start + timedelta(hours=1), 240)), 'Kontingent von 4 Stunden')
-        self.assertEqual(flashes(self.book(**times(slot(1, 45), 45), follow=True)), ['Buchung gespeichert. Kurzfristig: zählt nicht zum Kontingent.'])
+        self.refused(self.book(**times(start + timedelta(hours=1), 240)), 'höchstens 4 Stunden am Tag')
+        self.assertEqual(flashes(self.book(**times(slot(1, 45), 45), follow=True)), ['Buchung gespeichert. Sie beginnt in weniger als 3 Stunden und zählt deshalb nicht zu Ihren 4 Stunden am Tag.'])
 
     def test_rooms_and_categories_students_may_not_book(self):
         self.refused(self.book(room=Room.objects.get(name='Festsaal').pk, **times(slot(5))), 'gültige Auswahl')
@@ -130,7 +130,7 @@ class RulesAreDataTest(BookingRulesTest):
     def test_the_hochschule_sets_the_horizon_and_the_quota(self):
         Institution.objects.update(student_ahead_hours=48, student_daily_hours=1)
         self.assertEqual(flashes(self.book(**times(slot(30)), follow=True)), ['Buchung gespeichert.'])
-        self.refused(self.book(**times(slot(5, 120), 120)), 'Kontingent von 1 Stunden')
+        self.refused(self.book(**times(slot(5, 120), 120)), 'höchstens 1 Stunde am Tag')
 
     def test_a_category_sets_its_own_rules(self):
         BookingCategory.objects.filter(key='kammermusik').update(participants=2, ahead_hours=24)

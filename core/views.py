@@ -37,6 +37,9 @@ def home(request):
     day = dates.day(request.GET.get('tag', '')) or today
     bookings = agenda(person)
     marked = busy(bookings, today)
+    shown = list(bookings.filter(start__date=day).select_related('room', 'course', 'category').prefetch_related('participants'))
+    for b in shown:
+        b.clash = any(o is not b and o.start < b.end and b.start < o.end for o in shown)
     apps = tiles(person)
     tasks = sorted(
         ({**t, 'app': title} for app, title in apps for t in app.tasks(person)),
@@ -51,7 +54,7 @@ def home(request):
         'day': day,
         'calendar': bool(marked),
         'days': strip(today, day, marked),
-        'agenda': bookings.filter(start__date=day).select_related('room', 'course', 'category').prefetch_related('participants'),
+        'agenda': shown, 'now': timezone.now(),
         'letters': person.messages.filter(read=None)[:3],
     })
 

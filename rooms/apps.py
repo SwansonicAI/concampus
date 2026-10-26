@@ -40,5 +40,5 @@ class RoomsConfig(Tile, AppConfig):
             return f'{person.within(Booking.objects.filter(start__date=today), "manage_bookings").count()} Buchungen heute'
         if 'student' in person.roles:
             daily = Institution.get().student_daily_hours
-            return f'Heute noch {number_format(daily - quota(person, today))} von {daily} Std. Übezeit'
+            return f'Übezeit heute: noch {number_format(daily - quota(person, today))} von {daily} Std.'
         return f'{agenda(person).filter(start__date=today).count()} Termine heute'

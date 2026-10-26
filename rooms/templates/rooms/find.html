@@ -11,7 +11,8 @@
   </div>
 </form>
 {{ form.non_field_errors }}
-{% if rooms is not None %}
+{% if busy %}<p class="fail">Sie haben zu dieser Zeit schon {{ busy.label }} in {{ busy.room }} ({{ busy.start|time:"H:i" }}–{{ busy.end|time:"H:i" }}).</p>
+{% elif rooms is not None %}
 <table data-panel>
   <thead><tr><th>Raum</th><th>Gebäude</th><th class="num">Plätze</th><th>Ausstattung</th><th></th></tr></thead>
   <tbody>

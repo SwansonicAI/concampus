@@ -5,8 +5,9 @@
 <h1>Meine Buchungen</h1>
 {% if daily %}
 <div class="stats">
-  <div class="stat"><b>{{ used|floatformat:"-1" }} / {{ daily }}</b><span>Stunden heute gebucht</span><div class="bar"><i style="width: {% widthratio used daily 100 %}%"></i></div></div>
+  <div class="stat"><b>noch {{ left|floatformat:"-1" }} von {{ daily }}</b><span>Stunden Übezeit heute</span><div class="bar"><i style="width: {% widthratio used daily 100 %}%"></i></div></div>
 </div>
+<p class="muted"><small>Es zählt, was Sie mehr als {{ last_minute }} Stunden vorher gebucht haben: heute {{ used|floatformat:"-1" }} Std.{% if extra %} Dazu {{ extra|floatformat:"-1" }} Std., kurzfristig gebucht, die nicht zählen.{% endif %}</small></p>
 {% endif %}
 <section>
   <table data-panel>

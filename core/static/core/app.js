@@ -260,7 +260,7 @@ function converted(form) {
 }
 
 // What cannot be undone (data-confirm="Wirklich auflösen?") asks once more: the first click turns the button into the
-// question, a second within a few seconds does it.
+// question, a second within some seconds does it.
 document.addEventListener('click', event => {
   const button = event.target.closest('button[data-confirm]');
   if (!button || button.dataset.armed) return;
@@ -268,7 +268,7 @@ document.addEventListener('click', event => {
   const label = button.innerHTML;
   button.dataset.armed = '1';
   button.textContent = button.dataset.confirm;
-  setTimeout(() => { delete button.dataset.armed; button.innerHTML = label; }, 4000);
+  setTimeout(() => { delete button.dataset.armed; button.innerHTML = label; }, 10000);
 });
 
 // Fields that matter only for some choices of another (data-for="category:kammermusik") show only then.
@@ -486,7 +486,7 @@ if (drawer) {
     const url = new URL(link.getAttribute('href'), inside ? page.href : location.href);
     if (url.origin !== location.origin) return;
     event.preventDefault();
-    if (inside && url.pathname === location.pathname) return close();  // back to the page underneath, e.g. 'Abbrechen'
+    if (inside && (link.hasAttribute('data-close') || url.pathname === location.pathname)) return close();  // back to the page underneath, e.g. 'Abbrechen'
     show(url);
   });
   document.addEventListener('submit', event => {

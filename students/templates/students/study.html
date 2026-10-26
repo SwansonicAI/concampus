@@ -67,14 +67,21 @@
     <h2>Rückmeldung {{ upcoming }}</h2>
     <p>{% if paid and not missing %}<span class="badge green">zurückgemeldet</span>{% elif paid %}<span class="badge wait">bezahlt</span>{% elif upcoming.reregistration_open %}<span class="badge wait">offen</span> Semesterbeitrag {{ upcoming.fee }} € bis {{ upcoming.deadline|date:"j. F Y" }}{% else %}Semesterbeitrag {{ upcoming.fee }} € vom {{ upcoming.reregistration_start|date:"j. F" }} bis {{ upcoming.deadline|date:"j. F Y" }}{% endif %}{% if not paid and upcoming.late_deadline %}<br><small class="muted">Nachfrist bis {{ upcoming.late_deadline|date:"j. F" }} mit {{ late_fee }} € Säumnisgebühr; danach folgt die Exmatrikulation.</small>{% endif %}{% if next.leave %} · <span class="badge">Urlaubssemester</span>{% endif %}</p>
     {% if missing %}<p class="fail">Für die Rückmeldung fehlt noch: {{ missing|join:" · " }}</p>{% endif %}
-    {% if own and not paid and upcoming.reregistration_open %}{% include "students/_transfer.html" with amount=owed reference=study.person.matriculation|add:" "|add:study.person.last_name %}{% endif %}
+    {% if own and not paid %}{% include "students/_transfer.html" with amount=owed reference=study.person.matriculation|add:" "|add:study.person.last_name %}{% endif %}
     {% if own or office %}
-    <form method="post" action="{% url 'students:leave' study.pk %}" class="inline">
-      {% csrf_token %}
-      {% if not next.leave %}<label>Grund<select name="reason" required><option value="">–</option>{% for code, name in leaves %}<option value="{{ code }}">{{ name }}</option>{% endfor %}</select></label>{% endif %}
-      <button class="btn ghost small">{% if next.leave %}Urlaubssemester zurücknehmen{% else %}Urlaubssemester {% if own %}beantragen{% else %}eintragen{% endif %}{% endif %}</button>
-    </form>
-    {% if own and not next.leave %}<p class="muted"><small>Bis zum {{ upcoming.closes|date:"j. F Y" }}, nicht rückwirkend; in der Regel höchstens {{ leave_terms }} Urlaubssemester. Sie zählen nicht als Fachsemester, Prüfungen sind trotzdem möglich.</small></p>{% endif %}
+    {% if next.leave %}
+    <form method="post" action="{% url 'students:leave' study.pk %}">{% csrf_token %}<button class="btn ghost small">Urlaubssemester zurücknehmen</button></form>
+    {% else %}
+    <details>
+      <summary>Urlaubssemester {% if own %}beantragen{% else %}eintragen{% endif %}</summary>
+      <form method="post" action="{% url 'students:leave' study.pk %}" class="inline" style="margin-top: 8px">
+        {% csrf_token %}
+        <label>Grund<select name="reason" required><option value="">–</option>{% for code, name in leaves %}<option value="{{ code }}">{{ name }}</option>{% endfor %}</select></label>
+        <button class="btn ghost small">{% if own %}Beantragen{% else %}Eintragen{% endif %}</button>
+      </form>
+      {% if own %}<p class="muted"><small>Bis zum {{ upcoming.closes|date:"j. F Y" }}, nicht rückwirkend; in der Regel höchstens {{ leave_terms }} Urlaubssemester. Sie zählen nicht als Fachsemester, Prüfungen sind trotzdem möglich. Nachweise wie ein ärztliches Attest reichen Sie ein bei: {{ changes|default:"der Hochschule" }}.</small></p>{% endif %}
+    </details>
+    {% endif %}
     {% endif %}
     {% endif %}
     {% if office %}
@@ -128,9 +135,18 @@
   {% if own or office %}<p class="muted"><small>Der Semesterbeitrag gilt je Person für alle ihre Studien.</small></p>{% endif %}
 </section>
 
-<section>
+<section id="studienverlauf">
   <h2>Studienverlauf</h2>
-  <p class="lead">Der Studienverlaufs- und Prüfungsplan mit allem, was bisher erbracht ist. Grün: bestanden. Umrandet: dieses Semester.</p>
-  {% include "curriculum/_plan.html" with progress=True now=study.semester %}
+  {% if options %}{% with first=options.0 %}
+  <form method="post" action="{% url 'students:focus' study.pk %}" class="panel" style="margin-bottom: 16px">
+    {% csrf_token %}
+    <h3>{{ first.choice.title }} wählen</h3>
+    <p class="muted"><small>{{ first.choice.description|default:"Laut Studienplan" }} Die Wahl gilt für den Rest des Studiums; ändern lässt sie sich nur über: {{ changes|default:"die Hochschule" }}.</small></p>
+    <div class="inline">{% for o in options %}<label class="check"><input type="radio" name="focus" value="{{ o.pk }}" required> {{ o.title }} <small class="muted">ab dem {{ o.first }}. Semester</small></label>{% endfor %}</div>
+    <p style="margin: 12px 0 0"><button class="btn">Wählen</button></p>
+  </form>
+  {% endwith %}{% endif %}
+  <p class="lead">Der Studienverlaufs- und Prüfungsplan mit allem, was bisher erbracht ist. Grün: bestanden. Grün umrandet: in diesem Semester belegt. Rot umrandet: Prüfung laut Plan schon fällig. Gewicht: Anteil an der Note des Moduls, bei Modulen an der Gesamtnote.</p>
+  {% include "curriculum/_plan.html" with progress=True %}
 </section>
 {% endblock %}

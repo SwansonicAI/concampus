@@ -15,6 +15,7 @@ urlpatterns = [
     path('<int:pk>/versicherung/', views.insured, name='insured'),
     path('<int:pk>/beitrag/', views.fee_paid, name='fee_paid'),
     path('<int:pk>/urlaub/', views.leave, name='leave'),
+    path('<int:pk>/schwerpunkt/', views.focus, name='focus'),
     path('<int:pk>/exmatrikulieren/', views.exmatriculate, name='exmatriculate'),
     path('<int:pk>/fachwechsel/', views.change, name='change'),
     path('<int:pk>/sperre/', views.hold, name='hold'),

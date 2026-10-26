@@ -3,7 +3,7 @@
 {% block subnav %}{% include "courses/_nav.html" %}{% endblock %}
 {% block content %}
 <h1>Deputat</h1>
-<p class="lead">Lehrumfang in SWS im {{ term }}. Einzelunterricht zählt je Teilnahme.</p>
+<p class="lead">Lehrumfang in SWS im {{ term }}, gegen die Lehrverpflichtung. Einzelunterricht zählt je Teilnahme, Ensembles je betreutem Ensemble.</p>
 <form class="toolbar">
   <div class="inline">
     <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
@@ -14,17 +14,18 @@
   </div>
 </form>
 <table data-panel>
-  <thead><tr><th>Lehrende</th><th>Veranstaltungen</th><th class="num">SWS</th></tr></thead>
+  <thead><tr><th>Lehrende</th><th>Veranstaltungen</th><th class="num">SWS</th><th class="num">Soll</th></tr></thead>
   <tbody>
-    {% for teacher, courses, total in rows %}
+    {% for teacher, courses, total, balance in rows %}
     <tr>
-      <td data-value="{{ teacher.name }}"><b>{{ teacher }}</b></td>
+      <td data-value="{{ teacher.name }}"><b>{{ teacher }}</b>{% if teacher.employment %}<br><small class="muted">{{ teacher.get_employment_display }}</small>{% endif %}</td>
       <td>{% for c, load in courses %}<a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a> <small class="muted">{{ load }}</small>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
       <td class="num"><b>{{ total }}</b></td>
+      <td class="num" data-value="{{ balance|default_if_none:'' }}">{% if balance is None %}<span class="muted">–</span>{% else %}{{ teacher.obligation }}{% if balance > 0 %}<br><small class="fail" title="Über der Lehrverpflichtung">+{{ balance }}</small>{% elif balance < 0 %}<br><small class="muted" title="Unter der Lehrverpflichtung">{{ balance }}</small>{% endif %}{% endif %}</td>
     </tr>
-    {% empty %}<tr><td colspan="3" class="empty">Keine Lehre erfasst.</td></tr>
+    {% empty %}<tr><td colspan="4" class="empty">Keine Lehre erfasst.</td></tr>
     {% endfor %}
   </tbody>
-  {% if rows|length > 1 %}<tfoot><tr class="total"><td>Gesamt</td><td>{{ rows|length }} Lehrende</td><td class="num">{{ total }}</td></tr></tfoot>{% endif %}
+  {% if rows|length > 1 %}<tfoot><tr class="total"><td>Gesamt</td><td>{{ rows|length }} Lehrende</td><td class="num">{{ total }}</td><td></td></tr></tfoot>{% endif %}
 </table>
 {% endblock %}

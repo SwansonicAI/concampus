@@ -135,15 +135,21 @@ def index(request):
         )
     if 'student' in person.roles:
         studies = person.studies.filter(status=Study.Status.ENROLLED)
-        mine = Participation.objects.filter(study__in=studies, course__kind=Course.Kind.EXAM).select_related('course__term', 'module')
-        mine = list(mine.order_by('-course__term__start'))
+        mine = (
+            Participation.objects.filter(study__in=studies, course__kind=Course.Kind.EXAM).select_related('course__term', 'module')
+            .prefetch_related('course__staff', 'course__bookings__room').order_by('-course__term__start')
+        )
+        ahead = [p for p in mine if not p.course.released]
+        for p in ahead:
+            held = min(p.course.bookings.all(), key=lambda b: b.start, default=None)
+            p.when, p.where = p.slot or (held and held.start), held and held.room
         theses = list(
             Participation.objects.filter(study__in=studies, course__kind=Course.Kind.THESIS).select_related('course', 'module', 'study')
             .prefetch_related('course__staff').order_by('-created')
         )
         for p in theses:
             p.handed = handed_in(p)
-        context.update(mine=mine, timed=any(p.slot for p in mine), offered=offered(person), studies=studies, theses=theses)
+        context.update(mine=[p for p in mine if p.course.released], ahead=ahead, offered=offered(person), studies=studies, theses=theses)
     return render(request, 'exams/index.html', context)
 
 

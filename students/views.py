@@ -17,9 +17,11 @@ from core import dates, texts
 from core.access import require
 from core.history import tables
 from core.apps import plural
-from core.models import Institution, Message, Person, Term
+from core.models import Institution, Message, Office, Person, Term
 from core.text import fold, matching
 from core.views import SHOWN, without_term
+from courses.models import Participation
+from courses.views import untimed
 from curriculum.models import Program, Subject
 from curriculum.views import plan
 from exams.views import exhausted
@@ -76,14 +78,17 @@ COLUMNS = [  # heading, sort key, field; the server sorts, since the list may be
 def roster(request):
     today = timezone.localdate()
     status = request.GET.get('status', Study.Status.ENROLLED)
+    scoped = request.user.within(Study.objects.filter(status=status), 'view_students')
     studies = (
-        request.user.within(Study.objects.filter(status=status), 'view_students').select_related('person', 'program', 'subject', 'start_term', 'teacher')
+        scoped.select_related('person', 'program', 'subject', 'start_term', 'teacher')
         .annotate(fs=F('prior_terms') + Count('terms', filter=Q(terms__leave=False, terms__term__start__lte=today)))
         .order_by('person__last_name', 'person__first_name')
     )
-    for key, field in [('studiengang', 'program'), ('fach', 'subject'), ('fs', 'fs'), ('beginn', 'start_term')]:
+    for key, field in [('studiengang', 'program'), ('fach', 'subject'), ('klasse', 'teacher'), ('fs', 'fs'), ('beginn', 'start_term')]:
         if (value := request.GET.get(key, '')).isdigit():
             studies = studies.filter(**{field: value})
+    if request.GET.get('unterricht') == 'ohne':
+        studies = studies.filter(pk__in=untimed(Participation.objects.all()).values('study'))
     q, sort = request.GET.get('q', '').strip(), request.GET.get('sortierung', '')
     studies = matching(studies, q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__email', 'person__matriculation', 'teacher__last_name')
     if field := next((f for _, key, f in COLUMNS if key == sort.removeprefix('-')), None):
@@ -107,7 +112,8 @@ def roster(request):
         'sort': sort, 'columns': [(title, key, 'ascending' if sort == key else 'descending' if sort == f'-{key}' else '') for title, key, _ in COLUMNS],
         'programs': request.user.within(Program.objects.all(), 'view_students'), 'subjects': request.user.within(Subject.objects.all(), 'view_students'),
         'terms': Term.objects.filter(intake__isnull=False).distinct().order_by('-start'), 'semesters': range(1, 13),
-        **{key: request.GET.get(key, '') for key in ['studiengang', 'fach', 'fs', 'beginn']},
+        'classes': Person.objects.filter(class_studies__in=scoped).distinct().order_by('last_name', 'first_name'),
+        **{key: request.GET.get(key, '') for key in ['studiengang', 'fach', 'klasse', 'fs', 'beginn', 'unterricht']},
     })
 
 
@@ -147,6 +153,17 @@ def study(request, pk):
     identity = personal or person.may('decide_results', study)  # birth, address, phone, documents: also the office deciding results, for Zeugnisse and Bescheide
     tree, average = study.progress()
     upcoming, late_fee, today = Term.upcoming(), Institution.get().late_fee, timezone.localdate()
+    fs, late = study.semester, set()
+
+    def overdue(node):  # exams of modules under way that the plan put in an earlier semester
+        leaves = [n for n in node.nodes if not n.nodes]
+        if node.earned and any(n.credits for n in leaves):
+            late.update(n.pk for n in leaves if n.exam and not n.done and n.semester and n.semester < fs)
+        for n in node.nodes:
+            overdue(n)
+
+    for root in tree:
+        overdue(root)
     terms = list(study.terms.select_related('term').order_by('-term__start'))
     for t in terms:  # the Säumnisgebühr is for a late Rückmeldung, never for the semester one enrols in
         t.due = t.term.fee if t.term_id == study.start_term_id else t.term.due(t.paid or today, late_fee)
@@ -160,6 +177,8 @@ def study(request, pk):
         'certify': own or office,  # Bescheinigungen
         'rows': plan(tree, study.program.semesters),
         'semesters': range(1, study.program.semesters + 1),
+        'taking': set(study.participations.filter(course__term=Term.current()).values_list('module_id', flat=True)),
+        'late': late,
         'average': average,
         'earned': sum(m.earned for m in tree),
         'total': sum(m.credits for m in tree),
@@ -175,11 +194,27 @@ def study(request, pk):
         'change': ChangeForm(study=study) if office else None,
         'exits': EXITS, 'leaves': LEAVES,
         'exhausted': exhausted(study) if study.status == Study.Status.ENROLLED else [],
+        'options': study.options() if own and study.status == Study.Status.ENROLLED else [],
+        'changes': Office.holding('manage_students'),
         'recognise': study.status == Study.Status.ENROLLED and person.may('recognise', study),
         'thesis': study.status == Study.Status.ENROLLED and person.may('manage_exams', study),
         'loans': study.person.loans.filter(returned=None).select_related('instrument') if personal else [],
         'history': bool(tables(person.roles)),
     })
+
+
+@require_POST
+def focus(request, pk):
+    """The student's choice of Schwerpunkt, made once; changing it is for the student office."""
+    study = get_object_or_404(Study, pk=pk, person=request.user, status=Study.Status.ENROLLED, focus=None)
+    chosen = next((o for o in study.options() if str(o.pk) == request.POST.get('focus')), None)
+    if chosen is None:
+        messages.error(request, 'Bitte eine der Möglichkeiten wählen.')
+    else:
+        study.focus = chosen
+        study.save(update_fields=['focus'])
+        messages.success(request, f'Gewählt: {chosen.title}.')
+    return redirect(study)
 
 
 def next_matriculation():

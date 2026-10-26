@@ -169,7 +169,9 @@ class Person(Tracked, AbstractUser):
     nationality = models.CharField('Staatsangehörigkeit', max_length=60, choices=destatis.countries, blank=True)
     second_nationality = models.CharField('Weitere Staatsangehörigkeit', max_length=60, choices=destatis.countries, blank=True)
     address = models.TextField('Anschrift', blank=True)
-    phone = models.CharField('Telefon', max_length=40, blank=True)
+    phone = models.CharField(
+        'Telefon', max_length=40, blank=True, validators=[RegexValidator(r'^\+?[\d ()/.-]{5,}$', 'Bitte nur Ziffern, Leerzeichen und + ( ) / - eingeben.')],
+    )
     home =models.CharField('Heimatwohnsitz', max_length=5, choices=destatis.places, blank=True, help_text='Kreis, im Ausland der Staat.')
     residence = models.CharField('Semesterwohnsitz', max_length=5, choices=destatis.places, blank=True, help_text='Während der Unterrichtszeit; leer: wie der Heimatwohnsitz.')
     entrance = models.CharField(
@@ -206,6 +208,17 @@ class Person(Tracked, AbstractUser):
     institute = models.ForeignKey(
         Institute, models.SET_NULL, null=True, blank=True, related_name='staff', verbose_name='Institut',
         help_text='Für Lehrende. Studierende gehören zum Institut ihres Hauptfachs.',
+    )
+
+    class Employment(models.TextChoices):
+        PROFESSUR = 'professur', 'Professur'
+        MITARBEIT = 'mitarbeit', 'Künstlerische oder wissenschaftliche Mitarbeit'
+        LEHRAUFTRAG = 'lehrauftrag', 'Lehrauftrag'
+
+    employment = models.CharField('Beschäftigung', max_length=12, choices=Employment, blank=True, help_text='Für Lehrende.')
+    obligation = models.DecimalField(
+        'Lehrverpflichtung (LVS)', max_digits=4, decimal_places=1, null=True, blank=True,
+        help_text='Was die Lehrverpflichtungsverordnung verlangt, nach Ermäßigungen; leer: keine, etwa bei einem Lehrauftrag.',
     )
 
     class Meta:

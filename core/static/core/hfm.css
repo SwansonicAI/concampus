@@ -14,7 +14,7 @@
 }
 
 * { box-sizing: border-box; }
-html { -webkit-font-smoothing: antialiased; }
+html { -webkit-font-smoothing: antialiased; scrollbar-gutter: stable; }
 body {
   margin: 0;
   background: #fff;
@@ -188,6 +188,7 @@ tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 7
 .agenda .what::before { content: none; }
 .agenda .due { min-width: 0; color: var(--ink); text-align: left; }
 .agenda .empty { padding: 14px 4px; border-bottom: 1px solid var(--line); }
+.agenda .past a { color: var(--muted); }
 .demo-entry { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 15px; }
 dialog.demo { width: min(560px, calc(100vw - 32px)); padding: 28px 32px 32px; border: 0; border-radius: var(--radius); }
 dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
@@ -237,6 +238,7 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .svpp td.num { width: 44px; }
 .svpp td.done { background: #e5f3e5; color: var(--green); font-weight: 700; }
 .svpp td.now { outline: 2px solid var(--green); outline-offset: -3px; font-weight: 700; }
+.svpp td.late { outline: 2px solid var(--red); outline-offset: -3px; }
 .tag-exam { padding: 0 5px; border: 1px solid var(--amber); color: var(--amber); font-size: 11px; font-weight: 700; text-transform: uppercase; }
 
 /* Curriculum tree */

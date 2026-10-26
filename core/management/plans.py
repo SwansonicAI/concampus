@@ -10,6 +10,7 @@ passed, and their weight sets their share of the module grade. A module's weight
 """
 
 HF, WS, PIANO, SPEECH = 'hf', 'ws', 'piano', 'speech'  # one-to-one lessons: main subject, Klavierpartner:in, Pflichtfach Klavier, Sprecherziehung
+SECTION, VOCAL, EARLY = 'section', 'vocal', 'early'  # and Orchesterstudien with a teacher of one's instrument, Stimmbildung, historical instruments
 
 
 def M(code, title, credits, *parts, weight=0, note=''):
@@ -25,12 +26,13 @@ def C(title, credits, course=None, form='', taught=None, start=1):
     return {'shape': 'C', 'title': title, 'credits': credits, 'course': course or title, 'form': form, 'taught': taught, 'start': start}
 
 
-def X(title, semester, weight=1, form=''):
-    return {'shape': 'X', 'title': title, 'semester': semester, 'weight': weight, 'form': form}
+def X(title, semester, weight=1, form='', waived=()):
+    """An exam; `waived`: the Hauptfächer the plan lets off it."""
+    return {'shape': 'X', 'title': title, 'semester': semester, 'weight': weight, 'form': form, 'waived': waived}
 
 
-def L(code, title, credits, course=None, form=''):
-    return {'shape': 'L', 'code': code, 'title': title, 'credits': credits, 'course': course or title, 'form': form}
+def L(code, title, credits, course=None, form='', taught=None):
+    return {'shape': 'L', 'code': code, 'title': title, 'credits': credits, 'course': course or title, 'form': form, 'taught': taught}
 
 
 def theory(weight):
@@ -111,7 +113,7 @@ def orchestral(x):
           C(main, {1: 16, 2: 16, 3: 10, 4: 10}, form='E 90', taught=HF),
           C('Werkstudium', {1: 0, 2: 0, 3: 0, 4: 0}, form='E 30', taught=WS),
           X('Künstlerisch-praktische Prüfung (10 Min.)', 1, 0),
-          X('Künstlerisch-praktische Prüfung (15 Min.)', 3, 0, 'entfällt für Violine' if strings else ''),
+          X('Künstlerisch-praktische Prüfung (15 Min.)', 3, 0, 'entfällt für Violine' if strings else '', ['Violine'] if strings else []),
           X('Künstlerisch-praktische Prüfung (20 Min.)', 4, 0),
           note='Über das Bestehen entscheiden alle Lehrenden des Moduls gemeinsam.'),
         M(f'BM-{x}-02', 'Künstlerische Präsentation II', 56,
@@ -121,7 +123,7 @@ def orchestral(x):
         M('BM-OI-01', 'Instrumentale Berufsvorbereitung I', 16,
           C('Orchester- und Ensemblepraxis', {2: 2, 3: 2, 4: 2}, 'Hochschulorchester', 'G 180'),
           C('Kammermusik', {3: 3, 4: 3}, form='E+x 45'),
-          C('Orchesterstudien', {3: 2, 4: 2}, f'Orchesterstudien {group}', 'E 30'),
+          C('Orchesterstudien', {3: 2, 4: 2}, f'Orchesterstudien {group}', 'E 30', SECTION),
           X('Künstlerisch-praktische Prüfung Orchesterstudien (10 Min.)', 4, 0)),
         M('BM-OI-02', 'Instrumentale Berufsvorbereitung II', 6,
           C('Kammermusik', {5: 3, 6: 3}, form='E+x 45'),
@@ -144,7 +146,7 @@ def orchestral(x):
           G('KV', 'Künstlerische Vertiefung', 43,
             M('BM-OI-KV', 'Künstlerische Vertiefung', 28,
               C('Orchester- und Ensemblepraxis', {5: 3, 6: 3, 7: 3}, 'Hochschulorchester', 'G 180'),
-              C('Orchesterstudien', {5: 3, 6: 3, 7: 3, 8: 3}, f'Orchesterstudien {group}', 'E 30'),
+              C('Orchesterstudien', {5: 3, 6: 3, 7: 3, 8: 3}, f'Orchesterstudien {group}', 'E 30', SECTION),
               C('Probespielliteratur', {8: 7}, 'Probespieltraining', 'E'),
               X('Künstlerisch-praktische Prüfung Orchesterstudien (15–25 Min.)', 8, 1),
               X('Künstlerisch-praktische Prüfung Probespielliteratur (20–30 Min.)', 8, 2 if strings else 1), weight=15),
@@ -174,7 +176,7 @@ def orchestral(x):
             weight=1),
           weight=65 if strings else 70, note='Wahl zu Beginn des 5. Semesters.'),
         M('BM-OI-WK', 'Wahlkatalog', 10,
-          *[L(f'BM-OI-WK-{n:02d}', title, cp, course, form) for n, (title, cp, course, form) in enumerate(
+          *[L(f'BM-OI-WK-{n:02d}', title, cp, course, form, EARLY if title == 'Historisches Instrument' else None) for n, (title, cp, course, form) in enumerate(
               [('Kammermusik', 3, 'Kammermusik', 'E+x 45')] * 2
               + [('Kammerorchester', 2, 'Kammerorchester', 'G 90')] * 2
               + [('Historische Spielpraxis auf modernen Instrumenten', 2, 'Historische Spielpraxis auf modernen Instrumenten', 'G 90')] * 2
@@ -329,7 +331,7 @@ MASTER = [
           C('Zweitinstrument (Violine/Viola)', {n: 5}, form='E 30')),
         M(f'MM-ST-C{n}', f'Streichinstrumente C {r}', cp,
           C('Hauptfach', {n: cp - 7}, form='E 60', taught=HF), C('Werkstudium Hauptfach', {n: 2}, form='E 45', taught=WS),
-          C('Historisches Instrument', {n: 5}, form='E 30')))
+          C('Historisches Instrument', {n: 5}, form='E 30', taught=EARLY)))
       for n, r, cp in [(1, 'I', 20), (2, 'II', 20), (3, 'III', 15), (4, 'IV', 15)]],
       note='Variante A, B oder C, in jedem Semester neu wählbar. B nur für Violine und Viola. Unbenotet.'),
     M('MM-PB', 'Profilierungsbereich', 30, *[L(code, title, cp, course, form) for code, title, cp, course, form in PROFILE],
@@ -376,7 +378,7 @@ def schooling(prefix):
 BED_SHARED = schooling('BE')
 BED = [
     M('BE-BP-01', 'Berufsfeldorientierte künstlerische Praxis I', 17,
-      C('Künstlerisches Schwerpunktfach', {1: 4, 2: 4}, form='E 60', taught=HF), C('Gesang/Stimmbildung', {1: 2, 2: 2}, 'Stimmbildung', 'E 30'),
+      C('Künstlerisches Schwerpunktfach', {1: 4, 2: 4}, form='E 60', taught=HF), C('Gesang/Stimmbildung', {1: 2, 2: 2}, 'Stimmbildung', 'E 30', VOCAL),
       C('Schulpraktisches Klavierspiel', {1: 2, 2: 2}, form='E 30', taught=PIANO), C('Instrumentenpool', {1: 1}, form='G 60'),
       X('Künstlerisch-praktische Prüfung (20 Min.)', 2), weight=17),
     M('BE-BP-02', 'Berufsfeldorientierte künstlerische Praxis II', 27,
@@ -440,7 +442,7 @@ MED = [
 STEX_SHARED = schooling('ZF')
 STEX = [
     M('ZF-BP-01', 'Berufsfeldorientierte künstlerische Praxis I', 14,
-      C('Künstlerisches Schwerpunktfach', {1: 4, 2: 4}, form='E 60', taught=HF), C('Gesang/Stimmbildung', {1: 2, 2: 2}, 'Stimmbildung', 'E 30'),
+      C('Künstlerisches Schwerpunktfach', {1: 4, 2: 4}, form='E 60', taught=HF), C('Gesang/Stimmbildung', {1: 2, 2: 2}, 'Stimmbildung', 'E 30', VOCAL),
       C('Schulpraktisches Klavierspiel', {1: 1, 2: 1}, form='E 30', taught=PIANO), X('Künstlerisch-praktische Prüfung (20 Min.)', 2), weight=1),
     M('ZF-BP-02', 'Berufsfeldorientierte künstlerische Praxis II', 20,
       C('Künstlerisches Schwerpunktfach', {3: 5, 4: 5}, form='E 60', taught=HF), C('Schulpraktisches Klavierspiel', {3: 2, 4: 2}, form='E 30', taught=PIANO),
@@ -494,10 +496,10 @@ CHURCH = [
       C('Musikgeschichte', {s: 2 for s in range(1, 9)}, {'WiSe': 'Musikgeschichte im Überblick II', 'SoSe': 'Musikgeschichte im Überblick I'}, 'V 90'),
       C('Orgelkunde', {5: 3, 6: 3}, 'Instrumentenkunde/Akustik', 'Ü 90'), C('Diplomarbeit', {10: 10}, 'Bachelorprojekt: Kolloquium', 'S'),
       X('Diplomarbeit', 10, 2), weight=3),
-    M('KM-VII', 'Wahlobligatorischer Bereich', 16, *[L(f'KM-VII-0{n}', title, cp, course, form) for n, (title, cp, course, form) in enumerate([
+    M('KM-VII', 'Wahlobligatorischer Bereich', 16, *[L(f'KM-VII-0{n}', title, cp, course, form, VOCAL if course == 'Stimmbildung' else None) for n, (title, cp, course, form) in enumerate([
         ('Ergänzungsfach Cembalo', 4, 'Historische Tasteninstrumente', 'G 30'), ('Ergänzungsfach Klavier-Improvisation', 4, 'Improvisation', 'E 60'),
         ('Ergänzungsfach Jazz-Pop-Gesang', 4, 'Stimmbildung', 'E 30'), ('Ergänzungsfach Jazzchor-/Ensembleleitung', 4, 'Chorleitung Pop/Jazz', 'G 90'),
-        ('Schwerpunktfach Chorleitung', 8, 'Chorleitung Klassik', 'E 60'), ('Schwerpunktfach Pädagogische Qualifikation', 8, 'Musikpädagogik 1', 'S 90'),
+        ('Schwerpunktfach Chorleitung', 8, 'Chorleitung', 'E 60'), ('Schwerpunktfach Pädagogische Qualifikation', 8, 'Musikpädagogik 1', 'S 90'),
     ], 1)], note='Zwei Ergänzungsfächer zu je 4 CP und ein Schwerpunktfach zu 8 CP, ab dem 7. Semester.'),
 ]
 

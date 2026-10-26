@@ -34,6 +34,7 @@ class Format(Tracked, models.Model):
 
     name = models.CharField('Name', max_length=60, unique=True)
     short = models.CharField('Kürzel', max_length=8, blank=True, help_text='Wie in den Studienplänen, z. B. „S“ für Seminar.')
+    per_head = models.BooleanField('Zählt je Teilnahme', default=False, help_text='Im Deputat zählen die Stunden für jede Teilnahme, wie im Einzelunterricht.')
     order = models.PositiveSmallIntegerField('Reihenfolge', default=0)
 
     class Meta:

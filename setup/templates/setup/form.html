@@ -10,7 +10,7 @@
   {% else %}{{ form }}{% endif %}
   <div class="actions">
     <button class="btn">Speichern</button>
-    <a class="btn ghost" href="{{ back }}">Abbrechen</a>
+    <a class="btn ghost" data-close href="{{ back }}">Abbrechen</a>
     {% if history %}<a href="{% url 'history' table object.pk %}">Verlauf</a>{% endif %}
   </div>
 </form>

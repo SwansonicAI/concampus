@@ -103,6 +103,9 @@ class StudentsConfig(Tile, AppConfig):
             unpaid = enrolled.exclude(person__in=paid).values('person').distinct().count()
             if unpaid and term and term.reregistration_open:
                 found.append(task(f'Rückmeldung {term}: {plural(unpaid, "Zahlung", "Zahlungen")} ausstehend', reverse('students:reregistration'), due))
+        for own in enrolled.filter(person=person).select_related('program'):
+            if (options := own.options()) and own.semester >= min(o.first or 99 for o in options):
+                found.append(task(f'{options[0].choice.title} wählen', f'{own.get_absolute_url()}#studienverlauf'))
         study = enrolled.filter(person=person).first()
         if study and term and term.reregistration_open and not paid.filter(study__person=person).exists():
             fee = term.due(today, Institution.get().late_fee)

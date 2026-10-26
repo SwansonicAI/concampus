@@ -83,7 +83,7 @@ class BookingForm(forms.ModelForm):
         if self.instance.pk:
             start, end = timezone.localtime(self.instance.start), timezone.localtime(self.instance.end)
             self.initial.update(day=start.date(), begin=start.time(), until=end.time())
-        self.person, roles = person, person.roles
+        self.person, roles, self.began = person, person.roles, self.instance.start
         self.office = 'book_any_room' in roles
         self.student = not (self.office or 'teacher' in roles)
         self.fields['room'].empty_label = 'Bitte wählen'
@@ -158,7 +158,7 @@ class BookingForm(forms.ModelForm):
     def check_rules(self, category, start, end, participants):
         """The Hochschule's booking rules (Institution) and those of the category."""
         now, rules = timezone.now(), Institution.get()
-        if start < now - timedelta(minutes=15):
+        if end < now or start < now - timedelta(minutes=15) and start != self.began:  # one under way may end earlier or later
             raise forms.ValidationError('Der Termin liegt in der Vergangenheit.')
         if not self.student:
             if start > now + timedelta(days=rules.teacher_ahead_days):
@@ -174,8 +174,8 @@ class BookingForm(forms.ModelForm):
         used = quota(self.person, timezone.localtime(start).date(), exclude=self.instance.pk)
         if used + (end - start).total_seconds() / 3600 > rules.student_daily_hours:
             raise forms.ValidationError(
-                f'Ihr Kontingent von {rules.student_daily_hours} Stunden am Tag reicht dafür nicht (gebucht: {number_format(used)} Std.). '
-                f'Was in den nächsten {rules.last_minute_hours} Stunden beginnt, zählt nicht zum Kontingent.'
+                f'Dafür reicht die Übezeit nicht: höchstens {plural(rules.student_daily_hours, "Stunde", "Stunden")} am Tag, gezählt sind schon {number_format(used)} Std. '
+                f'Was in den nächsten {rules.last_minute_hours} Stunden beginnt, zählt nicht.'
             )
 
     def save(self):

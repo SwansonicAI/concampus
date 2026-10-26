@@ -21,6 +21,24 @@
   {% endif %}
 </section>
 
+{% if calendar %}
+<section>
+  <h2>Termine</h2>
+  {% include "core/_days.html" %}
+  <ul class="todo agenda" data-panel>
+    {% for b in agenda %}
+    <li{% if b.end < now %} class="past"{% endif %}><a href="{% if b.course and b.person_id != user.pk %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}">
+      <span class="due">{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</span>
+      <span class="what">{{ b.label }}{% if b.course.kind == 'lesson' %}{% for p in b.participants.all %}{% if p != user %} <span class="muted">· {{ p }}</span>{% endif %}{% endfor %}{% endif %}{% if b.clash %} <span class="badge no">Überschneidung</span>{% endif %}</span>
+      <span class="where">{{ b.room }} · {{ b.room.building }}</span>
+    </a></li>
+    {% empty %}
+    <li class="empty">Keine Termine am {{ day|date:"l, j. F" }}.</li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
 <section>
   <h2>Anwendungen</h2>
   <div class="launch">
@@ -32,24 +50,6 @@
     {% endfor %}
   </div>
 </section>
-
-{% if calendar %}
-<section>
-  <h2>Termine</h2>
-  {% include "core/_days.html" %}
-  <ul class="todo agenda" data-panel>
-    {% for b in agenda %}
-    <li><a href="{% if b.course and b.person_id != user.pk %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}">
-      <span class="due">{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</span>
-      <span class="what">{{ b.label }}{% if b.course.kind == 'lesson' %}{% for p in b.participants.all %}{% if p != user %} <span class="muted">· {{ p }}</span>{% endif %}{% endfor %}{% endif %}</span>
-      <span class="where">{{ b.room }} · {{ b.room.building }}</span>
-    </a></li>
-    {% empty %}
-    <li class="empty">Keine Termine am {{ day|date:"l, j. F" }}.</li>
-    {% endfor %}
-  </ul>
-</section>
-{% endif %}
 
 {% if letters %}
 <section>

@@ -7,6 +7,6 @@
 <form method="post" class="form">
   {% csrf_token %}
   {{ form }}
-  <div class="actions"><button class="btn">Speichern</button><a class="btn ghost" href="{{ back }}">Abbrechen</a></div>
+  <div class="actions"><button class="btn">Speichern</button><a class="btn ghost" data-close href="{{ back }}">Abbrechen</a></div>
 </form>
 {% endblock %}

@@ -89,6 +89,14 @@
     <button class="btn">{% if course.allocation == 'choice' %}Platz anfragen{% else %}Anmelden{% endif %}</button>
   </form>
   {% elif course.upcoming %}<p class="empty">Anmeldung ab {{ course.opens|date:"j. F Y" }}.</p>
+  {% elif running and eligible %}
+  <p class="muted"><small>Der Anmeldeschluss war am {{ course.deadline|date:"j. F" }}. Die Lehrenden können Sie noch aufnehmen; die Antwort kommt in Ihr Postfach.</small></p>
+  <form method="post" action="{% url 'courses:register' course.pk %}" class="actions">
+    {% csrf_token %}
+    <select name="study">{% for s in eligible %}<option value="{{ s.pk }}">{{ s.subject }} · {{ s.program }}</option>{% endfor %}</select>
+    <input name="note" placeholder="Nachricht an die Lehrenden (freiwillig)" aria-label="Nachricht an die Lehrenden">
+    <button class="btn ghost">Nachmeldung anfragen</button>
+  </form>
   {% else %}<p class="empty">Anmeldeschluss vorbei.</p>{% endif %}
   {% endfor %}
 </section>

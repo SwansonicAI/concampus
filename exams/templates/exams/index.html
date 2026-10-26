@@ -7,7 +7,7 @@
   <h1>Prüfungen</h1>
   {% if 'manage_exams' in user.roles %}<div class="actions"><a class="btn" href="{% url 'exams:new' %}?semester={{ term.pk }}">Prüfung anlegen</a></div>{% endif %}
 </div>
-<p class="lead">{{ term }} · {{ exams|length }} Prüfungen{% if 'manage_exams' not in user.roles and 'decide_results' not in user.roles %}, in denen Sie prüfen{% endif %}</p>
+<p class="lead">{{ term }} · {{ exams|length }} Prüfung{{ exams|length|pluralize:"en" }}{% if 'manage_exams' not in user.roles and 'decide_results' not in user.roles %}, in denen Sie prüfen{% endif %}</p>
 <form class="toolbar">
   <div class="inline">
     <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
@@ -79,24 +79,38 @@
 </table>
 
 <section>
-  <h2>Angemeldet und abgelegt</h2>
+  <h2>Angemeldet</h2>
   <table>
-    <thead><tr><th>Semester</th><th>Prüfung</th><th>Modul</th>{% if timed %}<th>Termin</th>{% endif %}<th class="num">Note</th><th>Ergebnis</th></tr></thead>
+    <thead><tr><th>Termin</th><th>Prüfung</th><th>Raum</th><th>Prüfende</th><th></th></tr></thead>
+    <tbody>
+      {% for p in ahead %}
+      <tr>
+        <td class="nowrap" data-value="{{ p.when|date:'c' }}">{{ p.when|date:"D j.n.Y, H:i"|default:"noch offen" }}</td>
+        <td><b>{{ p.course.title }}</b><br><small class="muted">{{ p.module.code }} · {{ p.course.term }}</small></td>
+        <td>{{ p.where|default:"–" }}</td>
+        <td><small>{% for s in p.course.staff.all %}{{ s }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</small></td>
+        <td class="num">{% if p.course.withdrawable %}<form method="post" action="{% url 'exams:withdraw' p.pk %}" title="Bis {{ p.course.withdraw_by|date:'j.n.Y' }}">{% csrf_token %}<button class="btn ghost small" data-confirm="Wirklich abmelden?">Abmelden</button></form>{% else %}<span class="badge open">angemeldet</span>{% endif %}</td>
+      </tr>
+      {% empty %}<tr><td colspan="5" class="empty">Zurzeit keine Prüfung angemeldet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Abgelegt</h2>
+  <table>
+    <thead><tr><th>Semester</th><th>Prüfung</th><th>Modul</th><th class="num">Note</th><th>Ergebnis</th></tr></thead>
     <tbody>
       {% for p in mine %}
       <tr>
         <td class="nowrap" data-value="{{ p.course.term.start|date:'c' }}">{{ p.course.term }}</td>
         <td><b>{{ p.course.title }}</b></td>
         <td class="nowrap">{{ p.module.code|default:"" }}</td>
-        {% if timed %}<td data-value="{{ p.slot|date:'c' }}">{{ p.slot|date:"D j.n., H:i"|default:"–" }}</td>{% endif %}
-        <td class="num">{% if p.course.released and p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</td>
-        <td>
-          {% if p.course.released %}{% if p.passed %}<span class="badge yes">bestanden</span>{% elif p.passed is False %}<span class="badge no">nicht bestanden</span>{% else %}<span class="badge wait">entschuldigt</span>{% endif %}{% if p.remark %} <small class="muted">{{ p.get_remark_display }}</small>{% endif %}
-          {% elif p.course.withdrawable %}<form method="post" action="{% url 'exams:withdraw' p.pk %}" title="Bis {{ p.course.withdraw_by|date:'j.n.Y' }}">{% csrf_token %}<button class="btn ghost small">Abmelden</button></form>
-          {% else %}<span class="badge open">angemeldet</span>{% endif %}
-        </td>
+        <td class="num">{% if p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</td>
+        <td>{% if p.passed %}<span class="badge yes">bestanden</span>{% elif p.passed is False %}<span class="badge no">nicht bestanden</span>{% else %}<span class="badge wait">entschuldigt</span>{% endif %}{% if p.remark %} <small class="muted">{{ p.get_remark_display }}</small>{% endif %}</td>
       </tr>
-      {% empty %}<tr><td colspan="6" class="empty">Noch keine Prüfungen.</td></tr>
+      {% empty %}<tr><td colspan="5" class="empty">Noch keine Prüfungen.</td></tr>
       {% endfor %}
     </tbody>
   </table>

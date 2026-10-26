@@ -6,7 +6,7 @@
   <h1>Studierende</h1>
   <div class="actions"><a class="btn ghost" href="{% querystring format='csv' %}">Als CSV exportieren</a></div>
 </div>
-<p class="lead">{{ count }} Studien</p>
+<p class="lead">{{ count }} Studi{{ count|pluralize:"um,en" }}</p>
 <form class="toolbar">
   <div class="inline">
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name, E-Mail, Matrikelnummer"></label>
@@ -14,8 +14,10 @@
     <label>Status<select name="status" onchange="this.form.requestSubmit()">{% for value, label in statuses %}<option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
     <label>Studiengang<select name="studiengang" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for p in programs %}<option value="{{ p.pk }}"{% if p.pk|stringformat:'s' == studiengang %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
     <label>Hauptfach<select name="fach" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for s in subjects %}<option value="{{ s.pk }}"{% if s.pk|stringformat:'s' == fach %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+    <label>Klasse<select name="klasse" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for t in classes %}<option value="{{ t.pk }}"{% if t.pk|stringformat:'s' == klasse %} selected{% endif %}>{{ t.last_name }}, {{ t.first_name }}</option>{% endfor %}</select></label>
     <label>Fachsemester<select name="fs" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for n in semesters %}<option value="{{ n }}"{% if n|stringformat:'s' == fs %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
     <label>Studienbeginn<select name="beginn" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for t in terms %}<option value="{{ t.pk }}"{% if t.pk|stringformat:'s' == beginn %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    <label>Einzelunterricht<select name="unterricht" onchange="this.form.requestSubmit()"><option value="">Alle</option><option value="ohne"{% if unterricht == 'ohne' %} selected{% endif %}>Ohne Unterrichtszeit</option></select></label>
   </div>
 </form>
 <form>

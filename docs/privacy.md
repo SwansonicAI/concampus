@@ -62,6 +62,12 @@ examiners' marks nor the mean, and no ranking (`courses/panel.py`, `blind()`). O
 A single examiner gives a step of the scale (1,0 to 4,0 by 0,3, or 5,0); with several examiners the grade is the mean of
 theirs and may fall between the steps (HfM Weimar RPSO 2026, Leistungsbewertung).
 
+### Staff
+
+A teacher's Beschäftigung and Lehrverpflichtung (`Person.employment`, `Person.obligation`) show only on the Deputat:
+to the teacher for their own row, and to `view_teaching_load` within the Institute its office is limited to
+(`courses/views.py`, `load()`). Accounts keep them (`manage_accounts`).
+
 ### Forms
 
 When a form is refused, what was typed is kept in the session to fill it in again (`core/forms.py`, `again()`, `sent()`),

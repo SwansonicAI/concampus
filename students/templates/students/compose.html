@@ -12,7 +12,7 @@
   {{ form }}
   <p class="muted"><small>Geht ins Postfach jeder Person und per E-Mail.</small></p>
   {% url 'students:list' as roster %}
-  <div class="actions"><button class="btn">Senden</button><a class="btn ghost" href="{{ back|default:roster }}">Abbrechen</a></div>
+  <div class="actions"><button class="btn">Senden</button><a class="btn ghost" data-close href="{{ back|default:roster }}">Abbrechen</a></div>
 </form>
 {% else %}
 <p class="empty">Niemand ausgewählt. In der Liste Personen ankreuzen, dann „Nachricht schreiben“.</p>

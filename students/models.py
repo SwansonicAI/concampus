@@ -160,9 +160,27 @@ class Study(Tracked, models.Model):
                 best[p.module_id] = p
         return sorted(best.values(), key=lambda p: p.module.code)
 
+    def options(self):
+        """While none is chosen, the Schwerpunkte the plan offers, each with `first`, the semester it begins in, and
+        `choice`, the area they are chosen in."""
+        if self.focus_id:
+            return []
+        foci, found = set(self.program.foci()), []
+
+        def walk(nodes, parent):
+            for node in nodes:
+                if node.pk in foci:
+                    node.choice = parent
+                    found.append(node)
+                else:
+                    walk(node.nodes, node)
+
+        walk(self.program.curriculum(), None)
+        return found
+
     def progress(self):
         """(curriculum tree with earned credits and grades, final grade so far)."""
-        tree = self.program.curriculum({p.module_id: p.grade for p in self.record()})
+        tree = self.program.curriculum({p.module_id: p.grade for p in self.record()}, self.subject_id)
         return tree, weighted(tree, self.program.rounding)
 
 

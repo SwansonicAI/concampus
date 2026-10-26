@@ -135,10 +135,12 @@ class Program(Tracked, models.Model):
             p.offered = {s.pk for s in p.subjects.all()}
         return programs
 
-    def curriculum(self, results=None):
+    def curriculum(self, results=None, subject=None):
         """Root modules in study-plan order. Each module gets `nodes` (children), `offered` (their credits),
-        `first` and `last` semester, and, given {module_id: grade} of passed modules, `done`, `earned` and `grade`."""
+        `first` and `last` semester, and, given {module_id: grade} of passed modules, `done`, `earned` and `grade`;
+        with the Hauptfach, exams waived for it count as done (`excused`)."""
         results = results or {}
+        excused = set(self.modules.filter(waived=subject).values_list('pk', flat=True)) if subject else set()
         children = defaultdict(list)
         for module in self.modules.order_by(models.F('semester').asc(nulls_last=True), 'code'):
             children[module.parent_id].append(module)
@@ -156,7 +158,8 @@ class Program(Tracked, models.Model):
                 module.grade = weighted(module.nodes, self.rounding)
             else:
                 module.first = module.last = module.semester
-                module.done = module.pk in results
+                module.excused = module.pk in excused
+                module.done = module.pk in results or module.excused
                 module.earned = module.credits if module.done else 0
                 module.grade = results.get(module.pk)
 
@@ -190,6 +193,7 @@ class Module(Tracked, models.Model):
         help_text='Anteil an der Note des übergeordneten Moduls, bei Modulen der obersten Ebene an der Gesamtnote. 0 zählt nicht.',
     )
     description = models.TextField('Beschreibung', blank=True)
+    waived = models.ManyToManyField(Subject, blank=True, related_name='+', verbose_name='Entfällt für', help_text='Hauptfächer, für die der Plan diese Prüfung erlässt.')
 
     class Meta:
         ordering = ['code']

@@ -1,3 +1,5 @@
+from collections import Counter
+
 from django.apps import AppConfig
 from django.db.models import Count, Q
 from django.utils.formats import number_format
@@ -55,20 +57,27 @@ class CoursesConfig(Tile, AppConfig):
 
     def tasks(self, person):
         from core.models import Term
-        from .views import TEACHING
+        from .models import Course, Participation
+        from .views import TEACHING, untimed
 
         found, term = [], Term.current()
         if 'teacher' in person.roles:
+            waiting = Counter(untimed(Participation.objects.filter(course__staff=person)).values_list('course', flat=True))
+            for course in Course.objects.filter(pk__in=waiting).order_by('title'):
+                found.append(task(f'{course.title}: {plural(waiting[course.pk], "Person", "Personen")} ohne Unterrichtszeit', course.get_absolute_url()))
             for course in person.teaching.filter(term=term, kind=TEACHING[0], bookings=None):
                 found.append(task(f'Termine planen: {course.title}', course.get_absolute_url()))
             for course in person.teaching.filter(term=term, signups__isnull=False).annotate(n=Count('signups')):
                 found.append(task(f'{course.title}: {plural(course.n, "Anfrage", "Anfragen")} entscheiden', course.get_absolute_url()))
             for course in person.teaching.filter(term=term).annotate(n=Count('ensembles', filter=Q(ensembles__coach=None))).filter(n__gt=0):
                 found.append(task(f'{course.title}: {plural(course.n, "Ensemble", "Ensembles")} ohne Betreuung', course.get_absolute_url()))
+        if 'manage_courses' in person.roles and not person.everywhere('manage_courses'):  # an Institut's office
+            if n := person.within(untimed(Participation.objects.all()), 'manage_courses').values('study').distinct().count():
+                found.append(task(f'Einzelunterricht: {plural(n, "Person", "Personen")} ohne Unterrichtszeit', f"{reverse('students:list')}?unterricht=ohne"))
         if 'roll_over' in person.roles:
             from .views import missing
 
             upcoming = Term.upcoming()
-            if upcoming and (count := missing(upcoming).count()):
+            if upcoming and (count := person.within(missing(upcoming), 'roll_over').count()):
                 found.append(task(f'Semesterwechsel: {plural(count, "Veranstaltung", "Veranstaltungen")} für {upcoming} übernehmen', reverse('courses:rollover'), upcoming.start))
         return found

@@ -6,7 +6,7 @@ from decimal import InvalidOperation
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Count, F, OuterRef, Q, Subquery
+from django.db.models import Count, Exists, F, Min, OuterRef, Q, Subquery
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -14,7 +14,7 @@ from django.utils.formats import date_format
 from django.views.decorators.http import require_POST
 
 from core import history, texts
-from core.access import kept, require
+from core.access import CODENAMES, kept, require
 from core.apps import plural
 from core.dates import day as understood
 from core.forms import again, sent
@@ -23,7 +23,7 @@ from core.text import fold, matching
 from core.views import without_term
 from curriculum.models import Program
 from rooms.models import Booking, BookingCategory
-from rooms.views import agenda, week
+from rooms.views import agenda, legend, week
 from students.models import Study
 from . import panel
 from .forms import AddForm, CourseForm, DateForm, EnsembleForm, Lessons, PlanForm
@@ -34,15 +34,16 @@ MANAGERS = {Course.Kind.EXAM: 'manage_exams', Course.Kind.RECOGNITION: 'recognis
 
 
 def deputat(courses, person):
-    """A teacher's load in SWS: each course's hours; per participant in one-to-one lessons, per ensemble they coach in
+    """A teacher's load in SWS: each course's hours; per participant in one-to-one teaching, per ensemble they coach in
     ensemble courses."""
-    courses = courses.annotate(size=Count('participations', distinct=True), coached=Count('ensembles', filter=Q(ensembles__coach=person), distinct=True))
+    courses = courses.select_related('format').annotate(size=Count('participations', distinct=True), coached=Count('ensembles', filter=Q(ensembles__coach=person), distinct=True))
     return sum((c.hours or 0) * share(c, c.coached) for c in courses)
 
 
 def share(course, coached):
-    """How many times a course's hours count for one of its teachers."""
-    if course.kind == Course.Kind.LESSON:
+    """How many times a course's hours count for one of its teachers: per participant in one-to-one teaching, whether a
+    lesson class or a course whose Lehrform counts so; per ensemble coached in ensemble courses; else once."""
+    if course.kind == Course.Kind.LESSON or course.format_id and course.format.per_head:
         return course.size
     return coached if course.allocation == Course.Allocation.ENSEMBLE else 1
 
@@ -107,7 +108,7 @@ def catalogue(request):
         courses = matching(courses, q, 'title', 'staff__last_name', 'subject__name', 'area__name', 'description', 'modules__title', 'modules__code')  # also by the module's name in the Studienplan
     return render(request, 'courses/catalogue.html', {
         'term': term,
-        'terms': Term.objects.filter(courses__kind__in=TEACHING).distinct().order_by('-start'),
+        'terms': Term.objects.filter(courses__kind__in=TEACHING).distinct().order_by('-start').filter(**since(request.user)),
         'courses': courses.order_by(F('area__order').asc(nulls_last=True), 'area__name', 'title'),
         'programs': Program.planned(),
         'program': program,
@@ -159,6 +160,7 @@ def course(request, pk):
         'count': len(rows),
         'staffed': staffed,
         'eligible': person.studies.filter(status=Study.Status.ENROLLED, program__modules__courses=course).distinct(),
+        'running': course.term.end >= timezone.localdate(),
         'modules': credited(course),
         'bookings': upcoming.select_related('room', 'category').prefetch_related('participants')[:8],
         'plan': PlanForm(sent(request, 'plan'), person=person) if staffed and course.kind != Course.Kind.LESSON else None,
@@ -217,19 +219,20 @@ def register(request, pk):
     course = get_object_or_404(Course, pk=pk, kind__in=TEACHING)
     study = get_object_or_404(Study, pk=request.POST.get('study'), person=request.user, status=Study.Status.ENROLLED)
     module = course.modules.filter(program=study.program).order_by('semester').first()
+    late = not course.is_open and not course.upcoming  # the teachers may still take someone while the term runs
     if course.allocation == Course.Allocation.STAFF:
         messages.error(request, 'Die Lehrenden teilen die Plätze ein.')
     elif course.allocation == Course.Allocation.ENSEMBLE:
         messages.error(request, 'Bitte als Ensemble anmelden.')
     elif course.upcoming:
         messages.error(request, f'Die Anmeldung beginnt am {date_format(course.opens, "j.n.Y")}.')
-    elif not course.is_open:
+    elif late and course.term.end < timezone.localdate():
         messages.error(request, 'Der Anmeldeschluss ist vorbei.')
     elif module is None:
         messages.error(request, 'Diese Veranstaltung ist in Ihrem Studiengang nicht anrechenbar.')
-    elif course.allocation == Course.Allocation.CHOICE:
+    elif course.allocation == Course.Allocation.CHOICE or late:
         Signup.objects.get_or_create(course=course, study=study, defaults={'module': module, 'note': request.POST.get('note', '').strip()})
-        messages.success(request, 'Angefragt. Die Lehrenden vergeben die Plätze; die Antwort kommt in Ihr Postfach.')
+        messages.success(request, f'{"Nachmeldung angefragt" if late else "Angefragt"}. Die Lehrenden entscheiden; die Antwort kommt in Ihr Postfach.')
     else:
         participation, _ = Participation.objects.get_or_create(course=course, study=study, module=module)
         place = course.participations.filter(created__lt=participation.created).count() + 1
@@ -478,7 +481,7 @@ def mine(request):
 
 def timetable(request):
     day = understood(request.GET.get('tag', '')) or timezone.localdate()
-    return render(request, 'courses/timetable.html', {'day': day, 'clashes': True, **week(agenda(request.user), day)})
+    return render(request, 'courses/timetable.html', {'day': day, 'clashes': True, 'tones': legend(), **week(agenda(request.user), day)})
 
 
 @require('view_teaching_load', 'teacher')
@@ -487,7 +490,7 @@ def load(request):
     term = Term.pick(request.GET.get('semester'))
     if term is None:
         return without_term(request, 'ein Semester mit Veranstaltungen')
-    courses = term.courses.filter(kind__in=TEACHING).prefetch_related('staff', 'ensembles').annotate(size=Count('participations'))
+    courses = term.courses.filter(kind__in=TEACHING).select_related('format').prefetch_related('staff', 'ensembles').annotate(size=Count('participations'))
     everyone = 'view_teaching_load' in person.roles
     teaching = Person.objects.filter(teaching__term=term, teaching__kind__in=TEACHING)
     seen = None if person.everywhere('view_teaching_load') else {person.pk, *person.within(teaching, 'view_teaching_load').values_list('pk', flat=True)}  # own load, and that of the Institute in reach
@@ -502,11 +505,18 @@ def load(request):
         for s in c.staff.all():
             if (seen is None or s.pk in seen) and institute in ('', str(s.institute_id)) and all(w in fold(s.name) for w in words):
                 teachers[s].append((c, (c.hours or 0) * share(c, coached[s.pk])))
-    rows = sorted(((t, cs, sum(load for _, load in cs)) for t, cs in teachers.items()), key=lambda row: row[0].last_name)
+    rows = sorted(((t, cs, total, total - t.obligation if t.obligation is not None else None) for t, cs in teachers.items() for total in [sum(load for _, load in cs)]), key=lambda row: row[0].last_name)
     return render(request, 'courses/load.html', {
         'term': term, 'terms': Term.objects.order_by('-start'), 'rows': rows, 'total': sum(row[2] for row in rows), 'everyone': everyone,
         'institutes': Institute.objects.filter(pk__in=ours) if seen is not None and ours else Institute.objects.all(), 'institute': institute, 'q': q,
     })
+
+
+def since(person):
+    """For a student and nobody else: terms from their first, as filter arguments."""
+    if person.roles & {'teacher', *CODENAMES} or 'student' not in person.roles:
+        return {}
+    return {'start__gte': person.studies.aggregate(first=Min('start_term__start'))['first']}
 
 
 def missing(target):
@@ -518,13 +528,20 @@ def missing(target):
     ).exclude(title__in=target.courses.values('title'))
 
 
+def untimed(participations):
+    """Places in this term's one-to-one classes that no lesson is booked for; accompaniment at auditions is no class."""
+    booked = Booking.objects.filter(course=OuterRef('course'), participants=OuterRef('study__person'))
+    return participations.filter(course__term=Term.current(), course__kind=Course.Kind.LESSON, study__status=Study.Status.ENROLLED).exclude(
+        Exists(booked)).exclude(course__in=Course.objects.filter(accompaniment__isnull=False).values('accompaniment'))
+
+
 @require('roll_over')
 def rollover(request):
     """Copy the missing courses to the next term, with staff and modules; lesson classes keep their students."""
     target = Term.upcoming()
     if target is None:
         return without_term(request, 'das nächste Semester, in das die Veranstaltungen übernommen werden')
-    pending = missing(target)
+    pending = request.user.within(missing(target), 'roll_over')
     if request.method == 'POST':
         with transaction.atomic():
             for c in pending.prefetch_related('modules', 'staff'):
