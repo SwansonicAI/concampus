@@ -566,8 +566,9 @@ def rollover(request):
         return without_term(request, 'das nächste Semester, in das die Veranstaltungen übernommen werden')
     pending = request.user.within(missing(target), 'roll_over')
     if request.method == 'POST':
+        chosen = list(pending.filter(pk__in=request.POST.getlist('course')).prefetch_related('modules', 'staff'))
         with transaction.atomic():
-            for c in pending.prefetch_related('modules', 'staff'):
+            for c in chosen:
                 copy = Course.objects.create(
                     term=target, kind=c.kind, title=c.title, area=c.area, format=c.format, subject=c.subject, hours=c.hours,
                     capacity=c.capacity, allocation=c.allocation, description=c.description,
@@ -579,6 +580,10 @@ def rollover(request):
                         Participation(course=copy, study=p.study, module=p.module)
                         for p in c.participations.filter(study__status=Study.Status.ENROLLED).select_related('study')
                     ))
-        messages.success(request, f'Veranstaltungen nach {target} übernommen.')
+        messages.success(request, f'{plural(len(chosen), "Veranstaltung", "Veranstaltungen")} nach {target} übernommen.')
         return redirect(f"{reverse('courses:catalogue')}?semester={target.pk}")
-    return render(request, 'courses/rollover.html', {'target': target, 'pending': pending.select_related('term').order_by('title')})
+    ours = request.user.ours('roll_over')
+    pending = list(pending.select_related('term', 'subject__institute').prefetch_related('staff__institute').order_by('title'))
+    for c in pending:  # taught with other Institute too: theirs to decide as well
+        c.others = sorted({str(s.institute) for s in c.staff.all() if s.institute_id and s.institute_id not in ours}) if ours else []
+    return render(request, 'courses/rollover.html', {'target': target, 'pending': pending})

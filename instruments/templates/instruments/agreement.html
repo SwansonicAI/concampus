@@ -1,0 +1,19 @@
+{% extends base %}
+{% block title %}Leihvertrag {{ loan.instrument.name }}{% endblock %}
+{% block content %}
+<div class="document">
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="more" href="{% url 'instruments:instrument' loan.instrument_id %}">Zum Instrument</a></p>
+  {% include "core/_letterhead.html" with office=sender %}
+  <h1>Leihvertrag</h1>
+  <dl class="facts">
+    <dt>Instrument</dt><dd><b>{{ loan.instrument.name }}</b>, Inventarnummer {{ loan.instrument.number }}{% if loan.instrument.maker %}<br>{{ loan.instrument.maker }}{% endif %}</dd>
+    <dt>Ausgeliehen von</dt><dd>{{ loan.person.legal_name }}{% if loan.person.matriculation %}, Matrikelnummer {{ loan.person.matriculation }}{% endif %}{% if loan.person.address %}<br>{{ loan.person.address|linebreaksbr }}{% endif %}</dd>
+    <dt>Leihzeit</dt><dd>{{ loan.start|date:"j. F Y" }} bis {{ loan.due|date:"j. F Y" }}</dd>
+    <dt>Zustand bei Ausgabe</dt><dd>{{ loan.condition|default:"–" }}</dd>
+    {% if loan.note %}<dt>Zubehör und Notiz</dt><dd>{{ loan.note }}</dd>{% endif %}
+    {% if loan.returned %}<dt>Zurückgegeben</dt><dd>{{ loan.returned|date:"j. F Y" }}{% if loan.returned_condition %}, {{ loan.returned_condition }}{% endif %}</dd>{% endif %}
+  </dl>
+  <section><p>{{ terms|linebreaksbr }}</p></section>
+  <div class="signatures"><span>Ort, Datum</span><span>Für die Hochschule</span><span>{{ loan.person.legal_name }}</span></div>
+</div>
+{% endblock %}

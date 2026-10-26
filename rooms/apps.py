@@ -1,8 +1,10 @@
+from datetime import timedelta
+
 from django.apps import AppConfig
 from django.urls import reverse
 from django.utils.formats import number_format
 
-from core.apps import Tile, feature
+from core.apps import Tile, feature, task
 
 
 class RoomsConfig(Tile, AppConfig):
@@ -42,3 +44,16 @@ class RoomsConfig(Tile, AppConfig):
             daily = Institution.get().student_daily_hours
             return f'Übezeit heute: noch {number_format(daily - quota(person, today))} von {daily} Std.'
         return f'{agenda(person).filter(start__date=today).count()} Termine heute'
+
+    def tasks(self, person):
+        from django.utils import timezone
+
+        from .models import Booking
+
+        if 'manage_bookings' not in person.roles:
+            return []
+        soon = Booking.objects.filter(category__public=True, internal=False, programme='', start__gte=timezone.now(), start__lte=timezone.now() + timedelta(days=14))
+        return [
+            task(f'Programm fehlt: {b.label}', reverse('rooms:booking', args=[b.pk]), timezone.localdate(b.start))
+            for b in person.within(soon, 'manage_bookings').select_related('category', 'course')
+        ]

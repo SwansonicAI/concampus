@@ -48,7 +48,7 @@ class ChangeForm(forms.Form):
 
 class ComposeForm(forms.Form):
     subject = forms.CharField(label='Betreff', max_length=200)
-    body = forms.CharField(label='Text', widget=forms.Textarea)
+    body = forms.CharField(label='Text', widget=forms.Textarea, help_text='{vorname} und {nachname} werden für jede Person eingesetzt.')
 
 
 def own(person):
@@ -79,6 +79,11 @@ CASES = [
     ('unterricht', 'Ohne Unterrichtszeit'), ('pruefung', 'Prüfung laut Plan überfällig'), ('regelstudienzeit', 'Über der Regelstudienzeit'),
     ('schwerpunkt', 'Schwerpunkt nicht gewählt'),
 ]
+
+
+def semesters(studies):
+    """The studies with their Fachsemester as `fs`, counted in the database."""
+    return studies.annotate(fs=F('prior_terms') + Count('terms', filter=Q(terms__leave=False, terms__term__start__lte=timezone.localdate())))
 
 
 def cases(studies, case):
@@ -114,11 +119,7 @@ def roster(request):
     today = timezone.localdate()
     status = request.GET.get('status', Study.Status.ENROLLED)
     scoped = request.user.within(Study.objects.filter(status=status), 'view_students')
-    studies = (
-        scoped.select_related('person', 'program', 'subject', 'start_term', 'teacher')
-        .annotate(fs=F('prior_terms') + Count('terms', filter=Q(terms__leave=False, terms__term__start__lte=today)))
-        .order_by('person__last_name', 'person__first_name')
-    )
+    studies = semesters(scoped.select_related('person', 'program', 'subject', 'start_term', 'teacher')).order_by('person__last_name', 'person__first_name')
     for key, field in [('studiengang', 'program'), ('fach', 'subject'), ('klasse', 'teacher'), ('fs', 'fs'), ('beginn', 'start_term')]:
         if (value := request.GET.get(key, '')).isdigit():
             studies = studies.filter(**{field: value})
@@ -170,12 +171,17 @@ def compose(request):
     if not url_has_allowed_host_and_scheme(back, {request.get_host()}):
         back = ''
     form = ComposeForm(request.POST or None)
+    sender = ', '.join(Office.objects.filter(user=request.user, permissions__codename='message_students').values_list('name', flat=True)) or str(request.user)
     if people and form.is_valid():
         for person in people:
-            Message.send(person, form.cleaned_data['subject'], form.cleaned_data['body'])
+            named = {'{vorname}': person.first_name, '{nachname}': person.last_name}
+            subject, body = form.cleaned_data['subject'], form.cleaned_data['body']
+            for placeholder, value in named.items():
+                subject, body = subject.replace(placeholder, value), body.replace(placeholder, value)
+            Message.send(person, subject, body, sender=sender)
         messages.success(request, f'Nachricht an {plural(len(people), "Person", "Personen")} gesendet.')
         return redirect(back or 'students:list')
-    return render(request, 'students/compose.html', {'form': form, 'people': people, 'studies': studies, 'back': back})
+    return render(request, 'students/compose.html', {'form': form, 'people': people, 'studies': studies, 'back': back, 'sender': sender})
 
 
 def study(request, pk):

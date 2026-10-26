@@ -1,17 +1,25 @@
 {% extends base %}
-{% block title %}Veranstaltungen{% endblock %}
+{% block title %}Veranstaltungen {{ month|date:"F Y" }}{% endblock %}
 {% block subnav %}{% include "rooms/_nav.html" %}{% endblock %}
 {% block content %}
 <div class="head">
   <h1>Veranstaltungen</h1>
-  <form class="actions">
-    <select name="kategorie" onchange="this.form.requestSubmit()" aria-label="Kategorie">
-      <option value="">Alle Kategorien</option>
-      {% for c in categories %}<option value="{{ c.key }}"{% if c.key == picked %} selected{% endif %}>{{ c }}</option>{% endfor %}
-    </select>
-  </form>
+  <div class="actions no-print">
+    <a class="btn ghost" href="?monat={{ prev|date:'Y-m' }}" data-key="ArrowLeft">← {{ prev|date:"F" }}</a>
+    <a class="btn ghost" href="?" data-key="h">Dieser Monat</a>
+    <a class="btn ghost" href="?monat={{ next|date:'Y-m' }}" data-key="ArrowRight">{{ next|date:"F" }} →</a>
+    <button class="btn ghost" onclick="window.print()">Drucken</button>
+    {% if office %}<a class="btn" href="{% url 'rooms:new' %}?kategorie=konzert">Veranstaltung anlegen</a>{% endif %}
+  </div>
 </div>
-<p class="lead">Konzerte, Klassenabende, Meisterkurse und Vorträge der nächsten vier Monate.</p>
+<p class="lead">Programm {{ month|date:"F Y" }}</p>
+<form class="toolbar no-print">
+  <div class="inline">
+    <input type="hidden" name="monat" value="{{ month|date:'Y-m' }}">
+    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Titel, Programm, Ort"></label>
+    <label>Kategorie<select name="kategorie" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for c in categories %}<option value="{{ c.key }}"{% if c.key == picked %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
+  </div>
+</form>
 <table data-panel>
   <thead><tr><th>Termin</th><th>Veranstaltung</th><th>Ort</th><th>Kategorie</th></tr></thead>
   <tbody>
@@ -19,13 +27,18 @@
     {% ifchanged b.start.date %}<tr><td colspan="4" class="mid"><b>{{ b.start|date:"l, j. F" }}</b></td></tr>{% endifchanged %}
     <tr>
       <td class="mid">{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</td>
-      <td class="mid"><a href="{% url 'rooms:booking' b.pk %}"><b>{{ b.label }}</b></a></td>
+      <td><a href="{% url 'rooms:booking' b.pk %}"><b>{{ b.label }}</b></a>{% if b.internal %} <span class="badge">intern</span>{% endif %}{% if b.programme %}<br><small class="muted">{{ b.programme|truncatechars:120 }}</small>{% endif %}{% if b.admission %}<br><small>Eintritt: {{ b.admission }}</small>{% endif %}</td>
       <td class="mid">{{ b.room }} <small class="muted">{{ b.room.building }}</small></td>
       <td class="mid"><span class="booking {{ b.tone }}">{{ b.category }}</span></td>
     </tr>
     {% empty %}
-    <tr><td colspan="4" class="empty">Keine Veranstaltungen.</td></tr>
+    <tr><td colspan="4" class="empty">Keine Veranstaltungen in diesem Monat.</td></tr>
     {% endfor %}
   </tbody>
 </table>
+<section class="no-print">
+  <h2>Kalender für die Website</h2>
+  <p>Alle öffentlichen Veranstaltungen des nächsten halben Jahres, ohne die internen, zum Abonnieren oder Einbinden.</p>
+  <p class="actions"><input value="{{ feed }}" readonly size="60" aria-label="Adresse des Kalenders" onfocus="this.select()"></p>
+</section>
 {% endblock %}

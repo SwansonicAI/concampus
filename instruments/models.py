@@ -39,6 +39,9 @@ class Loan(Tracked, models.Model):
     due = models.DateField('Rückgabe bis')
     returned = models.DateField('Zurückgegeben am', null=True, blank=True)
     note = models.CharField('Notiz', max_length=200, blank=True)
+    condition = models.CharField('Zustand bei Ausgabe', max_length=200, blank=True)
+    returned_condition = models.CharField('Zustand bei Rückgabe', max_length=200, blank=True)
+    reminded = models.DateField('Erinnert am', null=True, blank=True)
 
     class Meta:
         ordering = ['-start']

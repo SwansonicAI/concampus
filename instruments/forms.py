@@ -13,6 +13,7 @@ class LendForm(forms.Form):
     )
     due = DayField(label='Rückgabe bis')
     note = forms.CharField(label='Notiz', max_length=200, required=False, help_text='Z. B. mitgegebenes Zubehör.')
+    condition = forms.CharField(label='Zustand bei Ausgabe', max_length=200, required=False)
 
     def clean_who(self):
         """One student or teacher, found by name, e-mail or Matrikelnummer."""

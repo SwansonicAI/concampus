@@ -8,10 +8,11 @@ from .views import admitted
 
 
 def gate(get_response):
-    """In the demo, strangers give the shared access code first (core.views.gate); whoever is signed in is past it."""
+    """In the demo, strangers give the shared access code first (core.views.gate); whoever is signed in is past it, and
+    calendar apps fetch the feeds without it."""
 
     def middleware(request):
-        if settings.DEMO_CODE and not request.user.is_authenticated and not admitted(request) and request.path != reverse('gate'):
+        if settings.DEMO_CODE and not request.user.is_authenticated and not admitted(request) and request.path != reverse('gate') and not request.path.endswith('.ics'):
             return redirect_to_login(request.get_full_path(), reverse('gate'))
         return get_response(request)
 

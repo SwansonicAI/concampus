@@ -21,7 +21,7 @@ from core import texts
 from core.models import Institute, Institution, Message, Office, Person
 from core.text import matching
 from courses.models import Course
-from .forms import BookingForm, CancelForm, FindForm, bookable, quota
+from .forms import BookingForm, CancelForm, FindForm, ServiceForm, bookable, quota
 from .models import Booking, BookingCategory, Room, RoomFunction
 
 OPEN, CLOSE, STEP = 8, 22, 5  # hours shown, minutes per grid line
@@ -201,16 +201,56 @@ def mine(request):
 
 
 def events(request):
-    """What the Hochschule puts on: concerts, class evenings, master classes, lectures, from today on."""
-    picked = request.GET.get('kategorie', '')
-    found = (
-        Booking.objects.filter(category__public=True, end__gte=timezone.now(), start__lt=timezone.now() + timedelta(days=120))
-        .select_related('room', 'person', 'course', 'category')
-    )
+    """What the Hochschule puts on, a month at a time: concerts, class evenings, master classes, lectures."""
+    today = timezone.localdate()
+    try:
+        first = datetime.strptime(request.GET.get('monat', ''), '%Y-%m').date()
+    except ValueError:
+        first = today.replace(day=1)
+    following = (first + timedelta(days=32)).replace(day=1)
+    picked, q = request.GET.get('kategorie', ''), request.GET.get('q', '').strip()
+    found = Booking.objects.filter(category__public=True, start__date__gte=first, start__date__lt=following).select_related('room', 'person', 'course', 'category')
+    if picked:
+        found = found.filter(category=picked)
     return render(request, 'rooms/events.html', {
-        'events': found.filter(category=picked) if picked else found, 'picked': picked,
-        'categories': BookingCategory.objects.filter(public=True),
+        'events': matching(found, q, 'title', 'programme', 'room__name', 'room__building') if q else found, 'picked': picked, 'q': q,
+        'categories': BookingCategory.objects.filter(public=True), 'month': first,
+        'prev': (first - timedelta(days=1)).replace(day=1), 'next': following, 'office': 'manage_bookings' in request.user.roles,
+        'feed': request.build_absolute_uri(reverse('rooms:programme')),
     })
+
+
+@login_not_required
+def programme(request):
+    """The public events of the next half year as a calendar, for the Hochschule's website and anyone to subscribe to."""
+    now = timezone.now()
+    found = Booking.objects.filter(category__public=True, internal=False, end__gte=now, start__lte=now + timedelta(days=183)).select_related('room')
+    return ics(request, [(f'veranstaltung-{b.pk}', b.start, b.end, b.label, f'{b.room.purpose or b.room}, {b.room.building}') for b in found])
+
+
+@require_POST
+def service(request, pk):
+    """Book a service for an event, in its room: tuning before, technical support during, transport after."""
+    event = get_object_or_404(Booking.objects.select_related('room'), pk=pk, category__public=True)
+    if not editable(event, request.user):
+        raise PermissionDenied
+    form = ServiceForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, ' '.join(e for errors in form.errors.values() for e in errors))
+        return redirect('rooms:booking', pk=pk)
+    data, day = form.cleaned_data, timezone.localtime(event.start).date()
+    booked = Booking(
+        room=event.room, parent=event, category=data['category'], person=request.user, title=f'{data["category"]}: {event.label}',
+        start=timezone.make_aware(datetime.combine(day, data['begin'])), end=timezone.make_aware(datetime.combine(day, data['until'])),
+    )
+    try:
+        booked.full_clean()
+    except ValidationError as error:
+        messages.error(request, ' '.join(error.messages))
+    else:
+        booked.save()
+        messages.success(request, f'{data["category"]} gebucht.')
+    return redirect('rooms:booking', pk=pk)
 
 
 def booking(request, pk=None):
@@ -227,6 +267,8 @@ def booking(request, pk=None):
         room = Room.objects.filter(pk=initial['room']).first() if str(initial['room']).isdigit() else None
         if data is None and room:  # picked in the plan: what stands in the way shows at once, not after saving
             data = tried(person, room, start.date(), start.time(), end.time()).data.copy()
+    if kind := request.GET.get('kategorie'):  # e.g. a new event
+        initial['category'] = kind
     if data and (instead := data.pop('instead', [''])[0]):  # another room or a later time, offered when the room was taken
         what, _, value = instead.partition(':')
         if what == 'raum':
@@ -259,6 +301,9 @@ def booking(request, pk=None):
         'told': told, 'cancel': CancelForm(sent(request, 'absagen'), person=person), 'instead': form.instead(),
         'rules': Institution.get(), 'special': BookingCategory.objects.filter(students=True).exclude(ahead_hours=None, participants=0),
         'history': booking.pk and Booking.visible_to(person.roles), 'now': timezone.now(),
+        'services': booking.services.select_related('category') if booking.pk else [],
+        'serving': ServiceForm(initial={'begin': (timezone.localtime(booking.start) - timedelta(hours=2)).time(), 'until': (timezone.localtime(booking.start) - timedelta(hours=1)).time()})
+        if booking.pk and booking.category.public else None,
         'left': Institution.get().student_daily_hours - quota(person, timezone.localdate()) if form.student else None,
     })
 

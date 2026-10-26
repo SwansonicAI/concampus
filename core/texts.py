@@ -129,6 +129,11 @@ TEXTS = {
         NACHRICHT, 'Betreuung eines Ensembles', 'Betreuung: {besetzung}',
         '„{besetzung}“ wird in „{veranstaltung}“ von {betreuung} betreut.', ('veranstaltung', 'besetzung', 'betreuung'),
     ),
+    'leihe_erinnerung': Spec(
+        NACHRICHT, 'Leihinstrument überfällig', 'Bitte zurückgeben: {instrument}',
+        'Sie haben {instrument} ausgeliehen; die Rückgabe war bis zum {frist} vereinbart. Bitte bringen Sie es bald zurück oder melden Sie sich, '
+        'wenn Sie es länger brauchen. Solange es überfällig ist, ist keine Rückmeldung möglich.', ('instrument', 'frist'),
+    ),
     'leihe': Spec(
         NACHRICHT, 'Instrument ausgeliehen', 'Leihinstrument: {instrument}',
         'Sie haben {instrument} ausgeliehen. Bitte geben Sie es bis zum {frist} zurück; danach ist keine Rückmeldung möglich, bis es zurück ist.',
@@ -192,6 +197,13 @@ TEXTS = {
     'absender_bescheinigungen': Spec(BAUSTEIN, 'Absender der Immatrikulationsbescheinigung', '', '{hochschule}'),
     'absender_leistungen': Spec(BAUSTEIN, 'Absender der Leistungsübersichten und Zeugnisse', '', '{hochschule}'),
     'unterschrift_zeugnisse': Spec(BAUSTEIN, 'Unterschriften auf Zeugnissen', '', 'Vorsitz Prüfungsausschuss'),  # one per line
+    'leihbedingungen': Spec(
+        BAUSTEIN, 'Bedingungen für Leihinstrumente', '',
+        'Das Instrument bleibt Eigentum der Hochschule und dient dem Studium. Es ist pfleglich zu behandeln, nicht weiterzugeben und bis zum '
+        'vereinbarten Tag mit dem Zubehör zurückzugeben. Schäden und Verlust sind sofort zu melden; für Schäden, die über die übliche Abnutzung '
+        'hinausgehen, haftet, wer es ausgeliehen hat. Solange es überfällig ist, ist keine Rückmeldung möglich.',
+    ),
+    'absender_leihe': Spec(BAUSTEIN, 'Absender der Leihverträge', '', '{hochschule}'),
     'unterschrift_urkunden': Spec(BAUSTEIN, 'Unterschriften auf Urkunden', '', 'Präsidentin oder Präsident\nVorsitz Prüfungsausschuss'),
     'ds_hochschule': Spec(BAUSTEIN, 'Diploma Supplement: Hochschule und Status', '', '{hochschule}\nUniversity of Music, state institution'),
     'ds_hochschulsystem': Spec(

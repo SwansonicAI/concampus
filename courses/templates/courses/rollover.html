@@ -8,14 +8,14 @@
   <div>
     <p>Lehrveranstaltungen kommen aus dem Semester ein Jahr zuvor, weil die meisten zwischen Winter und Sommer wechseln; Einzelunterricht kommt aus dem laufenden Semester.</p>
     <p>Übernommen werden Titel, Art, Hauptfach, SWS, Plätze, Beschreibung, Lehrende und anrechenbare Module. Einzelunterricht behält seine Klasse: immatrikulierte Studierende werden mitgenommen. Termine plant jede Veranstaltung neu.</p>
-    {% if pending %}
-    <form method="post">{% csrf_token %}<button class="btn">{{ pending|length }} Veranstaltung{{ pending|length|pluralize:"en" }} übernehmen</button></form>
-    {% endif %}
+    <p>Was nicht stattfindet, etwa wegen eines Forschungssemesters, ohne Haken lassen; es lässt sich später noch übernehmen.</p>
+    {% if pending %}<button class="btn" form="uebernahme">Angekreuzte übernehmen</button>{% endif %}
   </div>
-  <div>
+  <form method="post" id="uebernahme">
+    {% csrf_token %}
     <table>
-      {% for c in pending %}<tr><td>{{ c.title }}</td><td class="muted nowrap">aus {{ c.term }}</td></tr>{% endfor %}
+      {% for c in pending %}<tr><td class="mid"><input type="checkbox" name="course" value="{{ c.pk }}" checked aria-label="{{ c.title }}"></td><td>{{ c.title }}{% if c.others %}<br><small class="muted">auch {{ c.others|join:", " }}</small>{% endif %}</td><td class="muted nowrap">aus {{ c.term }}</td></tr>{% endfor %}
     </table>
-  </div>
+  </form>
 </div>
 {% endblock %}

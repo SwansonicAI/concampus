@@ -14,9 +14,12 @@ from .views import deputat
 class RolloverTest(Seeded):
     def test_next_term_gets_the_courses_and_lesson_classes(self):
         before = Course.objects.filter(term__name='SoSe 2027', kind__in=['course', 'lesson']).count()
-        r = self.login('dekanat').post('/lehre/semesterwechsel/', follow=True)
-        self.assertEqual(flashes(r), ['Veranstaltungen nach SoSe 2027 übernommen.'])
-        self.assertGreater(Course.objects.filter(term__name='SoSe 2027', kind__in=['course', 'lesson']).count(), before)
+        dekanat = self.login('dekanat')
+        kept, *taken = dekanat.get('/lehre/semesterwechsel/').context['pending']  # one left out, e.g. for a sabbatical
+        r = dekanat.post('/lehre/semesterwechsel/', {'course': [c.pk for c in taken]}, follow=True)
+        self.assertEqual(flashes(r), [f'{len(taken)} Veranstaltungen nach SoSe 2027 übernommen.'])
+        self.assertEqual(Course.objects.filter(term__name='SoSe 2027', kind__in=['course', 'lesson']).count(), before + len(taken))
+        self.assertFalse(Course.objects.filter(term__name='SoSe 2027', title=kept.title).exists())
         self.assertTrue(Participation.objects.filter(course__term__name='SoSe 2027', course__kind='lesson').exists())
         self.assertEqual(self.login('student').post('/lehre/semesterwechsel/').status_code, 403)
 

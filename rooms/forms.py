@@ -70,13 +70,13 @@ class BookingForm(forms.ModelForm):
         help_text='Sehen den Termin in ihrem Stundenplan. Bei einer Kammermusikprobe mindestens eine weitere Person.',
     )
     repeat_until = DayField(label='Wöchentlich wiederholen bis', required=False, help_text='Die Serie wird nur gespeichert, wenn jeder Termin frei ist.')
-    field_order = ['room', 'category', 'day', 'begin', 'until', 'title', 'description', 'participants', 'repeat_until']
+    field_order = ['room', 'category', 'day', 'begin', 'until', 'title', 'description', 'programme', 'admission', 'audience', 'internal', 'participants', 'repeat_until']
 
     class Meta:
         model = Booking
-        fields = ['room', 'category', 'title', 'description', 'participants']
+        fields = ['room', 'category', 'title', 'description', 'programme', 'admission', 'audience', 'internal', 'participants']
         field_classes = {'room': RoomField}
-        widgets = {'description': forms.Textarea(attrs={'rows': 3})}
+        widgets = {'description': forms.Textarea(attrs={'rows': 3}), 'programme': forms.Textarea(attrs={'rows': 4})}
 
     def __init__(self, *args, person, **kwargs):
         super().__init__(*args, **kwargs)
@@ -97,6 +97,14 @@ class BookingForm(forms.ModelForm):
             allowed = allowed.filter(teachers=True) if 'teacher' in roles else allowed.filter(students=True)
         self.fields['category'].queryset = allowed | BookingCategory.objects.filter(key=self.instance.category_id)  # never silently changed
         self.fields['category'].empty_label = None
+        groups = {}  # what a category is: teaching, an event, a service, a closure
+        for c in self.fields['category'].queryset:
+            groups.setdefault(c.get_tone_display(), []).append((c.key, c.name))
+        if len(groups) > 1:
+            self.fields['category'].choices = list(groups.items())
+        public = ','.join(BookingCategory.objects.filter(public=True).values_list('key', flat=True))
+        for name in ('programme', 'admission', 'audience', 'internal'):  # an event's details, shown for the categories the public sees
+            self.fields[name].widget.attrs['data-for'] = f'category:{public}'
         self.fields['title'].required = False
         self.fields['title'].help_text = 'Leer: die Kategorie, z. B. „Übebuchung“.'
         enrolled = Q(studies__status='enrolled')
@@ -106,7 +114,8 @@ class BookingForm(forms.ModelForm):
             .order_by('-mate', 'last_name', 'first_name').exclude(pk=person.pk)
         )
         if self.student:  # practice needs a room and a time; a title and who else comes only for the categories that ask for others
-            del self.fields['description']
+            for name in ('description', 'programme', 'admission', 'audience', 'internal'):
+                del self.fields[name]
             together = ','.join(BookingCategory.objects.filter(students=True, participants__gt=0).values_list('key', flat=True))
             for name in ('title', 'participants'):
                 self.fields[name].widget.attrs['data-for'] = f'category:{together}'
@@ -131,6 +140,8 @@ class BookingForm(forms.ModelForm):
                 raise forms.ValidationError(f'Sie haben zu dieser Zeit schon {busy.label} in {busy.room} ({timezone.localtime(busy.start):%H:%M}–{timezone.localtime(busy.end):%H:%M}).')
         if not room:
             return data
+        if data.get('audience') and room.capacity and data['audience'] > room.capacity:
+            raise forms.ValidationError(f'{room} fasst {room.capacity} Personen, erwartet sind {data["audience"]}.')
         if until := data.get('repeat_until'):
             weeks = range(1, (until - timezone.localtime(start).date()).days // 7 + 1)
             self.repeats = [(later(start, n), later(end, n)) for n in weeks]
@@ -196,6 +207,20 @@ class BookingForm(forms.ModelForm):
         for copy in copies:
             copy.participants.set(booking.participants.all())
         return booking
+
+
+class ServiceForm(forms.Form):
+    """A service an event needs, booked with it in its room: tuning, technical support, transport, caretaking."""
+
+    category = forms.ModelChoiceField(label='Dienst', queryset=BookingCategory.objects.filter(tone=BookingCategory.Tone.SERVICE), empty_label=None)
+    begin = ClockField(label='Von')
+    until = ClockField(label='Bis')
+
+    def clean(self):
+        data = super().clean()
+        if data.get('begin') and data.get('until') and data['until'] <= data['begin']:
+            raise forms.ValidationError('„Bis“ muss nach „Von“ liegen.')
+        return data
 
 
 class CancelForm(forms.Form):

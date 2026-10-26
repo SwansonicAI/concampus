@@ -10,9 +10,9 @@
   {% for s in studies %}<input type="hidden" name="study" value="{{ s.pk }}">{% endfor %}
   <input type="hidden" name="next" value="{{ back }}">
   {{ form }}
-  <p class="muted"><small>Geht ins Postfach jeder Person und per E-Mail.</small></p>
+  <p class="muted"><small>Geht ins Postfach jeder Person und per E-Mail, als Absender: {{ sender }}.</small></p>
   {% url 'students:list' as roster %}
-  <div class="actions"><button class="btn">Senden</button><a class="btn ghost" data-close href="{{ back|default:roster }}">Abbrechen</a></div>
+  <div class="actions"><button class="btn">An {{ people|length }} Person{{ people|length|pluralize:"en" }} senden</button><a class="btn ghost" data-close href="{{ back|default:roster }}">Abbrechen</a></div>
 </form>
 {% else %}
 <p class="empty">Niemand ausgewählt. In der Liste Personen ankreuzen, dann „Nachricht schreiben“.</p>

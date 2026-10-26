@@ -55,7 +55,7 @@ def instrument(request, pk):
     term = Term.current()  # lent for the semester, as a rule
     return render(request, 'instruments/instrument.html', {
         'instrument': instrument, 'state': state(instrument), 'loans': instrument.loans.select_related('person'),
-        'lending': LendForm(initial={'due': term and term.end}) if state(instrument) == 'frei' else None, 'enrolled': enrolled(),
+        'lending': LendForm(initial={'due': term and term.end, 'condition': instrument.note[:200]}) if state(instrument) == 'frei' else None, 'enrolled': enrolled(),
     })
 
 
@@ -69,7 +69,8 @@ def lend(request, pk):
     elif not form.is_valid():
         messages.error(request, ' '.join(e for errors in form.errors.values() for e in errors))
     else:
-        loan = Loan.objects.create(instrument=instrument, person=form.cleaned_data['who'], due=form.cleaned_data['due'], note=form.cleaned_data['note'])
+        data = form.cleaned_data
+        loan = Loan.objects.create(instrument=instrument, person=data['who'], due=data['due'], note=data['note'], condition=data['condition'])
         texts.send('leihe', loan.person, reverse('instruments:mine'), instrument=instrument.name, frist=f'{loan.due:%d.%m.%Y}')
         messages.success(request, f'{instrument.name} an {loan.person} verliehen, zurück bis {date_format(loan.due, "j.n.Y")}.')
     return redirect('instruments:instrument', pk=instrument.pk)
@@ -79,10 +80,32 @@ def lend(request, pk):
 @require_POST
 def give_back(request, pk):
     loan = get_object_or_404(request.user.within(Loan.objects.filter(returned=None), 'manage_instruments'), pk=pk)
-    loan.returned = timezone.localdate()
-    loan.save(update_fields=['returned'])
+    loan.returned, loan.returned_condition = timezone.localdate(), request.POST.get('condition', '').strip()[:200]
+    loan.save(update_fields=['returned', 'returned_condition'])
     messages.success(request, f'{loan.instrument.name} zurückgenommen.')
     return redirect('instruments:instrument', pk=loan.instrument_id)
+
+
+@require('manage_instruments')
+@require_POST
+def remind(request, pk):
+    """Remind whoever has an instrument overdue; once a day."""
+    loan = get_object_or_404(request.user.within(Loan.objects.filter(returned=None, due__lt=timezone.localdate()), 'manage_instruments').select_related('instrument', 'person'), pk=pk)
+    if loan.reminded == timezone.localdate():
+        messages.success(request, 'Heute schon erinnert.')
+    else:
+        texts.send('leihe_erinnerung', loan.person, reverse('instruments:mine'), instrument=loan.instrument.name, frist=f'{loan.due:%d.%m.%Y}')
+        loan.reminded = timezone.localdate()
+        loan.save(update_fields=['reminded'])
+        messages.success(request, f'{loan.person} erinnert.')
+    return redirect('instruments:instrument', pk=loan.instrument_id)
+
+
+@require('manage_instruments')
+def agreement(request, pk):
+    """The loan agreement to print and sign at handover."""
+    loan = get_object_or_404(request.user.within(Loan.objects.all(), 'manage_instruments').select_related('instrument', 'person'), pk=pk)
+    return render(request, 'instruments/agreement.html', {'loan': loan, 'terms': texts.block('leihbedingungen'), 'sender': texts.block('absender_leihe')})
 
 
 def mine(request):

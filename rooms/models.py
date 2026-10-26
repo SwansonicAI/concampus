@@ -133,6 +133,14 @@ class Booking(Tracked, models.Model):
     description = models.TextField('Beschreibung', blank=True)
     series = models.UUIDField('Serie', null=True, blank=True, db_index=True)
     created = models.DateTimeField('Gebucht am', default=timezone.now)
+    programme = models.TextField('Programm und Mitwirkende', blank=True)
+    admission = models.CharField('Eintritt', max_length=120, blank=True, help_text='Z. B. „frei“ oder „12 €, ermäßigt 6 €“.')
+    audience = models.PositiveIntegerField('Erwartetes Publikum', null=True, blank=True)
+    internal = models.BooleanField('Nur intern', default=False, help_text='Erscheint nicht im Kalender für die Website.')
+    parent = models.ForeignKey(
+        'self', models.CASCADE, null=True, blank=True, related_name='services', verbose_name='Gehört zu',
+        help_text='Ein Dienst für eine Veranstaltung, etwa Stimmung oder Technik.',
+    )
 
     class Meta:
         ordering = ['start']
@@ -152,10 +160,11 @@ class Booking(Tracked, models.Model):
         return self.category.tone
 
     def clashes(self):
-        """Bookings that overlap in the same room. Cancelled ones stay visible but no longer block it."""
+        """Bookings that overlap in the same room. Cancelled ones stay visible but no longer block it; an event and the
+        services for it share the room."""
         return (
             Booking.objects.filter(room=self.room_id, start__lt=self.end, end__gt=self.start, category__blocks=True)
-            .exclude(pk=self.pk)
+            .exclude(pk=self.pk).exclude(pk=self.parent_id).exclude(parent=self.pk or 0)
         )
 
     def clean(self):

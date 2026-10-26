@@ -394,6 +394,21 @@ TEACHERS = [  # key, title, first, last, Hauptfach taught
     ('lorenz', 'Prof.', 'Ines', 'Lorenz', None), ('kraft', '', 'Simon', 'Kraft', None),
 ]
 POSTGRADUATE = ['M.Mus.', 'M.Ed.', 'Konzertexamen', 'Zertifikat', 'Dr. phil.']
+EVENTS = {  # programme and performers, admission, expected audience; the Jazz-Session's programme is still to come
+    'Klassenabend Violine · Klasse Prof. Wendt': ('Werke von Bach, Mozart, Brahms und Ysaÿe. Studierende der Klasse Prof. Katharina Wendt.', 'frei', 60),
+    'Liederabend der Gesangsklassen': ('Schubert, Schumann, Wolf. Studierende der Gesangsklassen; am Flügel Studierende der Korrepetition.', 'frei', 120),
+    'Orgelvesper': ('Bach: Präludium und Fuge h-Moll BWV 544; Liszt: Ad nos, ad salutarem undam. Studierende der Orgelklasse Prof. Sander.', 'frei, Spenden erbeten', 80),
+    'Meisterkurs Violoncello': ('Öffentlicher Unterricht mit Studierenden der Violoncelloklassen.', 'frei', 40),
+    'Vortrag: Liszt und die Neudeutsche Schule': ('Prof. Dr. Henrik Voss, Musikwissenschaft.', 'frei', 50),
+    'Kammermusikabend': ('Haydn: Streichquartett op. 76 Nr. 4; Schumann: Klavierquintett Es-Dur op. 44. Ensembles der Kammermusikklassen.', '10 €, ermäßigt 5 €', 150),
+    'Sinfoniekonzert des Hochschulorchesters': ('Brahms: Sinfonie Nr. 4 e-Moll; Dvořák: Cellokonzert h-Moll. Hochschulorchester, Leitung Prof. Nicolás Ferreira.', '15 €, ermäßigt 8 €', 700),
+    'Musik im Schloss': ('Musik am Weimarer Hof: Werke von Bach, Telemann und Hummel. Ensemble für Alte Musik.', '12 €, ermäßigt 6 €', 120),
+}
+SERVICES = {  # service → the event it serves
+    'Stimmung Steinway D': 'Kammermusikabend',
+    'Instrumente Festsaal → Weimarhalle': 'Sinfoniekonzert des Hochschulorchesters',
+    'Abenddienst Sinfoniekonzert': 'Sinfoniekonzert des Hochschulorchesters',
+}
 OUTBOX = {'default': {'BACKEND': 'django.core.mail.backends.locmem.EmailBackend'}}
 PLACEHOLDER = (  # a one-page PDF saying what it is
     b'%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj '
@@ -467,7 +482,7 @@ CATEGORIES = [  # key, name, colour, settings: the HfM's booking categories as i
     ('meisterkurs', 'Meisterkurs', 'event', BY_TEACHERS | PUBLIC), ('weimarer-meisterkurse', 'Weimarer Meisterkurse', 'event', PUBLIC),
     ('wettbewerb', 'Wettbewerb', 'exam', PUBLIC), ('workshop', 'Workshop', 'event', BY_TEACHERS | PUBLIC), ('vortrag', 'Vortrag', 'event', BY_TEACHERS | PUBLIC),
     ('tagung', 'Tagung', 'event', PUBLIC), ('sitzung', 'Sitzung', 'event', BY_TEACHERS), ('vorstellung', 'Vorstellungsgespräche', 'exam', {}),
-    ('aufnahme', 'Aufnahme', 'teach', BY_TEACHERS), ('projekt', 'Studentisches Projekt', 'teach', {}), ('vermietung', 'Vermietung', 'event', {}),
+    ('aufnahme', 'Tonaufnahme', 'teach', BY_TEACHERS), ('projekt', 'Studentisches Projekt', 'teach', {}), ('vermietung', 'Vermietung', 'event', {}),
     ('option', 'freie Konzert-Option', 'event', {}), ('konzertbetreuung', 'Konzertbetreuung', 'event', {}), ('organisation', 'Organisation', 'event', {}),
     ('stimmung', 'Stimmung', 'service', {}), ('klavierstimmer', 'Reparaturarbeiten Klavierstimmer', 'service', {}), ('hausmeister', 'Hausmeister', 'service', {}),
     ('technik', 'Technik', 'service', {}), ('transport', 'Transport', 'service', {}), ('persoenlich', 'Persönliche Buchung', 'practice', BY_TEACHERS),
@@ -1441,7 +1456,9 @@ class Command(BaseCommand):
         used, loans = {self.demo}, []
 
         def lend(name, person, start, due, returned=None, note=''):
-            loans.append(Loan(instrument=free[name].pop(0), person=person, start=start, due=due, returned=returned, note=note))
+            instrument = free[name].pop(0)
+            loans.append(Loan(instrument=instrument, person=person, start=start, due=due, returned=returned, note=note, condition=instrument.note[:200],
+                              returned_condition='wie ausgegeben' if returned else ''))
 
         def borrower(test):
             study = next(s for s in self.enrolled if s.person not in used and test(s))
@@ -1912,7 +1929,7 @@ class Command(BaseCommand):
         """What is on in the coming weeks, and what it takes behind the scenes."""
         today, vb, t = timezone.localdate(), self.staff['veranstaltungsbuero'], self.teachers
         plan = [  # days from today, room, start, minutes, category, title, booked for
-            (1, 'Festsaal', '08:00', 90, 'stimmung', 'Stimmung Steinway D', vb),
+            (9, 'Festsaal', '16:00', 90, 'stimmung', 'Stimmung Steinway D', vb),
             (2, 'FH 108', '19:30', 120, 'klassenabend', 'Klassenabend Violine · Klasse Prof. Wendt', t['wendt']),
             (3, 'Jenny-Fleischer-Alt-Saal', '19:30', 120, 'konzert', 'Liederabend der Gesangsklassen', t['lindner']),
             (4, 'Herz Jesu', '18:00', 60, 'konzert', 'Orgelvesper', t['sander']),
@@ -1938,6 +1955,18 @@ class Command(BaseCommand):
                     break
             if category == 'klassenabend':
                 booking.participants.set(s.person for s in Study.objects.filter(teacher=person, status=Study.Status.ENROLLED))
+        held = {b.title: b for b in Booking.objects.filter(title__in=EVENTS.keys() | SERVICES.keys(), start__date__gte=today)}
+        for title, (programme, admission, audience) in EVENTS.items():
+            Booking.objects.filter(pk=held[title].pk).update(programme=programme, admission=admission, audience=audience)
+        for title, event in SERVICES.items():  # on the day of the event it serves, at the first free hour from its own
+            service, event = held[title], held[event]
+            service.parent, length = event, service.end - service.start
+            day, clock_at = timezone.localtime(event.start).date(), timezone.localtime(service.start)
+            for start in (at(day, clock_at.hour * 60 + clock_at.minute), event.start - length - timedelta(minutes=60), *(at(day, h * 60) for h in (8, 12, 14, 17))):
+                service.start, service.end = start, start + length
+                if not service.clashes().exists():
+                    service.save()
+                    break
 
     def amend(self, by, when, obj, **values):
         """Change a record as `by` did on `when`, so the history has something to show."""

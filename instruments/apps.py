@@ -23,7 +23,7 @@ class InstrumentsConfig(Tile, AppConfig):
 
         out = person.within(Loan.objects.filter(returned=None), 'manage_instruments')
         late = out.filter(due__lt=timezone.localdate()).count()
-        return f'{out.count()} verliehen' + (f' · {late} überfällig' if late else '')
+        return f'{out.count() - late} verliehen' + (f' · {late} überfällig' if late else '')
 
     def features(self, person):
         found = []
