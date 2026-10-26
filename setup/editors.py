@@ -60,14 +60,16 @@ class Editor:
 
 
 def formfield(model_field, **kwargs):
-    """Date fields that understand '12.11.' and 'morgen' but ask for a full date, as records keep one; ticks instead of
-    multiple selects."""
+    """Date fields that understand '12.11.' and 'morgen' but ask for a full date, as records keep one; numbers with a
+    decimal comma, in a text box (a number box drops the comma in some browsers); ticks instead of multiple selects."""
     if type(model_field) is models.DateField:
         field = model_field.formfield(form_class=DayField, **kwargs)
         field.widget.attrs['placeholder'] = 'TT.MM.JJJJ'
         return field
     if isinstance(model_field, models.ManyToManyField):
         kwargs.setdefault('widget', forms.CheckboxSelectMultiple)
+    if isinstance(model_field, models.DecimalField):
+        kwargs['localize'] = True
     return model_field.formfield(**kwargs)
 
 

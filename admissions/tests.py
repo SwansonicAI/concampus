@@ -36,6 +36,9 @@ class DecisionTest(Seeded):
         self.assertTrue(StudyTerm.objects.filter(study=study).exists())
         asa.post(f'/studierende/{study.pk}/versicherung/')
         asa.post(f'/studierende/{study.pk}/immatrikulieren/')
+        self.assertEqual(Study.objects.get(pk=study.pk).status, Study.Status.ADMITTED)  # not before the fee is in
+        asa.post(f'/studierende/{study.pk}/beitrag/')
+        asa.post(f'/studierende/{study.pk}/immatrikulieren/')
         study.refresh_from_db()
         self.assertEqual(study.status, Study.Status.ENROLLED)
 

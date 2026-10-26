@@ -9,6 +9,7 @@ function init(root) {
   root.querySelectorAll('.form div[id^="id_"]').forEach(list => list.querySelectorAll('input[type=checkbox]').length > 8 && filterable(list));
   root.querySelectorAll('.form select').forEach(select => select.options.length > 60 && findable(select));
   root.querySelectorAll('select[data-leads]').forEach(lead);
+  root.querySelectorAll('form:has([name=worst])').forEach(converted);
   root.querySelectorAll('[data-day], [data-moment]').forEach(dated);
   root.querySelectorAll('form:has([data-for])').forEach(conditional);
   root.querySelectorAll('.lines').forEach(lineChart);
@@ -233,6 +234,19 @@ function lead(select) {
   };
   select.addEventListener('change', narrow);
   narrow();
+}
+
+// Anerkennung: the grade the modified Bavarian formula makes of a foreign one, shown while it is typed, cut to one
+// decimal as the server does.
+function converted(form) {
+  const inputs = ['foreign', 'best', 'worst'].map(name => form.elements[name]);
+  const hint = Object.assign(document.createElement('small'), {className: 'hint'});
+  inputs[2].after(hint);
+  form.addEventListener('input', () => {
+    const [foreign, best, worst] = inputs.map(input => parseFloat(input.value.replace(',', '.')));
+    const grade = Math.min(4, Math.max(1, Math.floor((1 + 3 * (best - foreign) / (best - worst)) * 10 + 1e-9) / 10));
+    hint.textContent = [foreign, best, worst].some(Number.isNaN) || best === worst ? '' : `ergibt ${grade.toFixed(1).replace('.', ',')}`;
+  });
 }
 
 // What cannot be undone (data-confirm="Wirklich auflösen?") asks once more: the first click turns the button into the

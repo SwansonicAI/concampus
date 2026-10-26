@@ -148,11 +148,11 @@ def study(request, pk):
     tree, average = study.progress()
     upcoming, late_fee, today = Term.upcoming(), Institution.get().late_fee, timezone.localdate()
     terms = list(study.terms.select_related('term').order_by('-term__start'))
-    for t in terms:
-        t.due = t.term.due(t.paid or today, late_fee)
+    for t in terms:  # the Säumnisgebühr is for a late Rückmeldung, never for the semester one enrols in
+        t.due = t.term.fee if t.term_id == study.start_term_id else t.term.due(t.paid or today, late_fee)
     reachable = Study.reachable(person, study.person.studies.exclude(pk=study.pk))
     return render(request, 'students/study.html', {
-        'study': study,
+        'study': study, 'today': today,
         'office': office,
         'own': own,
         'personal': personal, 'identity': identity,
@@ -189,15 +189,14 @@ def next_matriculation():
 
 
 def matriculate(study):
-    """Immatrikulation of an admitted applicant with nothing missing: Matrikelnummer, first registered term, Bescheid."""
+    """Immatrikulation of an admitted applicant with nothing missing, the fee paid among it: Matrikelnummer, first
+    registered term, Bescheid."""
     person = study.person
     with transaction.atomic():
         if not person.matriculation:
             person.matriculation = str(next_matriculation())
             person.save(update_fields=['matriculation'])
-        registration, _ = StudyTerm.objects.get_or_create(study=study, term=study.start_term)
-        registration.paid = registration.paid or timezone.localdate()
-        registration.save(update_fields=['paid'])
+        StudyTerm.objects.get_or_create(study=study, term=study.start_term)
         study.set_status(Study.Status.ENROLLED)
     study.notify('immatrikulation', study.get_absolute_url())
 
@@ -225,6 +224,18 @@ def enrol_many(request):
     messages.success(request, f'{plural(len(ready), "Person", "Personen")} immatrikuliert. Bescheide versandt.')
     back = request.POST.get('next', '')
     return redirect(back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else 'admissions:board')
+
+
+@require('manage_students')
+@require_POST
+def fee_paid(request, pk):
+    """The Semesterbeitrag of an admitted applicant has arrived: booked by hand, as they have no Matrikelnummer yet to find it
+    by in the bank statement."""
+    study = get_object_or_404(request.user.within(Study.objects.all(), 'manage_students'), pk=pk, status=Study.Status.ADMITTED)
+    StudyTerm.objects.filter(study=study, term=study.start_term, paid=None).update(paid=timezone.localdate())
+    messages.success(request, 'Semesterbeitrag verbucht.')
+    back = request.POST.get('next', '')
+    return redirect(back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else study.get_absolute_url())
 
 
 @require('manage_students')
@@ -276,8 +287,11 @@ def exmatriculate(request, pk):
     study = get_object_or_404(request.user.within(Study.objects.select_related('person'), 'manage_students'), pk=pk, status=Study.Status.ENROLLED)
     reason, term, asked = request.POST.get('reason', ''), Term.current(), request.POST.get('zum', '').strip()
     on = dates.day(asked) if asked else term.end if reason == '1' else timezone.localdate()
+    lost = exhausted(study) if reason == '8' else []
     if reason not in dict(EXITS):
         messages.error(request, 'Bitte den Grund der Exmatrikulation wählen.')
+    elif reason == '8' and (not lost or max(m.appeal for m in lost) >= timezone.localdate()):  # only on the evidence, and once it is final
+        messages.error(request, 'Kein endgültig nicht bestandenes Modul.' if not lost else f'Erst nach der Widerspruchsfrist, ab dem {date_format(max(m.appeal for m in lost) + timedelta(days=1), "j.n.Y")}.')
     elif not on or not term.start <= on <= term.end:
         messages.error(request, f'Bitte einen Tag im {term} angeben, spätestens den {date_format(term.end, "j.n.Y")}.')
     else:

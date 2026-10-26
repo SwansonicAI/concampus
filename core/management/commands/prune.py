@@ -1,7 +1,8 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
-from admissions.retention import forget, months_before
+from admissions.retention import forget
+from core.dates import months_before
 from core.history import tracked
 from core.models import Change, Institution
 

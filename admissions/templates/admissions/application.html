@@ -37,7 +37,7 @@
     {% if recommendation == 'admitted' %}<p>Nach den Prüfungsergebnissen: <b>bestanden</b>. Studienplatz oder Nachrückliste nach der Rangliste.</p>{% elif recommendation %}<p>Nach den Prüfungsergebnissen: <b>nicht bestanden</b>.</p>{% elif pending %}<p class="muted">Noch nicht alle Prüfungsstufen abgeschlossen: Studienplatz oder Nachrückliste erst danach.</p>{% endif %}
     <form method="post" action="{% url 'admissions:decide' study.pk %}" class="actions">
       {% csrf_token %}
-      {% for status, verb in decisions %}<button class="btn{% if status != recommendation %} ghost{% endif %}" name="status" value="{{ status }}"{% if study.status == status or pending and status != 'rejected' %} disabled{% endif %}>{{ verb }}</button>{% endfor %}
+      {% for status, verb in decisions %}<button class="btn{% if status != recommendation %} ghost{% endif %}" name="status" value="{{ status }}" data-confirm="{{ verb }}: Bescheid versenden?"{% if study.status == status or pending and status != 'rejected' %} disabled{% endif %}>{{ verb }}</button>{% endfor %}
     </form>
     <p class="muted" style="margin-top: 12px"><small>Der Bescheid geht sofort ins Postfach der Person.</small></p>
     {% endif %}
@@ -48,11 +48,12 @@
     <ul>{% for reason in missing %}<li class="fail">{{ reason }}</li>{% endfor %}</ul>
     <div class="actions">
       {% if remind %}<form method="post" action="{% url 'admissions:remind' %}">{% csrf_token %}<input type="hidden" name="study" value="{{ study.pk }}"><input type="hidden" name="next" value="{{ request.path }}"><button class="btn ghost small">Erinnern</button></form>{% endif %}
+      {% if 'Semesterbeitrag noch nicht eingegangen' in missing %}<form method="post" action="{% url 'students:fee_paid' study.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button class="btn ghost small" data-confirm="Eingang des Beitrags verbuchen?">Semesterbeitrag verbuchen</button></form>{% endif %}
       {% if not study.person.insurance_confirmed %}<form method="post" action="{% url 'students:insured' study.pk %}">{% csrf_token %}<button class="btn ghost small">Versicherungsmeldung verbuchen</button></form>{% endif %}
       {% if not study.person.entrance %}<a class="btn ghost small" href="{% url 'setup:edit' 'personen' study.person.pk %}?next={{ request.path|urlencode }}" data-panel>Hochschulzugang erfassen</a>{% endif %}
     </div>
     {% else %}
-    <form method="post" action="{% url 'students:enrol' study.pk %}">{% csrf_token %}<button class="btn">Immatrikulieren</button></form>
+    <form method="post" action="{% url 'students:enrol' study.pk %}">{% csrf_token %}<button class="btn" data-confirm="Immatrikulieren und Bescheid versenden?">Immatrikulieren</button></form>
     <p class="muted"><small>Vergibt die Matrikelnummer, verbucht den Semesterbeitrag und versendet den Immatrikulationsbescheid.</small></p>
     {% endif %}
     {% endif %}

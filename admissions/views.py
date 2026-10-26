@@ -33,6 +33,7 @@ CARDS = 40  # per column of the board before „alle anzeigen“
 BOARD = [Study.Status.APPLIED, Study.Status.ADMITTED, Study.Status.WAITLISTED, Study.Status.REJECTED, Study.Status.ENROLLED]
 Condition = DocumentType.Condition
 DECISIONS = {Study.Status.ADMITTED: 'zulassung', Study.Status.WAITLISTED: 'nachrueckliste', Study.Status.REJECTED: 'ablehnung'}  # their Bescheide
+UNDECIDED = [Study.Status.APPLIED, Study.Status.WAITLISTED, Study.Status.ADMITTED]  # an offer not taken up can still change
 VERBS = {Study.Status.ADMITTED: 'Studienplatz anbieten', Study.Status.WAITLISTED: 'Auf die Nachrückliste', Study.Status.REJECTED: 'Ablehnen'}  # the buttons that decide
 BESCHEIDE = {  # how a decision is counted
     Study.Status.ADMITTED: ('Studienplatzangebot', 'Studienplatzangebote'), Study.Status.WAITLISTED: ('Platz auf der Nachrückliste', 'Plätze auf der Nachrückliste'),
@@ -117,10 +118,10 @@ def lapsed(study, days):
 
 
 def ranked(studies):
-    """Studies best first by their points in the Hauptfach stages, on a tie by the mean of the other parts (the lot after
-    that is drawn by hand), each with whether its place is accepted."""
+    """Studies best first by their points in the Hauptfach exam in person (the video round only lets in), on a tie by the
+    mean of the other parts (the lot after that is drawn by hand), each with whether its place is accepted."""
     audition = Q(participations__course__kind=Course.Kind.AUDITION)
-    hall = audition & Q(participations__course__subject__isnull=False)
+    hall = audition & Q(participations__course__subject__isnull=False, participations__course__video=False)
     return studies.annotate(
         points=Avg('participations__grade', filter=hall), others=Avg('participations__grade', filter=audition & Q(participations__course__subject=None)),
         accepted=Exists(StudyTerm.objects.filter(study=OuterRef('pk'), term=OuterRef('start_term'))),
@@ -381,7 +382,7 @@ def application(request, pk):
         'show_results': office or juror,
         'checklist': items if personal else [item for item in items if item['kind'].jury],
         'documents': study.documents.exclude(message=None) if personal else [],
-        'decide': person.may('decide_applications', study),
+        'decide': person.may('decide_applications', study) and study.status in UNDECIDED and not accepted,
         'enrol': person.may('manage_students', study),
         'history': bool(tables(person.roles)),
         'accepted': accepted,
@@ -397,6 +398,9 @@ def decide(request, pk):
     status = request.POST.get('status')
     if status not in DECISIONS:
         raise PermissionDenied
+    if study.status not in UNDECIDED or study.terms.filter(term=study.start_term).exists():
+        messages.error(request, 'Der Studienplatz ist angenommen; daran ändert keine Entscheidung mehr etwas.' if study.status == Study.Status.ADMITTED else 'Diese Bewerbung ist abgeschlossen.')
+        return redirect(study.get_absolute_url())
     steps = list(stages().filter(study=study))
     if status != Study.Status.REJECTED and steps and verdict(steps) is None:
         messages.error(request, 'Noch nicht alle Prüfungsstufen abgeschlossen.')

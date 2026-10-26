@@ -90,6 +90,16 @@ def gaps(rows):
     return f'Noch ohne Ergebnis: {", ".join(names[:8])}{f" und {len(names) - 8} weitere" if len(names) > 8 else ""}.' if names else ''
 
 
+def off_scale(rows):
+    """Why a sheet cannot be released: single grades between the scale's steps, entered before they were checked; ''
+    if none."""
+    found = [
+        f'{p.study.person.last_name} ({e.last_name}: {f"{v:.1f}".replace(".", ",")})' for p in rows
+        if not p.course.points and p.course.kind != Course.Kind.RECOGNITION for e, v in p.marks if v is not None and v not in STEPS
+    ]
+    return f'Keine Note der Skala: {", ".join(found)}. Bitte die Wertung berichtigen lassen.' if found else ''
+
+
 def blind(rows, examiner):
     """Mark the rows `examiner` has still to mark: until then they see neither the others' marks nor the mean, so each
     judges on their own."""

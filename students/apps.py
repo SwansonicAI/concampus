@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.apps import AppConfig
 from django.db.models import Count, F, Q
 
@@ -92,8 +94,11 @@ class StudentsConfig(Tile, AppConfig):
                 .values('study', 'module', 'study__program__attempts').annotate(n=Count('pk')).filter(n__gte=F('study__program__attempts'))
             )
             passed = set(Participation.objects.filter(passed=True, study__in={f['study'] for f in fails}).values_list('study', 'module'))
-            for study in Study.objects.filter(pk__in={f['study'] for f in fails if (f['study'], f['module']) not in passed}).select_related('person'):
-                found.append(task(f'Exmatrikulieren: {study.person}, Prüfung endgültig nicht bestanden', study.get_absolute_url()))
+            from exams.views import exhausted
+
+            for study in Study.objects.filter(pk__in={f['study'] for f in fails if (f['study'], f['module']) not in passed}).select_related('person', 'program'):
+                final = max(m.appeal for m in exhausted(study)) + timedelta(days=1)  # once the Widerspruchsfrist is over
+                found.append(task(f'Exmatrikulieren{"" if final <= today else " ab " + date_format(final, "j.n.")}: {study.person}, Prüfung endgültig nicht bestanden', study.get_absolute_url(), final))
         if 'manage_reregistration' in person.roles:
             unpaid = enrolled.exclude(person__in=paid).values('person').distinct().count()
             if unpaid and term and term.reregistration_open:

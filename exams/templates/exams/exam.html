@@ -12,7 +12,7 @@
     <form method="post" action="{% url 'exams:release' course.pk %}">
       {% csrf_token %}
       {% if course.released %}{% if decide %}<button class="btn ghost">Wieder öffnen</button>{% endif %}
-      {% else %}<button class="btn"{% if missing %} title="Noch {{ missing }} ohne Ergebnis" disabled{% endif %}>Ergebnisse freigeben</button>{% endif %}
+      {% else %}<button class="btn" data-confirm="Freigeben, sperren und benachrichtigen?"{% if missing %} title="Noch {{ missing }} ohne Ergebnis" disabled{% endif %}>Ergebnisse freigeben</button>{% endif %}
     </form>
     {% endif %}
   </div>

@@ -13,6 +13,7 @@ urlpatterns = [
     path('<int:pk>/immatrikulieren/', views.enrol, name='enrol'),
     path('immatrikulieren/', views.enrol_many, name='enrol_many'),
     path('<int:pk>/versicherung/', views.insured, name='insured'),
+    path('<int:pk>/beitrag/', views.fee_paid, name='fee_paid'),
     path('<int:pk>/urlaub/', views.leave, name='leave'),
     path('<int:pk>/exmatrikulieren/', views.exmatriculate, name='exmatriculate'),
     path('<int:pk>/fachwechsel/', views.change, name='change'),

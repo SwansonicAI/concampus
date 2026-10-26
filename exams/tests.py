@@ -85,7 +85,7 @@ class OfficeTest(Seeded):
         r = office.post(f'/pruefungen/{resit.pk}/freigabe/', follow=True)
         self.assertIn('1 Bescheid über endgültiges Nichtbestehen versandt.', ' '.join(flashes(r)))
         self.assertIn(last.module, exhausted(last.study))
-        self.assertIn(f'Exmatrikulieren: {last.study.person}', self.login('asa').get('/').content.decode())
+        self.assertIn(f'{last.study.person}, Prüfung endgültig nicht bestanden', self.login('asa').get('/').content.decode())
         self.assertEqual(attempts(first.study.person, first.module), 1)  # the withdrawal is no attempt
 
     def test_a_whole_module_is_recognised_with_a_converted_grade(self):

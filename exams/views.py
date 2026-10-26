@@ -1,6 +1,6 @@
 import csv
 import io
-from collections import Counter
+from collections import Counter, defaultdict
 from datetime import timedelta
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
 
@@ -20,6 +20,7 @@ from django.views.decorators.http import require_POST
 from core import texts
 from core.access import kept, require
 from core.apps import plural
+from core.dates import months_before
 from core.models import Message, Term
 from core.text import matching
 from core.views import without_term
@@ -54,10 +55,17 @@ def attempts(person, module):
 
 
 def exhausted(study):
-    """Modules the study has failed as often as its Prüfungsordnung allows and never passed: the Prüfungsanspruch is lost."""
-    failed = Counter(Participation.objects.filter(study=study, passed=False, course__released__isnull=False).values_list('module', flat=True))
+    """Modules the study has failed as often as its Prüfungsordnung allows and never passed: the Prüfungsanspruch is lost.
+    Each comes with its `failures` and `appeal`, the last day to object: a month after the last result."""
+    failed = defaultdict(list)
+    for p in Participation.objects.filter(study=study, passed=False, course__released__isnull=False).select_related('course__term').order_by('course__released'):
+        failed[p.module_id].append(p)
     passed = set(Participation.objects.filter(study=study, passed=True).values_list('module', flat=True))
-    return Module.objects.filter(pk__in=[m for m, n in failed.items() if n >= study.program.attempts and m not in passed])
+    lost = list(Module.objects.filter(pk__in=[m for m, ps in failed.items() if len(ps) >= study.program.attempts and m not in passed]))
+    for module in lost:
+        module.failures = failed[module.pk]
+        module.appeal = months_before(timezone.localtime(module.failures[-1].course.released).date(), -1)
+    return lost
 
 
 def outcome(p):
@@ -120,7 +128,7 @@ def index(request):
         candidate = [f'participations__study__person__{name}' for name in ('first_name', 'last_name', 'matriculation')]
         exams = list(matching(exams, q, 'title', 'subject__name', 'staff__last_name', *candidate))
         for c in exams:
-            c.state = 'freigegeben' if c.released else 'bewertung' if c.graded else 'offen'
+            c.state = 'freigegeben' if c.released else 'bewertung' if c.graded or c.date and c.date <= timezone.now() else 'offen'  # held: marks are due
         context.update(
             exams=[c for c in exams if not stand or c.state == stand], q=q, stand=stand, program=program, programs=Program.planned(),
             states=[(key, label, sum(c.state == key for c in exams)) for key, label in STATES],
@@ -346,7 +354,7 @@ def release(request, pk):
         messages.success(request, 'Ergebnisse wieder zur Bearbeitung geöffnet.')
     else:
         _, rows = panel.sheet(course)
-        if missing := panel.gaps(rows):
+        if missing := panel.gaps(rows) or panel.off_scale(rows):
             messages.error(request, missing)
             return redirect(course)
         course.released = timezone.now()
@@ -427,10 +435,10 @@ class RecognitionForm(forms.Form):
 
     who = forms.CharField(label='Studierende:r', widget=forms.TextInput(attrs={'list': 'enrolled', 'placeholder': 'Name oder Matrikelnummer', 'autocomplete': 'off'}))
     module = forms.ChoiceField(label='Modul', help_text='Ein Teil, oder das ganze Modul mit allen noch offenen Teilen.')
-    grade = forms.DecimalField(label='Note', required=False, min_value=1, max_value=4, decimal_places=1, help_text='Leer: bestanden ohne Note.')
-    foreign = forms.DecimalField(label='Oder umrechnen: erzielte Note', required=False, decimal_places=2)
-    best = forms.DecimalField(label='Beste Note dort', required=False, decimal_places=2)
-    worst = forms.DecimalField(label='Schlechteste bestandene Note dort', required=False, decimal_places=2, help_text='Modifizierte bayerische Formel.')
+    grade = forms.DecimalField(label='Note', required=False, min_value=1, max_value=4, decimal_places=1, localize=True, help_text='Leer: bestanden ohne Note.')
+    foreign = forms.DecimalField(label='Oder umrechnen: erzielte Note', required=False, decimal_places=2, localize=True)
+    best = forms.DecimalField(label='Beste Note dort', required=False, decimal_places=2, localize=True)
+    worst = forms.DecimalField(label='Schlechteste bestandene Note dort', required=False, decimal_places=2, localize=True, help_text='Modifizierte bayerische Formel.')
     note = forms.CharField(label='Herkunft', widget=forms.Textarea(attrs={'rows': 3}), help_text='Hochschule, Veranstaltung, Semester, ECTS.')
 
     def __init__(self, *args, study=None, **kwargs):

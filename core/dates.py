@@ -1,6 +1,7 @@
 """Dates and times as people type them: 'heute', 'morgen', 'fr', 'nächste woche', '12.11.', '12. nov', '+3',
 'in 2 wochen', and for a moment also a time after it: 'fr 14', '12.11. 9:30', 'morgen um 10 uhr'."""
 import re
+from calendar import monthrange
 from datetime import date, datetime, time, timedelta
 
 from django import forms
@@ -12,6 +13,12 @@ from .text import fold
 WORDS = {'heute': 0, 'morgen': 1, 'ubermorgen': 2, 'gestern': -1, 'vorgestern': -2}
 WEEKDAYS = ['montag', 'dienstag', 'mittwoch', 'donnerstag', 'freitag', 'samstag', 'sonntag']
 MONTHS = ['jan', 'feb', 'mar', 'apr', 'mai', 'jun', 'jul', 'aug', 'sep', 'okt', 'nov', 'dez']
+
+
+def months_before(day, months):
+    """The same day `months` earlier (later if negative), the month's last where it is shorter."""
+    year, month = divmod(day.year * 12 + day.month - 1 - months, 12)
+    return day.replace(year=year, month=month + 1, day=min(day.day, monthrange(year, month + 1)[1]))
 
 
 def weekday(word):

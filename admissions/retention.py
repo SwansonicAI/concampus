@@ -1,18 +1,12 @@
 """What becomes of applications that came to nothing: once the Hochschule's period is over, their documents are deleted and
 whoever only applied is made anonymous. The statistics keep counting them; nobody can be named any more."""
-from calendar import monthrange
-
 from django.db.models import CharField, Q, Value
 from django.db.models.functions import Cast, Concat
 
+from core.dates import months_before
 from core.models import Change, Message, Person
 from courses.models import Participation
 from students.models import Document, Study
-
-
-def months_before(day, months):
-    year, month = divmod(day.year * 12 + day.month - 1 - months, 12)
-    return day.replace(year=year, month=month + 1, day=min(day.day, monthrange(year, month + 1)[1]))
 
 
 def ended(cutoff):

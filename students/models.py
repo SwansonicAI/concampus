@@ -127,8 +127,11 @@ class Study(Tracked, models.Model):
     def missing(self):
         """What still blocks the enrolment of an admitted applicant."""
         reasons = self.person.missing()
-        if not self.terms.filter(term=self.start_term).exists():
+        registration = self.terms.filter(term=self.start_term).first()
+        if not registration:
             reasons.insert(0, 'Studienplatz noch nicht angenommen')
+        elif not registration.paid:
+            reasons.insert(0, 'Semesterbeitrag noch nicht eingegangen')
         if not self.person.entrance:
             reasons.append('Hochschulzugangsberechtigung nicht erfasst')
         return reasons

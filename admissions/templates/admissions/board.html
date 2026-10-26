@@ -26,7 +26,7 @@
         <td class="num">{{ intake.capacity }}</td>
         <td>{% for s in lapsed %}<a href="{% url 'admissions:application' s.pk %}" data-panel>{{ s.person.name }}</a><br>{% empty %}–{% endfor %}</td>
         <td>{% for s in waiting %}<a href="{% url 'admissions:application' s.pk %}" data-panel>{{ s.person.name }}</a> <small class="muted">{{ s.points|floatformat:1 }} Punkte</small><br>{% empty %}<span class="muted">Niemand auf der Nachrückliste</span>{% endfor %}</td>
-        <td class="num"><form method="post" action="{% url 'admissions:move_up' intake.pk %}">{% csrf_token %}<button class="btn small">{% if waiting %}Nachrücken{% else %}Schließen{% endif %}</button></form></td>
+        <td class="num"><form method="post" action="{% url 'admissions:move_up' intake.pk %}">{% csrf_token %}<button class="btn small" data-confirm="{% if waiting %}Nachrücken und Bescheide versenden?{% else %}Abgelaufene Zulassungen schließen?{% endif %}">{% if waiting %}Nachrücken{% else %}Schließen{% endif %}</button></form></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -56,7 +56,7 @@
     </table>
     <div class="actions" style="margin-top: 16px">
       <select name="status" aria-label="Entscheidung"><option value="">Wie empfohlen</option>{% for status, verb in verbs.items %}<option value="{{ status }}">{{ verb }}</option>{% endfor %}</select>
-      <button class="btn">Für die Angekreuzten entscheiden</button>
+      <button class="btn" data-confirm="Entscheiden und Bescheide versenden?">Für die Angekreuzten entscheiden</button>
       <small class="muted">Die Bescheide gehen sofort ins Postfach.</small>
     </div>
   </form>
@@ -82,7 +82,7 @@
       </tbody>
     </table>
     <div class="actions" style="margin-top: 16px">
-      <button class="btn">Angekreuzte immatrikulieren</button>
+      <button class="btn" data-confirm="Immatrikulieren und Bescheide versenden?">Angekreuzte immatrikulieren</button>
       <small class="muted">Vergibt die Matrikelnummern, verbucht den Semesterbeitrag und versendet die Immatrikulationsbescheide.</small>
     </div>
   </form>

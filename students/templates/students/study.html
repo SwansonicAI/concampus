@@ -16,7 +16,7 @@
   </div>
 </div>
 <p class="lead">{% if study.person.matriculation %}Matrikelnr. {{ study.person.matriculation }} · {% endif %}{{ study.program }} · {{ study.subject }}{% if study.focus %} · Schwerpunkt {{ study.focus.title }}{% endif %} · <span class="badge {{ study.status }}">{{ study.get_status_display }}</span>{% if study.person.hold and personal %} <span class="badge hold">Sperre: {{ study.person.hold }}</span>{% endif %}</p>
-{% if exhausted %}<p class="flash error">Prüfungsanspruch erloschen: {% for m in exhausted %}{{ m.code }} {{ m.title }}{% if not forloop.last %}, {% endif %}{% endfor %} endgültig nicht bestanden.</p>{% endif %}
+{% for m in exhausted %}<div class="flash error">Prüfungsanspruch erloschen: {{ m.code }} {{ m.title }} endgültig nicht bestanden, {% for p in m.failures %}{{ p.course.term }} {{ p.grade|floatformat:1|default:"nicht bestanden" }}{% if p.remark %} ({{ p.remark|upper }}){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}.<br><small>Widerspruch bis {{ m.appeal|date:"j.n.Y" }}{% if m.appeal < today %}, abgelaufen{% else %}; erst danach exmatrikulieren{% endif %}.</small></div>{% endfor %}
 
 <div class="stats">
   <div class="stat"><b>{{ earned }} / {{ total }}</b><span>ECTS erworben</span><div class="bar"><i style="width: {% widthratio earned total 100 %}%"></i></div></div>
@@ -81,7 +81,7 @@
     <div class="panel" style="margin-top: 28px">
       <h3>Verwaltung</h3>
       {% if study.status == 'admitted' %}
-      <form method="post" action="{% url 'students:enrol' study.pk %}">{% csrf_token %}<button class="btn">Immatrikulieren</button></form>
+      <form method="post" action="{% url 'students:enrol' study.pk %}">{% csrf_token %}<button class="btn" data-confirm="Immatrikulieren und Bescheid versenden?">Immatrikulieren</button></form>
       {% elif study.status == 'enrolled' %}
       <form method="post" action="{% url 'students:exmatriculate' study.pk %}" class="inline">
         {% csrf_token %}

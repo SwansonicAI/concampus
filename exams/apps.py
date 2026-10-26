@@ -72,7 +72,14 @@ class ExamsConfig(Tile, AppConfig):
                     exam.get_absolute_url(), timezone.localdate(exam.held),
                 ))
         if 'manage_exams' in person.roles:
+            from core.models import Term
             from students.models import Document
+
+            undated = person.within(Course.objects.filter(kind=Course.Kind.EXAM, term=Term.current(), bookings=None, released=None), 'manage_exams')
+            if soon := list(undated.filter(Q(opens=None) | Q(opens__lte=timezone.localdate() + timedelta(days=14))).values_list('opens', flat=True)):  # registration open or near
+                first = min(filter(None, soon), default=None)
+                when = f' vor der Anmeldung ab {date_format(first, "j.n.")}' if first and first > timezone.localdate() else ''
+                found.append(task(f'{plural(len(soon), "Prüfung", "Prüfungen")} ohne Termin{when}', reverse('exams:index'), first))
 
             handed = Document.objects.filter(kind='abschlussarbeit', study__participations__course=OuterRef('pk'), created__gte=F('study__participations__created'))
             late = Course.objects.filter(kind=Course.Kind.THESIS, released=None, deadline__lt=timezone.localdate()).exclude(Exists(handed))

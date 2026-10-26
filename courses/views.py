@@ -104,7 +104,7 @@ def catalogue(request):
     if form.isdigit():
         courses = courses.filter(format=form)
     if q := request.GET.get('q', '').strip():
-        courses = matching(courses, q, 'title', 'staff__last_name', 'subject__name', 'area__name', 'description')
+        courses = matching(courses, q, 'title', 'staff__last_name', 'subject__name', 'area__name', 'description', 'modules__title', 'modules__code')  # also by the module's name in the Studienplan
     return render(request, 'courses/catalogue.html', {
         'term': term,
         'terms': Term.objects.filter(courses__kind__in=TEACHING).distinct().order_by('-start'),

@@ -124,6 +124,7 @@ class CourseForm(forms.ModelForm):
         model = Course
         fields = ['title', 'kind', 'area', 'format', 'subject', 'staff', 'modules', 'hours', 'capacity', 'allocation', 'opens', 'deadline', 'description']
         labels = {'staff': 'Lehrende'}
+        localized_fields = ['hours', 'pass_mark']  # a decimal comma, in a text box
         widgets = {
             'staff': forms.CheckboxSelectMultiple,
             'modules': forms.CheckboxSelectMultiple,

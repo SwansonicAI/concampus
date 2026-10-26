@@ -22,7 +22,8 @@ from django.db import models, transaction
 from django.utils import timezone
 from django.utils.crypto import get_random_string
 
-from admissions.retention import forget, months_before
+from admissions.retention import forget
+from core.dates import months_before
 from admissions.views import DECISIONS
 from core import destatis, history, texts
 from core.models import Change, Holiday, Institute, Institution, Message, Office, Person, Term, Text
@@ -1145,7 +1146,9 @@ class Command(BaseCommand):
             ) for study in studies for k in study.terms_ for term in [self.calendar[k]]),
             batch_size=2000,
         )
-        StudyTerm.objects.bulk_create(StudyTerm(study=study, term=self.current) for study in current[:2])
+        StudyTerm.objects.bulk_create(  # one has paid and waits for the insurer's notice, the other has the notice but has not paid yet
+            StudyTerm(study=study, term=self.current, paid=date(2026, 10, 12) if n == 1 else None) for n, study in enumerate(current[:2])
+        )
         self.enrolled, self.ability, self.rounds = [], {}, defaultdict(list)
         for study in studies:
             if study.status == Study.Status.ENROLLED:
@@ -1573,6 +1576,10 @@ class Command(BaseCommand):
                 Score.objects.filter(participation=lost).update(value=Decimal('5.0'))
                 for back in (1, 2):
                     self.failed_before(lost, back)
+                subject, body = lost.study.wording('endgueltig', pruefung=lost.course.title, modul=lost.module, versuch=3)  # sent with the result
+                when = lost.course.released + timedelta(days=2)
+                notice = Message.objects.create(person=lost.study.person, subject=subject, body=body, sender=texts.block('absender_bescheide'), created=when, read=when)
+                Document.objects.create(person=lost.study.person, study=lost.study, kind_id='notice', title=subject, message=notice, created=when)
 
     def failed_before(self, p, back):
         """An earlier failed attempt at p's exam, `back` terms before."""
@@ -1686,8 +1693,10 @@ class Command(BaseCommand):
                 talent = 21.4 if study.person == applicant else rng.uniform(13, 23)
             elif outcome == Study.Status.REJECTED:
                 talent = rng.uniform(12, 15.6)
+            elif outcome == Study.Status.WAITLISTED:  # passed, and behind everyone who got a place
+                talent = rng.uniform(19.6 if master else 16.6, 20.2 if master else 18.0)
             else:
-                talent = rng.uniform(20.5 if master else 18.5, 23.5)
+                talent = rng.uniform(21.5 if master else 19.5, 23.5)
             note = self.repertoire(subject)
             handed = ['cv', 'school'] + ['degree'] * master
             if finished or study.since.day < 15 or study.person == applicant:  # the latest applicants still owe the fee receipt
