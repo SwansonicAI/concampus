@@ -140,7 +140,7 @@ def find(request):
     now = timezone.localtime()
     hour = (now + timedelta(hours=1)).replace(minute=0)
     form = FindForm(request.GET or None, initial={'day': now.date(), 'start': hour.time(), 'end': (hour + timedelta(hours=1)).time()})
-    rooms = start = end = None
+    rooms = start = end = trial = None
     if form.is_valid():
         data = form.cleaned_data
         start = timezone.make_aware(datetime.combine(data['day'], data['start']))
@@ -149,8 +149,20 @@ def find(request):
         rooms = bookable(request.user).exclude(pk__in=taken).filter(capacity__gte=data['seats'] or 1)
         rooms = matching(rooms, data['equipment'], 'equipment', 'name', 'purpose', 'building')
         rooms = rooms.order_by('capacity', 'building', 'name')
-    busy = start and 'student' in request.user.roles and agenda(request.user).filter(start__lt=end, end__gt=start).select_related('room').first()
-    return render(request, 'rooms/find.html', {'form': form, 'rooms': rooms, 'start': start, 'end': end, 'busy': busy})
+        trial = tried(request.user, rooms.first(), data['day'], data['start'], data['end'])
+    return render(request, 'rooms/find.html', {'form': form, 'rooms': rooms, 'start': start, 'end': end, 'trial': trial})
+
+
+def tried(person, room, day, begin, until):
+    """A booking of `room` checked against every rule before anyone fills in a form: bound, so it carries its errors,
+    and holding what to send to book it at once. None without a room."""
+    if room is None:
+        return None
+    category = BookingForm(person=person).fields['category']
+    return BookingForm({
+        'room': room.pk, 'category': category.prepare_value(category.queryset.first()),
+        'day': f'{day:%d.%m.%Y}', 'begin': f'{begin:%H:%M}', 'until': f'{until:%H:%M}',
+    }, person=person)
 
 
 def room(request, pk):
@@ -208,11 +220,13 @@ def booking(request, pk=None):
         if private(booking, person):
             raise PermissionDenied
         return render(request, 'rooms/details.html', {'booking': booking, 'participants': booking.participants.all()})
-    initial = {}
+    initial, data = {}, request.POST.copy() or None
     if start := parse_datetime(request.GET.get('start', '')):
         end = parse_datetime(request.GET.get('ende', '')) or start + timedelta(hours=1)
         initial = {'room': request.GET.get('raum'), 'day': start.date(), 'begin': start.time(), 'until': end.time()}
-    data = request.POST.copy() or None
+        room = Room.objects.filter(pk=initial['room']).first() if str(initial['room']).isdigit() else None
+        if data is None and room:  # picked in the plan: what stands in the way shows at once, not after saving
+            data = tried(person, room, start.date(), start.time(), end.time()).data.copy()
     if data and (instead := data.pop('instead', [''])[0]):  # another room or a later time, offered when the room was taken
         what, _, value = instead.partition(':')
         if what == 'raum':
@@ -220,7 +234,7 @@ def booking(request, pk=None):
         else:
             data['begin'], data['until'] = value.split('-')
     form = BookingForm(data, instance=booking, initial=initial, person=person)
-    if form.is_valid():
+    if request.method == 'POST' and form.is_valid():
         booking = form.save()
         if booking.person_id != person.pk:
             texts.send(

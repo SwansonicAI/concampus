@@ -792,8 +792,8 @@ class Command(BaseCommand):
             self.loans()
             self.exams()
             self.admissions()
-            self.practice()
             self.events()
+            self.practice()
             self.letters()
             forget(months_before(timezone.localdate(), Institution.get().retention_months))  # as the nightly prune would have
         self.changes()

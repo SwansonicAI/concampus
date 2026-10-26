@@ -15,6 +15,15 @@ function init(root) {
   root.querySelectorAll('form:has([data-for])').forEach(conditional);
   root.querySelectorAll('.lines').forEach(lineChart);
   root.querySelectorAll('table:not(.hours)').forEach(sortable);
+  root.querySelectorAll('table').forEach(scrolling);
+}
+
+// A wide table scrolls within itself, never the page.
+function scrolling(table) {
+  if (table.closest('.scroll')) return;
+  const box = Object.assign(document.createElement('div'), {className: 'scroll'});
+  table.before(box);
+  box.append(table);
 }
 
 const MONTHS = ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'];

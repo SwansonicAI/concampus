@@ -11,23 +11,25 @@
   </div>
 </form>
 {{ form.non_field_errors }}
-{% if busy %}<p class="fail">Sie haben zu dieser Zeit schon {{ busy.label }} in {{ busy.room }} ({{ busy.start|time:"H:i" }}–{{ busy.end|time:"H:i" }}).</p>
+{% if trial.errors %}{% for errors in trial.errors.values %}{% for e in errors %}<p class="fail">{{ e }}</p>{% endfor %}{% endfor %}
 {% elif rooms is not None %}
 <table data-panel>
-  <thead><tr><th>Raum</th><th>Gebäude</th><th class="num">Plätze</th><th>Ausstattung</th><th></th></tr></thead>
+  <thead><tr><th>Raum</th><th class="num">Plätze</th><th></th></tr></thead>
   <tbody>
     {% for r in rooms %}
     <tr>
-      <td class="mid"><a href="{% url 'rooms:room' r.pk %}?tag={{ start|date:'Y-m-d' }}"><b>{{ r.name }}</b></a><br><small class="muted">{{ r.purpose }}</small></td>
-      <td class="mid">{{ r.building }}</td>
+      <td><a href="{% url 'rooms:room' r.pk %}?tag={{ start|date:'Y-m-d' }}"><b>{{ r.name }}</b></a> <small class="muted">{{ r.building }}</small><br><small class="muted">{{ r.purpose }}{% if r.equipment %} · {{ r.equipment }}{% endif %}</small></td>
       <td class="num mid">{{ r.capacity }}</td>
-      <td class="mid">{{ r.equipment }}</td>
-      <td class="num mid"><a class="btn small" href="{% url 'rooms:new' %}?raum={{ r.pk }}&amp;start={{ start|date:'Y-m-d\TH:i' }}&amp;ende={{ end|date:'Y-m-d\TH:i' }}">Buchen</a></td>
+      <td class="num mid">
+        {% if trial.student %}<form method="post" action="{% url 'rooms:new' %}">{% csrf_token %}{% for name, value in trial.data.items %}{% if name != 'room' %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endif %}{% endfor %}<button class="btn small" name="room" value="{{ r.pk }}">Buchen</button></form>
+        {% else %}<a class="btn small" href="{% url 'rooms:new' %}?raum={{ r.pk }}&amp;start={{ start|date:'Y-m-d\TH:i' }}&amp;ende={{ end|date:'Y-m-d\TH:i' }}">Buchen</a>{% endif %}
+      </td>
     </tr>
     {% empty %}
-    <tr><td colspan="5" class="empty">Kein passender Raum frei. Andere Zeit oder weniger Ausstattung versuchen.</td></tr>
+    <tr><td colspan="3" class="empty">Kein passender Raum frei. Andere Zeit oder weniger Ausstattung versuchen.</td></tr>
     {% endfor %}
   </tbody>
 </table>
+{% if trial.student %}<p class="muted"><small>Ein Klick bucht den Raum als {{ trial.cleaned_data.category }}.</small></p>{% endif %}
 {% endif %}
 {% endblock %}
