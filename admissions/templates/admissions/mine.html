@@ -22,7 +22,7 @@
   </table>
   {% if s.checklist %}
   <h3 style="margin-top: 28px">Video und Unterlagen{% if s.open %} · bis {{ s.deadline|date:"j. F Y" }} änderbar{% endif %}</h3>
-  {% if s.late %}<p class="muted">Die Frist ist abgelaufen. Was noch fehlt, reichen Sie bitte nach, bevor über Ihre Bewerbung entschieden wird.</p>{% endif %}
+  {% if s.late %}<p class="muted">Was noch fehlt, reichen Sie bitte nach, bevor über Ihre Bewerbung entschieden wird.</p>{% endif %}
   {% include "admissions/_checklist.html" with checklist=s.checklist study=s upload=s.open %}
   {% endif %}
   {% if s.status == 'admitted' %}

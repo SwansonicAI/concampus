@@ -53,7 +53,7 @@ class RoomField(forms.ModelChoiceField):
     recent = ()
 
     def label_from_instance(self, room):
-        return f'{room.name} · {room.purpose}' if room.purpose else room.name
+        return f'{room.name} · {room.purpose}' if room.purpose not in ('', room.name) else room.name
 
 
 class Participants(forms.ModelMultipleChoiceField):
@@ -87,8 +87,9 @@ class BookingForm(forms.ModelForm):
         self.office = 'book_any_room' in roles
         self.student = not (self.office or 'teacher' in roles)
         self.fields['room'].empty_label = 'Bitte wählen'
-        self.fields['room'].queryset = bookable(person)
-        self.fields['room'].recent = list(dict.fromkeys(person.bookings.order_by('-created').values_list('room', flat=True)[:30]))[:3]
+        rooms = self.fields['room'].queryset = bookable(person)
+        lately = person.bookings.filter(room__in=rooms).order_by('-created').values_list('room', flat=True)[:30]
+        self.fields['room'].recent = list(dict.fromkeys(lately))[:3]
         if not self.instance.pk and not self.initial.get('room'):  # practice is mostly in the same room
             self.initial['room'] = next(iter(self.fields['room'].recent), None)
         allowed = BookingCategory.objects.all()

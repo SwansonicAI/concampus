@@ -199,13 +199,15 @@ function findable(select) {
   select.before(input);
   const children = [...select.children].map(child => [child, [...child.children]]);
   input.addEventListener('input', () => {
+    const kept = select.value;  // taking options out and back loses the choice
     const words = fold(input.value).split(/\s+/).filter(Boolean);
-    const fits = (option, group = '') => option.selected || !option.value || words.every(word => fold(`${option.text} ${group}`).includes(word));
+    const fits = (option, group = '') => option.value === kept || !option.value || words.every(word => fold(`${option.text} ${group}`).includes(word));
     select.replaceChildren(...children.flatMap(([child, options]) => {
       if (child.tagName !== 'OPTGROUP') return fits(child) ? [child] : [];
       child.replaceChildren(...options.filter(option => fits(option, child.label)));
       return child.children.length ? [child] : [];
     }));
+    select.value = kept;
   });
 }
 
@@ -219,10 +221,15 @@ function lead(select) {
   const narrow = () => {
     const option = select.selectedOptions[0];
     const group = option?.value && (option.dataset.group ?? option.text);
+    const kept = list.value;
     list.replaceChildren(...children.filter(child => {
       const label = heading(child);
       return !group || label === undefined || label === group || child.querySelector('input:checked');
     }));
+    if (list.tagName === 'SELECT') {  // a dropdown keeps its choice where it still can, else none
+      list.value = kept;
+      if (list.selectedIndex < 0) list.value = '';
+    }
   };
   select.addEventListener('change', narrow);
   narrow();
