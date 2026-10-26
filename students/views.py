@@ -31,6 +31,17 @@ class ChangeForm(forms.Form):
     program = forms.ModelChoiceField(label='Neuer Studiengang', queryset=Program.objects.all(), empty_label='Bitte wählen')
     subject = forms.ModelChoiceField(label='Hauptfach', queryset=Subject.objects.all(), empty_label='Bitte wählen')
 
+    def __init__(self, *args, study=None, **kwargs):
+        """Shown for a study: its Hauptfach kept, the Studiengänge one can start with it first."""
+        super().__init__(*args, **kwargs)
+        if study:
+            self.fields['subject'].initial = study.subject_id
+            current = Program.current()
+            self.fields['program'].choices = [('', 'Bitte wählen')] + [
+                (label, [(p.pk, str(p)) for p in current if (study.subject_id in p.offered) == offered])
+                for label, offered in [(f'Mit Hauptfach {study.subject}', True), ('Weitere', False)]
+            ]
+
 
 class ComposeForm(forms.Form):
     subject = forms.CharField(label='Betreff', max_length=200)
@@ -93,7 +104,7 @@ def roster(request):
     return render(request, 'students/roster.html', {
         'studies': shown, 'count': len(shown) if len(shown) < SHOWN else studies.count(), 'q': q, 'status': status, 'statuses': Study.Status.choices,
         'sort': sort, 'columns': [(title, key, 'ascending' if sort == key else 'descending' if sort == f'-{key}' else '') for title, key, _ in COLUMNS],
-        'programs': Program.objects.all(), 'subjects': Subject.objects.all(),
+        'programs': request.user.within(Program.objects.all(), 'view_students'), 'subjects': request.user.within(Subject.objects.all(), 'view_students'),
         'terms': Term.objects.filter(intake__isnull=False).distinct().order_by('-start'), 'semesters': range(1, 13),
         **{key: request.GET.get(key, '') for key in ['studiengang', 'fach', 'fs', 'beginn']},
     })
@@ -155,7 +166,7 @@ def study(request, pk):
         'documents': study.documents.all(),
         'others': study.person.studies.exclude(pk=study.pk).select_related('program', 'subject'),
         'reachable': Study.reachable(person, study.person.studies.exclude(pk=study.pk)),
-        'change': ChangeForm() if office else None,
+        'change': ChangeForm(study=study) if office else None,
         'exits': EXITS, 'leaves': LEAVES,
         'exhausted': exhausted(study) if study.status == Study.Status.ENROLLED else [],
         'recognise': study.status == Study.Status.ENROLLED and person.may('recognise', study),

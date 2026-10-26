@@ -1,5 +1,5 @@
 {% load l10n marks %}
-<form method="post" class="scroll">
+<form method="post" class="scroll"{% if panel %} data-wide{% endif %}>
   {% csrf_token %}
   <table>
     <thead>

@@ -60,6 +60,25 @@ def sheet(course):
     return staff, rows
 
 
+def due(p):
+    """Whether a result is still to be entered: a withdrawal for good reason needs none."""
+    return p.passed is None and p.remark != Participation.Remark.EXCUSED
+
+
+def gaps(rows):
+    """Why a sheet cannot be closed yet: whose results are missing, and whose marks for them; '' once all are in."""
+    names = [
+        p.study.person.last_name + (f' (fehlt: {", ".join(e.last_name for e, v in p.marks if v is None)})' if any(v is None for _, v in p.marks) else '')
+        for p in rows if due(p)
+    ]
+    return f'Noch ohne Ergebnis: {", ".join(names[:8])}{f" und {len(names) - 8} weitere" if len(names) > 8 else ""}.' if names else ''
+
+
+def waiting(rows):
+    """The examiners whose marks keep results open: [(examiner, how many)]."""
+    return list(Counter(e for p in rows if due(p) for e, v in p.marks if v is None).items())
+
+
 def save(post, rows, columns, decide):
     """Apply a results form. Raises InvalidOperation on a malformed number; nothing is saved then.
 

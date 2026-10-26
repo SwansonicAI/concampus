@@ -287,6 +287,14 @@ class Person(Tracked, AbstractUser):
         """Whether the person may act on this record with the capability."""
         return self.everywhere(capability) or capability in self.reach and self.within(type(record).objects.filter(pk=record.pk), capability).exists()
 
+    def ours(self, capability):
+        """Ids of the Institute a person's lists open on for this capability: those their office is limited to, else
+        their own; none for the whole Hochschule."""
+        reach = self.reach.get(capability, ())
+        if reach is None:
+            return set()
+        return set(reach[0]) if reach and reach[0] else {self.institute_id} - {None}
+
     def reached(self, model, capability):
         """Ids of the records of `model` the person may act on with the capability, kept for the request: for long lists of rooms."""
         found = self.__dict__.setdefault('_reached', {})

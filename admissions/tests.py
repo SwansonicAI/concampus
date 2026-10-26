@@ -135,6 +135,19 @@ class VideoTest(Seeded):
         self.applicant.post(self.url, upload('cv2.pdf', 'cv'))
         self.assertEqual(list(self.study.documents.filter(kind='cv').values_list('title', flat=True)), ['cv2.pdf'])
 
+    def test_what_is_missing_is_handed_in_after_the_deadline_but_not_the_video(self):
+        cello = Study.objects.get(person__username='bewerbung', subject__name='Violoncello')
+        self.assertIn('nachreichen: Einwilligung der Erziehungsberechtigten', self.applicant.get('/').text)
+        url = f'/aufnahme/bewerbung/{cello.pk}/unterlagen/'
+        self.applicant.post(url, {'kind': 'consent', 'file': SimpleUploadedFile('einwilligung.pdf', b'%PDF-1.4', content_type='application/pdf')})
+        self.assertTrue(cello.documents.filter(kind='consent').exists())
+        self.assertIn('Die Frist für Unterlagen ist abgelaufen.', flashes(self.applicant.post(url, upload('neu.mp4'), follow=True)))
+
+    def test_the_form_offers_what_is_left_at_their_level_their_instruments_first(self):
+        auditions = self.applicant.get('/aufnahme/bewerben/').context['form'].fields['audition'].queryset
+        self.assertFalse(auditions.filter(program=self.study.program, subject=self.study.subject).exists())
+        self.assertEqual((auditions[0].subject.institute, auditions[0].program.postgraduate), (self.study.subject.institute, False))
+
     def test_others_cannot_upload(self):
         self.assertEqual(self.login('student').post(self.url, {'kind': 'cv', 'url': 'https://x.org/a.pdf'}).status_code, 403)
 
@@ -153,6 +166,12 @@ class JuryTest(Seeded):
         self.assertEqual(str(Score.objects.get(participation=first, examiner=wendt).value), '19.50')
         self.assertIn('Bitte Punkte zwischen 0 und 25 eintragen.', flashes(juror.post(url, {f'score-{first.pk}-{wendt.pk}': '31'}, follow=True)))
         self.assertEqual(self.login('student').get(f'/aufnahme/pruefung/{video_round.pk}/sichtung/').status_code, 403)
+
+    def test_an_audition_closes_only_with_every_result(self):
+        hall = Course.objects.get(term__name='SoSe 2027', title='Eignungsprüfung Hauptfach Violoncello')
+        r = self.login('institut').post(f'/aufnahme/pruefung/{hall.pk}/abschluss/', follow=True)
+        self.assertTrue(flashes(r)[-1].startswith('Noch ohne Ergebnis: '))
+        self.assertIsNone(Course.objects.get(pk=hall.pk).released)
 
     def test_board_flags_incomplete_applications(self):
         self.assertIn('unvollständig', self.login('asa').get('/aufnahme/bewerbungen/').text)

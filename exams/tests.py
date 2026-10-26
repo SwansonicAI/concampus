@@ -4,6 +4,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import Count
 from django.test import Client
 
+from core.models import Message
 from core.testing import Seeded, flashes
 from courses.models import Course, Participation
 from courses.panel import mean
@@ -82,6 +83,14 @@ class OfficeTest(Seeded):
         office.post(f'/pruefungen/anerkennung/?studium={study.pk}', {'module': options[0][0], 'foreign': '8', 'best': '10', 'worst': '5', 'note': 'mdw Wien, SoSe 2024'})
         recognised = Participation.objects.filter(study=study, course__kind='recognition')
         self.assertEqual((recognised.count(), set(recognised.values_list('grade', flat=True))), (len(options) - 1, {Decimal('2.2')}))
+
+    def test_examiners_behind_with_their_marks_are_named_and_reminded_once_a_day(self):
+        resit = Course.objects.get(title__contains='Wiederholung')
+        office = self.login('pruefungsamt')
+        self.assertIn('Wertung fehlt: Hallmann', office.get('/').text)
+        office.post(f'/pruefungen/{resit.pk}/erinnern/')
+        office.post(f'/pruefungen/{resit.pk}/erinnern/')
+        self.assertEqual(Message.objects.filter(person__last_name='Hallmann', subject=f'Ihre Wertung fehlt: {resit.title}').count(), 1)
 
     def test_marks_come_from_a_file(self):
         exam = Course.objects.annotate(n=Count('staff', distinct=True)).filter(kind='exam', released=None, n=1).first()

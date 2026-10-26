@@ -9,7 +9,7 @@
     {% if not course.video %}<a class="btn ghost" href="{% if request.GET.sortierung %}?{% else %}?sortierung=punkte{% endif %}">{% if request.GET.sortierung %}Nach Termin{% else %}Rangliste{% endif %}</a>{% endif %}
     {% if office %}<a class="btn ghost" href="{% url 'setup:edit' 'eignungspruefungen' course.pk %}?next={{ request.path|urlencode }}" data-panel>Bearbeiten</a>{% endif %}
     {% if history %}<a class="btn ghost" href="{% url 'history' 'courses.course' course.pk %}" data-panel>Verlauf</a>{% endif %}
-    {% if office %}<form method="post" action="{% url 'admissions:close' course.pk %}">{% csrf_token %}<button class="btn{% if course.released %} ghost{% endif %}">{% if course.released %}Wieder öffnen{% else %}Abschließen{% endif %}</button></form>{% endif %}
+    {% if office %}<form method="post" action="{% url 'admissions:close' course.pk %}">{% csrf_token %}<button class="btn{% if course.released %} ghost{% endif %}"{% if missing and not course.released %} title="Noch {{ missing }} ohne Ergebnis"{% endif %}>{% if course.released %}Wieder öffnen{% else %}Abschließen{% endif %}</button></form>{% endif %}
   </div>
 </div>
 <p class="lead">Studienbeginn {{ course.term }}{% if course.subject %} · {{ course.subject }}{% endif %}{% if course.released %} · <span class="badge green">abgeschlossen, gesperrt</span>{% endif %}</p>

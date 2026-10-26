@@ -20,7 +20,7 @@ from django.views.decorators.http import require_POST
 from core import texts
 from core.access import kept, require
 from core.apps import plural
-from core.models import Term
+from core.models import Message, Term
 from core.text import matching
 from core.views import without_term
 from courses import panel
@@ -63,11 +63,6 @@ def exhausted(study):
 def outcome(p):
     """A result in words, as lists and notices give it."""
     return 'bestanden' if p.passed else 'nicht bestanden' if p.passed is False else 'entschuldigt' if p.remark else ''
-
-
-def due(p):
-    """Whether a result is still to be entered: a withdrawal for good reason needs none."""
-    return p.passed is None and p.remark != Participation.Remark.EXCUSED
 
 
 def register_resits(course):
@@ -162,7 +157,8 @@ def exam(request, pk):
         else:
             messages.success(request, 'Ergebnisse gespeichert.')
         return redirect(course)
-    slots = SlotForm(request.GET or None, person=person) if office else None
+    handed = handed_in(rows[0]) if course.kind == Course.Kind.THESIS and rows else None
+    held = handed or course.bookings.filter(start__lte=timezone.now()).exists()  # marks are owed from then on, slots no more
     return render(request, 'exams/exam.html', {
         'course': course,
         'staff': staff,
@@ -172,12 +168,13 @@ def exam(request, pk):
         'office': office,
         'decide': decide,
         'history': Course.visible_to(person.roles),
-        'slots': slots,
+        'slots': SlotForm(request.GET or None, person=person, course=course) if office and not held else None,
         'modules': credited(course),
         'bookings': course.bookings.select_related('room'),
-        'missing': sum(1 for p in rows if due(p)),
+        'missing': sum(1 for p in rows if panel.due(p)),
+        'waiting': panel.waiting(rows) if (office or decide) and held and not course.released else [],
         'remarks': Participation.Remark.choices if decide and course.kind in (Course.Kind.EXAM, Course.Kind.THESIS) else [],
-        'handed': handed_in(rows[0]) if course.kind == Course.Kind.THESIS and rows else None,
+        'handed': handed,
         'adding': AddForm(),
         'importing': not course.released and course.kind == Course.Kind.EXAM and (decide or person in staff),
         'enrolled': enrolled() if office else [],
@@ -190,7 +187,7 @@ def edit(request, pk=None):
     exams = request.user.within(Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS]), 'manage_exams')
     course = get_object_or_404(exams, pk=pk) if pk else Course(term=Term.pick(request.GET.get('semester')), kind=Course.Kind.EXAM)
     thesis = course.kind == Course.Kind.THESIS
-    form = (ThesisForm if thesis else ExamForm)(request.POST or None, instance=course)
+    form = (ThesisForm if thesis else ExamForm)(request.POST or None, instance=course, person=request.user)
     if form.is_valid() and (saved := kept(form, request.user, 'manage_exams')):
         course = saved
         if thesis and 'deadline' in form.changed_data:
@@ -255,7 +252,7 @@ def submit(request, pk):
 @require_POST
 def plan(request, pk):
     course = get_object_or_404(request.user.within(Course.objects.all(), 'manage_exams'), pk=pk, kind=Course.Kind.EXAM)
-    form = SlotForm(request.POST, person=request.user)
+    form = SlotForm(request.POST, person=request.user, course=course)
     rows = list(course.participations.filter(slot=None).select_related('study__person').order_by('created'))
     if not form.is_valid() or not rows:
         messages.error(request, 'Bitte Beginn, Dauer und Raum angeben; alle Teilnehmenden haben schon Termine.' if rows else 'Alle Teilnehmenden haben schon Termine.')
@@ -343,9 +340,8 @@ def release(request, pk):
         messages.success(request, 'Ergebnisse wieder zur Bearbeitung geöffnet.')
     else:
         _, rows = panel.sheet(course)
-        if open_ := [p for p in rows if due(p)]:
-            gaps = [p.study.person.last_name + (f' (fehlt: {", ".join(e.last_name for e, v in p.marks if v is None)})' if any(v is None for _, v in p.marks) else '') for p in open_]
-            messages.error(request, f'Noch ohne Ergebnis: {", ".join(gaps[:8])}{f" und {len(gaps) - 8} weitere" if len(gaps) > 8 else ""}.')
+        if missing := panel.gaps(rows):
+            messages.error(request, missing)
             return redirect(course)
         course.released = timezone.now()
         final = 0
@@ -363,6 +359,24 @@ def release(request, pk):
         )
         if resits := [p for c in later for p in register_resits(c)]:
             messages.info(request, f'{plural(len(resits), "Person", "Personen")} zur Wiederholung automatisch angemeldet.')
+    return redirect(course)
+
+
+@require_POST
+def remind(request, pk):
+    """Ask the examiners whose marks keep results open for them; nobody twice a day."""
+    course = get_object_or_404(Course, pk=pk, kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], released=None)
+    if not (request.user.may('manage_exams', course) or request.user.may('decide_results', course)):
+        raise PermissionDenied
+    sent = []
+    for examiner, n in panel.waiting(panel.sheet(course)[1]):
+        subject, body = texts.render(
+            'wertung_fehlt', vorname=examiner.first_name, nachname=examiner.last_name, pruefung=course.title, anzahl=plural(n, 'Teilnahme', 'Teilnahmen'),
+        )
+        if not examiner.messages.filter(subject=subject, created__date=timezone.localdate()).exists():
+            Message.send(examiner, subject, body, course.get_absolute_url())
+            sent.append(examiner.last_name)
+    messages.success(request, f'Erinnert: {", ".join(sent)}.' if sent else 'Heute schon erinnert.')
     return redirect(course)
 
 

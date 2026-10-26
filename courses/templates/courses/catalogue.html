@@ -10,6 +10,7 @@
 <form class="toolbar">
   <div class="inline">
     <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    {% if scoped %}<label>Veranstaltungen<select name="bereich" onchange="this.form.requestSubmit()"><option value="eigene">in Ihrer Zuständigkeit</option><option value="alle"{% if reach == 'alle' %} selected{% endif %}>alle</option></select></label>{% endif %}
     <label>Fachgebiet<select name="fachgebiet" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for a in areas %}<option value="{{ a.pk }}"{% if a.pk|stringformat:'s' == area %} selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
     <label>Lehrform<select name="lehrform" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for f in formats %}<option value="{{ f.pk }}"{% if f.pk|stringformat:'s' == form %} selected{% endif %}>{{ f }}</option>{% endfor %}</select></label>
     <label>Studiengang<select name="studiengang" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for p in programs %}<option value="{{ p.pk }}"{% if p.pk|stringformat:'s' == program %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>

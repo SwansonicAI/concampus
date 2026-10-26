@@ -50,6 +50,8 @@ DEMO_VIDEO = (  # stand-in for every audition video: a real performance under CC
 VIDEO_SUBJECTS = {  # where the HfM's Eignungsprüfung starts with a video (Alles über die Eignungsprüfung)
     'Violine', 'Viola', 'Violoncello', 'Flöte', 'Oboe', 'Klarinette', 'Posaune', 'Schlagwerk', 'Gesang', 'Klavier', 'Jazz-Gesang', 'Orgel',
 }
+APPLY_BY = date(2026, 11, 2)  # Bewerbungsfrist for the SoSe 2027 intake
+JUDGED = {'Violoncello': date(2026, 10, 1)}  # where that intake's videos were due earlier and are judged by now: their Frist
 KREISE = {  # the Kreise of the German places students come from (core.destatis)
     'Weimar': '16055', 'Erfurt': '16051', 'Jena': '16053', 'Leipzig': '14713', 'Dresden': '14612', 'Berlin': '11000', 'Hamburg': '02000',
     'München': '09162', 'Köln': '05315', 'Halle (Saale)': '15002', 'Gotha': '16067', 'Kassel': '06611', 'Nürnberg': '09564',
@@ -1024,7 +1026,7 @@ class Command(BaseCommand):
                 study.structured, study.employed, study.cumulative = pick.random() < 0.3, pick.random() < 0.4, pick.random() < 0.2
             study.terms_, study.leave_ = [], None
             if start > self.now:
-                study.status, study.since = Study.Status.APPLIED, date(2026, 10, rng.randint(1, 20))
+                study.status, study.since = Study.Status.APPLIED, JUDGED.get(subject, APPLY_BY) - timedelta(days=rng.randint(12, 31))
             elif outcome or rng.random() < INTAKE[(program.degree, program.name)][1]:
                 if outcome is None and (rng.random() > 0.8 or id(person) in accepted):
                     study.status = Study.Status.LEFT  # admitted, and declined the place
@@ -1610,7 +1612,7 @@ class Command(BaseCommand):
     def admissions(self):
         """The WiSe intake is decided, the SoSe intake is being marked; auditions where the Hochschule holds them."""
         auditioned = ('B.Mus.', 'M.Mus.')
-        for term, video_deadline, audition_day in [(self.current, date(2026, 3, 15), date(2026, 5, 29)), (self.next, date(2026, 11, 2), date(2027, 1, 13))]:
+        for term, video_deadline, audition_day in [(self.current, date(2026, 3, 15), date(2026, 5, 29)), (self.next, APPLY_BY, date(2027, 1, 13))]:
             outcomes = [(s, 'running' if s.status == Study.Status.APPLIED else s.status) for s in self.rounds[term] if s.program.degree in auditioned]
             self.intake(term, outcomes, video_deadline, audition_day, finished=term == self.current)
 
@@ -1657,13 +1659,13 @@ class Command(BaseCommand):
             key = (study.program_id, subject)
             if key not in rounds:
                 level, n = (' (Master)' if master else ''), len(rounds)
-                decided = finished or subject == 'Violoncello'
+                decided = finished or subject in JUDGED
                 subjects, rate, sose = INTAKE[(study.program.degree, study.program.name)]
                 if finished:  # every place taken; a class without a free place took nobody
                     places = sum(1 for s, o in outcomes if (s.program_id, s.subject.name) == key and o in (Study.Status.ENROLLED, Study.Status.ADMITTED))
                 else:
                     places = max(1, round(subjects[subject] * rate * (sose if summer else 1 - sose)))
-                intake = {'program': study.program, 'deadline': video_deadline, 'capacity': places, 'accompaniment': accompanist}  # the course one applies to
+                intake = {'program': study.program, 'deadline': video_deadline if finished else JUDGED.get(subject, video_deadline), 'capacity': places, 'accompaniment': accompanist}  # the course one applies to
                 video = Course.objects.create(
                     term=term, kind=Course.Kind.AUDITION, title=f'Videostufe {subject}{level}', subject=study.subject, video=True, pass_mark=Decimal('19.1' if master else '16.1'), max_points=25,
                     released=at(video_deadline + timedelta(days=30) if finished else date(2026, 10, 20), hour=12) if decided else None, **intake,

@@ -53,6 +53,7 @@ class ExamsConfig(Tile, AppConfig):
         return found
 
     def tasks(self, person):
+        from courses import panel
         from courses.models import Course
 
         found, now = [], timezone.now()
@@ -65,7 +66,11 @@ class ExamsConfig(Tile, AppConfig):
             for exam in decided.filter(open=0):
                 found.append(task(f'Ergebnisse freigeben: {exam.title}', exam.get_absolute_url()))
             for exam in decided.filter(open__gt=0, held__lte=now - timedelta(days=7)):  # a week after the exam, results are overdue
-                found.append(task(f'Ergebnisse überfällig: {exam.title}, {plural(exam.open, "Teilnahme", "Teilnahmen")} offen', exam.get_absolute_url(), timezone.localdate(exam.held)))
+                late = ', '.join(e.last_name for e, _ in panel.waiting(panel.sheet(exam)[1]))
+                found.append(task(
+                    f'Ergebnisse überfällig: {exam.title}, ' + (f'Wertung fehlt: {late}' if late else f'{plural(exam.open, "Teilnahme", "Teilnahmen")} offen'),
+                    exam.get_absolute_url(), timezone.localdate(exam.held),
+                ))
         if 'manage_exams' in person.roles:
             from students.models import Document
 

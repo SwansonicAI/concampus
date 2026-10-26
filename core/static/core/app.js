@@ -7,6 +7,8 @@ const fold = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
 
 function init(root) {
   root.querySelectorAll('.form div[id^="id_"]').forEach(list => list.querySelectorAll('input[type=checkbox]').length > 8 && filterable(list));
+  root.querySelectorAll('.form select').forEach(select => select.options.length > 60 && findable(select));
+  root.querySelectorAll('select[data-leads]').forEach(lead);
   root.querySelectorAll('[data-day], [data-moment]').forEach(dated);
   root.querySelectorAll('form:has([data-for])').forEach(conditional);
   root.querySelectorAll('.lines').forEach(lineChart);
@@ -191,6 +193,41 @@ function filterable(list) {
   });
 }
 
+// Type-to-find in a long dropdown, such as every Kreis and state: only entries matching the words, or their group, stay.
+function findable(select) {
+  const input = Object.assign(document.createElement('input'), {type: 'search', className: 'filter', placeholder: 'Liste filtern …'});
+  select.before(input);
+  const children = [...select.children].map(child => [child, [...child.children]]);
+  input.addEventListener('input', () => {
+    const words = fold(input.value).split(/\s+/).filter(Boolean);
+    const fits = (option, group = '') => option.selected || !option.value || words.every(word => fold(`${option.text} ${group}`).includes(word));
+    select.replaceChildren(...children.flatMap(([child, options]) => {
+      if (child.tagName !== 'OPTGROUP') return fits(child) ? [child] : [];
+      child.replaceChildren(...options.filter(option => fits(option, child.label)));
+      return child.children.length ? [child] : [];
+    }));
+  });
+}
+
+// A choice that narrows the list it leads (data-leads="teacher") to its own group: the teachers of the Hauptfach applied
+// for, the modules of the Studiengang picked. Ticked entries stay, so saving loses nothing.
+const heading = child => child.tagName === 'OPTGROUP' ? child.label : child.querySelector(':scope > label:not(:has(input))')?.textContent.trim();
+
+function lead(select) {
+  const list = select.form.querySelector(`#id_${select.dataset.leads}`);
+  const children = [...list.children];
+  const narrow = () => {
+    const option = select.selectedOptions[0];
+    const group = option?.value && (option.dataset.group ?? option.text);
+    list.replaceChildren(...children.filter(child => {
+      const label = heading(child);
+      return !group || label === undefined || label === group || child.querySelector('input:checked');
+    }));
+  };
+  select.addEventListener('change', narrow);
+  narrow();
+}
+
 // Fields that matter only for some choices of another (data-for="category:kammermusik") show only then.
 function conditional(form) {
   const rules = new Map();
@@ -357,6 +394,10 @@ if (drawer) {
     if (!html || /^\s*<!doctype/i.test(html)) return location.assign(response.url);  // files, and pages of their own
     body.innerHTML = html;
     page.href = response.url;
+    if (body.querySelector('[data-wide]')) {  // a results sheet needs every column
+      drawer.classList.add('wide');
+      wider.textContent = 'Schmaler';
+    }
     if (!drawer.classList.contains('open')) {
       history.pushState({drawer: true}, '');
       drawer.classList.add('open');

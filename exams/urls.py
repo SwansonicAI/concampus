@@ -14,6 +14,7 @@ urlpatterns = [
     path('<int:pk>/bearbeiten/', views.edit, name='edit'),
     path('<int:pk>/termine/', views.plan, name='plan'),
     path('<int:pk>/freigabe/', views.release, name='release'),
+    path('<int:pk>/erinnern/', views.remind, name='remind'),
     path('<int:pk>/liste/', views.roster, name='roster'),
     path('<int:pk>/noten/', views.marks, name='marks'),
     path('<int:pk>/anmelden/', views.register, name='register'),

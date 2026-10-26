@@ -1,12 +1,13 @@
 from collections import defaultdict
 
 from django import forms
-from django.db.models import F
+from django.db.models import F, Q
 
 from core.dates import ClockField, DayField, MomentField
 from core.models import Institution, Person
 from curriculum.models import Module, Program
 from rooms.forms import RoomField, bookable
+from rooms.models import Room
 from students.models import Study
 from .models import Course
 
@@ -71,15 +72,27 @@ class DateForm(forms.Form):
 
 
 class SlotForm(forms.Form):
-    """A block of consecutive exam or audition slots."""
+    """A block of consecutive exam or audition slots, in the room the exam is booked in unless another is chosen."""
 
     start = MomentField(label='Beginn')
     minutes = forms.IntegerField(label='Minuten je Person', min_value=5, max_value=120, initial=20)
     room = RoomField(label='Raum', queryset=None, empty_label='Bitte wählen')
 
-    def __init__(self, *args, person, **kwargs):
+    def __init__(self, *args, person, course, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['room'].queryset = bookable(person)
+        self.fields['room'].queryset = Room.objects.filter(Q(pk__in=bookable(person).values('pk')) | Q(bookings__course=course)).distinct()
+        self.fields['room'].initial = course.bookings.order_by('-start').values_list('room', flat=True).first()
+
+
+def teachers(subject=None, institutes=()):
+    """Teachers as choices, the likely ones first: those teaching the Hauptfach, then those of the Institute in question,
+    then every other Institut's."""
+    hauptfach = set(Course.objects.filter(kind=Course.Kind.LESSON, subject=subject).values_list('staff', flat=True)) if subject else set()
+    groups = defaultdict(list)
+    for t in Person.teachers().select_related('institute'):
+        rank = 0 if t.pk in hauptfach else 1 if t.institute_id in institutes else 2
+        groups[rank, f'Hauptfach {subject}' if rank == 0 else str(t.institute or 'Ohne Institut')].append((t.pk, str(t)))
+    return [(label, people) for (_, label), people in sorted(groups.items())]
 
 
 def leaf_modules():
@@ -92,6 +105,10 @@ def leaf_modules():
 
 
 class CourseForm(forms.ModelForm):
+    programme = forms.ModelChoiceField(
+        label='Studiengang', queryset=Program.planned(), required=False, empty_label='Alle', help_text='Zeigt unten nur seine Module.',
+        widget=forms.Select(attrs={'data-leads': 'modules'}),
+    )
     opens = DayField(label='Anmeldung ab', required=False, help_text='Erster Tag der Anmeldung; leer: sofort.')
     deadline = DayField(label='Anmeldeschluss', required=False, help_text='Letzter Tag für An- und Abmeldung.')
 
@@ -105,15 +122,24 @@ class CourseForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'rows': 4}),
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, person=None, **kwargs):
         super().__init__(*args, **kwargs)
         if 'kind' in self.fields:
             self.fields['kind'].choices = [(k.value, k.label) for k in (Course.Kind.COURSE, Course.Kind.LESSON)]
         self.fields['staff'].queryset = Person.teachers()
+        self.fields['staff'].choices = teachers(self.instance.subject, person.ours('manage_courses') | person.ours('manage_exams') if person else ())
+        if person and not self.instance.pk and 'teacher' in person.roles and not self.initial.get('staff'):  # who creates a course mostly teaches it
+            self.initial['staff'] = [person.pk]
         if 'accompaniment' in self.fields:
             self.fields['accompaniment'].queryset = Course.objects.filter(kind=Course.Kind.LESSON, term=self.instance.term_id).order_by('title')
         if 'modules' in self.fields:
             self.fields['modules'].choices = leaf_modules()
+            self.fields['programme'].initial = self.instance.pk and self.instance.modules.values_list('program', flat=True).first()
+            names = [name for name in self.fields if name != 'programme']
+            names.insert(names.index('modules'), 'programme')
+            self.order_fields(names)
+        else:
+            del self.fields['programme']
         if 'subject' in self.fields:
             self.fields['subject'].empty_label = 'Keines'
         if 'program' in self.fields:
@@ -153,6 +179,8 @@ class ThesisForm(CourseForm):
         exams = study.program.modules.filter(children=None, exam=True).order_by(F('semester').desc(nulls_last=True), 'code')
         self.fields['module'].queryset = exams
         self.fields['module'].initial = exams.filter(title__icontains='arbeit').first()  # Bachelor-, Master-, Diplomarbeit come last in the plan
+        if study.teacher_id:  # the Hauptfachlehrer:in mostly reviews it
+            self.initial['staff'] = [study.teacher_id]
 
 
 class AuditionForm(CourseForm):

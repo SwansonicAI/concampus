@@ -139,6 +139,11 @@ TEXTS = {
     ),
     'pruefungsanmeldung': Spec(NACHRICHT, 'Prüfungsanmeldung', 'Prüfungsanmeldung: {pruefung}', 'Sie sind zur Prüfung {pruefung} ({modul}) angemeldet.', ('pruefung', 'modul')),
     'ergebnis': Spec(NACHRICHT, 'Ergebnis freigegeben', 'Ergebnis: {pruefung}', 'Ihr Prüfungsergebnis ist freigegeben.', ('pruefung',)),
+    'wertung_fehlt': Spec(
+        NACHRICHT, 'Wertung fehlt', 'Ihre Wertung fehlt: {pruefung}',
+        'Für „{pruefung}“ fehlt noch Ihre Wertung ({anzahl}). Bitte tragen Sie sie ein, damit das Ergebnis freigegeben werden kann.',
+        ('pruefung', 'anzahl'),
+    ),
     'anerkennung': Spec(NACHRICHT, 'Anerkennung', 'Anerkennung: {modul}', 'Anerkannt: {modul}.\nHerkunft: {herkunft}', ('modul', 'herkunft')),
     'buchung_geaendert': Spec(NACHRICHT, 'Buchung geändert', 'Buchung geändert: {buchung}', '{von} hat Ihre Buchung geändert: {raum}, {termin}.', ('buchung', 'von', 'raum', 'termin')),
     'buchung_storniert': Spec(

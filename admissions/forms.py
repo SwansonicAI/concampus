@@ -3,6 +3,7 @@ from collections import defaultdict
 from django import forms
 from django.contrib.auth.forms import BaseUserCreationForm
 from django.db import models
+from django.db.models import Case, Exists, OuterRef, Q, When
 from django.utils import timezone
 from django.utils.formats import date_format
 
@@ -43,8 +44,18 @@ class IntakeField(forms.ModelChoiceField):
         return f'{course.program.title} · {course.subject} · ab {course.term}, {stage} (Frist {date_format(course.deadline, "j.n.Y")})'
 
 
+class Hauptfach(forms.Select):
+    """Each option names its Hauptfach, so the teachers below narrow to that class."""
+
+    def create_option(self, *args, **kwargs):
+        option = super().create_option(*args, **kwargs)
+        if option['value']:
+            option['attrs']['data-group'] = str(option['value'].instance.subject)
+        return option
+
+
 class ApplicationForm(forms.Form):
-    audition = IntakeField(label='Studiengang und Hauptfach', queryset=None, empty_label=None)
+    audition = IntakeField(label='Studiengang und Hauptfach', queryset=None, empty_label=None, widget=Hauptfach(attrs={'data-leads': 'teacher'}))
     teacher = forms.ModelChoiceField(label='Wunschlehrer:in', queryset=None, required=False, empty_label='Keine Angabe')
     repertoire = forms.CharField(
         label='Prüfungsprogramm', widget=forms.Textarea(attrs={'rows': 5}),
@@ -61,12 +72,21 @@ class ApplicationForm(forms.Form):
         label='Ich versichere, dass meine Angaben vollständig und richtig sind.', help_text='Ersetzt den unterschriebenen Bewerbungsantrag.',
     )
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, person, **kwargs):
         super().__init__(*args, **kwargs)
+        studies = person.studies.all()  # who applied before: their instrument first, then its Institut's, at their level
+        applied = studies.filter(program=OuterRef('program'), subject=OuterRef('subject'), start_term=OuterRef('term'))
+        level = Q(program__postgraduate__in=studies.values('program__postgraduate'))
         auditions = self.fields['audition'].queryset = (
-            Course.objects.filter(kind=Course.Kind.AUDITION, program__isnull=False, deadline__gte=timezone.localdate())
-            .select_related('program', 'subject', 'term').order_by('program__degree', 'program__name', 'subject__name')
+            Course.objects.filter(kind=Course.Kind.AUDITION, program__isnull=False, deadline__gte=timezone.localdate()).exclude(Exists(applied))
+            .select_related('program', 'subject', 'term')
+            .annotate(near=Case(
+                When(level & Q(subject__in=studies.values('subject')), then=0), When(level & Q(subject__institute__in=studies.values('subject__institute')), then=1), default=2,
+            ))
+            .order_by('near', 'program__degree', 'program__name', 'subject__name')
         )
+        if person.home:  # where the HZB was most likely gained
+            self.fields['entrance_region'].choices = [('', '–'), ('Ihr Heimatwohnsitz', [(person.home, person.get_home_display())])] + destatis.places()
         classes = defaultdict(set)  # who teaches each Hauptfach one can apply for, grouped so applicants find their instrument
         for subject, pk in Course.objects.filter(kind=Course.Kind.LESSON, subject__in=auditions.values('subject'), staff__isnull=False).values_list('subject__name', 'staff'):
             classes[subject].add(pk)

@@ -125,6 +125,16 @@ class Program(Tracked, models.Model):
         """Programmes with a Studienplan, which courses, exams and auditions belong to; not a Gasthörerschaft."""
         return cls.objects.filter(modules__isnull=False).distinct()
 
+    @classmethod
+    def current(cls):
+        """The latest Prüfungsordnung of each planned Studiengang, what one can start now; each with the pks of the
+        Hauptfächer it `offered`."""
+        newer = cls.objects.filter(degree=models.OuterRef('degree'), name=models.OuterRef('name'), version__gt=models.OuterRef('version'))
+        programs = list(cls.planned().exclude(models.Exists(newer)).prefetch_related('subjects'))
+        for p in programs:
+            p.offered = {s.pk for s in p.subjects.all()}
+        return programs
+
     def curriculum(self, results=None):
         """Root modules in study-plan order. Each module gets `nodes` (children), `offered` (their credits),
         `first` and `last` semester, and, given {module_id: grade} of passed modules, `done`, `earned` and `grade`."""

@@ -91,6 +91,10 @@ def catalogue(request):
         )
     )
     offered = courses
+    scoped = 'manage_courses' in person.roles and not person.everywhere('manage_courses')  # an Institut's office starts with its own
+    reach = request.GET.get('bereich', 'eigene' if scoped else '')
+    if scoped and reach == 'eigene':
+        courses = person.within(courses, 'manage_courses')
     if program.isdigit():
         courses = courses.filter(pk__in=Course.objects.filter(modules__program=program).values('pk'))
     area, form = request.GET.get('fachgebiet', ''), request.GET.get('lehrform', '')
@@ -112,6 +116,7 @@ def catalogue(request):
         'form': form,
         'q': q,
         'office': 'manage_courses' in person.roles,
+        'scoped': scoped, 'reach': reach,
     })
 
 
@@ -172,7 +177,7 @@ def edit(request, pk=None):
     staffed = pk and course.staff.filter(pk=person.pk).exists()
     if not (staffed or 'manage_courses' in person.roles and (not pk or person.may('manage_courses', course))):
         raise PermissionDenied
-    form = CourseForm(request.POST or None, instance=course)
+    form = CourseForm(request.POST or None, instance=course, person=person)
     if form.is_valid() and (saved := form.save() if staffed else kept(form, person, 'manage_courses')):
         course = saved
         messages.success(request, 'Gespeichert. Jetzt Termine planen und Teilnehmende eintragen.' if not pk else 'Gespeichert.')
@@ -477,7 +482,8 @@ def load(request):
     seen = None if person.everywhere('view_teaching_load') else {person.pk, *person.within(teaching, 'view_teaching_load').values_list('pk', flat=True)}  # own load, and that of the Institute in reach
     if seen is not None:
         courses = courses.filter(pk__in=Course.objects.filter(staff__in=seen).values('pk'))
-    institute, q = request.GET.get('institut', ''), request.GET.get('q', '').strip()
+    ours = person.ours('view_teaching_load')  # an Institut's office sees its own; the list says so
+    institute, q = request.GET.get('institut', str(min(ours)) if len(ours) == 1 else ''), request.GET.get('q', '').strip()
     words = fold(q).split()
     teachers = defaultdict(list)
     for c in courses:
@@ -488,7 +494,7 @@ def load(request):
     rows = sorted(((t, cs, sum(load for _, load in cs)) for t, cs in teachers.items()), key=lambda row: row[0].last_name)
     return render(request, 'courses/load.html', {
         'term': term, 'terms': Term.objects.order_by('-start'), 'rows': rows, 'total': sum(row[2] for row in rows), 'everyone': everyone,
-        'institutes': Institute.objects.all(), 'institute': institute, 'q': q,
+        'institutes': Institute.objects.filter(pk__in=ours) if seen is not None and ours else Institute.objects.all(), 'institute': institute, 'q': q,
     })
 
 

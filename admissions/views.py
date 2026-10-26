@@ -25,6 +25,7 @@ from core.text import matching
 from courses import panel
 from courses.forms import SlotForm
 from courses.models import Course, Participation
+from curriculum.models import Subject
 from students.models import Document, DocumentType, Study, StudyTerm
 from .forms import AcceptForm, ApplicationForm, SignupForm
 
@@ -92,6 +93,12 @@ def uploads_open(study):
     return study.status == Study.Status.APPLIED and Course.objects.filter(
         kind=Course.Kind.AUDITION, program__isnull=False, participations__study=study, deadline__gte=timezone.localdate(), released=None,
     ).exists()
+
+
+def owed(items):
+    """Of a checklist, what can still be handed in once uploads are closed, until the application is decided: required
+    documents still missing, but not a video, judged by then."""
+    return [item for item in items if item['required'] and not item['documents'] and item['kind'].condition != Condition.VIDEO]
 
 
 def accept_by(study, days):
@@ -230,7 +237,7 @@ def board(request):
         'terms': terms,
         'subject': subject,
         'q': q,
-        'subjects': sorted({s.subject for s in Study.objects.filter(start_term=term).select_related('subject')}, key=str),
+        'subjects': Subject.objects.filter(pk__in=request.user.within(Study.objects.filter(start_term=term, status__in=BOARD), 'view_applications').values('subject')),
         'columns': columns,
         'incomplete': sum(1 for s in studies if s.incomplete) if any(c.program_id and c.deadline and c.deadline >= today and not c.released for c in auditions) else 0,
         'auditions': auditions,
@@ -286,9 +293,10 @@ def audition(request, pk):
         'columns': [e.pk for e in columns],
         'office': office,
         'history': Course.visible_to(person.roles),
-        'slots': SlotForm(person=person) if office else None,
+        'slots': SlotForm(person=person, course=course) if office else None,
         'stages': next_stages(course) if office else [],
         'ready': sum(1 for p in rows if p.passed and p.study.status == Study.Status.APPLIED),
+        'missing': sum(1 for p in rows if panel.due(p)),
         'bookings': course.bookings.select_related('room'),
         'reachable': Study.reachable(person, Study.objects.filter(participations__course=course)),
     })
@@ -298,7 +306,7 @@ def audition(request, pk):
 @require_POST
 def plan(request, pk):
     course = get_object_or_404(request.user.within(Course.objects.all(), 'run_auditions'), pk=pk, kind=Course.Kind.AUDITION)
-    form = SlotForm(request.POST, person=request.user)
+    form = SlotForm(request.POST, person=request.user, course=course)
     rows = list(course.participations.filter(slot=None, study__status=Study.Status.APPLIED).select_related('study__person').order_by('created'))
     if form.is_valid() and rows:
         try:
@@ -333,7 +341,11 @@ def advance(request, pk):
 @require('run_auditions')
 @require_POST
 def close(request, pk):
+    """Lock the marks once every applicant has a result: applicants see a closed stage as passed or not."""
     course = get_object_or_404(request.user.within(Course.objects.all(), 'run_auditions'), pk=pk, kind=Course.Kind.AUDITION)
+    if not course.released and (missing := panel.gaps(panel.sheet(course)[1])):
+        messages.error(request, missing)
+        return redirect(course)
     course.released = None if course.released else timezone.now()
     course.save(update_fields=['released'])
     messages.success(request, 'Wertungen gesperrt.' if course.released else 'Wertungen wieder geöffnet.')
@@ -475,7 +487,7 @@ def signup(request):
 def apply(request):
     person = request.user
     entrance = ['entrance', 'entrance_date', 'entrance_region']
-    form = ApplicationForm(request.POST or None, request.FILES or None, initial={field: getattr(person, field) for field in entrance})
+    form = ApplicationForm(request.POST or None, request.FILES or None, initial={field: getattr(person, field) for field in entrance}, person=person)
     if form.is_valid():
         data, audition = form.cleaned_data, form.cleaned_data['audition']
         with transaction.atomic():
@@ -517,6 +529,9 @@ def mine(request):
         study.waiting = study.missing() if study.status == Study.Status.ADMITTED and study.accepted else []
         study.checklist = checklist(study, types) if study.status == Study.Status.APPLIED else []
         study.open = uploads_open(study)
+        study.late = [] if study.open else owed(study.checklist)
+        for item in study.late:
+            item['late'] = True
         study.deadline = next((p.course.deadline for p in study.stages if p.course.program_id), None)
         study.stages = list(study.stages)
         for p in study.stages:  # where an appointment takes place: the course's booking around it
@@ -537,7 +552,7 @@ def upload(request, pk):
     back = redirect('admissions:mine' if study.person == request.user else study.get_absolute_url())
     kind = DocumentType.objects.exclude(condition=Condition.NEVER).filter(key=request.POST.get('kind')).first()
     file = request.FILES.get('file')
-    if not (office or uploads_open(study)):
+    if not (office or uploads_open(study) or any(item['kind'] == kind for item in owed(checklist(study)))):
         messages.error(request, 'Die Frist für Unterlagen ist abgelaufen.')
         return back
     if not (kind and file):

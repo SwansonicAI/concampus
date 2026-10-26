@@ -62,7 +62,7 @@ class AdmissionsConfig(Tile, AppConfig):
                 if missing and started:
                     url = reverse('admissions:review', args=[course.pk]) if course.video else course.get_absolute_url()
                     found.append(task(f'{course.title}: Ihre Wertung fehlt für {plural(missing, "Bewerbung", "Bewerbungen")}', url, course.deadline))
-        from .views import accept_by, document_types, incomplete, stages, uploads_open, vacancies, verdict
+        from .views import accept_by, checklist, document_types, incomplete, owed, stages, uploads_open, vacancies, verdict
 
         if 'decide_applications' in person.roles:
             ready = Counter(
@@ -78,9 +78,12 @@ class AdmissionsConfig(Tile, AppConfig):
                     found.append(task(f'Nachrücken zum {term}: {plural(len(moves), "Studiengang", "Studiengänge")}', f"{reverse('admissions:board')}?semester={term.pk}"))
         types = document_types()
         for study in person.studies.filter(status=Study.Status.APPLIED).select_related('person', 'program', 'subject').prefetch_related('documents'):
-            if uploads_open(study) and (missing := incomplete(study, types)):
-                deadline = study.participations.filter(course__program__isnull=False).values_list('course__deadline', flat=True).first()
-                found.append(task(f'Für die Bewerbung {study.subject} fehlt noch: {", ".join(missing)}', reverse('admissions:mine'), deadline))
+            if uploads_open(study):
+                if missing := incomplete(study, types):
+                    deadline = study.participations.filter(course__program__isnull=False).values_list('course__deadline', flat=True).first()
+                    found.append(task(f'Für die Bewerbung {study.subject} fehlt noch: {", ".join(missing)}', reverse('admissions:mine'), deadline))
+            elif late := owed(checklist(study, types)):
+                found.append(task(f'Für die Bewerbung {study.subject} nachreichen: {", ".join(item["label"] for item in late)}', reverse('admissions:mine')))
         days = Institution.get().accept_days
         for study in person.studies.filter(status=Study.Status.ADMITTED, terms=None):
             if accept_by(study, days) >= timezone.localdate():

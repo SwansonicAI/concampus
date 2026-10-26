@@ -33,13 +33,15 @@ def quota(person, day, exclude=None):
 
 
 class Buildings(forms.models.ModelChoiceIterator):
-    """Rooms grouped by building, read only when the choices are shown."""
+    """Rooms grouped by building, those booked lately first; read only when the choices are shown."""
 
     def __iter__(self):
         if self.field.empty_label is not None:
             yield '', self.field.empty_label
-        groups = defaultdict(list)
-        for room in self.queryset:
+        rooms, groups = list(self.queryset), defaultdict(list)
+        if recent := [self.choice(room) for pk in self.field.recent for room in rooms if room.pk == pk]:
+            yield 'Zuletzt gebucht', recent
+        for room in rooms:
             groups[room.building].append(self.choice(room))
         yield from groups.items()
 
@@ -48,6 +50,7 @@ class RoomField(forms.ModelChoiceField):
     """Rooms by building, each with what it is for: a room number alone tells few people anything."""
 
     iterator = Buildings
+    recent = ()
 
     def label_from_instance(self, room):
         return f'{room.name} · {room.purpose}' if room.purpose else room.name
@@ -85,6 +88,9 @@ class BookingForm(forms.ModelForm):
         self.student = not (self.office or 'teacher' in roles)
         self.fields['room'].empty_label = 'Bitte wählen'
         self.fields['room'].queryset = bookable(person)
+        self.fields['room'].recent = list(dict.fromkeys(person.bookings.order_by('-created').values_list('room', flat=True)[:30]))[:3]
+        if not self.instance.pk and not self.initial.get('room'):  # practice is mostly in the same room
+            self.initial['room'] = next(iter(self.fields['room'].recent), None)
         allowed = BookingCategory.objects.all()
         if not self.office:
             allowed = allowed.filter(teachers=True) if 'teacher' in roles else allowed.filter(students=True)

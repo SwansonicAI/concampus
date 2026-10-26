@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_not_required
 from django.contrib import messages
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import Case, Q, When
+from django.db.models import Case, Exists, OuterRef, Q, When
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import resolve, reverse
@@ -18,7 +18,7 @@ from django.utils.formats import date_format
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from courses.models import Course
+from courses.models import Course, Participation
 from curriculum.models import Module, Program
 from rooms.models import Booking, BookingCategory, Room
 from rooms.views import agenda
@@ -223,12 +223,14 @@ STANDING = [  # whose study a search for a name shows first
 ]
 
 
-def people(studies, limit):
-    """One hit per person, at their most current study: enrolled first, turned-down applications last. The birth date
-    tells namesakes apart."""
+def people(studies, limit, person):
+    """One hit per person, at their most current study: the searcher's own first (their class, their courses, their
+    Institut's), enrolled before turned-down applications. The birth date tells namesakes apart."""
     shown = {}
+    taught = Participation.objects.filter(study=OuterRef('pk'), course__staff=person)
+    own = Case(When(Q(teacher=person) | Q(Exists(taught)) | Q(subject__institute__in=person.ours('view_files')), then=0), default=1)
     rank = Case(*(When(status=status, then=n) for n, status in enumerate(STANDING)))
-    for s in studies.annotate(rank=rank).order_by('rank', 'person__last_name', 'person__first_name')[:limit * 10]:
+    for s in studies.annotate(own=own, rank=rank).order_by('own', 'rank', 'person__last_name', 'person__first_name')[:limit * 10]:
         if s.person_id in shown:
             shown[s.person_id][1] += 1
         elif len(shown) < limit:
@@ -263,7 +265,7 @@ def found(person, q, limit):
         seen |= Q(pk__in=person.within(Study.objects.exclude(status__in=Study.APPLICATION), 'view_files').values('pk'))
         seen |= Q(pk__in=person.within(Study.objects.filter(status__in=Study.APPLICATION), 'view_applications').values('pk'))
         studies = matching(Study.objects.filter(seen).select_related('person', 'program', 'subject'), q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__matriculation', 'person__email')
-        groups.append(('Studierende und Bewerbungen', people(studies, limit)))
+        groups.append(('Studierende und Bewerbungen', people(studies, limit, person)))
     teaching = [Course.Kind.COURSE, Course.Kind.LESSON]
     courses = matching(Course.objects.filter(term__end__gte=timezone.localdate()).select_related('term'), q, 'title', 'staff__last_name', 'subject__name')
     groups.append(('Lehrveranstaltungen', [hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in courses.filter(kind__in=teaching)[:limit]]))

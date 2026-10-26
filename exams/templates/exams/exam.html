@@ -56,7 +56,10 @@
 </div>
 
 <section>
-  <h2>{% if course.kind == 'thesis' %}Gutachten{% else %}Kandidat:innen{% endif %}</h2>
+  <div class="head">
+    <h2>{% if course.kind == 'thesis' %}Gutachten{% else %}Kandidat:innen{% endif %}</h2>
+    {% if waiting %}<form method="post" action="{% url 'exams:remind' course.pk %}" class="actions">{% csrf_token %}<small class="fail">Wertung fehlt: {% for e, n in waiting %}{{ e.last_name }} ({{ n }}){% if not forloop.last %}, {% endif %}{% endfor %}</small><button class="btn ghost small">Erinnern</button></form>{% endif %}
+  </div>
   {% if not decide %}<p class="lead">Sie tragen Ihre eigene Wertung ein. Das Ergebnis ergibt sich aus den Wertungen der ganzen Kommission.</p>{% endif %}
   {% include "courses/_sheet.html" with decide=decide %}
   {% if rows and course.kind == 'exam' %}
