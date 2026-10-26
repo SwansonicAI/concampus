@@ -12,8 +12,10 @@
     <dt>Matrikelnummer</dt><dd>{{ study.person.matriculation|default:"–" }}</dd>
     <dt>Studiengang</dt><dd>{{ study.program.title }}, Prüfungsordnung {{ study.program.version }}</dd>
     <dt>Hauptfach</dt><dd>{{ study.subject }}</dd>
-    {% if complete %}<dt>Letzte Prüfungsleistung</dt><dd>{{ completed|date:"j. F Y"|default:"–" }}</dd>
-    <dt>Ausgestellt</dt><dd>{% if study.issued %}{{ study.issued|date:"j. F Y" }}{% else %}noch nicht{% endif %}</dd>{% endif %}
+    {% if study.focus %}<dt>Schwerpunkt</dt><dd>{{ study.focus.title }}</dd>{% endif %}
+    {% if thesis %}<dt>Abschlussarbeit</dt><dd>{{ thesis }}</dd>{% endif %}
+    {% if complete %}<dt>Datum der letzten Prüfungsleistung</dt><dd>{{ completed|date:"j. F Y"|default:"–" }}, das Datum des Zeugnisses</dd>
+    <dt>Ausgefertigt am</dt><dd>{% if study.issued %}{{ study.issued|date:"j. F Y" }}{% else %}noch nicht{% endif %}</dd>{% endif %}
   </dl>
   {% if issue %}<form method="post" action="{% url 'exams:issue' study.pk %}" class="no-print panel" style="margin-top: 16px">{% csrf_token %}<p style="margin-top: 0">Alle Leistungen sind erbracht. Ausgestellt, erhält {{ study.person.name }} Bescheid und Abschriften von Zeugnis, Urkunde und Diploma Supplement; die Exmatrikulation folgt.</p><button class="btn" data-confirm="Zeugnis ausstellen?">Zeugnis ausstellen</button></form>{% endif %}
   <section>
@@ -22,7 +24,7 @@
       <tbody>
         {% for r in rows %}
         {% if r.kind == 'part' %}
-        {% for i in r.items %}{% if i.done %}<tr><td></td><td class="muted">{{ i.title }}</td><td></td><td class="num muted">{% if i.weight %}{{ i.weight|floatformat:"-2" }}{% endif %}</td><td class="num muted">{% if i.grade is not None %}{{ i.grade|floatformat:1 }}{% else %}bestanden{% endif %}</td></tr>{% endif %}{% endfor %}
+        {% for i in r.items %}{% if i.done and not i.excused %}<tr><td></td><td class="muted">{{ i.title }}{% if i.semester %}, {{ i.semester }}. Semester{% endif %}</td><td></td><td class="num muted">{% if i.weight %}{{ i.weight|floatformat:"-2" }}{% endif %}</td><td class="num muted">{% if i.grade is not None %}{{ i.grade|floatformat:1 }}{% else %}bestanden{% endif %}</td></tr>{% endif %}{% endfor %}
         {% else %}
         <tr>
           <td class="nowrap"><b>{{ r.node.code }}</b></td>

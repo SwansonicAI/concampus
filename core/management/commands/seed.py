@@ -5,6 +5,7 @@ and deadlines follow the Studienjahresrahmenplan 2026/27; course titles and time
 Lehrveranstaltungsverzeichnisse WiSe 2026/27; buildings and the 25-point Eignungsprüfung follow the Hochschule's
 rules. Every person is invented.
 """
+import math
 import random
 import re
 import unicodedata
@@ -439,7 +440,8 @@ TEXTS = {  # where the HfM words things its own way (core.texts has the defaults
     'absender_bescheide': 'Akademische und Studentische Angelegenheiten',
     'absender_bescheinigungen': 'Akademische und Studentische Angelegenheiten',
     'absender_leistungen': 'Prüfungsamt',
-    'unterschrift_zeugnisse': 'Präsidentin\nDekanin oder Dekan der Fakultät',  # RPSO 2026 § 23
+    'unterschrift_zeugnisse': 'Der Präsident\nDie Dekanin der Fakultät',  # RPSO 2026 § 23, as the demo's office holders are
+    'unterschrift_urkunden': 'Der Präsident\nDie Dekanin der Fakultät',
     'einladung': (
         'Ihr Termin: {termin} Uhr, {raum}.\n\nBitte erscheinen Sie 30 Minuten vorher; Einspielräume stehen bereit. Bringen Sie einen '
         'Lichtbildausweis mit, und wenn Sie mit Korrepetition spielen, die Noten für die Begleitung.'
@@ -516,6 +518,8 @@ STAFF = [  # username, title, first, last, office
     ('asa', '', 'Sabine', 'Krüger', 'Akademische und Studentische Angelegenheiten (ASA)'),
     ('pruefungsamt', '', 'Thomas', 'Albrecht', 'Prüfungsamt'),
     ('dekanat', 'Prof. Dr.', 'Johanna', 'Brandt', 'Dekanat'),
+    ('stefan.kuehn', '', 'Stefan', 'Kühn', 'Prüfungsamt'),  # deputies: no office rests on one person
+    ('monika.hartmann', '', 'Monika', 'Hartmann', 'Akademische und Studentische Angelegenheiten (ASA)'),
     ('veranstaltungsbuero', '', 'Michael', 'Görlitz', 'Veranstaltungsbüro'),
     ('campus', '', 'Lena', 'Hofmann', 'Campus-Team'),
     ('praesidium', 'Prof. Dr.', 'Andreas', 'Lindemann', 'Präsidium'),
@@ -819,6 +823,7 @@ class Command(BaseCommand):
             self.students()
             self.teaching()
             self.allocation()
+            self.contracts()
             self.guests()
             self.loans()
             self.exams()
@@ -1704,6 +1709,15 @@ class Command(BaseCommand):
             course.assessor = next((t for t in colleagues[examiner.institute_id] if t != examiner), None)
         Course.objects.bulk_update(alone, ['assessor'])
 
+    def contracts(self):
+        """Lehraufträge as agreed: the hours each Lehrbeauftragte:r teaches this term, rounded up."""
+        from courses.views import TEACHING, deputat
+
+        for person in Person.objects.filter(employment=Person.Employment.LEHRAUFTRAG, teaching__term=self.current).distinct():
+            if hours := deputat(person.teaching.filter(term=self.current, kind__in=TEACHING), person):
+                person.obligation = Decimal(math.ceil(hours))
+                person.save(update_fields=['obligation'])
+
     def held(self, leaf, subject):
         """(Hauptfach an exam is played in, its course title): the Pflichtfach Klavier on the piano, other artistic exams in
         one's own; none for the rest."""
@@ -1781,7 +1795,8 @@ class Command(BaseCommand):
                     places = max(1, round(subjects[subject] * rate * (sose if summer else 1 - sose)))
                 asked = '; '.join(w.format(i=subject) for w in REPERTOIRE[family(subject)])  # what the Prüfungsprogramm draws on
                 intake = {'program': study.program, 'deadline': video_deadline if finished else JUDGED.get(subject, video_deadline), 'capacity': places,
-                          'description': f'Drei Werke aus diesen, zusammen etwa 15 Minuten: {asked}.', 'accompaniment': accompanist}  # the course one applies to
+                          'description': f'Drei Werke aus diesen, zusammen etwa 15 Minuten: {asked}.',  # the course one applies to
+                          'accompaniment': None if subject in ('Klavier', 'Orgel') else accompanist}  # pianists and organists play alone
                 video = Course.objects.create(
                     term=term, kind=Course.Kind.AUDITION, title=f'Videostufe {subject}{level}', subject=study.subject, video=True, pass_mark=Decimal('19.1' if master else '16.1'), max_points=25,
                     released=at(video_deadline + timedelta(days=30) if finished else date(2026, 10, 20), hour=12) if decided else None, **intake,
@@ -1822,7 +1837,7 @@ class Command(BaseCommand):
                 if finished and not master:
                     for course in shared:
                         sit(study, course, rng.uniform(13, 21), course.jury, '')
-            if rng.random() < 0.3 or study.person == applicant:
+            if (rng.random() < 0.3 or study.person == applicant) and study.subject.name not in ('Klavier', 'Orgel'):
                 rows.append(Participation(course=accompanist, study=study, created=at(study.since, hour=12)))
         sitting = defaultdict(list)
         for p in rows:

@@ -90,8 +90,8 @@ def applications(person):
     (admit, accept), (admit_before, accept_before) = rates(current), rates(before)
     stats = [
         stat(f'Bewerbungen zum {current}', by_term.get(current.pk, 0), before=by_term.get(before.pk) if before else None),
-        stat('Zulassungsquote', admit, before=admit_before, unit=' %'),
-        stat('Annahmequote', accept, before=accept_before, unit=' %'),
+        stat('Zulassungsquote, aller Bewerbungen', admit, before=admit_before, unit=' %'),
+        stat('Annahmequote, der Zulassungen', accept, before=accept_before, unit=' %'),
     ]
     if terms[-1] != current:  # a round still open
         running = terms[-1]
@@ -118,9 +118,9 @@ def funnel(term):
             n_offered=Count('pk', filter=admitted()), n_took=Count('pk', filter=Q(took=True)),
         )
     )
-    steps = [('beworben', 'all'), ('zur Hauptfachprüfung', 'n_sat'), ('Hauptfach bestanden', 'n_passed'), ('zugelassen', 'n_offered'), ('Platz angenommen', 'n_took')]
+    steps = [('beworben', 'all'), ('zur Hauptfachprüfung', 'n_sat'), ('Hauptfach bestanden', 'n_passed'), ('zugelassen', 'n_offered'), ('Platz angenommen', 'n_took')]  # in % of who applied
     trend = Query(MEASURES['bewerbungen'], ['studienjahr', 'ergebnis'], zeit='j10', as_lines=True).url()
-    return {'title': f'Weg durch die Eignungsprüfung, {term}', 'trend': trend, 'bars': [
+    return {'title': f'Weg durch die Eignungsprüfung, {term}: nur Studiengänge mit Eignungsprüfung', 'trend': trend, 'bars': [
         {'label': label, 'shown': number_format(found[k], 0, force_grouping=True), 'width': percent(found[k], found['all']), 'extra': f'{percent(found[k], found["all"])} %'}
         for label, k in steps
     ] if found['all'] else []}

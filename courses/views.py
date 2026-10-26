@@ -148,10 +148,16 @@ def course(request, pk):
         upcoming = upcoming.filter(participants=person)  # one's own lessons, not everyone's
     elif not staffed:  # the dates for everyone, and those of one's own ensemble
         upcoming = upcoming.filter(Q(participants=None) | Q(participants=person)).distinct()
-    lessons = lesson_times(course) if staffed and course.kind == Course.Kind.LESSON else []
+    playing = None
+    if course.kind == Course.Kind.LESSON and Course.objects.filter(accompaniment=course).exists():  # accompaniment at auditions: who plays when, what
+        playing = (
+            Participation.objects.filter(course__term=course.term, course__kind=Course.Kind.AUDITION, course__video=False, course__subject__isnull=False, study__in=course.participations.values('study'))
+            .select_related('study__person', 'study__subject', 'course').order_by(F('slot').asc(nulls_last=True), 'study__person__last_name')
+        )
+    lessons = lesson_times(course) if staffed and course.kind == Course.Kind.LESSON and playing is None else []
     timetable = lessons and Lessons(sent(request, 'lessons'), initial=[row for _, row in lessons], form_kwargs={'person': person})
     return render(request, 'courses/course.html', {
-        'course': course,
+        'course': course, 'playing': playing,
         'staff': staff,
         'rows': rows if staffed else [],
         'own': own,
@@ -507,31 +513,38 @@ def timetable(request):
     return render(request, 'courses/timetable.html', {'day': day, 'clashes': True, 'tones': legend(), **week(agenda(request.user), day)})
 
 
-@require('view_teaching_load', 'teacher')
-def load(request):
-    person = request.user
-    term = Term.pick(request.GET.get('semester'))
-    if term is None:
-        return without_term(request, 'ein Semester mit Veranstaltungen')
+def loads(term, person, institute='', words=()):
+    """(teacher, [(course, SWS)], total, total less their obligation or None) of the teachers in the person's view: their
+    own load, and that of the Institute in reach."""
     courses = term.courses.filter(kind__in=TEACHING).select_related('format').prefetch_related('staff', 'ensembles').annotate(size=Count('participations'))
-    everyone = 'view_teaching_load' in person.roles
     teaching = Person.objects.filter(teaching__term=term, teaching__kind__in=TEACHING)
-    seen = None if person.everywhere('view_teaching_load') else {person.pk, *person.within(teaching, 'view_teaching_load').values_list('pk', flat=True)}  # own load, and that of the Institute in reach
+    seen = None if person.everywhere('view_teaching_load') else {person.pk, *person.within(teaching, 'view_teaching_load').values_list('pk', flat=True)}
     if seen is not None:
         courses = courses.filter(pk__in=Course.objects.filter(staff__in=seen).values('pk'))
-    ours = person.ours('view_teaching_load')  # an Institut's office sees its own; the list says so
-    institute, q = request.GET.get('institut', str(min(ours)) if len(ours) == 1 else ''), request.GET.get('q', '').strip()
-    words = fold(q).split()
     teachers = defaultdict(list)
     for c in courses:
         coached = Counter(e.coach_id for e in c.ensembles.all())
         for s in c.staff.all():
             if (seen is None or s.pk in seen) and institute in ('', str(s.institute_id)) and all(w in fold(s.name) for w in words):
                 teachers[s].append((c, (c.hours or 0) * share(c, coached[s.pk])))
-    rows = sorted(((t, cs, total, total - t.obligation if t.obligation is not None else None) for t, cs in teachers.items() for total in [sum(load for _, load in cs)]), key=lambda row: row[0].last_name)
+    return sorted(((t, cs, total, total - t.obligation if t.obligation is not None else None) for t, cs in teachers.items() for total in [sum(load for _, load in cs)]), key=lambda row: row[0].last_name)
+
+
+@require('view_teaching_load', 'teacher')
+def load(request):
+    person = request.user
+    term = Term.pick(request.GET.get('semester'))
+    if term is None:
+        return without_term(request, 'ein Semester mit Veranstaltungen')
+    ours = person.ours('view_teaching_load')  # an Institut's office sees its own; the list says so
+    institute, q, stand = request.GET.get('institut', str(min(ours)) if len(ours) == 1 else ''), request.GET.get('q', '').strip(), request.GET.get('stand', '')
+    rows = loads(term, person, institute, fold(q).split())
+    if stand:
+        rows = [row for row in rows if row[3] is not None and (row[3] > 0 if stand == 'ueber' else row[3] < 0)]
     return render(request, 'courses/load.html', {
-        'term': term, 'terms': Term.objects.order_by('-start'), 'rows': rows, 'total': sum(row[2] for row in rows), 'everyone': everyone,
-        'institutes': Institute.objects.filter(pk__in=ours) if seen is not None and ours else Institute.objects.all(), 'institute': institute, 'q': q,
+        'term': term, 'terms': Term.objects.order_by('-start'), 'rows': rows, 'total': sum(row[2] for row in rows), 'everyone': 'view_teaching_load' in person.roles,
+        'institutes': Institute.objects.filter(pk__in=ours) if not person.everywhere('view_teaching_load') and ours else Institute.objects.all(),
+        'institute': institute, 'q': q, 'stand': stand,
     })
 
 

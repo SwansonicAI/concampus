@@ -175,7 +175,21 @@
 </section>
 {% endif %}
 
-{% if staffed %}
+{% if playing is not None and staffed %}
+<section>
+  <h2>Zu begleiten</h2>
+  <p class="lead">Wer bei der Eignungsprüfung Korrepetition wünscht, wann und was. Proben nach Absprache vor dem Termin.</p>
+  <table>
+    <thead><tr><th>Termin</th><th>Name</th><th>Hauptfach</th><th>Programm</th></tr></thead>
+    <tbody>
+      {% for p in playing %}
+      <tr><td class="nowrap" data-value="{{ p.slot|date:'c' }}">{{ p.slot|date:"D j.n., H:i"|default:"noch offen" }}</td><td>{{ p.study.person.name }}</td><td>{{ p.study.subject }}</td><td><small>{{ p.note|linebreaksbr }}</small></td></tr>
+      {% empty %}<tr><td colspan="4" class="empty">Noch niemand.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% elif staffed %}
 <section>
   <h2>Teilnehmende</h2>
   {% include "courses/_sheet.html" with panel=False decide=True columns=None %}

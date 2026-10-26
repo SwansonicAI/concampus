@@ -91,6 +91,7 @@ def chart(query, person, title=''):
         peak = max(values.values(), default=0) or 1
         last = list(t.rows)[-1] if t.rows and dim.time else None
         found['columns'], found['timed'], found['dense'] = dim.time or dim.columns, dim.time, len(t.rows) > 12
+        found['peak'] = figure(peak / t.total if query.share and t.total else peak, m, query.share)  # the top of the scale
         if not dim.time and m.dimensions[m.drill].time:  # how each value developed, as lines
             found['trend'] = query.url(keys=[m.drill, key], zeit='j10', share=False, as_lines=True)
         found['bars'] = [{

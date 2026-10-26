@@ -456,6 +456,7 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .bars .extra:empty { display: none; }
 .columns { display: flex; gap: 3px; padding-top: 22px; }
 .columns .col { flex: 1; min-width: 0; max-width: 88px; }
+.columns .scale { display: flex; flex-direction: column; justify-content: space-between; height: 180px; padding-right: 6px; border-right: 1px solid var(--line); color: var(--muted); font-size: 12px; text-align: right; font-variant-numeric: tabular-nums; }
 .columns .plot { display: flex; flex-direction: column; justify-content: flex-end; height: 180px; }
 .columns .bar { display: block; min-height: 1px; border-radius: 2px 2px 0 0; background: var(--green); }
 .columns.timed .bar { background: #8a8a8a; }

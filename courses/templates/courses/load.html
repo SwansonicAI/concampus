@@ -8,6 +8,7 @@
   <div class="inline">
     <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
     {% if everyone %}
+    <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option><option value="ueber"{% if stand == 'ueber' %} selected{% endif %}>Über dem Soll</option><option value="unter"{% if stand == 'unter' %} selected{% endif %}>Unter dem Soll</option></select></label>
     <label>Institut<select name="institut" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name"></label>
     {% endif %}
@@ -21,7 +22,7 @@
       <td data-value="{{ teacher.name }}"><b>{{ teacher }}</b>{% if teacher.employment %}<br><small class="muted">{{ teacher.get_employment_display }}</small>{% endif %}</td>
       <td>{% for c, load in courses %}<a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a> <small class="muted">{{ load }}</small>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
       <td class="num"><b>{{ total }}</b></td>
-      <td class="num" data-value="{{ balance|default_if_none:'' }}">{% if balance is None %}<span class="muted">–</span>{% else %}{{ teacher.obligation }}{% if balance > 0 %}<br><small class="fail" title="Über der Lehrverpflichtung">+{{ balance }}</small>{% elif balance < 0 %}<br><small class="muted" title="Unter der Lehrverpflichtung">{{ balance }}</small>{% endif %}{% endif %}</td>
+      <td class="num" data-value="{{ balance|default_if_none:'' }}">{% if balance is None %}<span class="muted">–</span>{% else %}{{ teacher.obligation }}{% if teacher.employment == 'lehrauftrag' %} <small class="muted">vereinbart</small>{% endif %}{% if balance > 0 %}<br><small class="fail" title="Über der Lehrverpflichtung">+{{ balance }}</small>{% elif balance < 0 %}<br><small class="muted" title="Unter der Lehrverpflichtung">{{ balance }}</small>{% endif %}{% endif %}</td>
     </tr>
     {% empty %}<tr><td colspan="4" class="empty">Keine Lehre erfasst.</td></tr>
     {% endfor %}

@@ -12,7 +12,7 @@
     <li><a href="{{ t.url }}">
       <span class="what">{{ t.text }}</span>
       <span class="where">{{ t.app }}</span>
-      <span class="due{% if t.due and t.due <= soon %} soon{% endif %}">{% if t.due %}bis {{ t.due|date:"j.n.Y" }}{% endif %}</span>
+      <span class="due{% if t.due and t.due <= soon %} soon{% endif %}">{% if t.due and t.due < today %}überfällig seit {{ t.due|date:"j.n.Y" }}{% elif t.due %}bis {{ t.due|date:"j.n.Y" }}{% endif %}</span>
     </a></li>
     {% endfor %}
   </ul>

@@ -44,5 +44,15 @@ class ContactForm(forms.ModelForm):
 
     class Meta:
         model = Person
-        fields = ['address', 'phone']
+        fields = ['address', 'phone', 'email']
         widgets = {'address': forms.Textarea(attrs={'rows': 3})}
+        labels = {'email': 'E-Mail, privat'}
+        help_texts = {'email': 'Nach dem Studium gilt die Hochschuladresse nicht mehr; Nachrichten gehen dann hierhin.'}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        roles = self.instance.roles
+        if not ('alumni' in roles and not roles & {'student', 'applicant', 'teacher'} and not self.instance.groups.exists()):  # only who has left
+            del self.fields['email']
+        else:
+            self.fields['email'].required = True

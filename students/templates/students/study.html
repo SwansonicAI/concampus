@@ -8,6 +8,7 @@
     {% if certify and study.status == 'enrolled' %}<a class="btn ghost" href="{% url 'students:certificate' study.pk %}">Immatrikulationsbescheinigung</a>{% endif %}
     {% if files %}<a class="btn ghost" href="{% url 'exams:transcript' study.pk %}">{% if study.status == 'graduated' %}Zeugnis{% else %}Leistungsübersicht{% endif %}</a>{% endif %}
     {% if certify and terms %}<a class="btn ghost" href="{% url 'students:periods' study.pk %}">Studienzeitbescheinigung</a>{% endif %}
+    {% if certify and study.status == 'graduated' or certify and study.status == 'left' %}<a class="btn ghost" href="{% url 'students:exmatriculation' study.pk %}">Exmatrikulationsbescheinigung</a>{% endif %}
     {% if thesis %}<a class="btn ghost" href="{% url 'exams:thesis' study.pk %}">Abschlussarbeit anmelden</a>{% endif %}
     {% if recognise %}<a class="btn ghost" href="{% url 'exams:recognition' %}?studium={{ study.pk }}">Leistung anerkennen</a>{% endif %}
     {% if office %}<a class="btn ghost" href="{% url 'setup:edit' 'personen' study.person.pk %}?next={{ request.path|urlencode }}" data-panel>Stammdaten</a>
@@ -19,10 +20,12 @@
 {% for m in exhausted %}<div class="flash error">Prüfungsanspruch erloschen: {{ m.code }} {{ m.title }} endgültig nicht bestanden, {% for p in m.failures %}{{ p.course.term }} {{ p.grade|floatformat:1|default:"nicht bestanden" }}{% if p.remark %} ({{ p.remark|upper }}){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}.<br><small>Widerspruch bis {{ m.appeal|date:"j.n.Y" }}{% if m.appeal < today %}, abgelaufen{% else %}; erst danach exmatrikulieren{% endif %}.</small></div>{% endfor %}
 
 <div class="stats">
+  {% if total %}
   <div class="stat"><b>{{ earned }} / {{ total }}</b><span>ECTS erworben</span><div class="bar"><i style="width: {% widthratio earned total 100 %}%"></i></div></div>
   <div class="stat"><b>{{ average|floatformat:1|default:"–" }}</b><span>Gesamtnote{% if study.status != 'graduated' %} bisher{% endif %}</span></div>
+  {% endif %}
   {% with fs=study.semester hs=study.university_semester rsz=study.program.semesters %}
-  <div class="stat"><b>{{ fs }} / {{ rsz }}</b><span>Fachsemester der Regelstudienzeit{% if hs != fs %} · {{ hs }}. Hochschulsemester{% endif %}</span><div class="bar"><i style="width: {% widthratio fs rsz 100 %}%"></i></div></div>
+  <div class="stat"><b>{{ fs }} / {{ rsz }}</b><span>Fachsemester der Regelstudienzeit{% if hs != fs %} · {{ hs }}. Hochschulsemester{% endif %}{% if fs > rsz and study.status == 'enrolled' %}<br><span class="fail">über der Regelstudienzeit</span>{% endif %}</span><div class="bar"><i style="width: {% widthratio fs rsz 100 %}%"></i></div></div>
   {% endwith %}
 </div>
 
@@ -52,7 +55,7 @@
         {% else %}<small class="fail">Versicherungsmeldung fehlt</small>{% if office %} <form method="post" action="{% url 'students:insured' study.pk %}" style="display: inline">{% csrf_token %}<button class="link"><small>Eingang verbuchen</small></button></form>{% endif %}{% endif %}
       </dd>
       {% endif %}
-      <dt>Hauptfachlehrer:in</dt><dd>{{ study.teacher|default:"–" }}</dd>
+      <dt>{% if study.program.kind == '5' %}Betreuung{% else %}Hauptfachlehrer:in{% endif %}</dt><dd>{{ study.teacher|default:"–" }}</dd>
       {% if study.focus %}<dt>Schwerpunkt</dt><dd>{{ study.focus.title }}</dd>{% elif study.advised %}<dt>Schwerpunkt</dt><dd>noch nicht gewählt · <small class="muted">empfohlen: {{ study.advised.title }}</small></dd>{% endif %}
       <dt>Studienbeginn</dt><dd>{{ study.start_term }}{% if study.prior_terms %} · {{ study.prior_terms }} Semester angerechnet{% endif %}</dd>
       <dt>{% if study.status == 'graduated' or study.status == 'left' %}Beendet zum{% else %}Status seit{% endif %}</dt><dd>{{ study.since|date:"j. F Y" }}</dd>
@@ -93,10 +96,10 @@
       <form method="post" action="{% url 'students:exmatriculate' study.pk %}" class="inline">
         {% csrf_token %}
         <label>Exmatrikulation<select name="reason" required><option value="">Grund wählen</option>{% for code, name in exits %}<option value="{{ code }}"{% if exhausted and code == '8' %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
-        <label>zum<input name="zum" data-day autocomplete="off" placeholder="TT.MM.JJJJ" size="11"></label>
+        <label>zum<input name="zum" data-day autocomplete="off" placeholder="TT.MM.JJJJ" size="11" required value="{{ today|date:'d.m.Y' }}"></label>
         <button class="btn danger" data-confirm="Wirklich exmatrikulieren?">Exmatrikulieren</button>
       </form>
-      <p class="muted"><small>Auf Antrag zum gewünschten Tag, spätestens zum Ende des Semesters; leer: heute, nach dem Abschluss das Ende des Semesters.</small></p>
+      <p class="muted"><small>Auf Antrag zum gewünschten Tag, spätestens zum Ende des Semesters; nach dem Abschluss in der Regel das Ende des Semesters.</small></p>
       <form method="post" action="{% url 'students:change' study.pk %}" class="inline" style="margin-top: 16px">
         {% csrf_token %}
         {% for field in change %}<label>{{ field.label }}{{ field }}</label>{% endfor %}

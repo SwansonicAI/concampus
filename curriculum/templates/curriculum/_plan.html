@@ -25,7 +25,7 @@
         {% endfor %}
         <td class="num muted{% if progress %}{% for i in r.open %}{% if i.done %} done{% elif i.pk in taking %} now{% endif %}{% endfor %}{% endif %}">{% if r.open %}{{ r.open.0.credits }}{% endif %}</td>
         <td class="num muted">{% if r.weight %}{{ r.weight|floatformat:"-2" }}{% endif %}</td>
-        {% if progress %}<td class="num">{% for i in r.items %}{% if i.grade %}{{ i.grade|floatformat:1 }}{% endif %}{% endfor %}</td>{% endif %}
+        {% if progress %}<td class="num">{% for g in r.grades %}{{ g|floatformat:1 }}{% if not forloop.last %} · {% endif %}{% endfor %}</td>{% endif %}
       </tr>
       {% else %}
       <tr class="{{ r.kind }}{% if progress and r.node.done %} complete{% endif %}">

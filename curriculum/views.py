@@ -26,6 +26,7 @@ def plan(tree, semesters):
                 'kind': 'part', 'title': title, 'items': items, 'depth': depth + 1, 'exam': items[0].exam,
                 'form': items[0].description, 'weight': items[0].weight,
                 'cells': [[i for i in items if i.semester == s] for s in range(1, semesters + 1)],
+                'grades': [i.grade for i in items if getattr(i, 'grade', None)],
                 'open': [i for i in items if i.semester is None],
             })
         for child in node.nodes:

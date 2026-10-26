@@ -167,7 +167,7 @@ EDITORS = {e.key: e for e in [
     ),
     Editor(
         'konten', Person, 'Konten', 'manage_accounts', 'Verwaltung', form=AccountForm,
-        columns=[('Name', 'name'), ('E-Mail', 'email'), ('Ämter', 'groups'), ('Institut', 'institute')],
+        columns=[('Name', 'name'), ('E-Mail', 'email'), ('Ämter', 'groups'), ('Institut', 'institute'), ('Zuletzt angemeldet', 'last_login'), ('Aktiv', 'is_active')],
         search=['first_name', 'last_name', 'email', 'username'], words='mitarbeitende lehrende zugang benutzer einladung passwort', invite=True,
         queryset=lambda: (
             Person.objects.filter(models.Q(groups__isnull=False) | models.Q(institute__isnull=False) | models.Q(studies=None)).distinct()

@@ -18,9 +18,9 @@ class SetupConfig(Tile, AppConfig):
             return 'Einstellungen'
 
     def figure(self, person):
-        from .views import usable
+        from .views import places
 
-        return f'{plural(len(usable(person)), "Liste", "Listen")} zu pflegen'
+        return f'{plural(len(places(person)), "Liste", "Listen")} zu pflegen'
 
     def features(self, person):
         from .views import usable
@@ -31,8 +31,12 @@ class SetupConfig(Tile, AppConfig):
         return found
 
     def tasks(self, person):
-        from core.models import Term
+        from core.models import Office, Term
 
+        found = []
         if 'manage_terms' in person.roles and not Term.upcoming():
-            return [task('Nächstes Semester anlegen', reverse('setup:new', args=['semester']))]
-        return []
+            found.append(task('Nächstes Semester anlegen', reverse('setup:new', args=['semester'])))
+        if 'manage_accounts' in person.roles:  # an office nobody holds: what it decides goes nowhere
+            for office in Office.objects.filter(user=None).order_by('name'):
+                found.append(task(f'Amt ohne Mitglieder: {office.name}', reverse('setup:edit', args=['aemter', office.pk])))
+        return found

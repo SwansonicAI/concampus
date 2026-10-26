@@ -233,7 +233,7 @@ def study(request, pk):
         'paid': StudyTerm.objects.filter(study__person=study.person, term=upcoming, paid__isnull=False).exists(),
         'missing': study.person.missing() if personal else [],
         'documents': study.documents.all() if identity else [],
-        'others': [o for o in study.person.studies.exclude(pk=study.pk).select_related('program', 'subject') if personal or o.pk in reachable],
+        'others': [o for o in study.person.studies.exclude(pk=study.pk).exclude(status=Study.Status.REJECTED).select_related('program', 'subject') if personal or o.pk in reachable],
         'reachable': reachable,
         'change': ChangeForm(study=study) if office else None,
         'exits': EXITS, 'leaves': LEAVES,
@@ -524,6 +524,14 @@ def periods(request, pk):
         'study': study, 'person': person, 'studies': studies, 'rows': rows, 'count': len({row[0] for row in rows}),
         'leave': len({term for term, _, leave, _ in rows if leave}), 'today': today, 'sender': texts.block('absender_bescheinigungen'),
     })
+
+
+def exmatriculation(request, pk):
+    """Exmatrikulationsbescheinigung: when someone studied here and why it ended, as health insurers and job centres ask."""
+    study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term'), pk=pk, status__in=Study.FORMER)
+    if not (study.person == request.user or request.user.may('manage_students', study)):
+        raise PermissionDenied
+    return render(request, 'students/exmatriculation.html', {'study': study, 'today': timezone.localdate(), 'sender': texts.block('absender_bescheinigungen')})
 
 
 def certificate(request, pk):

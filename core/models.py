@@ -218,7 +218,7 @@ class Person(Tracked, AbstractUser):
     employment = models.CharField('Beschäftigung', max_length=12, choices=Employment, blank=True, help_text='Für Lehrende.')
     obligation = models.DecimalField(
         'Lehrverpflichtung (LVS)', max_digits=4, decimal_places=1, null=True, blank=True,
-        help_text='Was die Lehrverpflichtungsverordnung verlangt, nach Ermäßigungen; leer: keine, etwa bei einem Lehrauftrag.',
+        help_text='Was die Lehrverpflichtungsverordnung verlangt, nach Ermäßigungen; bei einem Lehrauftrag die vereinbarten SWS.',
     )
 
     class Meta:

@@ -94,6 +94,8 @@ class ApplicationForm(forms.Form):
         self.fields['entrance'].choices = [('', 'Noch nicht erworben'), *frequent('entrance', destatis.ENTRANCE)]
         self.fields['entrance_region'].choices = [('', '–'), *frequent('entrance_region', destatis.places())]
         self.order_fields(['audition', 'teacher', 'repertoire', 'nationality', 'gender'])
+        self.fields['accompanist'].widget.attrs['data-for'] = 'audition:' + ','.join(  # only where the audition offers an accompanist
+            str(pk) for pk in Course.objects.filter(kind=Course.Kind.AUDITION, accompaniment__isnull=False).values_list('pk', flat=True))
         studies = person.studies.all()  # who applied before: their instrument first, then its Institut's, at their level
         applied = studies.filter(program=OuterRef('program'), subject=OuterRef('subject'), start_term=OuterRef('term'))
         level = Q(program__postgraduate__in=studies.values('program__postgraduate'))

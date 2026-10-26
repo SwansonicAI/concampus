@@ -52,7 +52,8 @@ def handed_in(participation):
 
 def exhausted(study):
     """Modules the study has failed as often as its Prüfungsordnung allows and never passed: the Prüfungsanspruch is lost.
-    Each comes with its `failures` and `appeal`, the last day to object: a month after the last result."""
+    Each comes with its `failures` and `appeal`, the last day to object: a month after the Bescheid is taken as delivered, on
+    the fourth day after it went out (before it has, counted from the result)."""
     failed = defaultdict(list)
     for p in Participation.objects.filter(study=study, passed=False, course__released__isnull=False).select_related('course__term').order_by('course__released'):
         failed[p.module_id].append(p)
@@ -60,7 +61,9 @@ def exhausted(study):
     lost = list(Module.objects.filter(pk__in=[m for m, ps in failed.items() if len(ps) >= study.program.attempts and m not in passed]))
     for module in lost:
         module.failures = failed[module.pk]
-        module.appeal = months_before(timezone.localtime(module.failures[-1].course.released).date(), -1)
+        released = module.failures[-1].course.released
+        notice = study.documents.filter(kind='notice', created__gte=released).order_by('created').values_list('created', flat=True).first()
+        module.appeal = months_before(timezone.localtime(notice or released).date() + timedelta(days=4), -1)  # Bekanntgabe on the fourth day
     return lost
 
 
@@ -534,17 +537,22 @@ def achievements(study):
     tree, average = study.progress()
     earned, total, honours = sum(m.earned for m in tree), sum(m.credits for m in tree), study.program.honours
     last = study.participations.filter(passed=True, course__released__isnull=False).aggregate(last=Max('course__released'))['last']
-    rows = [r for r in study_plan(tree, study.program.semesters) if r['kind'] != 'part' and r['node'].earned or r['kind'] == 'part' and r['exam'] and any(i.done for i in r['items'])]
+    rows = [  # an exam the plan waives for the Hauptfach is no result
+        r for r in study_plan(tree, study.program.semesters)
+        if r['kind'] != 'part' and r['node'].earned or r['kind'] == 'part' and r['exam'] and any(i.done and not i.excused for i in r['items'])
+    ]
+    thesis = study.participations.filter(course__kind=Course.Kind.THESIS, passed=True).select_related('course').first()
     return {
         'study': study, 'rows': rows, 'earned': earned, 'total': total, 'finished': earned >= total, 'average': average,
         'completed': last and timezone.localdate(last),  # the Zeugnis is dated by the last result
+        'thesis': thesis and thesis.course.title,
         'honours': None not in (average, honours) and average <= honours, 'today': timezone.localdate(), 'signature': texts.block('unterschrift_zeugnisse'),
     }
 
 
 def transcript(request, pk):
     """Leistungsübersicht or, once all credits are earned, Zeugnis."""
-    study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject'), pk=pk)
+    study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'focus'), pk=pk)
     if not (study.person == request.user or request.user.may('view_files', study)):
         raise PermissionDenied
     found, office = achievements(study), request.user.may('decide_results', study)  # a Zeugnis comes from the office

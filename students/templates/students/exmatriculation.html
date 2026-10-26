@@ -1,0 +1,23 @@
+{% extends base %}
+{% block title %}Exmatrikulationsbescheinigung{% endblock %}
+{% block content %}
+<div class="document">
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
+  {% include "core/_letterhead.html" with office=sender %}
+  <h1>Exmatrikulations&shy;bescheinigung</h1>
+  <p>Hiermit wird bescheinigt, dass</p>
+  <dl class="facts">
+    <dt>Name</dt><dd><b>{{ study.person.legal_name }}</b>{% if study.person.birth_name %}, geb. {{ study.person.birth_name }}{% endif %}</dd>
+    <dt>Geboren</dt><dd>{{ study.person.birth_date|date:"j. F Y" }}{% if study.person.birth_place %} in {{ study.person.birth_place }}{% endif %}</dd>
+    <dt>Matrikelnummer</dt><dd>{{ study.person.matriculation|default:"–" }}</dd>
+  </dl>
+  <p style="margin-top: 24px">an der {{ institution.name }} vom {{ study.start_term.start|date:"j. F Y" }} bis zum {{ study.since|date:"j. F Y" }} immatrikuliert war und mit Ablauf dieses Tages exmatrikuliert ist:</p>
+  <dl class="facts">
+    <dt>Studiengang</dt><dd>{{ study.program.title }}</dd>
+    <dt>Hauptfach</dt><dd>{{ study.subject }}</dd>
+    {% if study.exit_reason %}<dt>Grund</dt><dd>{{ study.get_exit_reason_display }}</dd>{% endif %}
+  </dl>
+  <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ today|date:"j. F Y" }}</span><span>{{ sender }}</span></div>
+  <p class="muted" style="margin-top: 48px"><small>Diese Bescheinigung wurde maschinell erstellt und ist ohne Unterschrift gültig.</small></p>
+</div>
+{% endblock %}

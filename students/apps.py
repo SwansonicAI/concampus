@@ -80,12 +80,12 @@ class StudentsConfig(Tile, AppConfig):
         if 'manage_students' in person.roles:
             accepted = (
                 person.within(Study.objects.filter(status=Study.Status.ADMITTED, terms__term=F('start_term')), 'manage_students')
-                .values('start_term', 'start_term__name').annotate(n=Count('pk', distinct=True)).order_by('start_term__start')
+                .values('start_term', 'start_term__name', 'start_term__start').annotate(n=Count('pk', distinct=True)).order_by('start_term__start')
             )
             for row in accepted:
                 found.append(task(
                     f'{plural(row["n"], "angenommenen Studienplatz", "angenommene Studienplätze")} zum {row["start_term__name"]} immatrikulieren',
-                    f"{reverse('admissions:board')}?semester={row['start_term']}#immatrikulieren",
+                    f"{reverse('admissions:board')}?semester={row['start_term']}#immatrikulieren", row['start_term__start'],
                 ))
             from courses.models import Participation
 
