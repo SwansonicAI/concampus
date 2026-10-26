@@ -619,6 +619,8 @@ def review(request, pk):
     if not (juror or person.may('run_auditions', course)):
         raise PermissionDenied
     _, rows = panel.sheet(course)
+    filmed = set(Document.objects.filter(study__in=[p.study_id for p in rows], kind__condition=Condition.VIDEO).values_list('study', flat=True))
+    rows = [p for p in rows if p.study_id in filmed]  # nothing to watch yet: not in the jury's way
     if not rows:
         return redirect(course)
     rows.sort(key=lambda p: p.created)

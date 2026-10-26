@@ -10,6 +10,7 @@ function init(root) {
   root.querySelectorAll('.form select').forEach(select => select.options.length > 60 && findable(select));
   root.querySelectorAll('select[data-leads]').forEach(lead);
   root.querySelectorAll('form:has([name=worst])').forEach(converted);
+  root.querySelectorAll('select[data-describes]').forEach(describe);
   root.querySelectorAll('[data-day], [data-moment]').forEach(dated);
   root.querySelectorAll('form:has([data-for])').forEach(conditional);
   root.querySelectorAll('.lines').forEach(lineChart);
@@ -236,11 +237,20 @@ function lead(select) {
   narrow();
 }
 
+// A choice that brings a note to another field (data-describes="repertoire"): what the audition chosen asks for.
+function describe(select) {
+  const hint = Object.assign(document.createElement('small'), {className: 'muted'});
+  select.form.elements[select.dataset.describes].after(hint);
+  const show = () => { hint.textContent = select.selectedOptions[0]?.dataset.note ?? ''; };
+  select.addEventListener('change', show);
+  show();
+}
+
 // Anerkennung: the grade the modified Bavarian formula makes of a foreign one, shown while it is typed, cut to one
 // decimal as the server does.
 function converted(form) {
   const inputs = ['foreign', 'best', 'worst'].map(name => form.elements[name]);
-  const hint = Object.assign(document.createElement('small'), {className: 'hint'});
+  const hint = Object.assign(document.createElement('small'), {className: 'muted'});
   inputs[2].after(hint);
   form.addEventListener('input', () => {
     const [foreign, best, worst] = inputs.map(input => parseFloat(input.value.replace(',', '.')));

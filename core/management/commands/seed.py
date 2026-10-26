@@ -394,7 +394,7 @@ DOCUMENTS = [  # key, name, condition, settings: what a complete application hol
     ('cv', 'Lebenslauf', 'always', {'shared': True, 'jury': True}),
     ('school', 'Abitur- oder letztes Schulzeugnis', 'always', {'shared': True}),
     ('degree', 'Bachelor- oder Masterzeugnis, Transcript', 'degree', {'shared': True}),
-    ('fee', 'Einzahlungsbeleg Eignungsprüfungsgebühr', 'always', {'note': '50 €, Verwendungszweck: Eignungsprüfung, Name, Hauptfach.'}),
+    ('fee', 'Einzahlungsbeleg Eignungsprüfungsgebühr', 'always', {'amount': Decimal('50')}),
     ('consent', 'Einwilligung der Erziehungsberechtigten', 'minor', {'note': 'Sie sind noch nicht volljährig.', 'shared': True}),
     ('voice', 'Phoniatrisches Gutachten', 'subjects', {'required': False, 'shared': True}),
     ('language', 'Sprachnachweis Deutsch', 'foreign', {'required': False, 'note': 'Niveau B2.', 'shared': True}),
@@ -406,17 +406,27 @@ TEXTS = {  # where the HfM words things its own way (core.texts has the defaults
     'absender_bescheinigungen': 'Akademische und Studentische Angelegenheiten',
     'absender_leistungen': 'Prüfungsamt',
     'unterschrift_zeugnisse': 'Präsidentin\nDekanin oder Dekan der Fakultät',  # RPSO 2026 § 23
-    'einladung': 'Ihr Termin: {termin} Uhr, {raum}.\n\nBitte erscheinen Sie 30 Minuten vorher. Einspielräume stehen bereit.',
+    'einladung': (
+        'Ihr Termin: {termin} Uhr, {raum}.\n\nBitte erscheinen Sie 30 Minuten vorher; Einspielräume stehen bereit. Bringen Sie einen '
+        'Lichtbildausweis mit, und wenn Sie mit Korrepetition spielen, die Noten für die Begleitung.'
+    ),
+    'datenschutz_bewerbung': (
+        'Ihre Angaben verarbeitet die {hochschule} nach § 11 ThürHG und Art. 6 Abs. 1 lit. e DSGVO nur für das Bewerbungsverfahren und, '
+        'wenn Sie hier studieren, für Ihr Studium. Sie sehen nur die Stellen, die damit befasst sind; die Prüfungskommission sieht Ihr '
+        'Video, Ihren Lebenslauf und Ihr Prüfungsprogramm.'
+    ),
     'bewerbung_hinweise': (
         'Pro Studiengang und Hauptfach ist eine Bewerbung möglich. Nach dem Absenden laden Sie unter „Meine Bewerbung“ Ihr Video und Ihre '
-        'Unterlagen hoch: Lebenslauf, Schulzeugnis, Einzahlungsbeleg der Prüfungsgebühr (50 €), für einen Master auch Ihr Bachelorzeugnis. '
+        'Unterlagen hoch: Lebenslauf, Schulzeugnis, Einzahlungsbeleg der Prüfungsgebühr (50 €, die Bankverbindung steht dort), für einen '
+        'Master auch Ihr Bachelorzeugnis. Was Sie für eine Bewerbung hochgeladen haben, gilt auch für die nächste. '
         'Bis zur Frist können Sie alles ändern.\n\n'
         'Wo eine Videostufe vorgesehen ist, ist sie die erste Prüfungsstufe: ein ungeschnittenes Video von 10–15 Minuten in einer Datei, '
         'beginnend mit einer kurzen Vorstellung, nicht älter als ein Jahr, höchstens 1,5 GB. Eine professionelle Aufnahme ist nicht nötig. '
         'Die Videostufe wird mit „bestanden“ oder „nicht bestanden“ bewertet.\n\n'
         'Ihr Ergebnis erhalten Sie spätestens drei Wochen nach der Prüfung im Portal.\n\n'
         'Die Kommission besteht aus mindestens drei Lehrenden des Hauptfachs. Jedes Mitglied wertet mit 0 bis 25 Punkten; es zählt das '
-        'nach der ersten Nachkommastelle abgeschnittene Mittel. Bestanden ist im Bachelor das Hauptfach ab 16,1 Punkten, die übrigen Teile '
+        'nach der ersten Nachkommastelle abgeschnittene Mittel (Eignungsprüfungsordnung § 6; Noten im Studium werden dagegen gerundet). '
+        'Bestanden ist im Bachelor das Hauptfach ab 16,1 Punkten, die übrigen Teile '
         'ab 11,6; im Master das Hauptfach ab 19,1, die übrigen Teile ab 16,1.\n\n'
         'Einladungen und Bescheide erhalten Sie in Ihr Postfach.'
     ),
@@ -927,7 +937,8 @@ class Command(BaseCommand):
         self.staff['dekanat'].save(update_fields=['institute'])
         for key, title, first, last, subject in TEACHERS:
             institute = self.institutes[SUBJECT_INSTITUTE[subject] if subject else TEACHER_INSTITUTE[key]]
-            self.teachers[key] = self.person('lehre' if key == 'wendt' else handle(first, last), first, last, title, institute=institute)
+            login = {'wendt': 'lehre', 'hein': 'korrepetition'}.get(key) or handle(first, last)  # the demo's teacher and accompanist
+            self.teachers[key] = self.person(login, first, last, title, institute=institute)
             if subject:
                 self.by_subject[subject].append(self.teachers[key])
         self.logins |= set(Person.objects.values_list('username', flat=True))
@@ -1149,6 +1160,8 @@ class Command(BaseCommand):
         StudyTerm.objects.bulk_create(  # one has paid and waits for the insurer's notice, the other has the notice but has not paid yet
             StudyTerm(study=study, term=self.current, paid=date(2026, 10, 12) if n == 1 else None) for n, study in enumerate(current[:2])
         )
+        doctoral = next(s for s in studies if s.program.kind == '5' and s.status == Study.Status.ENROLLED)  # the demo's doctoral candidate
+        Person.objects.filter(pk=doctoral.person.pk).update(username='promotion')
         self.enrolled, self.ability, self.rounds = [], {}, defaultdict(list)
         for study in studies:
             if study.status == Study.Status.ENROLLED:
@@ -1673,7 +1686,9 @@ class Command(BaseCommand):
                     places = sum(1 for s, o in outcomes if (s.program_id, s.subject.name) == key and o in (Study.Status.ENROLLED, Study.Status.ADMITTED))
                 else:
                     places = max(1, round(subjects[subject] * rate * (sose if summer else 1 - sose)))
-                intake = {'program': study.program, 'deadline': video_deadline if finished else JUDGED.get(subject, video_deadline), 'capacity': places, 'accompaniment': accompanist}  # the course one applies to
+                asked = '; '.join(w.format(i=subject) for w in REPERTOIRE[family(subject)])  # what the Prüfungsprogramm draws on
+                intake = {'program': study.program, 'deadline': video_deadline if finished else JUDGED.get(subject, video_deadline), 'capacity': places,
+                          'description': f'Drei Werke aus diesen, zusammen etwa 15 Minuten: {asked}.', 'accompaniment': accompanist}  # the course one applies to
                 video = Course.objects.create(
                     term=term, kind=Course.Kind.AUDITION, title=f'Videostufe {subject}{level}', subject=study.subject, video=True, pass_mark=Decimal('19.1' if master else '16.1'), max_points=25,
                     released=at(video_deadline + timedelta(days=30) if finished else date(2026, 10, 20), hour=12) if decided else None, **intake,

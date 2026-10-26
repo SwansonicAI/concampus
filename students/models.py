@@ -222,6 +222,10 @@ class DocumentType(Tracked, Keyed):
         'Für die Kommission', default=False, help_text='Die Prüfungskommission sieht es, etwa Video oder Lebenslauf; alles andere nur die Verwaltung.',
     )
     note = models.TextField('Hinweis für Bewerbende', blank=True)
+    amount = models.DecimalField(
+        'Zu überweisen', max_digits=7, decimal_places=2, null=True, blank=True,
+        help_text='Für einen Zahlungsbeleg, etwa die Prüfungsgebühr: Bewerbende sehen Betrag und Bankverbindung der Hochschule.',
+    )
     file_types = models.CharField('Dateitypen', max_length=120, blank=True, help_text='Endungen, z. B. „.pdf, .jpg“; leer: PDF und Bilder.')
     max_mb = models.PositiveIntegerField('Höchstens (MB)', null=True, blank=True)
     single = models.BooleanField('Nur eine Datei', default=False, help_text='Eine neue ersetzt die alte.')
@@ -239,9 +243,11 @@ class DocumentType(Tracked, Keyed):
     def system(cls, key):
         return cls.objects.get_or_create(key=key, defaults=cls.SYSTEM[key])[0]
 
+    DEFAULT_TYPES = '.pdf, .jpg, .jpeg, .png, .heic, .webp'  # PDF and photos of a paper
+
     @property
     def extensions(self):
-        return tuple(e.strip().lower() for e in self.file_types.replace(';', ',').split(',') if e.strip())
+        return tuple(e.strip().lower() for e in (self.file_types or self.DEFAULT_TYPES).replace(';', ',').split(',') if e.strip())
 
     @property
     def limit(self):
@@ -249,8 +255,8 @@ class DocumentType(Tracked, Keyed):
 
     def refuses(self, file):
         """Why a file cannot be handed in as this kind, or ''."""
-        if self.extensions and not file.name.lower().endswith(self.extensions):
-            return f'{self} bitte als {self.file_types} hochladen.'
+        if not file.name.lower().endswith(self.extensions):
+            return f'{self} bitte als {self.file_types or "PDF oder Bild"} hochladen.'
         if self.max_mb and file.size > self.max_mb * 2 ** 20:
             return f'Die Datei ist größer als {self.limit}. Bitte verkleinern und erneut hochladen.'
         return ''

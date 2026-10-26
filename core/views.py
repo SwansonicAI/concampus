@@ -74,13 +74,17 @@ ROLES = {'student': 'Studierende', 'applicant': 'Bewerbende', 'teacher': 'Lehren
 
 
 def demo_people():
-    """The demo's people in the configured order, each with what they stand for: their office, else their role."""
+    """The demo's people in the configured order, each with what they stand for: a label of the demo's, their office, a
+    doctorate, else their role."""
     found = Person.objects.prefetch_related('groups').in_bulk(settings.DEMO, field_name='username')
     shown = []
     for username in settings.DEMO:
         if person := found.get(username):
             offices = person.groups.all()
-            shown.append((offices[0].name if offices else next((label for role, label in ROLES.items() if role in person.roles), ''), person))
+            label = settings.DEMO_LABELS.get(username) or (offices[0].name if offices else '')
+            if not label and person.studies.filter(status=Study.Status.ENROLLED, program__kind='5').exists():
+                label = 'Promovierende'
+            shown.append((label or next((label for role, label in ROLES.items() if role in person.roles), ''), person))
     return shown
 
 

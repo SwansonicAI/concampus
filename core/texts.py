@@ -93,7 +93,8 @@ TEXTS = {
     ),
     'einladung': Spec(
         NACHRICHT, 'Einladung zum Prüfungstermin', 'Einladung: {pruefung}',
-        'Ihr Termin: {termin} Uhr, {raum}.\n\nBitte erscheinen Sie 30 Minuten vorher.', ('pruefung', 'termin', 'raum'),
+        'Ihr Termin: {termin} Uhr, {raum}.\n\nBitte erscheinen Sie 30 Minuten vorher und bringen Sie einen Lichtbildausweis mit, wenn Sie '
+        'begleitet werden auch die Noten für die Begleitung.', ('pruefung', 'termin', 'raum'),
     ),
     'unterlagen_fehlen': Spec(
         NACHRICHT, 'Bewerbung unvollständig', 'Ihre Bewerbung: es fehlt noch etwas',
@@ -196,6 +197,11 @@ TEXTS = {
         'Akkreditierungsrat, www.akkreditierungsrat.de; German ENIC-NARIC, www.kmk.org/zab.',
     ),
     'anmeldung': Spec(BAUSTEIN, 'Begrüßung auf der Anmeldeseite', '', 'Campus ist die Verwaltung von Studium, Lehre, Prüfungen, Aufnahme und Räumen der {hochschule}.'),
+    'datenschutz_bewerbung': Spec(
+        BAUSTEIN, 'Datenschutz beim Bewerben', '',
+        'Ihre Angaben verarbeitet die {hochschule} nur für das Bewerbungsverfahren und, wenn Sie hier studieren, für Ihr Studium. '
+        'Sie sehen nur die Stellen, die damit befasst sind; die Prüfungskommission sieht Ihre künstlerischen Unterlagen.',
+    ),
     'bewerbung_hinweise': Spec(
         BAUSTEIN, 'Hinweise beim Bewerben', '',
         'Pro Studiengang und Hauptfach ist eine Bewerbung möglich. Nach dem Absenden laden Sie unter „Meine Bewerbung“ Ihr Video und Ihre '

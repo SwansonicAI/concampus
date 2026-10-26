@@ -5,6 +5,7 @@
     <div>
       <b>{{ item.label }}</b>{% if not item.required %} <small class="muted">freiwillig</small>{% elif not item.documents %} <small class="fail">fehlt</small>{% endif %}
       {% if item.note %}{% if upload or item.late %}<br><small class="muted">{{ item.note }}</small>{% endif %}{% endif %}
+      {% if item.kind.amount and not item.documents %}{% include "students/_transfer.html" with amount=item.kind.amount reference="Eignungsprüfung, "|add:study.person.name|add:", "|add:study.subject.name %}{% endif %}
       {% for d in item.documents %}
       <div class="handed">
         {% include "admissions/_document.html" %}
@@ -16,7 +17,7 @@
       <form method="post" enctype="multipart/form-data" action="{% url 'admissions:upload' study.pk %}" class="inline handed" data-upload>
         {% csrf_token %}
         <input type="hidden" name="kind" value="{{ item.kind.key }}">
-        <input type="file" name="file" accept="{{ item.kind.file_types|cut:' '|default:'.pdf,image/*' }}"{% if item.kind.max_mb %} data-max="{% widthratio item.kind.max_mb 1 1048576 %}" data-too-big="Höchstens {{ item.kind.limit }}. Bitte verkleinern."{% endif %} aria-label="{{ item.label }}">
+        <input type="file" name="file" accept="{{ item.kind.extensions|join:',' }}"{% if item.kind.max_mb %} data-max="{% widthratio item.kind.max_mb 1 1048576 %}" data-too-big="Höchstens {{ item.kind.limit }}. Bitte verkleinern."{% endif %} aria-label="{{ item.label }}">
         <button class="btn ghost small">{% if item.documents and item.kind.single %}Ersetzen{% elif item.documents %}Weitere hochladen{% else %}Hochladen{% endif %}</button>
       </form>
       {% endif %}

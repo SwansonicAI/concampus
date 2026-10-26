@@ -4,12 +4,13 @@
 {% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
 {% block content %}
 <h1>Bewerbung</h1>
-<p class="lead">Die Eignungsprüfung beginnt mit der Videostufe. Wer sie besteht, wird zur Präsenzprüfung eingeladen: Hauptfach, Klavier, Musiktheorie und Gehörbildung.</p>
+<p class="lead">Die Eignungsprüfung findet vor Ort statt: Hauptfach, Klavier, Musiktheorie und Gehörbildung. In manchen Hauptfächern geht ihr eine Videostufe voraus; wer sie besteht, wird eingeladen.</p>
 <div class="cols">
   <form method="post" enctype="multipart/form-data" class="form">
     {% csrf_token %}
     {{ form }}
     <div class="actions"><button class="btn">Bewerbung absenden</button></div>
+    {% include "admissions/_privacy.html" %}
   </form>
   <div class="panel">
     <h3>Gut zu wissen</h3>

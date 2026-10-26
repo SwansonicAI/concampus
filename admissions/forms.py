@@ -45,17 +45,18 @@ class IntakeField(forms.ModelChoiceField):
 
 
 class Hauptfach(forms.Select):
-    """Each option names its Hauptfach, so the teachers below narrow to that class."""
+    """Each option names its Hauptfach, so the teachers below narrow to that class, and what its audition asks for."""
 
     def create_option(self, *args, **kwargs):
         option = super().create_option(*args, **kwargs)
         if option['value']:
-            option['attrs']['data-group'] = str(option['value'].instance.subject)
+            course = option['value'].instance
+            option['attrs'].update({'data-group': str(course.subject), 'data-note': course.description})
         return option
 
 
 class ApplicationForm(forms.Form):
-    audition = IntakeField(label='Studiengang und Hauptfach', queryset=None, empty_label=None, widget=Hauptfach(attrs={'data-leads': 'teacher'}))
+    audition = IntakeField(label='Studiengang und Hauptfach', queryset=None, empty_label=None, widget=Hauptfach(attrs={'data-leads': 'teacher', 'data-describes': 'repertoire'}))
     teacher = forms.ModelChoiceField(label='Wunschlehrer:in', queryset=None, required=False, empty_label='Keine Angabe')
     repertoire = forms.CharField(
         label='Prüfungsprogramm', widget=forms.Textarea(attrs={'rows': 5}),

@@ -7,5 +7,6 @@
   {% csrf_token %}
   {{ form }}
   <div class="actions"><button class="btn">Konto anlegen</button><a href="{% url 'login' %}">Ich habe schon ein Konto</a></div>
+  {% include "admissions/_privacy.html" %}
 </form>
 {% endblock %}

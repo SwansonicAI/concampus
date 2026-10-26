@@ -57,7 +57,10 @@ class AdmissionsConfig(Tile, AppConfig):
         if 'juror' in person.roles:
             open_ = person.teaching.filter(kind=Course.Kind.AUDITION, released=None)
             for course in open_.exclude(participations=None).distinct():
-                missing = course.participations.exclude(scores__examiner=person).count()
+                missing = course.participations.exclude(scores__examiner=person)
+                if course.video:  # only what has a video to watch
+                    missing = missing.filter(study__documents__kind__condition='video').distinct()
+                missing = missing.count()
                 started = course.video or course.participations.filter(slot__lte=timezone.now()).exists()
                 if missing and started:
                     url = reverse('admissions:review', args=[course.pk]) if course.video else course.get_absolute_url()

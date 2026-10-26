@@ -22,7 +22,7 @@ from .texts import TEXTS, render, send
 from .views import found
 
 PANEL = {'X-Panel': '1'}
-DEMO = ['admin', 'asa', 'pruefungsamt', 'dekanat', 'institut', 'veranstaltungsbuero', 'lehre', 'student', 'bewerbung', 'absolvent']
+DEMO = ['admin', 'asa', 'pruefungsamt', 'dekanat', 'institut', 'veranstaltungsbuero', 'lehre', 'korrepetition', 'student', 'promotion', 'bewerbung', 'absolvent']
 
 
 class HistoryTest(Empty):
