@@ -16,6 +16,8 @@
   {% with p=study.person %}
   <dl class="facts">
     <dt>E-Mail</dt><dd>{{ p.email }}</dd>
+    {% if p.phone %}<dt>Telefon</dt><dd>{{ p.phone }}</dd>{% endif %}
+    {% if p.address %}<dt>Anschrift</dt><dd>{{ p.address|linebreaksbr }}</dd>{% endif %}
     <dt>Geschlecht</dt><dd>{{ p.get_gender_display|default:"–" }}</dd>
     <dt>Geboren</dt><dd>{{ p.birth_date|date:"j. F Y" }}{% if p.birth_place %} in {{ p.birth_place }}{% endif %}</dd>
     <dt>Staatsangehörigkeit</dt><dd>{{ p.get_nationality_display|default:"–" }}{% if p.second_nationality %}, {{ p.get_second_nationality_display }}{% endif %}</dd>
@@ -30,10 +32,10 @@
   <div class="panel">
     {% if decide %}
     <h3>Entscheidung</h3>
-    {% if recommendation == 'admitted' %}<p>Nach den Prüfungsergebnissen: <b>bestanden</b>. Studienplatz oder Nachrückliste nach der Rangliste.</p>{% elif recommendation %}<p>Nach den Prüfungsergebnissen: <b>nicht bestanden</b>.</p>{% else %}<p class="muted">Noch nicht alle Prüfungsstufen abgeschlossen.</p>{% endif %}
+    {% if recommendation == 'admitted' %}<p>Nach den Prüfungsergebnissen: <b>bestanden</b>. Studienplatz oder Nachrückliste nach der Rangliste.</p>{% elif recommendation %}<p>Nach den Prüfungsergebnissen: <b>nicht bestanden</b>.</p>{% elif pending %}<p class="muted">Noch nicht alle Prüfungsstufen abgeschlossen: Studienplatz oder Nachrückliste erst danach.</p>{% endif %}
     <form method="post" action="{% url 'admissions:decide' study.pk %}" class="actions">
       {% csrf_token %}
-      {% for status, verb in decisions %}<button class="btn{% if status != recommendation %} ghost{% endif %}" name="status" value="{{ status }}"{% if study.status == status %} disabled{% endif %}>{{ verb }}</button>{% endfor %}
+      {% for status, verb in decisions %}<button class="btn{% if status != recommendation %} ghost{% endif %}" name="status" value="{{ status }}"{% if study.status == status or pending and status != 'rejected' %} disabled{% endif %}>{{ verb }}</button>{% endfor %}
     </form>
     <p class="muted" style="margin-top: 12px"><small>Der Bescheid geht sofort ins Postfach der Person.</small></p>
     {% endif %}
@@ -43,6 +45,7 @@
     <p>Es fehlt noch:</p>
     <ul>{% for reason in missing %}<li class="fail">{{ reason }}</li>{% endfor %}</ul>
     <div class="actions">
+      {% if remind %}<form method="post" action="{% url 'admissions:remind' %}">{% csrf_token %}<input type="hidden" name="study" value="{{ study.pk }}"><input type="hidden" name="next" value="{{ request.path }}"><button class="btn ghost small">Erinnern</button></form>{% endif %}
       {% if not study.person.insurance_confirmed %}<form method="post" action="{% url 'students:insured' study.pk %}">{% csrf_token %}<button class="btn ghost small">Versicherungsmeldung verbuchen</button></form>{% endif %}
       {% if not study.person.entrance %}<a class="btn ghost small" href="{% url 'setup:edit' 'personen' study.person.pk %}?next={{ request.path|urlencode }}" data-panel>Hochschulzugang erfassen</a>{% endif %}
     </div>
@@ -56,7 +59,10 @@
 </div>
 
 <section>
-  <h2>Video und Unterlagen</h2>
+  <div class="head">
+    <h2>Video und Unterlagen</h2>
+    {% if remind and study.status == 'applied' %}<form method="post" action="{% url 'admissions:remind' %}" class="actions">{% csrf_token %}<input type="hidden" name="study" value="{{ study.pk }}"><input type="hidden" name="next" value="{{ request.path }}"><button class="btn ghost small">Fehlende Unterlagen nachfordern</button></form>{% endif %}
+  </div>
   {% include "admissions/_checklist.html" with upload=False %}
 </section>
 

@@ -123,6 +123,7 @@ input.cell { width: 76px; padding: 4px 8px; text-align: right; }
 select.cell { padding: 4px 6px; }
 .form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; max-width: 640px; }
 .form > div:not(.actions) { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.form > div[hidden] { display: none; }
 .form fieldset { display: grid; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .form legend { margin-bottom: 6px; padding: 0; font-weight: 600; }
 .form label.option { position: relative; padding-left: 30px; font-weight: 400; }
@@ -371,12 +372,12 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 /* Search palette under the search box */
 .search { position: relative; flex: 0 1 230px; min-width: 150px; }  /* gives way before the menu wraps */
 .search:focus-within { flex-basis: 300px; }
-.palette { display: none; position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: 560px; max-height: 72vh; overflow-y: auto; padding: 8px 0; border: 1px solid var(--line); border-top: 4px solid var(--green); border-radius: var(--radius); background: #fff; color: var(--ink); }
+.palette { display: none; position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: 560px; max-height: 72vh; overflow: hidden auto; padding: 8px 0; border: 1px solid var(--line); border-top: 4px solid var(--green); border-radius: var(--radius); background: #fff; color: var(--ink); }
 .search.open .palette { display: block; }
 .palette .empty { margin: 8px 16px; }
 .found h4 { margin: 10px 16px 4px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
 .found a { display: flex; justify-content: space-between; gap: 16px; padding: 7px 16px; color: var(--ink); font-size: 15px; }
-.found a small { color: var(--muted); text-align: right; }
+.found a small { min-width: 0; color: var(--muted); text-align: right; }
 .found a:hover, .found a.on { background: var(--soft); text-decoration: none; }
 .found a.on b { color: var(--green); }
 .results .found { margin-bottom: 24px; border-top: 2px solid var(--ink); }

@@ -21,8 +21,7 @@ class RoomsConfig(Tile, AppConfig):
             return []
         return [
             feature('Raumplan', reverse('rooms:index'), 'belegung räume heute kalender tagesplan institut gebäude'),
-            feature('Raum finden', reverse('rooms:find'), 'frei freier raum suchen verfügbar'),
-            feature('Raum buchen', reverse('rooms:new'), 'buchung reservieren üben überaum kammermusik probe'),
+            feature('Raum buchen', reverse('rooms:find'), 'frei freier raum finden suchen verfügbar buchung reservieren üben überaum kammermusik probe'),
             feature('Meine Buchungen', reverse('rooms:mine'), 'stornieren übezeit kontingent'),
             feature('Veranstaltungen', reverse('rooms:events'), 'konzert klassenabend meisterkurs vortrag programm'),
             feature('Kalender abonnieren', f"{reverse('rooms:mine')}#kalender", 'ical ics outlook google apple handy feed'),

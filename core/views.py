@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_not_required
 from django.contrib import messages
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import Q
+from django.db.models import Case, Q, When
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import resolve, reverse
@@ -24,10 +24,11 @@ from rooms.models import Booking, BookingCategory, Room
 from rooms.views import agenda
 from students.models import Document, Study
 from . import dates
-from .apps import feature, tile_apps, tiles
+from .apps import feature, plural, tile_apps, tiles
 from .days import busy, strip
+from .forms import ContactForm
 from .history import describe, restore, tables
-from .models import Change, Message, Person, Term, Tracked
+from .models import Change, Message, Office, Person, Term, Tracked
 from .text import fold, matching, words
 
 
@@ -57,6 +58,16 @@ def home(request):
 
 def inbox(request):
     return render(request, 'core/inbox.html', {'letters': request.user.messages.all()})
+
+
+def account(request):
+    """Mein Konto: address and phone number, kept up by the person; name and birth data only the office changes, on proof."""
+    form = ContactForm(request.POST or None, instance=request.user)
+    if form.is_valid():
+        form.save()
+        messages.success(request, 'Kontaktdaten gespeichert.')
+        return redirect('account')
+    return render(request, 'core/account.html', {'form': form, 'office': Office.holding('manage_students')})
 
 
 ROLES = {'student': 'Studierende', 'applicant': 'Bewerbende', 'teacher': 'Lehrende', 'alumni': 'Ehemalige'}
@@ -206,6 +217,31 @@ def hit(title, url, meta=''):
     return {'title': title, 'url': url, 'meta': meta}
 
 
+STANDING = [  # whose study a search for a name shows first
+    Study.Status.ENROLLED, Study.Status.GUEST, Study.Status.ADMITTED, Study.Status.APPLIED, Study.Status.WAITLISTED,
+    Study.Status.GRADUATED, Study.Status.LEFT, Study.Status.REJECTED,
+]
+
+
+def people(studies, limit):
+    """One hit per person, at their most current study: enrolled first, turned-down applications last. The birth date
+    tells namesakes apart."""
+    shown = {}
+    rank = Case(*(When(status=status, then=n) for n, status in enumerate(STANDING)))
+    for s in studies.annotate(rank=rank).order_by('rank', 'person__last_name', 'person__first_name')[:limit * 10]:
+        if s.person_id in shown:
+            shown[s.person_id][1] += 1
+        elif len(shown) < limit:
+            shown[s.person_id] = [s, 0]
+    return [
+        hit(s.person.name, s.get_absolute_url(), ' · '.join(filter(None, [
+            s.person.birth_date and f'geb. {date_format(s.person.birth_date, "j.n.Y")}', s.person.matriculation, f'{s.subject} {s.program.degree}',
+            s.get_status_display(), more and plural(more, 'weiteres Studium', 'weitere Studien'),
+        ])))
+        for s, more in shown.values()
+    ]
+
+
 def found(person, q, limit):
     roles, sought = person.roles, words(q)
     groups = []
@@ -213,7 +249,8 @@ def found(person, q, limit):
         groups.append(('Springen zu', jumps(roles, *when)))
     # every app's places, also of apps without a tile for this person: a student applying for a Master
     places = [(f, app.title(roles) or app.verbose_name) for app in tile_apps() for f in app.features(person)]
-    places += [(feature('Startseite', reverse('home'), 'aufgaben zu erledigen übersicht'), ''), (feature('Postfach', reverse('inbox'), 'nachrichten bescheide mitteilungen'), '')]
+    places += [(feature('Startseite', reverse('home'), 'aufgaben zu erledigen übersicht'), ''), (feature('Postfach', reverse('inbox'), 'nachrichten bescheide mitteilungen'), ''),
+               (feature('Mein Konto', reverse('account'), 'anschrift adresse telefon kontaktdaten umzug'), '')]
     if person.is_superuser:
         places.append((feature('Datenpflege', reverse('admin:index'), 'admin stammdaten verwaltung'), ''))
     groups.append(('Funktionen', [
@@ -225,11 +262,8 @@ def found(person, q, limit):
         seen = Q(teacher=person) & ~Q(status__in=Study.APPLICATION) if 'teacher' in roles else Q(pk=None)
         seen |= Q(pk__in=person.within(Study.objects.exclude(status__in=Study.APPLICATION), 'view_files').values('pk'))
         seen |= Q(pk__in=person.within(Study.objects.filter(status__in=Study.APPLICATION), 'view_applications').values('pk'))
-        studies = matching(Study.objects.filter(seen).select_related('person', 'program', 'subject'), q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__matriculation', 'person__email')[:limit]
-        groups.append(('Studierende und Bewerbungen', [
-            hit(s.person.name, s.get_absolute_url(), ' · '.join(filter(None, [s.person.matriculation, f'{s.subject} {s.program.degree}', s.get_status_display()])))
-            for s in studies
-        ]))
+        studies = matching(Study.objects.filter(seen).select_related('person', 'program', 'subject'), q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__matriculation', 'person__email')
+        groups.append(('Studierende und Bewerbungen', people(studies, limit)))
     teaching = [Course.Kind.COURSE, Course.Kind.LESSON]
     courses = matching(Course.objects.filter(term__end__gte=timezone.localdate()).select_related('term'), q, 'title', 'staff__last_name', 'subject__name')
     groups.append(('Lehrveranstaltungen', [hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in courses.filter(kind__in=teaching)[:limit]]))

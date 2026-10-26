@@ -77,6 +77,7 @@ class BookingCategory(Tracked, Keyed):
         'unterricht': {'name': 'Unterricht', 'tone': Tone.TEACH, 'teachers': True},
         'pruefung': {'name': 'Prüfung', 'tone': Tone.EXAM, 'teachers': True},
         'eignungspruefung': {'name': 'Eignungsprüfung', 'tone': Tone.EXAM},
+        'abgesagt': {'name': 'Abgesagt', 'tone': Tone.CANCELLED, 'blocks': False},
     }
 
     capabilities = ('manage_rooms',)

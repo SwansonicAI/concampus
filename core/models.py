@@ -166,7 +166,8 @@ class Person(Tracked, AbstractUser):
     nationality = models.CharField('Staatsangehörigkeit', max_length=60, choices=destatis.countries, blank=True)
     second_nationality = models.CharField('Weitere Staatsangehörigkeit', max_length=60, choices=destatis.countries, blank=True)
     address = models.TextField('Anschrift', blank=True)
-    home = models.CharField('Heimatwohnsitz', max_length=5, choices=destatis.places, blank=True, help_text='Kreis, im Ausland der Staat.')
+    phone = models.CharField('Telefon', max_length=40, blank=True)
+    home =models.CharField('Heimatwohnsitz', max_length=5, choices=destatis.places, blank=True, help_text='Kreis, im Ausland der Staat.')
     residence = models.CharField('Semesterwohnsitz', max_length=5, choices=destatis.places, blank=True, help_text='Während der Unterrichtszeit; leer: wie der Heimatwohnsitz.')
     entrance = models.CharField(
         'Hochschulzugangsberechtigung', max_length=10, choices=destatis.ENTRANCE, blank=True,

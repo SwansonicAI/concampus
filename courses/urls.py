@@ -16,6 +16,7 @@ urlpatterns = [
     path('<int:pk>/hinzufuegen/', views.add, name='add'),
     path('<int:pk>/anmelden/', views.register, name='register'),
     path('<int:pk>/planen/', views.plan, name='plan'),
+    path('<int:pk>/unterrichtszeiten/', views.lessons, name='lessons'),
     path('teilnahme/<int:pk>/abmelden/', views.withdraw, name='withdraw'),
     path('<int:pk>/termin/', views.date, name='date'),
     path('<int:pk>/ensemble/', views.ensemble, name='ensemble'),

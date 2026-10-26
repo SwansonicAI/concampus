@@ -3,22 +3,24 @@ from datetime import UTC, datetime, timedelta
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
 from django.core import signing
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Prefetch, Q
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
+from django.utils.formats import date_format
 from django.views.decorators.http import require_POST
 
+from core.apps import plural
 from core.dates import day as understood
 from core.days import busy, strip
 from core import texts
-from core.models import Institute, Institution, Office, Person
+from core.models import Institute, Institution, Message, Office, Person
 from core.text import matching
 from courses.models import Course
-from .forms import BookingForm, FindForm, bookable, quota
+from .forms import BookingForm, CancelForm, FindForm, bookable, quota
 from .models import Booking, BookingCategory, Room, RoomFunction
 
 OPEN, CLOSE, STEP = 8, 22, 5  # hours shown, minutes per grid line
@@ -217,8 +219,13 @@ def booking(request, pk=None):
         messages.success(request, 'Buchung gespeichert.')
         return redirect(f"{reverse('rooms:index')}?tag={timezone.localtime(booking.start):%Y-%m-%d}")
     series = Booking.objects.filter(series=booking.series).count() if booking.series else 0
+    told = None  # a date others come to can be called off and they hear of it
+    if booking.pk and (booking.course_id or booking.participants.exists()):
+        told = [p.name for p in recipients(booking, person)]
+        told = told if len(told) <= 3 else [f'alle {len(told)} Teilnehmenden']
     return render(request, 'rooms/booking.html', {
         'form': form, 'booking': booking, 'series': series, 'central': Office.holding('book_any_room'),
+        'told': told, 'cancel': CancelForm(person=person),
         'rules': Institution.get(), 'special': BookingCategory.objects.filter(students=True).exclude(ahead_hours=None, participants=0),
         'history': booking.pk and Booking.visible_to(person.roles),
         'left': Institution.get().student_daily_hours - quota(person, timezone.localdate()) if form.student else None,
@@ -241,6 +248,65 @@ def delete(request, pk):
     doomed.delete()
     messages.success(request, 'Buchung gelöscht.')
     return redirect(f"{reverse('rooms:index')}?tag={timezone.localtime(booking.start):%Y-%m-%d}")
+
+
+def recipients(booking, by):
+    """Who hears when a date is called off: whoever takes part, everyone in a group course, and whoever booked it when
+    someone else calls it off."""
+    people = set(booking.participants.all())
+    if booking.course_id and booking.course.kind == Course.Kind.COURSE:
+        people |= set(Person.objects.filter(studies__participations__course=booking.course_id))
+    people.add(booking.person)
+    people.discard(by)
+    return sorted(people, key=lambda p: p.name)
+
+
+def moment(start, end):
+    start, end = timezone.localtime(start), timezone.localtime(end)
+    return f'{date_format(start, "D j.n.Y")}, {start:%H:%M}–{end:%H:%M} Uhr'
+
+
+@require_POST
+def cancel(request, pk):
+    """Call off one date: it stays on the plans as „Abgesagt“ and frees the room; whoever takes part hears of it, with
+    the make-up date if there is one."""
+    booking = get_object_or_404(Booking.objects.select_related('course', 'room', 'person'), pk=pk)
+    if not editable(booking, request.user):
+        raise PermissionDenied
+    form = CancelForm(request.POST, person=request.user)
+    if not form.is_valid():
+        messages.error(request, ' '.join(e for errors in form.errors.values() for e in errors))
+        return redirect('rooms:booking', pk)
+    data, makeup = form.cleaned_data, None
+    if data['day']:
+        makeup = Booking(
+            room=data['room'] or booking.room, person=booking.person, course=booking.course, category=booking.category, title=booking.title,
+            start=timezone.make_aware(datetime.combine(data['day'], data['begin'])), end=timezone.make_aware(datetime.combine(data['day'], data['until'])),
+        )
+        try:
+            makeup.full_clean()
+        except ValidationError as error:
+            messages.error(request, f'Nachholtermin: {" ".join(error.messages)}')
+            return redirect('rooms:booking', pk)
+    told = recipients(booking, request.user)
+    booking.category = BookingCategory.system('abgesagt')
+    booking.save(update_fields=['category'])
+    if makeup:
+        makeup.save()
+        makeup.participants.set(booking.participants.all())
+    link = booking.course.get_absolute_url() if booking.course else reverse('rooms:booking', args=[(makeup or booking).pk])
+    values = {'veranstaltung': booking.label, 'termin': moment(booking.start, booking.end), 'raum': (makeup or booking).room, 'von': request.user}
+    for person in told:
+        if makeup:
+            subject, body = texts.render('termin_verlegt', vorname=person.first_name, nachname=person.last_name, neuer_termin=moment(makeup.start, makeup.end), **values)
+        else:
+            subject, body = texts.render('termin_abgesagt', vorname=person.first_name, nachname=person.last_name, **values)
+        Message.send(person, subject, body + (f'\n\n{data["note"]}' if data['note'] else ''), link)
+    messages.success(request, ' '.join(filter(None, [
+        f'Verlegt auf {moment(makeup.start, makeup.end)}.' if makeup else 'Abgesagt.',
+        told and f'Nachricht an {plural(len(told), "Person", "Personen")}.',
+    ])))
+    return redirect(booking.course or f"{reverse('rooms:index')}?tag={timezone.localtime(booking.start):%Y-%m-%d}")
 
 
 def feed(request):

@@ -186,10 +186,13 @@ EDITORS = {e.key: e for e in [
     Editor('institute', Institute, 'Institute', 'manage_institution', 'Verwaltung', fields=['name'], columns=[('Institut', 'name')], search=['name']),
     Editor(
         'personen', Person, 'Stammdaten', 'manage_students', deletable=False,
-        fields=[
-            'title', 'first_name', 'given_names', 'last_name', 'birth_name', 'gender', 'birth_date', 'birth_place', 'nationality',
-            'second_nationality', 'address', 'home', 'residence', 'email', 'entrance', 'entrance_date', 'entrance_region', 'first_university', 'first_term',
-            'external_terms', 'degree_university', 'degree_exam', 'degree_field', 'degree_date', 'degree_grade', 'vocational', 'internship', 'insurer', 'insurance',
+        sections=[  # what changes most often first
+            ('Kontakt', ['address', 'phone', 'email']),
+            ('Person', ['title', 'first_name', 'given_names', 'last_name', 'birth_name', 'gender', 'birth_date', 'birth_place', 'nationality', 'second_nationality']),
+            ('Krankenversicherung', ['insurer', 'insurance']),
+            ('Hochschulzugang', ['entrance', 'entrance_date', 'entrance_region']),
+            ('Bisheriges Studium', ['first_university', 'first_term', 'external_terms', 'degree_university', 'degree_exam', 'degree_field', 'degree_date', 'degree_grade', 'vocational', 'internship']),
+            ('Amtliche Statistik', ['home', 'residence']),
         ],
     ),
     Editor(

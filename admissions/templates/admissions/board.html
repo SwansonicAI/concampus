@@ -4,7 +4,7 @@
 {% block content %}
 <div class="head">
   <h1>Bewerbungen</h1>
-  {% if 'run_auditions' in user.roles %}<div class="actions"><a class="btn ghost" href="{% url 'setup:list' 'eignungspruefungen' %}">Eignungsprüfungen</a></div>{% endif %}
+  {% if 'run_auditions' in user.roles %}<div class="actions"><a class="btn ghost" href="{% url 'setup:list' 'eignungspruefungen' %}">Eignungsprüfungen einrichten</a></div>{% endif %}
 </div>
 <form class="toolbar">
   <div class="inline">
@@ -12,23 +12,6 @@
     <label>Hauptfach<select name="fach" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for s in subjects %}<option value="{{ s.pk }}"{% if s.pk|stringformat:'s' == subject %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
   </div>
 </form>
-
-<h2>Eignungsprüfungen</h2>
-<table>
-  <thead><tr><th>Datum</th><th>Prüfung</th><th>Bewerbungsfrist</th><th class="num">Bewerbende</th><th>Stand</th></tr></thead>
-  <tbody>
-    {% for c in auditions %}
-    <tr>
-      <td data-value="{{ c.date|date:'c' }}">{% if c.date %}{{ c.date|date:"D j.n.Y" }}{% elif c.program %}online{% else %}–{% endif %}</td>
-      <td><a href="{% url 'admissions:audition' c.pk %}"><b>{{ c.title }}</b></a>{% if c.program %}<br><small class="muted">Bewerbung für {{ c.program.title }}</small>{% endif %}</td>
-      <td>{{ c.deadline|date:"j.n.Y"|default:"" }}</td>
-      <td class="num">{{ c.size }}</td>
-      <td>{% if c.released %}<span class="badge green">abgeschlossen</span>{% else %}<span class="badge open">offen</span>{% endif %}</td>
-    </tr>
-    {% empty %}<tr><td colspan="5" class="empty">Keine Eignungsprüfungen.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
 
 {% if vacancies %}
 <section>
@@ -93,7 +76,7 @@
           <td class="mid">{% if not s.waiting %}<input type="checkbox" name="study" value="{{ s.pk }}" aria-label="{{ s.person.name }}">{% endif %}</td>
           <td class="mid"><a href="{% url 'admissions:application' s.pk %}">{{ s.person.name }}</a></td>
           <td class="mid">{{ s.program.title }} · {{ s.subject }}</td>
-          <td class="mid">{% if s.waiting %}<small class="fail">{{ s.waiting|join:" · " }}</small>{% else %}–{% endif %}</td>
+          <td class="mid">{% if s.waiting %}<small class="fail">{{ s.waiting|join:" · " }}</small> <button class="link" form="erinnern" name="study" value="{{ s.pk }}"><small>erinnern</small></button>{% else %}–{% endif %}</td>
         </tr>
         {% endfor %}
       </tbody>
@@ -103,8 +86,31 @@
       <small class="muted">Vergibt die Matrikelnummern, verbucht den Semesterbeitrag und versendet die Immatrikulationsbescheide.</small>
     </div>
   </form>
+  <form id="erinnern" method="post" action="{% url 'admissions:remind' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"></form>
 </section>
 {% endif %}
+
+<section>
+  <h2>Eignungsprüfungen</h2>
+  <details class="tail"{% if running %} open{% endif %}>
+    <summary><small>{{ auditions|length }} Prüfungen{% if not running %}, alle abgeschlossen{% endif %}</small></summary>
+    <table>
+      <thead><tr><th>Datum</th><th>Prüfung</th><th>Bewerbungsfrist</th><th class="num">Bewerbende</th><th>Stand</th></tr></thead>
+      <tbody>
+        {% for c in auditions %}
+        <tr>
+          <td data-value="{{ c.date|date:'c' }}">{% if c.date %}{{ c.date|date:"D j.n.Y" }}{% elif c.program %}online{% else %}–{% endif %}</td>
+          <td><a href="{% url 'admissions:audition' c.pk %}"><b>{{ c.title }}</b></a>{% if c.program %}<br><small class="muted">Bewerbung für {{ c.program.title }}</small>{% endif %}</td>
+          <td>{{ c.deadline|date:"j.n.Y"|default:"" }}</td>
+          <td class="num">{{ c.size }}</td>
+          <td>{% if c.released %}<span class="badge green">abgeschlossen</span>{% else %}<span class="badge open">offen</span>{% endif %}</td>
+        </tr>
+        {% empty %}<tr><td colspan="5" class="empty">Keine Eignungsprüfungen.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </details>
+</section>
 
 <section>
   <div class="head">
@@ -114,11 +120,14 @@
       <input type="search" name="q" value="{{ q }}" placeholder="Name oder E-Mail" aria-label="Bewerbungen durchsuchen">
     </form>
   </div>
-  <p class="lead">Sortiert nach Punkten im Hauptfach.</p>
+  <div class="actions">
+    <p class="lead" style="margin: 0">Sortiert nach Punkten im Hauptfach.{% if incomplete %} {{ incomplete }} Bewerbungen sind unvollständig.{% endif %}</p>
+    {% if incomplete %}<form method="post" action="{% url 'admissions:remind' %}">{% csrf_token %}<input type="hidden" name="semester" value="{{ term.pk }}"><input type="hidden" name="fach" value="{{ subject }}"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn ghost small">Unvollständige erinnern</button></form>{% endif %}
+  </div>
   <div class="board" data-panel>
-    {% for status, studies in columns %}
+    {% for status, studies, total in columns %}
     <div>
-      <h3>{{ status.label }} <span>{{ studies|length }}</span></h3>
+      <h3>{{ status.label }} <span>{{ total }}</span></h3>
       <div class="tickets">
         {% for s in studies %}
         <a class="ticket" href="{% url 'admissions:application' s.pk %}">
@@ -129,6 +138,7 @@
           <span class="chips">{% include "admissions/_stages.html" %}{% if s.incomplete %}<span class="chip no" title="Fehlt: {{ s.incomplete|join:', ' }}">unvollständig</span>{% endif %}</span>
         </a>
         {% empty %}<p class="empty">–</p>{% endfor %}
+        {% if total > studies|length %}<p><small><a href="{% querystring alle=status.value %}">Alle {{ total }} anzeigen</a></small></p>{% endif %}
       </div>
     </div>
     {% endfor %}

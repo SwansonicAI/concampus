@@ -37,7 +37,8 @@
       <dt>Geboren</dt><dd>{{ p.birth_date|date:"j. F Y"|default:"–" }}{% if p.birth_place %} in {{ p.birth_place }}{% endif %}</dd>
       <dt>Staatsangehörigkeit</dt><dd>{{ p.get_nationality_display|default:"–" }}{% if p.second_nationality %}, {{ p.get_second_nationality_display }}{% endif %}</dd>
       <dt>E-Mail</dt><dd>{{ p.email }}</dd>
-      <dt>Anschrift</dt><dd>{{ p.address|linebreaksbr|default:"–" }}</dd>
+      <dt>Anschrift</dt><dd>{{ p.address|linebreaksbr|default:"–" }}{% if p == user %} <a href="{% url 'account' %}"><small>ändern</small></a>{% endif %}</dd>
+      {% if p.phone %}<dt>Telefon</dt><dd>{{ p.phone }}</dd>{% endif %}
       <dt>Hochschulzugang</dt><dd>{{ p.get_entrance_display|default:"–" }}{% if p.entrance_date %}, {{ p.entrance_date|date:"j.n.Y" }}{% endif %}{% if p.entrance_region %}, {{ p.get_entrance_region_display }}{% endif %}</dd>
       <dt>Krankenversicherung</dt>
       <dd>

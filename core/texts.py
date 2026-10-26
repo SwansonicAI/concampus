@@ -95,6 +95,17 @@ TEXTS = {
         NACHRICHT, 'Einladung zum Prüfungstermin', 'Einladung: {pruefung}',
         'Ihr Termin: {termin} Uhr, {raum}.\n\nBitte erscheinen Sie 30 Minuten vorher.', ('pruefung', 'termin', 'raum'),
     ),
+    'unterlagen_fehlen': Spec(
+        NACHRICHT, 'Bewerbung unvollständig', 'Ihre Bewerbung: es fehlt noch etwas',
+        'Zu Ihrer Bewerbung für {studiengang}, Hauptfach {hauptfach}, fehlt noch:\n{fehlt}\n\nBitte laden Sie es bis zum {frist} unter „Meine Bewerbung“ '
+        'hoch. Unvollständige Bewerbungen können nicht berücksichtigt werden.',
+        STUDY + ('fehlt', 'frist'),
+    ),
+    'immatrikulation_offen': Spec(
+        NACHRICHT, 'Immatrikulation offen', 'Ihre Immatrikulation: es fehlt noch etwas',
+        'Sie haben Ihren Studienplatz im Studiengang {studiengang}, Hauptfach {hauptfach}, angenommen. Für die Immatrikulation ist noch offen:\n{fehlt}',
+        STUDY + ('fehlt',),
+    ),
     'studienplatz_angenommen': Spec(
         NACHRICHT, 'Studienplatz angenommen', 'Studienplatz angenommen',
         'Sie haben den Studienplatz angenommen. Bitte überweisen Sie den Semesterbeitrag von {beitrag} € bis zum {frist}, und bitten '
@@ -133,6 +144,18 @@ TEXTS = {
     'buchung_storniert': Spec(
         NACHRICHT, 'Buchung storniert', 'Buchung storniert: {buchung}', '{von} hat {anzahl} Termin(e) ab {termin} in {raum} storniert.',
         ('buchung', 'von', 'anzahl', 'termin', 'raum'),
+    ),
+    'unterrichtszeit': Spec(
+        NACHRICHT, 'Unterrichtszeit eingetragen', 'Unterrichtszeit: {veranstaltung}', '{von} hat Ihre Unterrichtszeit eingetragen: {zeit} in {raum}, ab {ab}.',
+        ('veranstaltung', 'von', 'zeit', 'raum', 'ab'),
+    ),
+    'termin_abgesagt': Spec(
+        NACHRICHT, 'Termin abgesagt', 'Abgesagt: {veranstaltung}', '{von} hat „{veranstaltung}“ am {termin} in {raum} abgesagt.',
+        ('veranstaltung', 'termin', 'raum', 'von'),
+    ),
+    'termin_verlegt': Spec(
+        NACHRICHT, 'Termin verlegt', 'Verlegt: {veranstaltung}', '{von} hat „{veranstaltung}“ vom {termin} auf {neuer_termin} in {raum} verlegt.',
+        ('veranstaltung', 'termin', 'neuer_termin', 'raum', 'von'),
     ),
     'rueckmeldung': Spec(NACHRICHT, 'Rückmeldung erledigt', 'Rückmeldung {rueckmeldesemester}', 'Ihr Semesterbeitrag ist eingegangen. Sie sind für das {rueckmeldesemester} zurückgemeldet.', ('rueckmeldesemester',)),
     'rueckmeldung_offen': Spec(

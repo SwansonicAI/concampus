@@ -22,9 +22,17 @@
   </div>
   <div>
     <h3>Nächste Termine</h3>
-    <table>
-      {% for b in bookings %}<tr><td data-value="{{ b.start|date:'c' }}">{{ b.start|date:"D j.n." }}</td><td>{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</td><td><a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a></td></tr>{% empty %}<tr><td class="empty">Noch keine Termine.</td></tr>{% endfor %}
+    <table data-panel>
+      {% for b in bookings %}
+      <tr>
+        <td data-value="{{ b.start|date:'c' }}">{% if staffed %}<a href="{% url 'rooms:booking' b.pk %}" title="Absagen, verlegen">{{ b.start|date:"D j.n." }}</a>{% else %}{{ b.start|date:"D j.n." }}{% endif %}</td>
+        <td>{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</td>
+        {% if course.kind == 'lesson' and staffed %}<td>{% for p in b.participants.all %}{{ p.first_name }} {{ p.last_name }}{% endfor %}</td>{% endif %}
+        <td>{% if b.category.blocks %}<a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a>{% else %}<span class="badge no">{{ b.category }}</span>{% endif %}</td>
+      </tr>
+      {% empty %}<tr><td class="empty">Noch keine Termine.</td></tr>{% endfor %}
     </table>
+    {% if staffed and bookings %}<p class="muted"><small>Ein Datum anklicken, um den Termin abzusagen oder zu verlegen.</small></p>{% endif %}
     {% if plan %}
     <form method="post" action="{% url 'courses:plan' course.pk %}" class="panel" style="margin-top: 24px">
       {% csrf_token %}
@@ -33,11 +41,13 @@
       <p class="muted" style="margin: 12px 0"><small>Bucht den Raum über die ganze Unterrichtszeit ({{ course.term.lectures_start|date:"j.n." }}–{{ course.term.lectures_end|date:"j.n.Y" }}) ohne die unterrichtsfreien Tage, nur wenn alle Termine frei sind.</small></p>
       <button class="btn">Termine buchen</button>
     </form>
+    {% endif %}
+    {% if date %}
     <form method="post" action="{% url 'courses:date' course.pk %}" class="panel" style="margin-top: 24px">
       {% csrf_token %}
       <h3>Einzeltermin</h3>
       <div class="inline">{% for field in date %}<label>{{ field.label }}{{ field }}</label>{% endfor %}</div>
-      <p class="muted" style="margin: 12px 0"><small>Für Blockveranstaltungen, Proben und Nachholtermine.</small></p>
+      <p class="muted" style="margin: 12px 0"><small>{% if course.kind == 'lesson' %}Für Nachholtermine und zusätzliche Stunden.{% else %}Für Blockveranstaltungen, Proben und Nachholtermine.{% endif %}</small></p>
       <button class="btn ghost">Termin buchen</button>
     </form>
     {% endif %}
@@ -128,6 +138,31 @@
       {% endfor %}
     </tbody>
   </table>
+</section>
+{% endif %}
+
+{% if lessons %}
+<section>
+  <h2>Unterrichtszeiten</h2>
+  <p class="lead">Eine wöchentliche Zeit je Studierende:r bis zum Ende der Unterrichtszeit am {{ course.term.lectures_end|date:"j.n.Y" }}, ohne die unterrichtsfreien Tage. Geänderte Zeilen werden ab heute neu gebucht; die Studierenden erhalten ihre Zeit als Nachricht.</p>
+  <form method="post" action="{% url 'courses:lessons' course.pk %}">
+    {% csrf_token %}{{ lessons.management_form }}
+    <table>
+      <thead><tr><th>Name</th><th>Wochentag</th><th>Beginn</th><th>Dauer (Min.)</th><th>Raum</th></tr></thead>
+      <tbody>
+        {% for student, form in lesson_rows %}
+        <tr>
+          <td class="mid">{{ student.last_name }}, {{ student.first_name }}{{ form.person }}{% for e in form.non_field_errors %}<br><small class="fail">{{ e }}</small>{% endfor %}</td>
+          <td>{{ form.weekday }}</td>
+          <td>{{ form.time }}</td>
+          <td>{{ form.minutes }}</td>
+          <td>{{ form.room }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="actions" style="margin-top: 16px"><button class="btn">Unterrichtszeiten buchen</button><small class="muted">Nur wenn alle neuen Termine frei sind.</small></div>
+  </form>
 </section>
 {% endif %}
 

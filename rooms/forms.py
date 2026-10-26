@@ -3,7 +3,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 
 from django import forms
-from django.db.models import Min, Q
+from django.db.models import Exists, Min, OuterRef, Q
 from django.utils import timezone
 from django.utils.formats import number_format
 
@@ -93,11 +93,16 @@ class BookingForm(forms.ModelForm):
         self.fields['title'].required = False
         self.fields['title'].help_text = 'Leer: die Kategorie, z. B. „Übebuchung“.'
         enrolled = Q(studies__status='enrolled')
+        mates = Person.objects.filter(studies__ensembles__members__person=person, pk=OuterRef('pk'))  # who plays with them comes first
         self.fields['participants'].queryset = (
-            Person.objects.filter(enrolled).annotate(subject=Min('studies__subject__name', filter=enrolled)).order_by('last_name', 'first_name').exclude(pk=person.pk)
+            Person.objects.filter(enrolled).annotate(subject=Min('studies__subject__name', filter=enrolled), mate=Exists(mates))
+            .order_by('-mate', 'last_name', 'first_name').exclude(pk=person.pk)
         )
-        if self.student:
+        if self.student:  # practice needs a room and a time; a title and who else comes only for the categories that ask for others
             del self.fields['description']
+            together = ','.join(BookingCategory.objects.filter(students=True, participants__gt=0).values_list('key', flat=True))
+            for name in ('title', 'participants'):
+                self.fields[name].widget.attrs['data-for'] = f'category:{together}'
         if self.student or self.instance.pk:
             del self.fields['repeat_until']
 
@@ -163,6 +168,29 @@ class BookingForm(forms.ModelForm):
         for copy in copies:
             copy.participants.set(booking.participants.all())
         return booking
+
+
+class CancelForm(forms.Form):
+    """Calling off one date, with its make-up date if there is one and a word to those taking part."""
+
+    note = forms.CharField(label='Nachricht', required=False, widget=forms.TextInput(attrs={'placeholder': 'freiwillig, z. B. wegen Krankheit'}))
+    day = DayField(label='Nachholtermin', required=False)
+    begin = ClockField(label='Von', required=False)
+    until = ClockField(label='Bis', required=False)
+    room = RoomField(label='Raum', queryset=None, required=False, empty_label='derselbe Raum')
+
+    def __init__(self, *args, person, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['room'].queryset = bookable(person)
+
+    def clean(self):
+        data = super().clean()
+        given = [data.get(name) for name in ('day', 'begin', 'until')]
+        if any(given) and not all(given):
+            raise forms.ValidationError('Für den Nachholtermin bitte Tag, Von und Bis angeben.')
+        if all(given) and data['until'] <= data['begin']:
+            raise forms.ValidationError('„Bis“ muss nach „Von“ liegen.')
+        return data
 
 
 class FindForm(forms.Form):

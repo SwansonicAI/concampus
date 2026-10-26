@@ -28,6 +28,7 @@
         <div>
           <b>{{ user }}</b>
           <small class="muted">{{ user.email }}</small>
+          <a href="{% url 'account' %}">Mein Konto</a>
           {% for app, title in nav %}{% if app.label == 'setup' %}<a href="{% url app.url %}">{{ title }}</a>{% endif %}{% endfor %}
           {% if user.is_superuser %}<a href="{% url 'admin:index' %}">Datenpflege</a>{% endif %}
           <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link">Abmelden</button></form>

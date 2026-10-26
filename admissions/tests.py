@@ -24,7 +24,7 @@ def upload(name, kind='video'):
 class DecisionTest(Seeded):
     def test_decide_accept_enrol(self):
         asa = self.login('asa')
-        study = Study.objects.filter(status='applied').exclude(person__username='bewerbung').first()
+        study = Study.objects.filter(status='applied', participations=None).exclude(person__username='bewerbung').first()  # no stages to wait for
         asa.post(f'/aufnahme/bewerbung/{study.pk}/entscheidung/', {'status': 'admitted'})
         self.assertTrue(Message.objects.filter(person=study.person, subject='Bescheid über die Eignungsprüfung: Studienplatzangebot').exists())
         applicant = Client()

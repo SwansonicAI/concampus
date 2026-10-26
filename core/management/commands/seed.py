@@ -7,10 +7,12 @@ rules. Every person is invented.
 """
 import random
 import re
+import unicodedata
 import uuid
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from typing import NamedTuple
 
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Permission
@@ -37,13 +39,6 @@ FEES = {  # published Semesterbeiträge from WiSe 2023/24; earlier ones approxim
     'SoSe 2022': Decimal('205.30'), 'WiSe 2022/23': Decimal('211.30'), 'SoSe 2023': Decimal('219.80'), 'WiSe 2023/24': Decimal('230.30'),
     'SoSe 2024': Decimal('223.80'), 'WiSe 2024/25': Decimal('279.40'), 'SoSe 2025': Decimal('279.40'), 'WiSe 2025/26': Decimal('313.30'),
     'SoSe 2026': Decimal('323.30'), 'WiSe 2026/27': FEE,
-}
-FEMALE = {
-    'Anna', 'Clara', 'Lea', 'Nora', 'Hannah', 'Ida', 'Greta', 'Svea', 'Maja', 'Frieda', 'Marlene', 'Mei Lin', 'Xinyi', 'Jiayi', 'Seo-yeon', 'Ha-eun',
-    'Aiko', 'Haruka', 'Yuki', 'Zofia', 'Marta', 'Aleksandra', 'Chiara', 'Valentina', 'Giulia', 'Sofiia', 'Anastasiia', 'Kateryna',
-    'Mia', 'Emma', 'Sophie', 'Lina', 'Johanna', 'Charlotte', 'Helena', 'Mathilda', 'Paula', 'Luise', 'Ruoxi', 'Shuang', 'Qing', 'Ji-woo', 'Soo-ah', 'Mio',
-    'Julia', 'Katarzyna', 'Francesca', 'Sofia', 'Iryna', 'Yuliia', 'Lena', 'Magdalena', 'Theresa', 'Camille', 'Léa', 'Manon', 'Lucía', 'Carmen', 'Elena',
-    'Emily', 'Sarah', 'Olivia',
 }
 MIDDLE = {'w': ['Sophie', 'Marie', 'Charlotte', 'Luise', 'Elisabeth'], 'm': ['Maximilian', 'Alexander', 'Johannes', 'Friedrich', 'Wilhelm']}
 DEMO_VIDEO = (  # stand-in for every audition video: a real performance under CC BY 3.0, via Wikimedia Commons
@@ -505,23 +500,153 @@ LECTURERS = {  # course title (or its start) → teacher key
     'Musikpädagogik: Forschungskolloquium': 'neumann', 'Liturgik': 'wiegand', 'Gregorianik': 'wiegand', 'Hymnologie': 'wiegand', 'Liturgisches Orgelspiel': 'sander',
     'Orgelexkursion': 'sander', 'Orchesterleitung': 'ferreira', 'Doktorandenkolloquium': 'voss', 'Proben und Aufführungen': 'falk',
 }
-ORIGINS = [  # weight, first names, last names, nationality, places
-    (13, ['Anna', 'Lukas', 'Clara', 'Jakob', 'Paul', 'Lea', 'Nora', 'Felix', 'Hannah', 'Emil', 'Ida', 'Leon', 'Greta', 'Moritz', 'Svea', 'Oskar', 'Maja', 'Frieda', 'Vincent', 'Marlene',
-           'Mia', 'Ben', 'Emma', 'Finn', 'Sophie', 'Elias', 'Lina', 'Noah', 'Johanna', 'Theo', 'Charlotte', 'Anton', 'Helena', 'Karl', 'Mathilda', 'Julius', 'Paula', 'Henri', 'Luise', 'Jonathan'],
-     ['Müller', 'Schmidt', 'Fischer', 'Hoffmann', 'Lehmann', 'Wagner', 'Richter', 'Klein', 'Wolf', 'Schröder', 'Schwarz', 'Zimmermann', 'Braun', 'Hartmann', 'Lange', 'Werner', 'Krause', 'Meier', 'Becker', 'Schulz', 'Koch', 'Bauer', 'Schäfer', 'Schmitt', 'Meyer', 'Walter', 'Graf', 'Kaiser', 'Sommer', 'Ernst', 'Kühn',
-     'Nagel', 'Stein', 'Jäger', 'Otto', 'Simon', 'Berger', 'Frank', 'Thiele', 'Sauerbrey', 'Reinhardt', 'Ullrich', 'Kretschmer', 'Köhler', 'Herrmann', 'König', 'Fuchs', 'Peters', 'Möller', 'Jung', 'Hahn', 'Vogel', 'Friedrich', 'Günther', 'Winkler', 'Lorenz', 'Baumann', 'Franke', 'Schuster', 'Ludwig', 'Böhm', 'Winter', 'Seidel', 'Haas', 'Dietrich', 'Ziegler', 'Kuhn', 'Pohl', 'Busch', 'Bergmann', 'Voigt', 'Arnold', 'Pfeiffer'],
-     '000', ['Weimar', 'Erfurt', 'Jena', 'Leipzig', 'Dresden', 'Berlin', 'Hamburg', 'München', 'Köln', 'Halle (Saale)', 'Gotha', 'Kassel', 'Nürnberg']),
-    (2.5, ['Mei Lin', 'Yuxuan', 'Hao', 'Xinyi', 'Zihan', 'Jiayi', 'Yiming', 'Ruoxi', 'Haoran', 'Shuang', 'Wenjie', 'Qing'],
-     ['Chen', 'Wang', 'Li', 'Zhang', 'Liu', 'Zhao', 'Huang', 'Zhou', 'Wu', 'Xu', 'Sun', 'Ma'], '479', ['Shanghai', 'Peking', 'Chengdu', 'Wuhan']),
-    (2, ['Hyun-woo', 'Ji-ho', 'Seo-yeon', 'Min-jun', 'Ha-eun', 'Ji-woo', 'Soo-ah', 'Do-yun'], ['Park', 'Kim', 'Lee', 'Choi', 'Yoon', 'Jung', 'Kang', 'Cho'], '467', ['Seoul', 'Busan', 'Daegu']),
-    (1, ['Yuki', 'Aiko', 'Kaito', 'Haruka', 'Ren', 'Mio', 'Riku'], ['Tanaka', 'Sato', 'Suzuki', 'Takahashi', 'Ito', 'Yamamoto', 'Nakamura', 'Kobayashi'], '442', ['Tokio', 'Osaka', 'Nagoya']),
-    (1, ['Zofia', 'Tomasz', 'Marta', 'Jakub', 'Aleksandra', 'Julia', 'Piotr', 'Katarzyna'], ['Nowak', 'Mazur', 'Krawczyk', 'Kaczmarek', 'Wójcik'], '152', ['Krakau', 'Warschau', 'Breslau']),
-    (1, ['Chiara', 'Matteo', 'Valentina', 'Lorenzo', 'Giulia', 'Francesca', 'Alessandro', 'Sofia'], ['Rossi', 'Bianchi', 'Romano', 'Ricci', 'Marino', 'Colombo', 'Greco', 'Conti'], '137', ['Mailand', 'Rom', 'Turin', 'Bologna']),
-    (1, ['Daniil', 'Sofiia', 'Anastasiia', 'Artem', 'Kateryna', 'Oleksandr', 'Iryna', 'Yuliia'], ['Shevchenko', 'Bondarenko', 'Kovalenko', 'Tkachenko', 'Melnyk', 'Boyko', 'Kravchenko'], '166', ['Kyjiw', 'Lwiw', 'Odesa']),
-    (1, ['Lena', 'Florian', 'Magdalena', 'Sebastian', 'Theresa', 'Lorenz'], ['Gruber', 'Huber', 'Pichler', 'Steiner', 'Moser', 'Hofer'], '151', ['Wien', 'Graz', 'Salzburg', 'Linz']),
-    (0.5, ['Camille', 'Louis', 'Léa', 'Hugo', 'Manon', 'Gabriel'], ['Moreau', 'Laurent', 'Lefebvre', 'Garnier', 'Bernard'], '129', ['Paris', 'Lyon', 'Straßburg']),
-    (0.5, ['Lucía', 'Pablo', 'Carmen', 'Diego', 'Elena', 'Javier'], ['García', 'Fernández', 'López', 'Martínez', 'Sánchez'], '161', ['Madrid', 'Barcelona', 'Valencia']),
-    (0.5, ['Emily', 'Michael', 'Sarah', 'Daniel', 'Olivia', 'Ethan'], ['Smith', 'Johnson', 'Miller', 'Davis', 'Wilson'], '368', ['New York', 'Boston', 'Chicago']),
+class Origin(NamedTuple):
+    """Where applicants come from: how many, their names, and how their home address, mail and phone look."""
+
+    weight: float
+    women: list
+    men: list
+    lasts: list
+    nationality: str
+    places: dict  # place → postcode, abroad none
+    streets: list
+    mail: list  # the usual private mail providers
+    dial: str
+
+
+def syllables(firsts, seconds, joint=''):
+    """Given names built as they are in China and Korea: 'Xin' + 'yi' → 'Xinyi', 'Seo' + 'yeon' → 'Seo-yeon'."""
+    return [f'{a}{joint}{b}' for a in firsts for b in seconds]
+
+
+ORIGINS = [  # pools wide enough that namesakes stay as rare as they are; no student shares a surname with the staff
+    Origin(
+        13,
+        ['Anna', 'Clara', 'Lea', 'Nora', 'Hannah', 'Ida', 'Greta', 'Svea', 'Maja', 'Frieda', 'Marlene', 'Mia', 'Emma', 'Sophie', 'Lina', 'Johanna',
+         'Charlotte', 'Helena', 'Mathilda', 'Paula', 'Luise', 'Lena', 'Marie', 'Emilia', 'Ella', 'Leonie', 'Amelie', 'Lotta', 'Romy', 'Pia', 'Jule',
+         'Carla', 'Antonia', 'Elisa', 'Mila', 'Theresa', 'Juna', 'Isabel', 'Rosa', 'Alma', 'Katharina', 'Laura', 'Sarah', 'Julia', 'Franziska', 'Miriam',
+         'Judith', 'Vera', 'Annika', 'Lisa', 'Merle', 'Fenja', 'Hedda', 'Thea', 'Edda', 'Wiebke', 'Inga', 'Selma', 'Linnea', 'Ronja'],
+        ['Lukas', 'Jakob', 'Paul', 'Felix', 'Emil', 'Leon', 'Moritz', 'Oskar', 'Vincent', 'Ben', 'Finn', 'Elias', 'Noah', 'Theo', 'Anton', 'Karl',
+         'Julius', 'Henri', 'Jonathan', 'Jonas', 'Maximilian', 'Alexander', 'Johannes', 'Friedrich', 'Konstantin', 'Leonard', 'Matthias', 'Tobias',
+         'Simon', 'David', 'Benedikt', 'Valentin', 'Niklas', 'Tim', 'Jan', 'Philipp', 'Florian', 'Carl', 'Arthur', 'Mats', 'Ole', 'Hannes', 'Till',
+         'Lennart', 'Fabian', 'Gustav', 'Richard', 'Ludwig', 'Kilian', 'Malte', 'Jannik', 'Erik', 'Hendrik', 'Levi', 'Linus', 'Mattis', 'Bruno',
+         'Raphael', 'Samuel', 'Adrian'],
+        ['Müller', 'Schmidt', 'Fischer', 'Hoffmann', 'Lehmann', 'Wagner', 'Richter', 'Klein', 'Wolf', 'Schröder', 'Schwarz', 'Zimmermann', 'Braun',
+         'Hartmann', 'Lange', 'Werner', 'Krause', 'Meier', 'Becker', 'Schulz', 'Koch', 'Bauer', 'Schäfer', 'Schmitt', 'Meyer', 'Walter', 'Graf',
+         'Kaiser', 'Sommer', 'Ernst', 'Kühn', 'Nagel', 'Stein', 'Jäger', 'Otto', 'Simon', 'Berger', 'Frank', 'Thiele', 'Sauerbrey', 'Reinhardt',
+         'Ullrich', 'Kretschmer', 'Köhler', 'Herrmann', 'König', 'Fuchs', 'Peters', 'Möller', 'Jung', 'Hahn', 'Vogel', 'Friedrich', 'Günther',
+         'Winkler', 'Lorenz', 'Baumann', 'Franke', 'Schuster', 'Ludwig', 'Böhm', 'Winter', 'Seidel', 'Haas', 'Dietrich', 'Ziegler', 'Kuhn', 'Pohl',
+         'Busch', 'Bergmann', 'Voigt', 'Arnold', 'Pfeiffer', 'Schneider', 'Martin', 'Schumacher', 'Horn', 'Beck', 'Schubert', 'Heinrich',
+         'Wolff', 'Kraus', 'Böttcher', 'Kirchner', 'Marx', 'Fröhlich', 'Schreiber', 'Mayer', 'Haase', 'Schulze', 'Kraft', 'Jahn', 'Brückner',
+         'Wenzel', 'Ritter', 'Gärtner', 'Thomas', 'Engelhardt', 'Pietsch', 'Seifert', 'Ulbrich', 'Fritzsche', 'Möbius', 'Rößler', 'Heinze', 'Krebs',
+         'Hesse', 'Gebhardt', 'Kunze', 'Bach', 'Reuter', 'Teichmann', 'Ackermann', 'Weise', 'Blum', 'Hentschel', 'Göbel', 'Stolz', 'Kranz', 'Nowotny',
+         'Opitz', 'Hilbert', 'Thieme', 'Bauch', 'Wirth', 'Dittrich', 'Kühne', 'Zeller', 'Rudolph'],
+        '000', {'Weimar': '99423', 'Erfurt': '99084', 'Jena': '07743', 'Leipzig': '04109', 'Dresden': '01067', 'Berlin': '10115', 'Hamburg': '20095',
+                'München': '80331', 'Köln': '50667', 'Halle (Saale)': '06108', 'Gotha': '99867', 'Kassel': '34117', 'Nürnberg': '90402'},
+        ['Goethestraße', 'Schillerstraße', 'Bahnhofstraße', 'Lindenallee', 'Am Markt', 'Bergstraße', 'Gartenstraße', 'Kirchgasse', 'Ahornweg'],
+        ['gmx.de', 'web.de', 'gmail.com', 't-online.de', 'posteo.de'], '+49',
+    ),
+    Origin(
+        2.5,
+        ['Mei Lin'] + syllables(['Mei', 'Xin', 'Jia', 'Ruo', 'Yu', 'Shu', 'Hui', 'Ying', 'Xiao', 'Yue', 'Jing', 'Lan'], ['lin', 'yi', 'xi', 'han', 'ting', 'qi', 'yan', 'wen', 'ning', 'xuan']),
+        syllables(['Hao', 'Zi', 'Yi', 'Wen', 'Jun', 'Ming', 'Tian', 'Kai', 'Lei', 'Zhi', 'Bo', 'Jia'], ['ran', 'han', 'ming', 'jie', 'yu', 'hao', 'xuan', 'feng', 'long', 'yang']),
+        ['Chen', 'Wang', 'Li', 'Zhang', 'Liu', 'Zhao', 'Huang', 'Zhou', 'Wu', 'Xu', 'Sun', 'Ma', 'Yang', 'Lin', 'He', 'Gao', 'Luo', 'Zheng', 'Guo', 'Hu'],
+        '479', dict.fromkeys(['Shanghai', 'Peking', 'Chengdu', 'Wuhan', 'Hangzhou', 'Xi’an'], ''), ['Renmin Road', 'Jiefang Road', 'Zhongshan Road'],
+        ['qq.com', '163.com', 'gmail.com'], '+86',
+    ),
+    Origin(
+        2,
+        syllables(['Ji', 'Seo', 'Ha', 'Soo', 'Min', 'Ye', 'Hye', 'Yu', 'Chae', 'Da'], ['yeon', 'eun', 'woo', 'ah', 'jin', 'rin', 'won', 'bin'], '-'),
+        syllables(['Min', 'Do', 'Hyun', 'Ji', 'Jun', 'Seung', 'Tae', 'Woo', 'Sung', 'Jae'], ['jun', 'yun', 'woo', 'ho', 'min', 'hyun', 'seok', 'won'], '-'),
+        ['Kim', 'Lee', 'Park', 'Choi', 'Jung', 'Kang', 'Cho', 'Yoon', 'Jang', 'Lim', 'Han', 'Oh', 'Seo', 'Shin', 'Kwon', 'Song'],
+        '467', dict.fromkeys(['Seoul', 'Busan', 'Daegu', 'Incheon'], ''), ['Sejong-daero', 'Teheran-ro', 'Gangnam-daero'], ['naver.com', 'gmail.com'], '+82',
+    ),
+    Origin(
+        1,
+        ['Yuki', 'Aiko', 'Haruka', 'Mio', 'Sakura', 'Hina', 'Yui', 'Rin', 'Mei', 'Aoi', 'Yuna', 'Saki', 'Nanami', 'Misaki', 'Ayaka', 'Kana', 'Emi',
+         'Natsuki', 'Riko', 'Honoka', 'Yuka', 'Asuka', 'Chihiro', 'Miyu', 'Kaede', 'Mana', 'Nao', 'Sora', 'Akari', 'Momoka'],
+        ['Kaito', 'Ren', 'Riku', 'Haruto', 'Sota', 'Yuto', 'Hiroto', 'Takumi', 'Daiki', 'Kenta', 'Shota', 'Yuma', 'Kazuki', 'Ryota', 'Naoki', 'Tomoya',
+         'Yusuke', 'Kosuke', 'Takeshi', 'Hayato', 'Sho', 'Taiga', 'Ryo', 'Itsuki', 'Kota', 'Shun', 'Masato', 'Akira', 'Koki', 'Haruki'],
+        ['Tanaka', 'Sato', 'Suzuki', 'Takahashi', 'Ito', 'Yamamoto', 'Nakamura', 'Kobayashi', 'Kato', 'Yoshida', 'Yamada', 'Sasaki', 'Yamaguchi',
+         'Matsumoto', 'Inoue', 'Kimura', 'Hayashi', 'Shimizu', 'Yamazaki', 'Mori', 'Abe', 'Ikeda', 'Hashimoto', 'Ishikawa', 'Ogawa', 'Okada',
+         'Hasegawa', 'Fujita', 'Goto', 'Kondo'],
+        '442', dict.fromkeys(['Tokio', 'Osaka', 'Nagoya', 'Kyoto'], ''), ['Chuo-dori', 'Meiji-dori', 'Omotesando'], ['gmail.com', 'yahoo.co.jp'], '+81',
+    ),
+    Origin(
+        1,
+        ['Zofia', 'Marta', 'Aleksandra', 'Julia', 'Katarzyna', 'Zuzanna', 'Maja', 'Hanna', 'Natalia', 'Agnieszka', 'Joanna', 'Magdalena', 'Karolina',
+         'Weronika', 'Alicja', 'Anna', 'Ewa', 'Barbara', 'Monika', 'Paulina', 'Dominika', 'Justyna', 'Oliwia', 'Amelia', 'Gabriela'],
+        ['Tomasz', 'Jakub', 'Piotr', 'Michał', 'Paweł', 'Krzysztof', 'Mateusz', 'Kacper', 'Szymon', 'Bartosz', 'Wojciech', 'Adam', 'Łukasz', 'Marcin',
+         'Kamil', 'Filip', 'Antoni', 'Jan', 'Stanisław', 'Maciej', 'Dawid', 'Igor', 'Wiktor', 'Mikołaj', 'Krystian'],
+        ['Nowak', 'Wójcik', 'Kowalczyk', 'Woźniak', 'Mazur', 'Krawczyk', 'Kaczmarek', 'Zając', 'Król', 'Wieczorek', 'Wróbel', 'Stępień', 'Adamczyk',
+         'Dudek', 'Pawlak', 'Walczak', 'Sikora', 'Baran', 'Michalak', 'Szewczyk', 'Pietrzak', 'Marciniak', 'Duda', 'Włodarczyk', 'Wilk', 'Lis',
+         'Kubiak', 'Mazurek', 'Kołodziej', 'Sobczak'],
+        '152', dict.fromkeys(['Krakau', 'Warschau', 'Breslau', 'Posen', 'Danzig'], ''), ['ul. Długa', 'ul. Floriańska', 'ul. Mickiewicza'],
+        ['wp.pl', 'gmail.com', 'onet.pl'], '+48',
+    ),
+    Origin(
+        1,
+        ['Chiara', 'Valentina', 'Giulia', 'Francesca', 'Sofia', 'Martina', 'Alice', 'Aurora', 'Giorgia', 'Elisa', 'Sara', 'Federica', 'Beatrice',
+         'Ginevra', 'Elena', 'Silvia', 'Laura', 'Alessia', 'Ilaria', 'Camilla', 'Arianna', 'Benedetta', 'Caterina', 'Margherita', 'Noemi'],
+        ['Matteo', 'Lorenzo', 'Alessandro', 'Leonardo', 'Francesco', 'Andrea', 'Riccardo', 'Tommaso', 'Gabriele', 'Davide', 'Federico', 'Marco',
+         'Luca', 'Giovanni', 'Pietro', 'Simone', 'Edoardo', 'Filippo', 'Nicolò', 'Stefano', 'Emanuele', 'Giacomo', 'Michele', 'Daniele', 'Paolo'],
+        ['Rossi', 'Bianchi', 'Romano', 'Ricci', 'Marino', 'Colombo', 'Greco', 'Conti', 'Russo', 'Ferrari', 'Esposito', 'Gallo', 'Costa', 'Fontana',
+         'Rizzo', 'Moretti', 'Barbieri', 'Lombardi', 'Giordano', 'Mancini', 'Rinaldi', 'Caruso', 'Ferrara', 'Galli', 'Martini', 'Leone', 'Longo',
+         'Gentile', 'Martinelli', 'Vitale', 'Serra', 'Coppola', 'De Luca', 'Bruno', 'Villa'],
+        '137', dict.fromkeys(['Mailand', 'Rom', 'Turin', 'Bologna', 'Florenz'], ''), ['Via Roma', 'Via Garibaldi', 'Corso Italia'], ['gmail.com', 'libero.it'], '+39',
+    ),
+    Origin(
+        1,
+        ['Sofiia', 'Anastasiia', 'Kateryna', 'Iryna', 'Yuliia', 'Oksana', 'Olena', 'Daria', 'Viktoriia', 'Mariia', 'Anna', 'Alina', 'Khrystyna',
+         'Tetiana', 'Nataliia', 'Yana', 'Polina', 'Valeriia', 'Diana', 'Solomiia'],
+        ['Daniil', 'Artem', 'Oleksandr', 'Andrii', 'Dmytro', 'Maksym', 'Mykola', 'Bohdan', 'Ivan', 'Taras', 'Yaroslav', 'Volodymyr', 'Oleh', 'Serhii',
+         'Vladyslav', 'Denys', 'Roman', 'Yurii', 'Nazar', 'Mykhailo'],
+        ['Shevchenko', 'Bondarenko', 'Kovalenko', 'Tkachenko', 'Kravchenko', 'Boyko', 'Melnyk', 'Oliinyk', 'Shevchuk', 'Polishchuk', 'Kovalchuk',
+         'Bondar', 'Tkachuk', 'Moroz', 'Lysenko', 'Rudenko', 'Savchenko', 'Petrenko', 'Klymenko', 'Marchenko', 'Pavlenko', 'Ivanenko', 'Kuzmenko',
+         'Ponomarenko', 'Kharchenko', 'Levchenko', 'Karpenko', 'Vasylenko', 'Yurchenko', 'Honcharenko'],
+        '166', dict.fromkeys(['Kyjiw', 'Lwiw', 'Odesa', 'Charkiw'], ''), ['vul. Khreshchatyk', 'vul. Shevchenka', 'vul. Franka'], ['gmail.com', 'ukr.net'], '+380',
+    ),
+    Origin(
+        1,
+        ['Lena', 'Magdalena', 'Theresa', 'Katharina', 'Anna', 'Laura', 'Sarah', 'Julia', 'Hannah', 'Valentina', 'Elena', 'Viktoria', 'Johanna',
+         'Marie', 'Leonie', 'Sophie', 'Teresa', 'Elisabeth', 'Barbara', 'Veronika'],
+        ['Florian', 'Sebastian', 'Lorenz', 'Maximilian', 'Tobias', 'Lukas', 'David', 'Simon', 'Jakob', 'Matthias', 'Stefan', 'Michael', 'Alexander',
+         'Fabian', 'Philipp', 'Raphael', 'Valentin', 'Benedikt', 'Clemens', 'Dominik'],
+        ['Gruber', 'Huber', 'Pichler', 'Steiner', 'Moser', 'Hofer', 'Bauer', 'Wagner', 'Mayer', 'Berger', 'Leitner', 'Fuchs', 'Eder', 'Fischer',
+         'Schwarz', 'Maier', 'Schmid', 'Winkler', 'Wimmer', 'Egger', 'Reiter', 'Lang', 'Brunner', 'Haas', 'Wallner', 'Aigner', 'Lechner',
+         'Baumgartner', 'Ebner', 'Holzer', 'Strasser', 'Lehner', 'Auer', 'Riegler', 'Pölzl'],
+        '151', {'Wien': '1070', 'Graz': '8010', 'Salzburg': '5020', 'Linz': '4020', 'Innsbruck': '6020'},
+        ['Hauptstraße', 'Kirchengasse', 'Mariahilfer Straße', 'Lindengasse'], ['gmx.at', 'gmail.com'], '+43',
+    ),
+    Origin(
+        0.5,
+        ['Camille', 'Léa', 'Manon', 'Chloé', 'Inès', 'Jade', 'Louise', 'Alice', 'Juliette', 'Clara', 'Margaux', 'Pauline', 'Mathilde', 'Élise', 'Anaïs'],
+        ['Louis', 'Hugo', 'Gabriel', 'Arthur', 'Jules', 'Lucas', 'Raphaël', 'Théo', 'Antoine', 'Paul', 'Victor', 'Maxime', 'Baptiste', 'Étienne', 'Mathis'],
+        ['Moreau', 'Laurent', 'Lefebvre', 'Garnier', 'Bernard', 'Durand', 'Leroy', 'Petit', 'Michel', 'Roux', 'Bertrand', 'Fontaine', 'Rousseau',
+         'Vincent', 'Faure', 'André', 'Mercier', 'Blanc', 'Guérin', 'Girard', 'Bonnet', 'Lambert', 'Fournier', 'Chevalier', 'Morel'],
+        '129', dict.fromkeys(['Paris', 'Lyon', 'Straßburg', 'Toulouse'], ''), ['rue de la République', 'avenue Victor Hugo', 'rue Pasteur'],
+        ['gmail.com', 'orange.fr'], '+33',
+    ),
+    Origin(
+        0.5,
+        ['Lucía', 'Carmen', 'Elena', 'Sofía', 'Paula', 'María', 'Martina', 'Julia', 'Alba', 'Irene', 'Laura', 'Marta', 'Claudia', 'Nerea', 'Ana'],
+        ['Pablo', 'Diego', 'Javier', 'Alejandro', 'Daniel', 'Hugo', 'Álvaro', 'Adrián', 'Sergio', 'Mario', 'Carlos', 'Marcos', 'Jorge', 'Iván', 'Raúl'],
+        ['García', 'Fernández', 'López', 'Martínez', 'Sánchez', 'González', 'Rodríguez', 'Pérez', 'Gómez', 'Martín', 'Jiménez', 'Ruiz', 'Hernández',
+         'Díaz', 'Moreno', 'Muñoz', 'Álvarez', 'Romero', 'Alonso', 'Gutiérrez', 'Navarro', 'Torres', 'Domínguez', 'Vázquez', 'Ramos'],
+        '161', dict.fromkeys(['Madrid', 'Barcelona', 'Valencia', 'Sevilla'], ''), ['Calle Mayor', 'Gran Vía', 'Calle de Alcalá'], ['gmail.com', 'hotmail.es'], '+34',
+    ),
+    Origin(
+        0.5,
+        ['Emily', 'Sarah', 'Olivia', 'Emma', 'Ava', 'Abigail', 'Madison', 'Grace', 'Hannah', 'Chloe', 'Natalie', 'Rachel', 'Megan', 'Lauren', 'Hailey'],
+        ['Michael', 'Daniel', 'Ethan', 'James', 'Benjamin', 'Samuel', 'Nathan', 'Andrew', 'Ryan', 'Tyler', 'Joshua', 'Christopher', 'Matthew', 'Jacob', 'William'],
+        ['Smith', 'Johnson', 'Miller', 'Davis', 'Wilson', 'Brown', 'Jones', 'Taylor', 'Anderson', 'Thomas', 'Moore', 'Jackson', 'White', 'Harris',
+         'Clark', 'Lewis', 'Robinson', 'Walker', 'Young', 'Allen', 'King', 'Wright', 'Scott', 'Green', 'Baker'],
+        '368', dict.fromkeys(['New York', 'Boston', 'Chicago', 'Philadelphia'], ''), ['Main Street', 'Maple Avenue', 'Park Avenue'], ['gmail.com', 'outlook.com'], '+1',
+    ),
+]
+WEIMAR = [  # where students live during their studies
+    'Marienstraße', 'Steubenstraße', 'Trierer Straße', 'Humboldtstraße', 'Bauhausstraße', 'Jakobstraße', 'Karl-Liebknecht-Straße', 'Schubertstraße',
+    'Coudraystraße', 'Wörthstraße', 'Erfurter Straße', 'Am Horn', 'Belvederer Allee', 'Cranachstraße', 'Gropiusstraße', 'Washingtonstraße',
 ]
 INTAKE = {  # applications a year by Hauptfach as of 2026, admission rate, share of the summer round
     ('B.Mus.', 'Streichinstrumente und Harfe'): ({'Violine': 150, 'Viola': 50, 'Violoncello': 80, 'Kontrabass': 30, 'Harfe': 18}, 0.11, 0.25),
@@ -556,9 +681,16 @@ ARTISTIC = ('Künstlerisch-praktische', 'Rezital', 'Künstlerische Präsentation
 def handle(first, last):
     """Mail-safe login name: 'Nicolás', 'Ferreira' → 'nicolas.ferreira'."""
     name = f'{first}.{last}'.lower().replace(' ', '-')
-    for a, b in [('ä', 'ae'), ('ö', 'oe'), ('ü', 'ue'), ('ß', 'ss'), ('á', 'a'), ('é', 'e'), ('í', 'i'), ('ó', 'o'), ('ś', 's'), ('ł', 'l')]:
+    for a, b in [('ä', 'ae'), ('ö', 'oe'), ('ü', 'ue'), ('ß', 'ss'), ('ł', 'l'), ('’', '')]:
         name = name.replace(a, b)
-    return name
+    return unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode()
+
+
+def phone(dial, rng):
+    """A mobile number as written in that country, German ones with their 15x, 16x and 17x prefixes."""
+    if dial == '+49':
+        return f'+49 1{rng.choice(["51", "52", "57", "60", "62", "70", "72", "76"])} {rng.randint(1000000, 99999999)}'
+    return f'{dial} {rng.randint(100, 999)} {rng.randint(1000000, 9999999)}'
 
 
 def family(subject):
@@ -628,7 +760,7 @@ class Command(BaseCommand):
             raise CommandError('The database is not empty. Use --reset to replace everything.')
         self.rng = random.Random(1872)  # the year the Hochschule was founded
         self.password = make_password(get_random_string(32))  # one nobody knows: the demo has its access code and profiles
-        self.logins = set()
+        self.logins, self.names, self.mails = set(), set(), set()
         with transaction.atomic(), history.quietly():
             self.terms()
             self.structure()
@@ -768,9 +900,10 @@ class Command(BaseCommand):
     # People
 
     def person(self, username, first, last, title='', email=None, **fields):
+        self.names.add((first, last))
         return Person.objects.create(
             username=username, first_name=first, last_name=last, title=title, password=self.password,
-            email=email or f'{handle(first, last)}@hfm-weimar.de', **fields,
+            email=email or f'{handle(first, last)}@hfm-weimar.de', phone=f'+49 3643 555 {self.rng.randint(100, 899)}', **fields,
         )
 
     def people(self):
@@ -809,13 +942,25 @@ class Command(BaseCommand):
         self.logins.add(name)
         return name
 
+    def draw(self, origin, gender, first=None, last=None):
+        """A name from where someone comes from, a taken one drawn again: namesakes stay as rare as they are."""
+        for _ in range(30):
+            name = first or self.rng.choice(origin.women if gender == 'w' else origin.men), last or self.rng.choice(origin.lasts)
+            if name not in self.names:
+                break
+        self.names.add(name)
+        return name
+
     def candidate(self, year, age, origin=None, first=None, last=None, username=None):
-        """An unsaved person, `age` years old in `year`, named and placed by where they come from."""
+        """An unsaved person, `age` years old in `year`, named and placed by where they come from; reached in Weimar, as
+        those who study here are (private() for those who never did)."""
         rng = self.rng
-        _, firsts, lasts, nationality, places = origin or rng.choices(ORIGINS, weights=[o[0] for o in ORIGINS])[0]
-        first, last = first or rng.choice(firsts), last or rng.choice(lasts)
+        origin = origin or rng.choices(ORIGINS, weights=[o.weight for o in ORIGINS])[0]
+        gender = ('w' if first in origin.women else 'm') if first else 'w' if rng.random() < 0.55 else 'm'
+        first, last = self.draw(origin, gender, first, last)
+        nationality, places = origin.nationality, list(origin.places)
         name = username or self.login(first, last)
-        gender = 'd' if rng.random() < 0.004 else 'w' if first in FEMALE else 'm'
+        gender = 'd' if rng.random() < 0.004 else gender
         born = date(year - age, rng.randint(1, 12), rng.randint(1, 28))
         german = nationality == '000'
         talent = german and age < 19 and rng.random() < 0.5  # admitted for artistic talent, before the Abitur
@@ -824,16 +969,28 @@ class Command(BaseCommand):
         person = Person(
             username=name, first_name=first, last_name=last, password=self.password, email=f'{name}@stud.hfm-weimar.de', gender=gender,
             given_names=f'{first} {rng.choice(MIDDLE[gender])}' if german and gender in MIDDLE and rng.random() < 0.3 else '',
-            birth_name=rng.choice(lasts) if age > 24 and gender == 'w' and rng.random() < 0.3 else '',
+            birth_name=rng.choice(origin.lasts) if age > 24 and gender == 'w' and rng.random() < 0.3 else '',
             birth_date=born, birth_place=rng.choice(places), nationality=nationality,
             second_nationality='000' if not german and rng.random() < 0.15 else '', residence='16055',
             entrance='' if at_school else '33' if talent else '03' if german else '39',  # Eignungsprüfung here, Abitur, or a school abroad
             entrance_date=None if at_school else date(year, 2, 20) if talent else school,
             entrance_region='' if at_school else '16055' if talent else KREISE[rng.choice(places)] if german else '99' + nationality,
-            address=f'{rng.choice(["Marienstraße", "Steubenstraße", "Trierer Straße", "Humboldtstraße", "Bauhausstraße"])} {rng.randint(1, 60)}\n99423 Weimar',
+            address=f'{rng.choice(WEIMAR)} {rng.randint(1, 60)}\n{rng.choice(["99423", "99425"])} Weimar', phone=phone('+49', rng),
         )
         person.home = KREISE[person.birth_place] if german else '99' + nationality
+        person.origin_ = origin
         return person
+
+    def private(self, person):
+        """Someone who applied and never studied here, reached at home: their own mail, address and phone."""
+        rng, origin = self.rng, person.origin_
+        place = person.birth_place if person.birth_place in origin.places else rng.choice(list(origin.places))
+        lines = [f'{rng.choice(origin.streets)} {rng.randint(1, 120)}', f'{origin.places[place]} {place}'.strip()]
+        person.address = '\n'.join(lines + ([] if person.nationality == '000' else [person.get_nationality_display()]))
+        while (mail := f'{handle(person.first_name, person.last_name)}{rng.choice(["", f"{person.birth_date:%y}", str(rng.randint(1, 99))])}@{rng.choice(origin.mail)}') in self.mails:
+            pass
+        self.mails.add(mail)
+        person.email, person.phone, person.residence = mail, phone(origin.dial, rng), ''
 
     def newcomer(self, username=None, first=None, last=None, origin=None):
         person = self.candidate(2026, self.rng.randint(19, 26), origin, first, last, username)
@@ -852,7 +1009,7 @@ class Command(BaseCommand):
         """Every application since the first term, and the students they brought. Whoever studies now gets the full record
         (teaching() adds it); the past keeps what the statistics need: who applied, was admitted, graduated or left."""
         rng = self.rng
-        chen = next(o for o in ORIGINS if o[3] == '479')
+        chen = next(o for o in ORIGINS if o.nationality == '479')
         church = self.programs[('Diplom', 'Kirchenmusik A')]
         self.demo, organist = self.candidate(2024, 20, chen, 'Mei Lin', 'Chen', 'student'), self.candidate(2023, 20)
         self.applicant = self.candidate(2027, 19, ORIGINS[0], 'Jonas', 'Becker', 'bewerbung')
@@ -907,16 +1064,19 @@ class Command(BaseCommand):
                 for subject, per_year in subjects.items() if not (summer and subject in WINTER_ONLY)
                 for _ in range(round(per_year * (sose if summer else 1 - sose) * back * rng.gauss(1, 0.12)))
             ]
-            applied, by_subject, accepted = [], defaultdict(set), set()
+            applied, by_subject, accepted, count = [], defaultdict(set), set(), Counter()
             for program, subject in rng.sample(wanted, len(wanted)):
-                level = program.degree in POSTGRADUATE
-                others = [p for p, l in applied[-30:] if l == level and id(p) not in by_subject[subject]]  # some apply for two places
+                level, kind = program.degree in POSTGRADUATE, family(subject)
+                others = [  # some apply for a second place, on the same instrument or one close to it
+                    p for p, l, k in applied[-30:] if l == level and k == kind and id(p) not in by_subject[subject] and count[id(p)] < 2
+                ]
                 if others and rng.random() < 0.12:
                     person = rng.choice(others)
                 else:
                     person = self.candidate(term.start.year, rng.randint(26, 34) if program.degree == 'Dr. phil.' else rng.randint(22, 28) if level else rng.randint(18, 23))
                     people.append(person)
-                applied.append((person, level))
+                applied.append((person, level, kind))
+                count[id(person)] += 1
                 by_subject[subject].add(id(person))
                 apply(person, program, subject, start, accepted)
         current = [s for s in studies if s.start_term == self.current and s.status == Study.Status.ENROLLED and s.person not in (self.demo, organist)]
@@ -948,6 +1108,10 @@ class Command(BaseCommand):
                 semesters = rng.choice([6, 8, 10])  # earlier degree elsewhere
                 person.external_terms = semesters if person.nationality == '000' else 0  # only German semesters count
                 studied_before(person, study, semesters)
+        came = {id(s.person) for s in studies if s.terms_ or s.status == Study.Status.ADMITTED}
+        for person in people:
+            if id(person) not in came:
+                self.private(person)
         Person.objects.bulk_create(people, batch_size=2000)
 
         # Hauptfach classes of at most fourteen: Lehrbeauftragte take whoever the professors cannot
@@ -991,8 +1155,8 @@ class Command(BaseCommand):
 
     def lecturer(self, institute):
         """A Lehrbeauftragte:r of an Institut."""
-        _, firsts, lasts, *_ = self.rng.choices(ORIGINS, weights=[o[0] for o in ORIGINS])[0]
-        first, last = self.rng.choice(firsts), self.rng.choice(lasts)
+        origin = self.rng.choices(ORIGINS, weights=[o.weight for o in ORIGINS])[0]
+        first, last = self.draw(origin, self.rng.choice('wm'))
         login = self.login(first, last)
         return self.person(login, first, last, email=f'{login}@hfm-weimar.de', institute=self.institutes[institute])
 

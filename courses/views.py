@@ -15,6 +15,7 @@ from django.views.decorators.http import require_POST
 
 from core import history, texts
 from core.access import kept, require
+from core.apps import plural
 from core.dates import day as understood
 from core.models import Holiday, Institute, Person, Term
 from core.text import fold, matching
@@ -24,7 +25,7 @@ from rooms.models import Booking, BookingCategory
 from rooms.views import agenda, week
 from students.models import Study
 from . import panel
-from .forms import AddForm, CourseForm, DateForm, EnsembleForm, PlanForm
+from .forms import AddForm, CourseForm, DateForm, EnsembleForm, Lessons, PlanForm
 from .models import Area, Course, Ensemble, Format, Participation, Signup
 
 TEACHING = [Course.Kind.COURSE, Course.Kind.LESSON]
@@ -133,6 +134,11 @@ def course(request, pk):
     for n, p in enumerate(rows):
         p.waiting = course.capacity is not None and n >= course.capacity
     own = [p for p in rows if p.study.person_id == person.pk]
+    upcoming = course.bookings.filter(start__gte=timezone.now())
+    if course.kind == Course.Kind.LESSON and not staffed:
+        upcoming = upcoming.filter(participants=person)  # one's own lessons, not everyone's
+    lessons = lesson_times(course) if staffed and course.kind == Course.Kind.LESSON else []
+    timetable = lessons and Lessons(initial=[row for _, row in lessons], form_kwargs={'person': person})
     return render(request, 'courses/course.html', {
         'course': course,
         'staff': staff,
@@ -144,9 +150,11 @@ def course(request, pk):
         'staffed': staffed,
         'eligible': person.studies.filter(status=Study.Status.ENROLLED, program__modules__courses=course).distinct(),
         'modules': credited(course),
-        'bookings': course.bookings.filter(start__gte=timezone.now()).select_related('room')[:6],
-        'plan': PlanForm(person=person) if staffed else None,
-        'date': DateForm(person=person) if staffed else None,
+        'bookings': upcoming.select_related('room', 'category').prefetch_related('participants')[:8],
+        'plan': PlanForm(person=person) if staffed and course.kind != Course.Kind.LESSON else None,
+        'date': DateForm(person=person, course=course) if staffed else None,
+        'lessons': timetable,
+        'lesson_rows': zip([s for s, _ in lessons], timetable or []),
         'ensembles': (course.ensembles if staffed else course.ensembles.filter(members__person=person).distinct())
         .select_related('coach', 'wish').prefetch_related('members__person', 'members__subject'),
         'grouping': EnsembleForm(course=course) if course.allocation == Course.Allocation.ENSEMBLE else None,
@@ -300,7 +308,7 @@ def date(request, pk):
     course = get_object_or_404(Course, pk=pk, kind__in=TEACHING)
     if not teaches(request.user, course):
         raise PermissionDenied
-    form = DateForm(request.POST, person=request.user)
+    form = DateForm(request.POST, person=request.user, course=course)
     if not form.is_valid():
         messages.error(request, ' '.join(e for errors in form.errors.values() for e in errors))
         return redirect(course)
@@ -316,6 +324,8 @@ def date(request, pk):
         messages.error(request, ' '.join(error.messages))
     else:
         booking.save()
+        if student := data.get('student'):
+            booking.participants.set([student])
         messages.success(request, f'Termin am {date_format(start, "j.n.Y")} in {booking.room} gebucht.')
     return redirect(course)
 
@@ -341,22 +351,92 @@ def plan(request, pk):
     if not form.is_valid():
         messages.error(request, 'Bitte Wochentag, Beginn, Dauer und Raum angeben.')
         return redirect(course)
-    term, data, series = course.term, form.cleaned_data, uuid.uuid4()
-    first = term.lectures_start + timedelta(days=(data['weekday'] - term.lectures_start.weekday()) % 7)
-    bookings, lesson, free = [], BookingCategory.system('unterricht'), Holiday.days(term.lectures_start, term.lectures_end)
-    for day in (first + timedelta(weeks=n) for n in range((term.lectures_end - first).days // 7 + 1)):
-        if day in free:
-            continue
-        start = timezone.make_aware(datetime.combine(day, data['time']))
-        bookings.append(Booking(
-            room=data['room'], start=start, end=start + timedelta(minutes=data['minutes']),
-            person=request.user, course=course, series=series, category=lesson,
-        ))
+    data = form.cleaned_data
+    bookings = weekly(course, request.user, data)
     if taken := [b for b in bookings if b.clashes().exists()]:
         messages.error(request, 'Nicht gebucht, belegt am ' + ', '.join(f'{b.start:%d.%m.}' for b in taken) + '.')
     else:
         history.saved(Booking.objects.bulk_create(bookings))
         messages.success(request, f'{len(bookings)} Termine in {data["room"]} gebucht.')
+    return redirect(course)
+
+
+def weekly(course, person, data):
+    """A weekly time (PlanForm) as unsaved bookings across what is still to come of the lecture period, the unterrichtsfreie
+    Tage left out; one series."""
+    term, series, now = course.term, uuid.uuid4(), timezone.now()
+    first = max(term.lectures_start, timezone.localdate())
+    first += timedelta(days=(data['weekday'] - first.weekday()) % 7)
+    free, lesson, found = Holiday.days(term.lectures_start, term.lectures_end), BookingCategory.system('unterricht'), []
+    for day in (first + timedelta(weeks=n) for n in range((term.lectures_end - first).days // 7 + 1)):
+        start = timezone.make_aware(datetime.combine(day, data['time']))
+        if day not in free and start > now:
+            found.append(Booking(
+                room=data['room'], start=start, end=start + timedelta(minutes=data['minutes']), person=person, course=course, series=series, category=lesson,
+            ))
+    return found
+
+
+def lesson_times(course):
+    """The class timetable of a one-to-one course: [(student, initial row of the Lessons form)], each as their next lesson
+    shows it, else in the room the course is mostly taught in."""
+    students = Person.objects.filter(studies__participations__course=course).distinct().order_by('last_name', 'first_name')
+    upcoming = course.bookings.filter(start__gte=timezone.now(), category__blocks=True).select_related('room').prefetch_related('participants')
+    nexts, rooms = {}, Counter(b.room_id for b in upcoming)
+    for b in upcoming:
+        for p in b.participants.all():
+            nexts.setdefault(p.pk, b)
+    rows = []
+    for student in students:
+        row = {'person': student.pk, 'room': rooms.most_common(1)[0][0] if rooms else None}
+        if b := nexts.get(student.pk):
+            start = timezone.localtime(b.start)
+            row.update(weekday=start.weekday(), time=start.time(), minutes=int((b.end - b.start).total_seconds() // 60), room=b.room_id)
+        rows.append((student, row))
+    return rows
+
+
+@require_POST
+def lessons(request, pk):
+    """Book the changed rows of a class timetable: each student's future lessons give way to the new weekly time, to the
+    end of the lecture period; all or none. The students hear their new time."""
+    course = get_object_or_404(Course.objects.select_related('term'), pk=pk, kind=Course.Kind.LESSON)
+    if not teaches(request.user, course):
+        raise PermissionDenied
+    rows = lesson_times(course)
+    formset = Lessons(request.POST, initial=[row for _, row in rows], form_kwargs={'person': request.user})
+    if not formset.is_valid():
+        messages.error(request, ' '.join(e for form in formset for errors in form.errors.values() for e in errors))
+        return redirect(course)
+    students, future = {s.pk: s for s, _ in rows}, course.bookings.filter(start__gte=timezone.now())
+    dropped, added = set(), []
+    for form in formset:
+        student = students.get(form.cleaned_data['person'])
+        if student and form.has_changed():
+            dropped |= set(future.filter(participants=student).values_list('pk', flat=True))
+            if form.cleaned_data['time']:
+                added += [(b, student, form.cleaned_data) for b in weekly(course, request.user, form.cleaned_data)]
+    taken = [
+        (b, s) for b, s, _ in added
+        if b.clashes().exclude(pk__in=dropped).exists() or any(o is not b and o.start < b.end and b.start < o.end for o, _, _ in added)
+    ]
+    if taken:
+        messages.error(request, 'Nicht gebucht, belegt oder überschneidend: ' + ', '.join(f'{s.name} am {timezone.localtime(b.start):%d.%m.}' for b, s in taken[:6]) + '.')
+        return redirect(course)
+    with transaction.atomic():
+        Booking.objects.filter(pk__in=dropped).delete()
+        history.saved(Booking.objects.bulk_create(b for b, _, _ in added))
+        Booking.participants.through.objects.bulk_create(Booking.participants.through(booking_id=b.pk, person_id=s.pk) for b, s, _ in added)
+    told = {}
+    for b, s, data in added:
+        told.setdefault(s, (b, data))
+    for student, (first, data) in told.items():
+        start, end = timezone.localtime(first.start), timezone.localtime(first.end)
+        texts.send(
+            'unterrichtszeit', student, course.get_absolute_url(), veranstaltung=course.title, von=request.user, raum=data['room'],
+            zeit=f'{date_format(start, "l").lower()}s {start:%H:%M}–{end:%H:%M} Uhr', ab=date_format(start, 'j.n.Y'),
+        )
+    messages.success(request, f'Unterrichtszeiten gebucht: {plural(len(told), "Person", "Personen")}, {plural(len(added), "Termin", "Termine")}.' if told else 'Nichts geändert.')
     return redirect(course)
 
 

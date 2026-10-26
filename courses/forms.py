@@ -27,17 +27,41 @@ class PlanForm(forms.Form):
         self.fields['room'].queryset = bookable(person)
 
 
+class LessonForm(PlanForm):
+    """One student's weekly lesson, a row of the class timetable; left without a time, the student has none."""
+
+    person = forms.IntegerField(widget=forms.HiddenInput)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['time'].required = self.fields['room'].required = False
+
+    def clean(self):
+        data = super().clean()
+        if bool(data.get('time')) != bool(data.get('room')):
+            raise forms.ValidationError('Bitte Beginn und Raum angeben oder beides leer lassen.')
+        return data
+
+
+Lessons = forms.formset_factory(LessonForm, extra=0)
+
+
 class DateForm(forms.Form):
-    """One date of a course, such as a day of a block seminar."""
+    """One date of a course, such as a day of a block seminar; in one-to-one lessons a make-up lesson for one student."""
 
     day = DayField(label='Tag')
     begin = ClockField(label='Von')
     until = ClockField(label='Bis')
     room = RoomField(label='Raum', queryset=None, empty_label='Bitte wählen')
 
-    def __init__(self, *args, person, **kwargs):
+    def __init__(self, *args, person, course=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['room'].queryset = bookable(person)
+        if course and course.kind == Course.Kind.LESSON:
+            self.fields['student'] = forms.ModelChoiceField(
+                label='Für', queryset=Person.objects.filter(studies__participations__course=course).distinct(), empty_label='Bitte wählen',
+            )
+            self.order_fields(['student'])
 
     def clean(self):
         data = super().clean()

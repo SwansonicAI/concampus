@@ -39,7 +39,7 @@
   {% include "core/_days.html" %}
   <ul class="todo agenda" data-panel>
     {% for b in agenda %}
-    <li><a href="{% if b.course %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}">
+    <li><a href="{% if b.course and b.person_id != user.pk %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}">
       <span class="due">{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</span>
       <span class="what">{{ b.label }}{% if b.course.kind == 'lesson' %}{% for p in b.participants.all %}{% if p != user %} <span class="muted">· {{ p }}</span>{% endif %}{% endfor %}{% endif %}</span>
       <span class="where">{{ b.room }} · {{ b.room.building }}</span>

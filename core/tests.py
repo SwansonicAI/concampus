@@ -216,7 +216,7 @@ class TextTest(Seeded):
         old = Message.objects.filter(subject='Bescheid über die Eignungsprüfung: Studienplatzangebot').first()
         before = old.body
         campus.post('/einstellungen/texte/zulassung/', {'subject': 'Ihre Zulassung', 'body': 'Willkommen, {vorname}, zum {semester}.'})
-        study = Study.objects.filter(status='applied').exclude(person__username='bewerbung').select_related('person').first()
+        study = Study.objects.filter(status='applied', participations=None).exclude(person__username='bewerbung').select_related('person').first()
         self.login('asa').post(f'/aufnahme/bewerbung/{study.pk}/entscheidung/', {'status': 'admitted'})
         letter = Message.objects.filter(person=study.person).first()
         self.assertEqual((letter.subject, letter.body), ('Ihre Zulassung', f'Willkommen, {study.person.first_name}, zum {study.start_term}.'))

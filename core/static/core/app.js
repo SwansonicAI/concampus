@@ -8,6 +8,7 @@ const fold = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
 function init(root) {
   root.querySelectorAll('.form div[id^="id_"]').forEach(list => list.querySelectorAll('input[type=checkbox]').length > 8 && filterable(list));
   root.querySelectorAll('[data-day], [data-moment]').forEach(dated);
+  root.querySelectorAll('form:has([data-for])').forEach(conditional);
   root.querySelectorAll('.lines').forEach(lineChart);
   root.querySelectorAll('table:not(.hours)').forEach(sortable);
 }
@@ -188,6 +189,19 @@ function filterable(list) {
       }
     }
   });
+}
+
+// Fields that matter only for some choices of another (data-for="category:kammermusik") show only then.
+function conditional(form) {
+  const rules = new Map();
+  form.querySelectorAll('[data-for]').forEach(input => rules.set(input.closest('form > div'), input.dataset.for));
+  for (const [group, rule] of rules) {
+    const [name, values] = rule.split(':');
+    const choice = form.elements[name];
+    const show = () => { group.hidden = !values.split(',').includes(choice.value); };
+    choice.addEventListener('change', show);
+    show();
+  }
 }
 
 // Date fields take 'morgen', 'fr', '12.11.' and say what they understood; arrow keys move a day, with Shift a week.

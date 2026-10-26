@@ -1,5 +1,6 @@
-from django.test import Client
+from datetime import timedelta
 
+from django.test import Client
 from django.utils import timezone
 
 from core.models import Holiday, Person, Term
@@ -64,3 +65,25 @@ class PlanTest(Seeded):
         days = {timezone.localtime(b.start).date() for b in course.bookings.all()}
         self.assertTrue(days)
         self.assertFalse(days & Holiday.days(term.lectures_start, term.lectures_end))  # Reformationstag and the Christmas break fall on Saturdays
+
+    def test_a_student_gets_a_new_weekly_lesson_and_hears_of_a_moved_one(self):
+        mei, course = Person.objects.get(username='student'), Course.objects.get(title='Hauptfach Violine · Klasse Wendt', term__name='WiSe 2026/27')
+        teacher = self.login('lehre')
+        rows = teacher.get(f'/lehre/{course.pk}/').context['lessons']
+        data = {'form-TOTAL_FORMS': len(rows.forms), 'form-INITIAL_FORMS': len(rows.forms)}
+        for n, form in enumerate(rows.forms):
+            row = {**form.initial, **({'weekday': 5, 'time': '20:00', 'minutes': 90} if form.initial['person'] == mei.pk else {})}
+            data |= {f'form-{n}-{name}': '' if value is None else f'{value:%H:%M}' if hasattr(value, 'hour') else value for name, value in row.items()}
+        teacher.post(f'/lehre/{course.pk}/unterrichtszeiten/', data)
+        lessons = course.bookings.filter(participants=mei, start__gte=timezone.now())
+        self.assertTrue(lessons)
+        self.assertEqual({(timezone.localtime(b.start).weekday(), f'{timezone.localtime(b.start):%H:%M}') for b in lessons}, {(5, '20:00')})
+        self.assertTrue(mei.messages.filter(subject=f'Unterrichtszeit: {course.title}').exists())
+
+        first = lessons.first()
+        r = teacher.post(f'/raeume/buchung/{first.pk}/absagen/', {'day': f'{first.start + timedelta(days=1):%d.%m.%Y}', 'begin': '20:00', 'until': '21:30'}, follow=True)
+        self.assertIn('Verlegt', flashes(r)[-1])
+        first.refresh_from_db()
+        self.assertEqual(first.category_id, 'abgesagt')
+        self.assertTrue(course.bookings.filter(participants=mei, start=first.start + timedelta(days=1)).exists())
+        self.assertTrue(mei.messages.filter(subject=f'Verlegt: {course.title}').exists())

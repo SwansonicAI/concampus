@@ -13,4 +13,5 @@ urlpatterns = [
     path('buchen/', views.booking, name='new'),
     path('buchung/<int:pk>/', views.booking, name='booking'),
     path('buchung/<int:pk>/loeschen/', views.delete, name='delete'),
+    path('buchung/<int:pk>/absagen/', views.cancel, name='cancel'),
 ]

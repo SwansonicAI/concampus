@@ -13,13 +13,14 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format, number_format
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from core import texts
 from core.access import require
 from core.apps import plural
 from core.history import tables
-from core.models import Institution, Term
+from core.models import Institution, Message, Term
 from core.text import matching
 from courses import panel
 from courses.forms import SlotForm
@@ -27,6 +28,7 @@ from courses.models import Course, Participation
 from students.models import Document, DocumentType, Study, StudyTerm
 from .forms import AcceptForm, ApplicationForm, SignupForm
 
+CARDS = 40  # per column of the board before „alle anzeigen“
 BOARD = [Study.Status.APPLIED, Study.Status.ADMITTED, Study.Status.WAITLISTED, Study.Status.REJECTED, Study.Status.ENROLLED]
 Condition = DocumentType.Condition
 DECISIONS = {Study.Status.ADMITTED: 'zulassung', Study.Status.WAITLISTED: 'nachrueckliste', Study.Status.REJECTED: 'ablehnung'}  # their Bescheide
@@ -218,14 +220,21 @@ def board(request):
     )
     for s in accepted:
         s.waiting = s.missing()
+    shown, columns = request.GET.get('alle', ''), []
+    for status in BOARD:  # long columns end in a link, so the page stays readable
+        found = [s for s in studies if s.status == status]
+        columns.append((Study.Status(status), found if status == shown else found[:CARDS], len(found)))
+    today = timezone.localdate()
     return render(request, 'admissions/board.html', {
         'term': term,
         'terms': terms,
         'subject': subject,
         'q': q,
         'subjects': sorted({s.subject for s in Study.objects.filter(start_term=term).select_related('subject')}, key=str),
-        'columns': [(Study.Status(status), [s for s in studies if s.status == status]) for status in BOARD],
+        'columns': columns,
+        'incomplete': sum(1 for s in studies if s.incomplete) if any(c.program_id and c.deadline and c.deadline >= today and not c.released for c in auditions) else 0,
         'auditions': auditions,
+        'running': any(not c.released for c in auditions),
         'vacancies': vacancies(term, request.user),
         'decidable': decidable, 'verbs': VERBS,
         'accepted': accepted,
@@ -339,19 +348,23 @@ def application(request, pk):
     if not (office or juror or study.person == person):
         raise PermissionDenied
     steps = study.stages = list(stages().filter(study=study))
+    missing = study.missing() if study.status == Study.Status.ADMITTED else []
+    accepted = study.terms.filter(term=study.start_term).first()
     return render(request, 'admissions/application.html', {
         'study': study,
         'stages': steps,
         'recommendation': verdict(steps),
+        'pending': bool(steps) and verdict(steps) is None,  # no place nor Nachrückliste before every stage has its result
+        'remind': office and (accepted and missing or study.status == Study.Status.APPLIED and uploads_open(study) and incomplete(study)),
         'show_results': office or juror,
         'checklist': checklist(study),
         'documents': study.documents.exclude(message=None),
         'decide': person.may('decide_applications', study),
         'enrol': person.may('manage_students', study),
         'history': bool(tables(person.roles)),
-        'accepted': study.terms.filter(term=study.start_term).first(),
+        'accepted': accepted,
         'decisions': VERBS.items(),
-        'missing': study.missing() if study.status == Study.Status.ADMITTED else [],
+        'missing': missing,
     })
 
 
@@ -362,6 +375,10 @@ def decide(request, pk):
     status = request.POST.get('status')
     if status not in DECISIONS:
         raise PermissionDenied
+    steps = list(stages().filter(study=study))
+    if status != Study.Status.REJECTED and steps and verdict(steps) is None:
+        messages.error(request, 'Noch nicht alle Prüfungsstufen abgeschlossen.')
+        return redirect(study.get_absolute_url())
     offer(study, status)
     messages.success(request, f'{study.person}: {study.get_status_display()}. Bescheid versandt.')
     return redirect(study.get_absolute_url())
@@ -390,6 +407,39 @@ def decide_many(request):
         skipped and f'{plural(skipped, "Bewerbung wartet", "Bewerbungen warten")} noch auf die Ergebnisse der anderen im selben Hauptfach.',
     ])))
     return redirect(f"{reverse('admissions:board')}?semester={term.pk}#entscheiden")
+
+
+@require('view_applications')
+@require_POST
+def remind(request):
+    """Ask for what is still missing: the documents of applications whose deadline is still to come, or what a place
+    taken up needs before the Immatrikulation. The ticked ones, else every incomplete application of the term; nobody
+    twice a day."""
+    studies = request.user.within(Study.objects.select_related('person', 'program', 'subject', 'start_term'), 'view_applications')
+    if picked := request.POST.getlist('study'):
+        studies = studies.filter(pk__in=picked)
+    else:
+        studies = studies.filter(start_term=request.POST.get('semester'), status=Study.Status.APPLIED)
+        if (subject := request.POST.get('fach', '')).isdigit():
+            studies = studies.filter(subject=subject)
+    types, today, sent = document_types(), timezone.localdate(), 0
+    for study in studies.prefetch_related('documents', Prefetch('participations', stages(), to_attr='stages')):
+        if study.status == Study.Status.APPLIED and uploads_open(study):
+            due = min(p.course.deadline for p in study.stages if p.course.program_id and p.course.deadline)
+            key, items, values = 'unterlagen_fehlen', incomplete(study, types), {'frist': date_format(due, 'j. F Y')}
+        elif study.status == Study.Status.ADMITTED and study.terms.filter(term=study.start_term).exists():  # the place taken up
+            key, items, values = 'immatrikulation_offen', study.missing(), {}
+        else:
+            continue
+        if not items:
+            continue
+        subject, body = study.wording(key, fehlt='\n'.join(f'– {item}' for item in items), **values)
+        if not study.person.messages.filter(subject=subject, created__date=today).exists():
+            Message.send(study.person, subject, body, reverse('admissions:mine'))
+            sent += 1
+    messages.success(request, f'{plural(sent, "Erinnerung", "Erinnerungen")} versandt.' if sent else 'Niemand zu erinnern, oder heute schon erinnert.')
+    back = request.POST.get('next', '')
+    return redirect(back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else 'admissions:board')
 
 
 @require('decide_applications')
