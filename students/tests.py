@@ -62,7 +62,7 @@ class FocusTest(Seeded):
         other = next(o for o in options if o.pk != study.advised_id)
         student = self.login('student')
         self.assertIn(f'{options[0].choice.title} wählen', student.get('/').text)
-        self.assertEqual(self.login('pruefungsamt').post(f'/studierende/{study.pk}/empfehlung/', {'advised': other.pk}).status_code, 403)
+        self.assertEqual(self.login('institut').post(f'/studierende/{study.pk}/empfehlung/', {'advised': other.pk}).status_code, 403)
         student.post(f'/studierende/{study.pk}/schwerpunkt/', {'focus': study.advised_id})
         student.post(f'/studierende/{study.pk}/schwerpunkt/', {'focus': other.pk})  # under way: only the office changes it
         study.refresh_from_db()

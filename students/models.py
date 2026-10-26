@@ -61,6 +61,7 @@ class Study(Tracked, models.Model):
     start_term = models.ForeignKey(Term, models.PROTECT, related_name='intake', verbose_name='Studienbeginn')
     status = models.CharField('Status', max_length=10, choices=Status, default=Status.APPLIED)
     since = models.DateField('Status seit', default=timezone.localdate)
+    issued = models.DateField('Zeugnis ausgestellt am', null=True, blank=True)
     teacher = models.ForeignKey(
         Person, models.SET_NULL, null=True, blank=True, related_name='class_studies',
         verbose_name='Hauptfachlehrer:in', help_text='Bis zur Zulassung der Wunsch aus der Bewerbung.',
@@ -224,6 +225,7 @@ class DocumentType(Tracked, Keyed):
     SYSTEM = {  # what the code files itself
         'notice': {'name': 'Bescheid', 'condition': Condition.NEVER},
         'abschlussarbeit': {'name': 'Abschlussarbeit', 'condition': Condition.NEVER, 'file_types': '.pdf'},
+        'anerkennung': {'name': 'Nachweis zur Anerkennung', 'condition': Condition.NEVER},
     }
     capabilities = ('run_auditions',)
 

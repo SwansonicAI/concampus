@@ -37,6 +37,7 @@ class Editor:
     new: Callable = None  # request → the unsaved record a new form starts from
     deletable: bool = True  # people are deactivated, not deleted: their records hang on them
     single: bool = False  # one record only, like the Hochschule's own data
+    adding: bool = True  # False: only some fields of records kept up elsewhere, like the exam dates of a term
     invite: bool = False  # people: its form offers to send a sign-in invitation
 
     def __post_init__(self):
@@ -53,7 +54,7 @@ class Editor:
 
     @property
     def creatable(self):
-        return bool(self.section or self.new) and not (self.single and self.model.objects.exists())
+        return self.adding and bool(self.section or self.new) and not (self.single and self.model.objects.exists())
 
     def start(self, request):
         return self.new(request) if self.new else self.model()
@@ -176,10 +177,17 @@ EDITORS = {e.key: e for e in [
     ),
     Editor(
         'semester', Term, 'Semester', 'manage_terms', 'Verwaltung',
-        fields=['name', 'start', 'end', 'lectures_start', 'lectures_end', 'exams_start', 'reregistration_start', 'deadline', 'late_deadline', 'fee'],
+        fields=['name', 'start', 'end', 'lectures_start', 'lectures_end', 'reregistration_start', 'deadline', 'late_deadline', 'fee'],
         columns=[('Semester', 'name'), ('Beginn', 'start'), ('Ende', 'end'), ('Rückmeldefrist', 'deadline'), ('Beitrag', 'fee')],
         search=['name'], words='unterrichtszeit vorlesungszeit rückmeldefrist semesterbeitrag termine',
         queryset=lambda: Term.objects.order_by('-start'),
+    ),
+    Editor(
+        'pruefungszeitraeume', Term, 'Prüfungszeiträume', 'manage_exams', 'Studium und Lehre',
+        fields=['exam_signup_start', 'exam_signup_end', 'exams_start', 'exams_end'],
+        columns=[('Semester', 'name'), ('Anmeldung ab', 'exam_signup_start'), ('bis', 'exam_signup_end'), ('Prüfungen ab', 'exams_start'), ('bis', 'exams_end')],
+        search=['name'], words='prüfungsanmeldung prüfungszeitraum prüfungswochen fristen', queryset=lambda: Term.objects.order_by('-start'),
+        adding=False, deletable=False,
     ),
     Editor(
         'unterrichtsfrei', Holiday, 'Unterrichtsfreie Tage', 'manage_terms', 'Verwaltung', fields=['name', 'first', 'last'],

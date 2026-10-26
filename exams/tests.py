@@ -104,9 +104,21 @@ class OfficeTest(Seeded):
         office = self.login('pruefungsamt')
         choices = office.get(f'/pruefungen/anerkennung/?studium={study.pk}').context['form'].fields['module'].choices
         options = next(options for _, options in choices[1:] if options[0][1] == 'Ganzes Modul')
-        office.post(f'/pruefungen/anerkennung/?studium={study.pk}', {'module': options[0][0], 'foreign': '8', 'best': '10', 'worst': '5', 'note': 'mdw Wien, SoSe 2024'})
+        office.post(f'/pruefungen/anerkennung/?studium={study.pk}', {'module': options[0][0], 'foreign': '8', 'best': '10', 'worst': '5', 'origin': '9990151', 'place': 'mdw Wien', 'taken': 'SoSe 2024', 'credits': '12'})
         recognised = Participation.objects.filter(study=study, course__kind='recognition')
         self.assertEqual((recognised.count(), set(recognised.values_list('grade', flat=True))), (len(options) - 1, {Decimal('2.2')}))
+        self.assertEqual(recognised.first().note, 'mdw Wien, Österreich, SoSe 2024, 12 ECTS')
+        self.assertTrue(study.documents.filter(kind='notice', title='Bescheid: Anerkennung').exists())
+
+    def test_the_zeugnis_once_everything_is_done_then_the_exmatrikulation(self):
+        office = self.login('pruefungsamt')
+        due = next(t for t in office.get('/').context['tasks'] if t['text'].startswith('Zeugnis ausstellen'))
+        study = Study.objects.get(pk=due['url'].rstrip('/').split('/')[-1])
+        office.post(f'/pruefungen/leistungen/{study.pk}/ausstellen/')
+        study.refresh_from_db()
+        self.assertIsNotNone(study.issued)
+        self.assertIn(f'Exmatrikulieren nach Abschluss: {study.person}', self.login('asa').get('/').content.decode())
+        self.assertEqual(self.login(study.person.username).get(f'/pruefungen/leistungen/{study.pk}/urkunde/').status_code, 200)
 
     def test_examiners_behind_with_their_marks_are_named_and_reminded_once_a_day(self):
         resit = Course.objects.get(title__contains='Wiederholung')

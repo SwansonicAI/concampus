@@ -233,8 +233,9 @@ def study(request, pk):
         'exits': EXITS, 'leaves': LEAVES,
         'exhausted': exhausted(study) if study.status == Study.Status.ENROLLED else [],
         'options': options if own else [], 'fs': fs,
-        'advising': options if (study.teacher_id == person.pk or office) and not study.focus_id else [],
-        'changes': Office.holding('manage_students'),
+        'advising': options if study.teacher_id == person.pk and not study.focus_id else [],
+        'recording': study.program.choices() if not own and study.status == Study.Status.ENROLLED and decides(person, study) else [],
+        'changes': Office.holding('decide_results', study.program),
         'recognise': study.status == Study.Status.ENROLLED and person.may('recognise', study),
         'thesis': study.status == Study.Status.ENROLLED and person.may('manage_exams', study),
         'loans': study.person.loans.filter(returned=None).select_related('instrument') if personal else [],
@@ -242,11 +243,19 @@ def study(request, pk):
     })
 
 
+def decides(person, study):
+    """Whether the person's office records a study's Schwerpunkt: the student office, or the office deciding results."""
+    return person.may('manage_students', study) or person.may('decide_results', study)
+
+
 @require_POST
 def focus(request, pk):
-    """The student's choice of Schwerpunkt, theirs to change until it begins; then changes are the student office's."""
-    study = get_object_or_404(Study, pk=pk, person=request.user, status=Study.Status.ENROLLED)
-    chosen = next((o for o in study.options() if str(o.pk) == request.POST.get('focus')), None)
+    """The Schwerpunkt: the student's choice, theirs to change until it begins; the office records or changes it any time."""
+    study = get_object_or_404(Study, pk=pk, status=Study.Status.ENROLLED)
+    office = decides(request.user, study)
+    if not (office or study.person == request.user):
+        raise PermissionDenied
+    chosen = next((o for o in (study.program.choices() if office else study.options()) if str(o.pk) == request.POST.get('focus')), None)
     if chosen is None:
         messages.error(request, 'Die Wahl lässt sich hier nicht mehr ändern.' if study.focus_id else 'Bitte eine der Möglichkeiten wählen.')
     else:
@@ -260,7 +269,7 @@ def focus(request, pk):
 def advise(request, pk):
     """The teachers' recommendation of a Schwerpunkt, from the Studienfachberatung; the choice stays with the student."""
     study = get_object_or_404(Study, pk=pk, status=Study.Status.ENROLLED, focus=None)
-    if not (study.teacher_id == request.user.pk or request.user.may('manage_students', study)):
+    if not (study.teacher_id == request.user.pk or decides(request.user, study)):
         raise PermissionDenied
     study.advised = next((o for o in study.program.choices() if str(o.pk) == request.POST.get('advised')), None)
     study.save(update_fields=['advised'])

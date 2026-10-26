@@ -1,7 +1,7 @@
 from datetime import timedelta
 
 from django.apps import AppConfig
-from django.db.models import Count, Exists, F, Min, OuterRef, Q, Subquery
+from django.db.models import Count, Exists, F, Min, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Coalesce
 from django.urls import reverse
 from django.utils import timezone
@@ -55,7 +55,8 @@ class ExamsConfig(Tile, AppConfig):
 
     def tasks(self, person):
         from courses import panel
-        from courses.models import Course
+        from courses.models import Course, Participation
+        from curriculum.models import Module
 
         found, now = [], timezone.now()
         exams = Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], released=None).annotate(
@@ -63,6 +64,19 @@ class ExamsConfig(Tile, AppConfig):
             open=Count('participations', filter=Q(participations__passed=None) & ~Q(participations__remark='rt'), distinct=True),
         ).filter(size__gt=0)
         if 'decide_results' in person.roles:
+            from students.models import Study
+            from .views import achievements
+
+            totals = {}  # each programme's credits; only who has passed as many is checked exactly
+            for program, credits in Module.objects.filter(parent=None).values_list('program').annotate(n=Sum('credits')):
+                totals[program] = credits
+            credited = Participation.objects.filter(study=OuterRef('pk'), passed=True).exclude(course__kind__in=['exam', 'thesis'], course__released=None)
+            near = person.within(Study.objects.filter(status=Study.Status.ENROLLED, issued=None), 'decide_results').annotate(
+                credited=Subquery(credited.values('study').annotate(n=Sum('module__credits')).values('n')[:1]),
+            ).select_related('person', 'program')
+            for study in near:
+                if study.credited and study.credited >= totals.get(study.program_id, 0) and achievements(study)['finished']:
+                    found.append(task(f'Zeugnis ausstellen: {study.person}, {study.program.title}', reverse('exams:transcript', args=[study.pk])))
             decided = person.within(exams, 'decide_results')
             for exam in decided.filter(open=0):
                 found.append(task(f'Ergebnisse freigeben: {exam.title}', exam.get_absolute_url()))
@@ -74,7 +88,6 @@ class ExamsConfig(Tile, AppConfig):
                 ))
         if 'manage_exams' in person.roles:
             from core.models import Term
-            from courses.models import Participation
             from students.models import Document
 
             if short := person.within(Course.short_panels(), 'manage_exams').filter(released=None).count():

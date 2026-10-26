@@ -77,6 +77,9 @@ HOLIDAYS = [  # the Unterrichtsfreie Tage of the Studienjahresrahmenplan 2026/27
 EXAM_DAYS = [d for d in (date(2027, 2, 8) + timedelta(days=n) for n in range(19)) if d.weekday() < 5]  # Prüfungszeitraum 08.–26.02.2027
 EXAMS_START = {'WiSe 2026/27': date(2027, 2, 8), 'SoSe 2027': date(2027, 7, 14)}  # published Prüfungszeiträume
 EXAM_SIGNUP = (date(2026, 11, 1), date(2026, 11, 15))  # Prüfungsanmeldung WiSe 2026/27
+EXAM_PERIODS = {  # Prüfungsanmeldung and the end of the Prüfungszeitraum; SoSe 2027 approximated
+    'WiSe 2026/27': (*EXAM_SIGNUP, date(2027, 2, 26)), 'SoSe 2027': (date(2027, 5, 1), date(2027, 5, 15), date(2027, 7, 30)),
+}
 LECTURES = {  # published lecture periods; other terms are approximated
     'WiSe 2025/26': (date(2025, 10, 8), date(2026, 2, 10)), 'SoSe 2026': (date(2026, 4, 8), date(2026, 7, 14)),
     'WiSe 2026/27': (date(2026, 10, 5), date(2027, 2, 5)), 'SoSe 2027': (date(2027, 4, 7), date(2027, 7, 13)),
@@ -796,6 +799,7 @@ class Command(BaseCommand):
             self.events()
             self.practice()
             self.letters()
+            Study.objects.filter(status=Study.Status.GRADUATED).update(issued=models.F('since'))  # their Zeugnisse issued
             forget(months_before(timezone.localdate(), Institution.get().retention_months))  # as the nightly prune would have
         self.changes()
         self.stdout.write(self.style.SUCCESS(
@@ -821,6 +825,7 @@ class Command(BaseCommand):
             term.reregistration_start = term.deadline - timedelta(days=14)  # Rückmeldung SoSe 2027: 04.–18.01.2027
             term.late_deadline = term.deadline + timedelta(days=8)  # Nachfrist with Säumnisgebühr: 19.–26.01.2027
             term.exams_start = EXAMS_START.get(term.name)
+            term.exam_signup_start, term.exam_signup_end, term.exams_end = EXAM_PERIODS.get(term.name, (None, None, None))
         Term.objects.bulk_create(terms)
         self.calendar = list(Term.objects.order_by('start'))
         self.now = next(i for i, t in enumerate(self.calendar) if t.name == 'WiSe 2026/27')
@@ -1273,10 +1278,11 @@ class Command(BaseCommand):
         rng = self.rng
         self.courses, links, staff, rows, scores = {}, set(), set(), {}, []
         self.chose, self.foci = [], {}  # studies whose Vertiefung plan() put on record; the Schwerpunkte of each programme
+        self.finished = next(s for s in self.enrolled if s.program == self.bmsh and s.fs > s.program.semesters and s.person != self.demo)  # all done, the Zeugnis due
         self.lessons, booked = [], set()  # weekly one-to-one lessons this term: (person, course, teacher, rooms, minutes)
         for study in [*self.enrolled, self.graduate]:  # and the graduate's whole record
             subject, enrolled = study.subject.name, study.status == Study.Status.ENROLLED
-            behind = enrolled and study.fs > study.program.semesters  # over the Regelstudienzeit: the last semester taken now
+            behind = enrolled and study.fs > study.program.semesters and study is not self.finished  # over the Regelstudienzeit: the last semester taken now
             for leaf in self.plan(study):
                 if leaf.semester > study.fs:
                     continue
@@ -1290,7 +1296,7 @@ class Command(BaseCommand):
                     course = self.course(term, name, Course.Kind.EXAM, subject=self.subjects.get(played), released=at(term.end - timedelta(days=45), hour=12))
                     examiners = self.panel(played) if played else [self.teachers[lecturer(self.first_course.get(leaf.parent_id, ''))]]
                     grade, index = self.grade(study), self.calendar.index(term)
-                    if enrolled and study.person != self.demo and rng.random() < 0.06:  # failed; passed on retake the term after, or retaken this term
+                    if enrolled and study.person != self.demo and rng.random() < 0.06 and study is not self.finished:  # failed; passed on retake the term after, or retaken this term
                         rows[(course.pk, study.pk, leaf.pk)] = Participation(course=course, study=study, module=leaf, grade=Decimal('5.0'), passed=False, created=at(term.start, hour=9))
                         scores += [(course.pk, study.pk, leaf.pk, examiner, Decimal('5.0')) for examiner in examiners]
                         staff |= {(course.pk, e.pk) for e in examiners}

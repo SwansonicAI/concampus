@@ -9,7 +9,7 @@
 <p class="lead">Leistungen aus anderen Hochschulen oder Studiengängen auf Module anrechnen. Jede Anerkennung erscheint sofort in der Leistungsübersicht.</p>
 {% endif %}
 <div class="cols">
-  <form method="post" class="form">
+  <form method="post" class="form" enctype="multipart/form-data">
     {% csrf_token %}
     {{ form }}
     <div class="actions"><button class="btn">{% if study %}Anerkennen{% else %}Weiter{% endif %}</button></div>

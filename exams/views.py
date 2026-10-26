@@ -8,20 +8,20 @@ from django import forms
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Count, DateTimeField, Min, Q
+from django.db.models import Count, DateTimeField, Max, Min, Q
 from django.db.models.functions import Cast, Coalesce
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.formats import date_format
+from django.utils.formats import date_format, number_format
 from django.views.decorators.http import require_POST
 
-from core import texts
+from core import destatis, texts
 from core.access import kept, require
 from core.apps import plural
 from core.dates import months_before
-from core.models import Message, Term
+from core.models import Message, Office, Term
 from core.text import matching
 from core.views import without_term
 from courses import panel
@@ -203,7 +203,8 @@ def exam(request, pk):
 @require('manage_exams')
 def edit(request, pk=None):
     exams = request.user.within(Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS]), 'manage_exams')
-    course = get_object_or_404(exams, pk=pk) if pk else Course(term=Term.pick(request.GET.get('semester')), kind=Course.Kind.EXAM)
+    term = Term.pick(request.GET.get('semester'))  # a new exam takes the term's registration period
+    course = get_object_or_404(exams, pk=pk) if pk else Course(term=term, kind=Course.Kind.EXAM, opens=term and term.exam_signup_start, deadline=term and term.exam_signup_end)
     thesis = course.kind == Course.Kind.THESIS
     form = (ThesisForm if thesis else ExamForm)(request.POST or None, instance=course, person=request.user)
     if form.is_valid() and (saved := kept(form, request.user, 'manage_exams')):
@@ -441,12 +442,17 @@ class RecognitionForm(forms.Form):
     foreign = forms.DecimalField(label='Oder umrechnen: erzielte Note', required=False, decimal_places=2, localize=True)
     best = forms.DecimalField(label='Beste Note dort', required=False, decimal_places=2, localize=True)
     worst = forms.DecimalField(label='Schlechteste bestandene Note dort', required=False, decimal_places=2, localize=True, help_text='Modifizierte bayerische Formel.')
-    note = forms.CharField(label='Herkunft', widget=forms.Textarea(attrs={'rows': 3}), help_text='Hochschule, Veranstaltung, Semester, ECTS.')
+    origin = forms.ChoiceField(label='Hochschule', choices=[('', 'Bitte wählen'), *destatis.universities()], help_text='Im Ausland: das Land.')
+    place = forms.CharField(label='Name der Hochschule', required=False, help_text='Bei einer Hochschule im Ausland, z. B. „mdw Wien“.')
+    taken = forms.CharField(label='Semester dort', required=False, widget=forms.TextInput(attrs={'placeholder': 'z. B. SoSe 2024'}))
+    credits = forms.DecimalField(label='ECTS dort', required=False, min_value=0, decimal_places=1, localize=True)
+    proof = forms.FileField(label='Nachweis', required=False, help_text='Transcript oder Bescheinigung; kommt in die Studienakte.')
+    FIELDS = ['module', 'grade', 'foreign', 'best', 'worst', 'origin', 'place', 'taken', 'credits', 'proof']
 
     def __init__(self, *args, study=None, **kwargs):
         super().__init__(*args, **kwargs)
         if study is None:
-            for name in ['module', 'grade', 'foreign', 'best', 'worst', 'note']:
+            for name in self.FIELDS:
                 del self.fields[name]
             return
         del self.fields['who']
@@ -481,6 +487,13 @@ class RecognitionForm(forms.Form):
                 raise forms.ValidationError('Zum Umrechnen erzielte, beste und schlechteste bestandene Note angeben.')
             grade = 1 + 3 * (best - foreign) / (best - worst)  # 1,0 for the best, 4,0 for the worst passing grade
             data['grade'] = max(Decimal('1.0'), min(Decimal('4.0'), grade.quantize(Decimal('0.1'), ROUND_DOWN)))
+        if data.get('origin'):  # kept as one line of the record: Hochschule, Land, Semester, ECTS
+            name = dict(choice for _, group in destatis.universities() for choice in group)[data['origin']]
+            abroad = data['origin'].startswith(destatis.ABROAD)
+            credits = data.get('credits') is not None and f'{number_format(data["credits"])} ECTS'
+            data['note'] = ', '.join(filter(None, [data.get('place') if abroad else name, name if abroad else '', data.get('taken'), credits]))
+        if (proof := data.get('proof')) and (refusal := DocumentType.system('anerkennung').refuses(proof)):
+            self.add_error('proof', refusal)
         return data
 
 
@@ -495,7 +508,7 @@ def recognition(request):
     if pk:
         studies = request.user.within(Study.objects.select_related('person', 'program', 'subject'), 'recognise')
         study = get_object_or_404(studies, pk=pk if pk.isdigit() else 0, status=Study.Status.ENROLLED)
-    form = RecognitionForm(request.POST or None, study=study)
+    form = RecognitionForm(request.POST or None, request.FILES or None, study=study)
     if form.is_valid() and study is None:
         if request.user.may('recognise', found := form.cleaned_data['who']):
             return redirect(f'{reverse("exams:recognition")}?studium={found.pk}')
@@ -505,7 +518,9 @@ def recognition(request):
         for module in data['module']:
             Participation.objects.update_or_create(course=course, study=study, module=module, defaults={'grade': data['grade'], 'passed': True, 'note': data['note']})
         codes = ', '.join(m.code for m in data['module'])
-        texts.send('anerkennung', study.person, modul=codes, herkunft=data['note'])
+        if data['proof']:
+            Document.hand_in(study, DocumentType.system('anerkennung'), data['proof'])
+        study.notify('anerkennung', reverse('exams:transcript', args=[study.pk]), modul=codes, herkunft=data['note'])
         messages.success(request, f'{codes} für {study.person} anerkannt' + (f' mit {data["grade"]}.' if data['grade'] is not None else '.'))
         return redirect(f'{reverse("exams:recognition")}?studium={study.pk}')
     return render(request, 'exams/recognition.html', {
@@ -518,9 +533,11 @@ def achievements(study):
     """What a Leistungsübersicht, a Zeugnis and a Diploma Supplement show: the modules with their credits, and the grade so far."""
     tree, average = study.progress()
     earned, total, honours = sum(m.earned for m in tree), sum(m.credits for m in tree), study.program.honours
+    last = study.participations.filter(passed=True, course__released__isnull=False).aggregate(last=Max('course__released'))['last']
     rows = [r for r in study_plan(tree, study.program.semesters) if r['kind'] != 'part' and r['node'].earned or r['kind'] == 'part' and r['exam'] and any(i.done for i in r['items'])]
     return {
         'study': study, 'rows': rows, 'earned': earned, 'total': total, 'finished': earned >= total, 'average': average,
+        'completed': last and timezone.localdate(last),  # the Zeugnis is dated by the last result
         'honours': None not in (average, honours) and average <= honours, 'today': timezone.localdate(), 'signature': texts.block('unterschrift_zeugnisse'),
     }
 
@@ -531,10 +548,39 @@ def transcript(request, pk):
     if not (study.person == request.user or request.user.may('view_files', study)):
         raise PermissionDenied
     found, office = achievements(study), request.user.may('decide_results', study)  # a Zeugnis comes from the office
-    copy = not office and study.person == request.user and study.status == Study.Status.GRADUATED and found['finished']  # graduates print their own
+    copy = not office and study.person == request.user and study.issued and found['finished']  # graduates print their own
     return render(request, 'exams/transcript.html', found | {
         'complete': found['finished'] and (office or copy), 'copy': copy, 'supplement': (office or copy) and study.program.level,
+        'issue': office and found['finished'] and study.issued is None and study.status == Study.Status.ENROLLED,
         'verbal': verbal(found['average']) if found['average'] else '', 'sender': texts.block('absender_leistungen'),
+    })
+
+
+@require_POST
+def issue(request, pk):
+    """The Zeugnis issued once every credit is earned: noted in the file and told to the student; the Exmatrikulation follows."""
+    study = get_object_or_404(Study.objects.select_related('person', 'program'), pk=pk, status=Study.Status.ENROLLED, issued=None)
+    if not request.user.may('decide_results', study):
+        raise PermissionDenied
+    if not achievements(study)['finished']:
+        messages.error(request, 'Es fehlen noch Leistungen.')
+    else:
+        study.issued = timezone.localdate()
+        study.save(update_fields=['issued'])
+        texts.send('zeugnis', study.person, reverse('exams:transcript', args=[study.pk]), studiengang=study.program.title)
+        messages.success(request, f'Zeugnis ausgestellt. Die Exmatrikulation steht an: {Office.holding("manage_students") or "Studierendenverwaltung"}.')
+    return redirect('exams:transcript', study.pk)
+
+
+def certificate(request, pk):
+    """The Urkunde conferring the degree, once the Zeugnis is issued."""
+    study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject'), pk=pk, issued__isnull=False)
+    office = request.user.may('decide_results', study)
+    if not (office or study.person == request.user):
+        raise PermissionDenied
+    return render(request, 'exams/certificate.html', {
+        'study': study, 'completed': achievements(study)['completed'], 'copy': not office,
+        'signature': texts.block('unterschrift_urkunden'), 'sender': texts.block('absender_leistungen'),
     })
 
 
@@ -543,7 +589,7 @@ def supplement(request, pk):
     every credit is earned; for graduates a copy of their own."""
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject'), pk=pk)
     office = request.user.may('decide_results', study)
-    if not (office or study.person == request.user and study.status == Study.Status.GRADUATED):
+    if not (office or study.person == request.user and study.issued):
         raise PermissionDenied
     if not study.program.level:
         raise Http404

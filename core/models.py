@@ -361,9 +361,12 @@ class Office(Tracked, Group):
         return ', '.join(map(str, [*self.institutes.all(), *self.programs.all()])) or 'ganze Hochschule'
 
     @classmethod
-    def holding(cls, capability):
-        """The offices that hold a capability, for sentences like 'Zentral vergeben: …'."""
-        *rest, last = cls.objects.filter(permissions__codename=capability).values_list('name', flat=True) or ['']
+    def holding(cls, capability, program=None):
+        """The offices that hold a capability, for sentences like 'Zentral vergeben: …'; with a programme, those for it."""
+        offices = cls.objects.filter(permissions__codename=capability)
+        if program:
+            offices = offices.filter(models.Q(programs=None) | models.Q(programs=program), institutes=None)
+        *rest, last = offices.values_list('name', flat=True) or ['']
         return f'{", ".join(rest)} oder {last}' if rest else last
 
 
@@ -379,7 +382,10 @@ class Term(Tracked, models.Model):
     deadline = models.DateField('Rückmeldefrist')
     late_deadline = models.DateField('Nachfrist bis', null=True, blank=True, help_text='Rückmeldung mit Säumnisgebühr; leer: keine Nachfrist.')
     fee = models.DecimalField('Semesterbeitrag', max_digits=7, decimal_places=2)
+    exam_signup_start = models.DateField('Prüfungsanmeldung ab', null=True, blank=True, help_text='Neue Prüfungen des Semesters übernehmen den Zeitraum.')
+    exam_signup_end = models.DateField('Prüfungsanmeldung bis', null=True, blank=True)
     exams_start = models.DateField('Beginn des Prüfungszeitraums', null=True, blank=True, help_text='Bis einige Wochen davor melden sich Studierende von Prüfungen ab.')
+    exams_end = models.DateField('Ende des Prüfungszeitraums', null=True, blank=True)
 
     class Meta:
         ordering = ['start']
@@ -420,6 +426,10 @@ class Term(Tracked, models.Model):
             raise ValidationError({'deadline': 'Die Rückmeldefrist endet nach dem Beginn der Rückmeldung.'})
         if self.late_deadline and self.deadline and self.late_deadline <= self.deadline:
             raise ValidationError({'late_deadline': 'Die Nachfrist endet nach der Rückmeldefrist.'})
+        if self.exam_signup_start and self.exam_signup_end and self.exam_signup_start > self.exam_signup_end:
+            raise ValidationError({'exam_signup_end': 'Die Anmeldung endet nach ihrem Beginn.'})
+        if self.exams_start and self.exams_end and self.exams_start > self.exams_end:
+            raise ValidationError({'exams_end': 'Der Prüfungszeitraum endet nach seinem Beginn.'})
 
     @classmethod
     def pick(cls, pk):

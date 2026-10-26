@@ -99,6 +99,9 @@ class StudentsConfig(Tile, AppConfig):
             for study in Study.objects.filter(pk__in={f['study'] for f in fails if (f['study'], f['module']) not in passed}).select_related('person', 'program'):
                 final = max(m.appeal for m in exhausted(study)) + timedelta(days=1)  # once the Widerspruchsfrist is over
                 found.append(task(f'Exmatrikulieren{"" if final <= today else " ab " + date_format(final, "j.n.")}: {study.person}, Prüfung endgültig nicht bestanden', study.get_absolute_url(), final))
+        if 'manage_students' in person.roles:  # the Zeugnis issued: the study ends
+            for study in person.within(enrolled.filter(issued__isnull=False), 'manage_students').select_related('person', 'program'):
+                found.append(task(f'Exmatrikulieren nach Abschluss: {study.person}, {study.program.title}', study.get_absolute_url(), study.issued))
         if 'manage_reregistration' in person.roles:
             unpaid = enrolled.exclude(person__in=paid).values('person').distinct().count()
             if unpaid and term and term.reregistration_open:

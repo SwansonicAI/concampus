@@ -1,0 +1,1 @@
+{% if term.exam_signup_start %} · Anmeldung {{ term.exam_signup_start|date:"j.n." }}–{{ term.exam_signup_end|date:"j.n.Y" }}{% endif %}{% if term.exams_start %} · Prüfungszeitraum {{ term.exams_start|date:"j.n." }}{% if term.exams_end %}–{{ term.exams_end|date:"j.n.Y" }}{% endif %}{% endif %}

@@ -7,7 +7,7 @@
   <h1>Prüfungen</h1>
   {% if 'manage_exams' in user.roles %}<div class="actions"><a class="btn" href="{% url 'exams:new' %}?semester={{ term.pk }}">Prüfung anlegen</a></div>{% endif %}
 </div>
-<p class="lead">{{ term }} · {{ exams|length }} Prüfung{{ exams|length|pluralize:"en" }}{% if 'manage_exams' not in user.roles and 'decide_results' not in user.roles %}, in denen Sie prüfen{% endif %}</p>
+<p class="lead">{{ term }} · {{ exams|length }} Prüfung{{ exams|length|pluralize:"en" }}{% include "exams/_periods.html" %}{% if 'manage_exams' not in user.roles and 'decide_results' not in user.roles %}, in denen Sie prüfen{% endif %}</p>
 <form class="toolbar">
   <div class="inline">
     <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
@@ -58,6 +58,7 @@
 {% endfor %}
 
 <h2>Zur Anmeldung</h2>
+<p class="muted" style="margin-top: -8px">{{ term }}{% include "exams/_periods.html" %}</p>
 <table>
   <thead><tr><th>Datum</th><th>Prüfung</th><th>Anmeldung</th><th></th></tr></thead>
   <tbody>

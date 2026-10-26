@@ -146,7 +146,15 @@ TEXTS = {
         'Für „{pruefung}“ fehlt noch Ihre Wertung ({anzahl}). Bitte tragen Sie sie ein, damit das Ergebnis freigegeben werden kann.',
         ('pruefung', 'anzahl'),
     ),
-    'anerkennung': Spec(NACHRICHT, 'Anerkennung', 'Anerkennung: {modul}', 'Anerkannt: {modul}.\nHerkunft: {herkunft}', ('modul', 'herkunft')),
+    'anerkennung': Spec(
+        BESCHEID, 'Anerkennung von Leistungen', 'Bescheid: Anerkennung',
+        'Auf Ihren Antrag werden Leistungen aus {herkunft} anerkannt für: {modul}. Sie stehen in Ihrer Leistungsübersicht.', STUDY + ('modul', 'herkunft'),
+    ),
+    'zeugnis': Spec(
+        NACHRICHT, 'Zeugnis ausgestellt', 'Ihr Zeugnis ist ausgestellt',
+        'Ihr Zeugnis im Studiengang {studiengang} ist ausgestellt. Abschriften von Zeugnis, Urkunde und Diploma Supplement finden Sie in Ihrer '
+        'Leistungsübersicht; die unterschriebenen Originale erhalten Sie von der Hochschule. Die Exmatrikulation folgt.', ('studiengang',),
+    ),
     'buchung_geaendert': Spec(NACHRICHT, 'Buchung geändert', 'Buchung geändert: {buchung}', '{von} hat Ihre Buchung geändert: {raum}, {termin}.', ('buchung', 'von', 'raum', 'termin')),
     'buchung_storniert': Spec(
         NACHRICHT, 'Buchung storniert', 'Buchung storniert: {buchung}', '{von} hat {anzahl} Termin(e) ab {termin} in {raum} storniert.',
@@ -178,6 +186,7 @@ TEXTS = {
     'absender_bescheinigungen': Spec(BAUSTEIN, 'Absender der Immatrikulationsbescheinigung', '', '{hochschule}'),
     'absender_leistungen': Spec(BAUSTEIN, 'Absender der Leistungsübersichten und Zeugnisse', '', '{hochschule}'),
     'unterschrift_zeugnisse': Spec(BAUSTEIN, 'Unterschriften auf Zeugnissen', '', 'Vorsitz Prüfungsausschuss'),  # one per line
+    'unterschrift_urkunden': Spec(BAUSTEIN, 'Unterschriften auf Urkunden', '', 'Präsidentin oder Präsident\nVorsitz Prüfungsausschuss'),
     'ds_hochschule': Spec(BAUSTEIN, 'Diploma Supplement: Hochschule und Status', '', '{hochschule}\nUniversity of Music, state institution'),
     'ds_hochschulsystem': Spec(
         BAUSTEIN, 'Diploma Supplement: Hochschulsystem (Abschnitt 8)', '',

@@ -1,0 +1,17 @@
+{% extends base %}
+{% block title %}Urkunde {{ study.person.name }}{% endblock %}
+{% block content %}
+<div class="document">
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="more" href="{% url 'exams:transcript' study.pk %}">Zum Zeugnis</a></p>
+  {% include "core/_letterhead.html" with office=sender %}
+  <h1>Urkunde</h1>
+  {% if copy %}<p class="muted"><small>Abschrift zur Information. Gültig ist die unterschriebene und gesiegelte Urkunde.</small></p>{% endif %}
+  <p style="margin-top: 32px">Die {{ institution.name }} verleiht</p>
+  <p style="font-size: 22px"><b>{{ study.person.legal_name }}</b>{% if study.person.birth_name %}, geb. {{ study.person.birth_name }}{% endif %}</p>
+  <p>geboren am {{ study.person.birth_date|date:"j. F Y" }}{% if study.person.birth_place %} in {{ study.person.birth_place }}{% endif %},</p>
+  <p>nach bestandener Prüfung im Studiengang {{ study.program.name }}, Hauptfach {{ study.subject }}, den akademischen Grad</p>
+  <p style="font-size: 22px"><b>{{ study.program.qualification|default:study.program.degree }}</b></p>
+  <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ completed|default:study.issued|date:"j. F Y" }}</span></div>
+  <div class="signatures">{% for name in signature.splitlines %}<span>{{ name }}</span>{% endfor %}</div>
+</div>
+{% endblock %}

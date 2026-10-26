@@ -145,7 +145,14 @@
     <div class="inline">{% for o in options %}<label class="check"><input type="radio" name="focus" value="{{ o.pk }}" required{% if o.pk == study.focus_id %} checked{% endif %}> {{ o.title }}{% if o.pk == study.advised_id %} <span class="badge">von den Lehrenden empfohlen</span>{% endif %}</label>{% endfor %}</div>
     <p style="margin: 12px 0 0"><button class="btn">{% if study.focus %}Ändern{% else %}Wählen{% endif %}</button></p>
   </form>
-  {% endwith %}{% elif advising %}{% with first=advising.0 %}
+  {% endwith %}{% elif recording %}
+  <form method="post" action="{% url 'students:focus' study.pk %}" class="panel" style="margin-bottom: 16px">
+    {% csrf_token %}
+    <h3>{{ recording.0.choice.title }}</h3>
+    <p class="muted"><small>{% if study.focus %}Gewählt: {{ study.focus.title }}.{% else %}Noch nicht gewählt{% if study.advised %}; die Lehrenden empfehlen {{ study.advised.title }}{% endif %}.{% endif %} Hier eingetragen gilt die Wahl, etwa nach einer Erklärung oder einem Antrag.</small></p>
+    <div class="inline"><label>{{ recording.0.choice.title }}<select name="focus" required><option value="">Bitte wählen</option>{% for o in recording %}<option value="{{ o.pk }}"{% if o.pk == study.focus_id %} selected{% endif %}>{{ o.title }}</option>{% endfor %}</select></label><button class="btn ghost">Eintragen</button></div>
+  </form>
+  {% elif advising %}{% with first=advising.0 %}
   <form method="post" action="{% url 'students:advise' study.pk %}" class="panel" style="margin-bottom: 16px">
     {% csrf_token %}
     <h3>Studienfachberatung: {{ first.choice.title }}</h3>

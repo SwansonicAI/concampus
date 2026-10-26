@@ -2,7 +2,7 @@
 {% block title %}{% if complete %}Zeugnis{% else %}Leistungsübersicht{% endif %} {{ study.person.name }}{% endblock %}
 {% block content %}
 <div class="document">
-  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button>{% if supplement %}<a class="btn ghost" href="{% url 'exams:supplement' study.pk %}">Diploma Supplement</a>{% endif %}<a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button>{% if study.issued %}<a class="btn ghost" href="{% url 'exams:certificate' study.pk %}">Urkunde</a>{% endif %}{% if supplement %}<a class="btn ghost" href="{% url 'exams:supplement' study.pk %}">Diploma Supplement</a>{% endif %}<a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
   {% include "core/_letterhead.html" with office=sender %}
   <h1>{% if complete %}Zeugnis{% else %}Leistungsübersicht{% endif %}</h1>
   {% if copy %}<p class="muted"><small>Abschrift zur Information. Gültig ist das unterschriebene und gesiegelte Zeugnis.</small></p>{% endif %}
@@ -12,7 +12,10 @@
     <dt>Matrikelnummer</dt><dd>{{ study.person.matriculation|default:"–" }}</dd>
     <dt>Studiengang</dt><dd>{{ study.program.title }}, Prüfungsordnung {{ study.program.version }}</dd>
     <dt>Hauptfach</dt><dd>{{ study.subject }}</dd>
+    {% if complete %}<dt>Letzte Prüfungsleistung</dt><dd>{{ completed|date:"j. F Y"|default:"–" }}</dd>
+    <dt>Ausgestellt</dt><dd>{% if study.issued %}{{ study.issued|date:"j. F Y" }}{% else %}noch nicht{% endif %}</dd>{% endif %}
   </dl>
+  {% if issue %}<form method="post" action="{% url 'exams:issue' study.pk %}" class="no-print panel" style="margin-top: 16px">{% csrf_token %}<p style="margin-top: 0">Alle Leistungen sind erbracht. Ausgestellt, erhält {{ study.person.name }} Bescheid und Abschriften von Zeugnis, Urkunde und Diploma Supplement; die Exmatrikulation folgt.</p><button class="btn" data-confirm="Zeugnis ausstellen?">Zeugnis ausstellen</button></form>{% endif %}
   <section>
     <table>
       <thead><tr><th>Modul</th><th>Titel</th><th class="num">CP</th><th class="num">Gewicht</th><th class="num">Note</th></tr></thead>
@@ -39,6 +42,6 @@
   {% if complete %}
   <p style="margin-top: 24px">Gesamtnote: <b>{{ average }} ({{ verbal }}){% if honours %}, mit Auszeichnung{% endif %}</b></p>
   {% endif %}
-  <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ today|date:"j. F Y" }}</span>{% if complete %}{% for name in signature.splitlines %}<span>{{ name }}</span>{% endfor %}{% else %}<span>{{ sender }}</span>{% endif %}</div>
+  <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{% if complete and completed %}{{ completed|date:"j. F Y" }}{% else %}{{ today|date:"j. F Y" }}{% endif %}</span>{% if complete %}{% for name in signature.splitlines %}<span>{{ name }}</span>{% endfor %}{% else %}<span>{{ sender }}</span>{% endif %}</div>
 </div>
 {% endblock %}
