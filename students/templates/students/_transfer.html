@@ -1,0 +1,8 @@
+{% if bank.iban %}<dl class="facts" style="margin-top: 12px">
+  <dt>Empfänger</dt><dd>{{ bank.payee|default:bank.name }}</dd>
+  <dt>IBAN</dt><dd>{{ bank.iban }}</dd>
+  {% if bank.bic %}<dt>BIC</dt><dd>{{ bank.bic }}</dd>{% endif %}
+  <dt>Betrag</dt><dd>{{ amount }} €</dd>
+  <dt>Verwendungszweck</dt><dd>{{ reference }}</dd>
+</dl>
+<p class="muted"><small>Per Überweisung; maßgeblich ist der Eingang bei der Hochschule. Ohne den Verwendungszweck lässt sich die Zahlung nicht zuordnen.</small></p>{% endif %}

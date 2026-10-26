@@ -37,7 +37,7 @@
           {% if r.node.description %}<br><small class="muted">{{ r.node.description }}</small>{% endif %}
         </td>
         {% for s in semesters %}<td></td>{% endfor %}
-        <td class="num"><b>{% if progress %}{{ r.node.earned }}/{% endif %}{{ r.node.credits }}</b></td>
+        <td class="num"><b>{% if progress %}{{ r.node.earned }}/{% endif %}{{ r.node.credits }}</b>{% if progress and r.node.credits and r.node.earned >= r.node.credits and not r.node.done %}<br><small class="muted">Prüfung offen</small>{% endif %}</td>
         <td class="num">{% if r.node.weight %}{{ r.node.weight|floatformat:"-2" }}{% endif %}</td>
         {% if progress %}<td class="num"><b>{% if r.node.done and r.node.grade %}{{ r.node.grade }}{% endif %}</b></td>{% endif %}
       </tr>

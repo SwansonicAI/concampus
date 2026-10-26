@@ -165,6 +165,7 @@ def study(request, pk):
         'total': sum(m.credits for m in tree),
         'terms': terms,
         'upcoming': upcoming, 'late_fee': late_fee, 'leave_terms': LEAVE_TERMS,
+        'bank': Institution.get(), 'owed': upcoming and upcoming.due(today, late_fee),
         'next': study.terms.filter(term=upcoming).first(),
         'paid': StudyTerm.objects.filter(study__person=study.person, term=upcoming, paid__isnull=False).exists(),
         'missing': study.person.missing() if personal else [],

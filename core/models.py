@@ -94,6 +94,9 @@ class Institution(Tracked, models.Model):
     report_id = models.CharField('BerichtseinheitID', max_length=8, blank=True, help_text='Vom Statistischen Landesamt vergeben, für die Lieferung.')
     accept_days = models.PositiveSmallIntegerField('Frist zur Annahme eines Studienplatzes (Tage)', default=14)
     late_fee = models.DecimalField('Säumnisgebühr', max_digits=6, decimal_places=2, default=15, help_text='Zum Semesterbeitrag, wer sich in der Nachfrist zurückmeldet.')
+    payee = models.CharField('Zahlungsempfänger', max_length=120, blank=True, help_text='Für den Semesterbeitrag; leer: der Name der Hochschule.')
+    iban = models.CharField('IBAN', max_length=34, blank=True, help_text='Studierende überweisen dorthin, mit ihrer Matrikelnummer im Verwendungszweck.')
+    bic = models.CharField('BIC', max_length=11, blank=True)
     withdraw_weeks = models.PositiveSmallIntegerField(
         'Abmeldung von Prüfungen (Wochen)', default=3, help_text='So viele Wochen vor Beginn des Prüfungszeitraums endet die Abmeldung.',
     )

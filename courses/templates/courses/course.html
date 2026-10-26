@@ -27,7 +27,8 @@
       <tr>
         <td data-value="{{ b.start|date:'c' }}">{% if staffed %}<a href="{% url 'rooms:booking' b.pk %}" title="Absagen, verlegen">{{ b.start|date:"D j.n." }}</a>{% else %}{{ b.start|date:"D j.n." }}{% endif %}</td>
         <td>{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</td>
-        {% if course.kind == 'lesson' and staffed %}<td>{% for p in b.participants.all %}{{ p.first_name }} {{ p.last_name }}{% endfor %}</td>{% endif %}
+        {% if course.kind == 'lesson' and staffed %}<td>{% for p in b.participants.all %}{{ p.first_name }} {{ p.last_name }}{% endfor %}</td>
+        {% elif course.allocation == 'ensemble' %}<td>{{ b.title|default:"alle" }}</td>{% endif %}
         <td>{% if b.category.blocks %}<a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a>{% else %}<span class="badge no">{{ b.category }}</span>{% endif %}</td>
       </tr>
       {% empty %}<tr><td class="empty">Noch keine Termine.</td></tr>{% endfor %}
@@ -68,7 +69,7 @@
   <form method="post" action="{% url 'courses:withdraw' p.pk %}" class="actions">
     {% csrf_token %}
     <span>Angemeldet seit {{ p.created|date:"j. F Y" }}{% if p.module %} für {{ p.module.code }}{% endif %}{% if p.waiting %} · <span class="badge wait">Warteliste</span>{% endif %}{% if p.passed %} · <span class="badge yes">bestanden{% if p.grade %} ({{ p.grade|floatformat:1 }}){% endif %}</span>{% endif %}</span>
-    {% if course.is_open %}<button class="btn ghost small">Abmelden</button>{% endif %}
+    {% if course.leavable %}<button class="btn ghost small" data-confirm="Wirklich abmelden?">Abmelden</button>{% elif course.allocation == 'staff' or course.allocation == 'ensemble' %}<small class="muted">Abmelden über die Lehrenden</small>{% endif %}
   </form>
   {% empty %}
   {% if wished %}

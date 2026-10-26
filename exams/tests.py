@@ -133,7 +133,7 @@ class ThesisTest(Seeded):
         for examiner, grade in zip(examiners, ['1,3', '2,0']):
             self.login(examiner.username).post(f'/pruefungen/{p.course_id}/', {f'score-{p.pk}-{examiner.pk}': grade})
         office.post(f'/pruefungen/{p.course_id}/freigabe/')
-        self.assertEqual({r.module_id: r.grade for r in study.record()}[module.pk], Decimal('1.6'))  # the mean of 1.3 and 2.0, cut
+        self.assertEqual({r.module_id: r.grade for r in study.record()}[module.pk], Decimal('1.7'))  # the mean of 1.3 and 2.0, rounded half up
 
     def test_diploma_supplement(self):
         study = Study.objects.get(person__username='student')

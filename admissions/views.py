@@ -548,7 +548,7 @@ def mine(request):
             p.room = p.slot and next((b.room for b in p.course.bookings.select_related('room') if b.start <= p.slot < b.end), None)
     return render(request, 'admissions/mine.html', {
         'studies': studies, 'documents': person.documents.exclude(message=None), 'accept': AcceptForm(instance=person),
-        'insurers': Institution.get().insurers.splitlines(),
+        'insurers': Institution.get().insurers.splitlines(), 'bank': Institution.get(),
     })
 
 

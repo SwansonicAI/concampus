@@ -31,8 +31,10 @@ class BookingRulesTest(Seeded):
         super().setUpTestData()
         cls.mei = Person.objects.get(username='student')
         cls.own = Room.objects.get(name='FH 310')  # practice room of Mei's Institut
-        with history.quietly():  # free rooms and an unused quota, whatever the time of day
-            Booking.objects.filter(Q(room__name__in=['FH 310', 'FH 312', 'FH 324']) | Q(person=cls.mei)).delete()
+        with history.quietly():  # free rooms, an unused quota and a free timetable, whatever the time of day
+            Booking.objects.filter(
+                Q(room__name__in=['FH 310', 'FH 312', 'FH 324']) | Q(person=cls.mei) | Q(participants=cls.mei) | Q(course__participations__study__person=cls.mei)
+            ).delete()
 
     def setUp(self):
         self.student = self.login('student')
@@ -52,18 +54,25 @@ class BookingRulesTest(Seeded):
 
     def test_a_taken_room_offers_another_or_a_later_time_in_one_click(self):
         start = slot(5, 120)
-        self.book(**times(start))
+        other_student = Person.objects.filter(studies__status='enrolled').exclude(pk=self.mei.pk).first()
+        Booking.objects.create(room=self.own, start=start, end=start + timedelta(hours=1), person=other_student, category_id='uebung')
         instead = self.book(**times(start)).context['instead']
         self.assertEqual(instead['later'][0], start + timedelta(hours=1))
         other = instead['rooms'][0]
         self.assertEqual(flashes(self.book(**times(start), instead=f'raum:{other.pk}', follow=True)), ['Buchung gespeichert.'])
         self.assertTrue(Booking.objects.filter(room=other, start=start, person=self.mei).exists())
 
+    def test_not_in_two_places_at_once(self):
+        start = slot(5)
+        lesson = Booking.objects.create(room=Room.objects.get(name='FH 312'), start=start, end=start + timedelta(hours=1), person=Person.objects.get(username='lehre'), category_id='unterricht')
+        lesson.participants.set([self.mei])
+        self.refused(self.book(**times(start)), 'Sie haben zu dieser Zeit schon')
+
     def test_four_hours_a_day_but_last_minute_is_free(self):
         start = slot(5, 300)
         self.book(**times(start))
         self.refused(self.book(**times(start + timedelta(hours=1), 240)), 'Kontingent von 4 Stunden')
-        self.assertEqual(flashes(self.book(**times(slot(1, 45), 45), follow=True)), ['Buchung gespeichert.'])
+        self.assertEqual(flashes(self.book(**times(slot(1, 45), 45), follow=True)), ['Buchung gespeichert. Kurzfristig: zählt nicht zum Kontingent.'])
 
     def test_rooms_and_categories_students_may_not_book(self):
         self.refused(self.book(room=Room.objects.get(name='Festsaal').pk, **times(slot(5))), 'gültige Auswahl')
@@ -74,7 +83,7 @@ class BookingRulesTest(Seeded):
         chamber = {'room': Room.objects.get(name='FH 324').pk, 'category': 'kammermusik', 'title': 'Probe Quartett', **times(slot(72, 120), 120)}
         self.refused(self.book(**chamber), 'mindestens 1 weitere Person')
         partner = Person.objects.filter(studies__status='enrolled', studies__subject__name='Viola').first()
-        self.assertEqual(flashes(self.book(**chamber, participants=[partner.pk], follow=True)), ['Buchung gespeichert.'])
+        self.assertTrue(flashes(self.book(**chamber, participants=[partner.pk], follow=True))[0].startswith('Buchung gespeichert.'))
         rehearsal = Booking.objects.get(title='Probe Quartett')
         self.assertEqual(list(rehearsal.participants.all()), [partner])
         self.assertIn(rehearsal, self.login(partner.username).get('/raeume/meine/').context['attending'])

@@ -145,6 +145,8 @@ def course(request, pk):
     upcoming = course.bookings.filter(start__gte=timezone.now())
     if course.kind == Course.Kind.LESSON and not staffed:
         upcoming = upcoming.filter(participants=person)  # one's own lessons, not everyone's
+    elif not staffed:  # the dates for everyone, and those of one's own ensemble
+        upcoming = upcoming.filter(Q(participants=None) | Q(participants=person)).distinct()
     lessons = lesson_times(course) if staffed and course.kind == Course.Kind.LESSON else []
     timetable = lessons and Lessons(sent(request, 'lessons'), initial=[row for _, row in lessons], form_kwargs={'person': person})
     return render(request, 'courses/course.html', {
@@ -331,9 +333,13 @@ def date(request, pk):
     except ValidationError as error:
         messages.error(request, ' '.join(error.messages))
         return again(request, course, 'date')
+    if ensemble := data.get('ensemble'):
+        booking.title = ensemble.name
     booking.save()
     if student := data.get('student'):
         booking.participants.set([student])
+    elif ensemble:  # its members see it in their timetable
+        booking.participants.set(Person.objects.filter(studies__ensembles=ensemble))
     messages.success(request, f'Termin am {date_format(start, "j.n.Y")} in {booking.room} gebucht.')
     return redirect(course)
 
@@ -341,9 +347,11 @@ def date(request, pk):
 @require_POST
 def withdraw(request, pk):
     participation = get_object_or_404(Participation, pk=pk, study__person=request.user, course__kind__in=TEACHING)
-    if participation.course.is_open:
+    if participation.course.leavable:
         participation.delete()
         messages.success(request, 'Sie sind abgemeldet.')
+    elif participation.course.is_open:
+        messages.error(request, 'Abmelden geht hier über die Lehrenden.')
     else:
         messages.error(request, 'Der Abmeldeschluss ist vorbei.')
     return redirect(participation.course)

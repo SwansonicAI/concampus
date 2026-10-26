@@ -124,6 +124,11 @@ class BookingForm(forms.ModelForm):
         end = self.instance.end = timezone.make_aware(datetime.combine(day, until))
         if not self.office and data.get('category'):
             self.check_rules(data['category'], start, end, data.get('participants') or [])
+        if self.student:  # nobody is in two places at once: not in two rooms, not practising during their own lesson
+            from .views import agenda
+
+            if busy := agenda(self.person).filter(start__lt=end, end__gt=start).exclude(pk=self.instance.pk).select_related('room').first():
+                raise forms.ValidationError(f'Sie haben zu dieser Zeit schon {busy.label} in {busy.room} ({timezone.localtime(busy.start):%H:%M}–{timezone.localtime(busy.end):%H:%M}).')
         if not room:
             return data
         if until := data.get('repeat_until'):

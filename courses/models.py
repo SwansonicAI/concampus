@@ -140,6 +140,12 @@ class Course(Tracked, models.Model):
         return (self.opens is None or self.opens <= today) and (self.deadline is None or today <= self.deadline)
 
     @property
+    def leavable(self):
+        """Whether participants may withdraw themselves: from what they registered for alone, while registration is open.
+        A class the teachers give out, or an ensemble, they leave through the teachers."""
+        return self.is_open and self.allocation in (self.Allocation.ORDER, self.Allocation.CHOICE)
+
+    @property
     def upcoming(self):
         """Registration has yet to open."""
         return self.opens is not None and timezone.localdate() < self.opens

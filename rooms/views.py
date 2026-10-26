@@ -224,7 +224,11 @@ def booking(request, pk=None):
                 'buchung_geaendert', booking.person, reverse('rooms:booking', args=[booking.pk]), buchung=booking.label, von=person, raum=booking.room,
                 termin=f'{timezone.localtime(booking.start):%d.%m.%Y %H:%M}–{timezone.localtime(booking.end):%H:%M}',
             )
-        messages.success(request, 'Buchung gespeichert.')
+        free = form.student and (  # say why the counter did not move
+            f'{booking.category} zählt nicht zum Kontingent.' if not booking.category.quota
+            else 'Kurzfristig: zählt nicht zum Kontingent.' if booking.start - booking.created <= timedelta(hours=Institution.get().last_minute_hours) else ''
+        )
+        messages.success(request, f'Buchung gespeichert. {free or ""}'.strip())
         return redirect(f"{reverse('rooms:index')}?tag={timezone.localtime(booking.start):%Y-%m-%d}")
     series = Booking.objects.filter(series=booking.series).count() if booking.series else 0
     told = None  # a date others come to can be called off and they hear of it

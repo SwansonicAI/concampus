@@ -67,6 +67,7 @@
     <h2>Rückmeldung {{ upcoming }}</h2>
     <p>{% if paid and not missing %}<span class="badge green">zurückgemeldet</span>{% elif paid %}<span class="badge wait">bezahlt</span>{% elif upcoming.reregistration_open %}<span class="badge wait">offen</span> Semesterbeitrag {{ upcoming.fee }} € bis {{ upcoming.deadline|date:"j. F Y" }}{% else %}Semesterbeitrag {{ upcoming.fee }} € vom {{ upcoming.reregistration_start|date:"j. F" }} bis {{ upcoming.deadline|date:"j. F Y" }}{% endif %}{% if not paid and upcoming.late_deadline %}<br><small class="muted">Nachfrist bis {{ upcoming.late_deadline|date:"j. F" }} mit {{ late_fee }} € Säumnisgebühr; danach folgt die Exmatrikulation.</small>{% endif %}{% if next.leave %} · <span class="badge">Urlaubssemester</span>{% endif %}</p>
     {% if missing %}<p class="fail">Für die Rückmeldung fehlt noch: {{ missing|join:" · " }}</p>{% endif %}
+    {% if own and not paid and upcoming.reregistration_open %}{% include "students/_transfer.html" with amount=owed reference=study.person.matriculation|add:" "|add:study.person.last_name %}{% endif %}
     {% if own or office %}
     <form method="post" action="{% url 'students:leave' study.pk %}" class="inline">
       {% csrf_token %}

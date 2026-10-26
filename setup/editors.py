@@ -149,7 +149,7 @@ EDITORS = {e.key: e for e in [
         sections=[
             ('Briefkopf und Website', ['name', 'short_name', 'address', 'place', 'email', 'website', 'imprint', 'privacy', 'accessibility']),
             ('Aufnahme und Immatrikulation', ['matriculation_start', 'accept_days', 'retention_months', 'signup', 'insurers']),
-            ('Rückmeldung und Prüfungen', ['late_fee', 'withdraw_weeks']),
+            ('Rückmeldung und Prüfungen', ['late_fee', 'payee', 'iban', 'bic', 'withdraw_weeks']),
             ('Raumbuchung', ['student_daily_hours', 'student_ahead_hours', 'last_minute_hours', 'teacher_ahead_days']),
             ('Amtliche Statistik', ['university', 'region', 'report_id']),
         ],

@@ -23,7 +23,7 @@
         {% else %}
         <tr>
           <td class="nowrap"><b>{{ r.node.code }}</b></td>
-          <td><b>{{ r.node.title }}</b>{% if not r.node.done %} <small class="muted">(laufend)</small>{% endif %}</td>
+          <td><b>{{ r.node.title }}</b>{% if not r.node.done %} <small class="muted">({% if r.node.earned >= r.node.credits %}Prüfung offen{% else %}laufend{% endif %})</small>{% endif %}</td>
           <td class="num">{{ r.node.earned }}{% if r.node.earned != r.node.credits %} / {{ r.node.credits }}{% endif %}</td>
           <td class="num">{% if r.node.weight %}{{ r.node.weight|floatformat:"-2" }}{% endif %}</td>
           <td class="num"><b>{% if r.node.done %}{{ r.node.grade|default_if_none:"bestanden" }}{% endif %}</b></td>

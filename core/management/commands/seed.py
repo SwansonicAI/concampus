@@ -28,7 +28,7 @@ from core import destatis, history, texts
 from core.models import Change, Holiday, Institute, Institution, Message, Office, Person, Term, Text
 from courses.models import Area, Course, Ensemble, Format, Participation, Score, Signup
 from courses.panel import mean, rounding
-from curriculum.models import Module, Program, Subject
+from curriculum.models import Module, Program, Rounding, Subject
 from instruments.models import Instrument, Loan
 from rooms.models import Booking, BookingCategory, Room, RoomFunction
 from students.models import Document, DocumentType, Study, StudyTerm
@@ -813,6 +813,7 @@ class Command(BaseCommand):
             email='campus@hfm-weimar.de', website='https://www.hfm-weimar.de', imprint='https://www.hfm-weimar.de/footer/impressum',
             privacy='https://www.hfm-weimar.de/footer/datenschutz', accessibility='https://www.hfm-weimar.de/footer/barrierefreiheit',
             insurers='\n'.join(INSURERS), university='2850', region='16055', report_id='28500000',
+            iban='DE02120300000000202051', bic='BYLADEM1001',  # a published sample account, not the Hochschule's
         )
         Text.objects.bulk_create(Text(key=key, subject=texts.TEXTS[key].subject, body=body) for key, body in TEXTS.items())
         RoomFunction.objects.bulk_create(RoomFunction(key=key, name=name, central=central, order=n) for n, (key, name, central) in enumerate(FUNCTIONS))
@@ -834,7 +835,7 @@ class Command(BaseCommand):
         self.programs, self.teach, self.first_course = {}, {}, {}
         for name, degree, version, semesters, subjects, plan in PROGRAMS:
             program = Program.objects.create(
-                name=name, degree=degree, version=version, semesters=semesters, postgraduate=degree in POSTGRADUATE, honours=Decimal('1.0'),
+                name=name, degree=degree, version=version, semesters=semesters, postgraduate=degree in POSTGRADUATE, honours=Decimal('1.0'), mean_rounding=Rounding.HALF_UP,  # RPSO 2026: kaufmännisch gerundet
                 thesis_weeks=THESIS_WEEKS.get(degree), **dict(zip(['qualification', 'english', 'level', 'outcomes'], SUPPLEMENT.get((degree, name), ()))),
                 **dict(zip(['exam', 'kind', 'field', 'exam_office'], OFFICIAL[degree])),
             )

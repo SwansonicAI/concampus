@@ -30,6 +30,7 @@
     {% if s.accepted %}
     <h3>Studienplatz angenommen</h3>
     <p>Bitte überweisen Sie den Semesterbeitrag von {{ s.start_term.fee }} € bis zum {{ s.start_term.deadline|date:"j. F Y" }}.</p>
+    {% include "students/_transfer.html" with amount=s.start_term.fee reference="Semesterbeitrag "|add:s.start_term.name|add:", "|add:s.person.name %}
     {% if s.waiting %}<p>Für die Immatrikulation fehlt noch: {{ s.waiting|join:" · " }}.</p>{% endif %}
     {% elif s.lapsed %}
     <h3>Frist zur Annahme verstrichen</h3>

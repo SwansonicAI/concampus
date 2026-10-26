@@ -47,6 +47,11 @@ class LessonForm(PlanForm):
 Lessons = forms.formset_factory(LessonForm, extra=0)
 
 
+class EnsembleField(forms.ModelChoiceField):
+    def label_from_instance(self, ensemble):
+        return ensemble.name
+
+
 class DateForm(forms.Form):
     """One date of a course, such as a day of a block seminar; in one-to-one lessons a make-up lesson for one student."""
 
@@ -63,6 +68,9 @@ class DateForm(forms.Form):
                 label='Für', queryset=Person.objects.filter(studies__participations__course=course).distinct(), empty_label='Bitte wählen',
             )
             self.order_fields(['student'])
+        elif course and course.allocation == Course.Allocation.ENSEMBLE:  # a coaching session of one ensemble
+            self.fields['ensemble'] = EnsembleField(label='Für', queryset=course.ensembles.all(), required=False, empty_label='Alle')
+            self.order_fields(['ensemble'])
 
     def clean(self):
         data = super().clean()
