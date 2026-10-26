@@ -1,0 +1,11 @@
+{% extends base %}
+{% block title %}{{ kind.name }}{% endblock %}
+{% block content %}
+<div class="document">
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="more" href="{% url 'admissions:mine' %}">Zur Bewerbung</a></p>
+  <h1>{{ kind.name }}</h1>
+  <p style="margin-top: 32px">{{ body|linebreaksbr }}</p>
+  <div class="signatures"><span>Ort, Datum</span><span>Unterschrift</span><span>Unterschrift</span></div>
+  <p class="no-print muted" style="margin-top: 32px"><small>Unterschrieben fotografieren oder einscannen und unter „Meine Bewerbung“ hochladen.</small></p>
+</div>
+{% endblock %}

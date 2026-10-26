@@ -245,6 +245,10 @@ class DocumentType(Tracked, Keyed):
         help_text='Für einen Zahlungsbeleg, etwa die Prüfungsgebühr: Bewerbende sehen Betrag und Bankverbindung der Hochschule.',
     )
     file_types = models.CharField('Dateitypen', max_length=120, blank=True, help_text='Endungen, z. B. „.pdf, .jpg“; leer: PDF und Bilder.')
+    template = models.TextField(
+        'Vordruck', blank=True,
+        help_text='Zum Ausdrucken und Unterschreiben, etwa die Einwilligung der Eltern. Platzhalter: {name}, {geburtsdatum}, {studiengang}, {hauptfach}, {hochschule}.',
+    )
     max_mb = models.PositiveIntegerField('Höchstens (MB)', null=True, blank=True)
     single = models.BooleanField('Nur eine Datei', default=False, help_text='Eine neue ersetzt die alte.')
     order = models.PositiveSmallIntegerField('Reihenfolge', default=0)
@@ -266,6 +270,11 @@ class DocumentType(Tracked, Keyed):
     @property
     def extensions(self):
         return tuple(e.strip().lower() for e in (self.file_types or self.DEFAULT_TYPES).replace(';', ',').split(',') if e.strip())
+
+    @property
+    def accepted(self):
+        """What an upload may be, in words."""
+        return f'{self.file_types or "PDF oder Foto"}' + (f', höchstens {self.limit}' if self.max_mb else '')
 
     @property
     def limit(self):
@@ -316,9 +325,14 @@ class Document(Tracked, models.Model):
         """File an upload; where the kind keeps one file only, it replaces the one before."""
         if kind.single:
             for old in study.documents.filter(kind=kind):
-                old.file.delete(save=False)
+                old.drop_file()
                 old.delete()
         return cls.objects.create(person=study.person, study=study, kind=kind, title=file.name[:120], file=file)
+
+    def drop_file(self):
+        """Delete the file, unless another document keeps it too, like the demo's placeholder."""
+        if self.file and not Document.objects.filter(file=self.file.name).exclude(pk=self.pk).exists():
+            self.file.delete(save=False)
 
     @property
     def href(self):

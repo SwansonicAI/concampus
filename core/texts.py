@@ -96,6 +96,12 @@ TEXTS = {
         'Ihr Termin: {termin} Uhr, {raum}.\n\nBitte erscheinen Sie 30 Minuten vorher und bringen Sie einen Lichtbildausweis mit, wenn Sie '
         'begleitet werden auch die Noten für die Begleitung.', ('pruefung', 'termin', 'raum'),
     ),
+    'einladung_eignungspruefung': Spec(
+        BESCHEID, 'Einladung zur Eignungsprüfung', 'Einladung: {pruefung}',
+        'Sie sind zur {pruefung} eingeladen.\n\nTermin: {termin} Uhr\nOrt: {raum}\n\nIhr Programm:\n{programm}\n\n'
+        'Wenn Sie bestehen, folgen:\n{danach}\n\nBitte erscheinen Sie 30 Minuten vorher und bringen Sie einen Lichtbildausweis mit. '
+        'Dieses Schreiben können Sie für ein Visum vorlegen.', STUDY + ('pruefung', 'termin', 'raum', 'programm', 'danach'),
+    ),
     'unterlagen_fehlen': Spec(
         NACHRICHT, 'Bewerbung unvollständig', 'Ihre Bewerbung: es fehlt noch etwas',
         'Zu Ihrer Bewerbung für {studiengang}, Hauptfach {hauptfach}, fehlt noch:\n{fehlt}\n\nBitte laden Sie es bis zum {frist} unter „Meine Bewerbung“ '

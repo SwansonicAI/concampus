@@ -77,11 +77,13 @@ class ApplicationTest(Seeded):
     def test_sign_up_and_apply(self):
         anon = Client()
         r = anon.post('/aufnahme/konto/', {
-            'first_name': 'Ida', 'last_name': 'Testfall', 'email': 'ida@example.org', 'gender': 'w', 'birth_date': '2005-05-05',
-            'birth_place': 'Erfurt', 'nationality': '000', 'password1': 'Geige-Weimar-2026', 'password2': 'Geige-Weimar-2026',
+            'first_name': 'Ida', 'last_name': 'Testfall', 'email': 'ida@example.org', 'birth_date': '2005-05-05',
+            'password1': 'Geige-Weimar-2026', 'password2': 'Geige-Weimar-2026',
         }, follow=True)
         audition = r.context['form'].fields['audition'].queryset.filter(video=True).first()
-        anon.post('/aufnahme/bewerben/', {'audition': audition.pk, 'repertoire': 'Bach, Partita Nr. 2', 'accompanist': 'on', 'declaration': 'on'})
+        anon.post('/aufnahme/bewerben/', {  # what the account did not ask, the first application does
+            'audition': audition.pk, 'repertoire': 'Bach, Partita Nr. 2', 'nationality': '000', 'gender': 'w', 'accompanist': 'on', 'declaration': 'on',
+        })
         ida = Person.objects.get(username='ida@example.org')
         study = ida.studies.get()
         self.assertEqual(study.status, Study.Status.APPLIED)

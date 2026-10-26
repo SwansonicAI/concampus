@@ -16,7 +16,10 @@ from typing import NamedTuple
 
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Permission
+from django.core.files.base import ContentFile
+from django.core.files.storage import default_storage
 from django.core.management import call_command
+from django.test import override_settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import models, transaction
 from django.utils import timezone
@@ -24,7 +27,7 @@ from django.utils.crypto import get_random_string
 
 from admissions.retention import forget
 from core.dates import months_before
-from admissions.views import DECISIONS
+from admissions.views import DECISIONS, invite
 from core import destatis, history, texts
 from core.models import Change, Holiday, Institute, Institution, Message, Office, Person, Term, Text
 from courses.models import Area, Course, Ensemble, Format, Participation, Score, Signup
@@ -391,6 +394,13 @@ TEACHERS = [  # key, title, first, last, Hauptfach taught
     ('lorenz', 'Prof.', 'Ines', 'Lorenz', None), ('kraft', '', 'Simon', 'Kraft', None),
 ]
 POSTGRADUATE = ['M.Mus.', 'M.Ed.', 'Konzertexamen', 'Zertifikat', 'Dr. phil.']
+OUTBOX = {'default': {'BACKEND': 'django.core.mail.backends.locmem.EmailBackend'}}
+PLACEHOLDER = (  # a one-page PDF saying what it is
+    b'%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj 2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj '
+    b'3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj '
+    b'4 0 obj<</Length 58>>stream\nBT /F1 18 Tf 72 760 Td (Platzhalter des Demosystems) Tj ET\nendstream endobj '
+    b'5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n'
+)
 VIDEO_NOTE = (
     'Eine Datei, ungeschnitten, 10–15 Minuten, beginnend mit einer kurzen Vorstellung; die Kamera 3–5 m entfernt, '
     'eine professionelle Aufnahme ist nicht nötig. Nicht älter als ein Jahr. Höchstens 1,5 GB als .mp4, .mov, .webm, .m4v, .ogg, .ogv oder .qt.'
@@ -401,7 +411,10 @@ DOCUMENTS = [  # key, name, condition, settings: what a complete application hol
     ('school', 'Abitur- oder letztes Schulzeugnis', 'always', {'shared': True}),
     ('degree', 'Bachelor- oder Masterzeugnis, Transcript', 'degree', {'shared': True}),
     ('fee', 'Einzahlungsbeleg Eignungsprüfungsgebühr', 'always', {'amount': Decimal('50')}),
-    ('consent', 'Einwilligung der Erziehungsberechtigten', 'minor', {'note': 'Sie sind noch nicht volljährig.', 'shared': True}),
+    ('consent', 'Einwilligung der Erziehungsberechtigten', 'minor', {'note': 'Sie sind noch nicht volljährig.', 'shared': True, 'template': (
+        'Wir sind die Erziehungsberechtigten von {name}, geboren am {geburtsdatum}. Wir sind damit einverstanden, dass sich unser Kind an der '
+        '{hochschule} für {studiengang}, Hauptfach {hauptfach}, bewirbt, an der Eignungsprüfung teilnimmt und im Fall der Zulassung das '
+        'Studium aufnimmt.\n\nName der Erziehungsberechtigten: ________________________________')}),
     ('voice', 'Phoniatrisches Gutachten', 'subjects', {'required': False, 'shared': True}),
     ('language', 'Sprachnachweis Deutsch', 'foreign', {'required': False, 'note': 'Niveau B2.', 'shared': True}),
     ('notice', 'Bescheid', 'never', {}),
@@ -784,7 +797,7 @@ class Command(BaseCommand):
         self.rng = random.Random(1872)  # the year the Hochschule was founded
         self.password = make_password(get_random_string(32))  # one nobody knows: the demo has its access code and profiles
         self.logins, self.names, self.mails = set(), set(), set()
-        with transaction.atomic(), history.quietly():
+        with override_settings(MAILERS=OUTBOX), transaction.atomic(), history.quietly():  # letters land in the Postfach; no mail to made-up people
             self.terms()
             self.structure()
             self.people()
@@ -1654,7 +1667,7 @@ class Command(BaseCommand):
             early.course.staff.set([wendt, second])
             Document.objects.create(
                 person=early.study.person, study=early.study, kind=DocumentType.system('abschlussarbeit'), title='Abschlussarbeit.pdf',
-                url=f'https://upload.hfm-weimar.de/{uuid.uuid4().hex[:10]}.pdf', created=at(date(2026, 10, 22), hour=16),
+                file=self.placeholder(), created=at(date(2026, 10, 22), hour=16),
             )
             Score.objects.create(participation=early, examiner=second, value=Decimal('1.7'))
 
@@ -1680,6 +1693,13 @@ class Command(BaseCommand):
         module = self.titles[leaf.parent_id]
         played = '' if not leaf.title.startswith(ARTISTIC) else 'Klavier' if module.startswith('Klavier') else subject
         return played, f'{module} · {leaf.title}' + (f' · {played}' if played and not module.startswith(played) else '')
+
+    def placeholder(self):
+        """The one file the demo's documents share: opened through the same check as real uploads."""
+        name = 'dokumente/demo/platzhalter.pdf'
+        if not default_storage.exists(name):
+            default_storage.save(name, ContentFile(PLACEHOLDER))
+        return name
 
     def repertoire(self, subject):
         return '\n'.join(w.format(i=subject) for w in self.rng.sample(REPERTOIRE[family(subject)], 3))
@@ -1777,7 +1797,7 @@ class Command(BaseCommand):
             if video:
                 documents.append(Document(person=study.person, study=study, kind_id='video', title=DEMO_VIDEO[0], url=DEMO_VIDEO[1], created=at(study.since, hour=11)))
             documents += [
-                Document(person=study.person, study=study, kind_id=kind, title=names[kind], url=f'https://upload.hfm-weimar.de/{uuid.uuid4().hex[:10]}.pdf', created=at(study.since, hour=11))
+                Document(person=study.person, study=study, kind_id=kind, title=names[kind], file=self.placeholder(), created=at(study.since, hour=11))
                 for kind in handed
             ]
             if not video or (sit(study, video, talent + 1.5, panel, note).passed and video.released):  # videos are judged more kindly
@@ -1807,9 +1827,17 @@ class Command(BaseCommand):
                 day += timedelta(days=1)
             if course not in shared:
                 free[room] = day
+        for course in shared:  # the parts after the Hauptfach have their day before anyone is entered: the first free half day in a room like the planned one
+            rooms = [course.plan[0], *Room.objects.filter(function=course.plan[0].function_id).exclude(pk=course.plan[0].pk).order_by('name')]
+            free_at = next(((r, at(written, hour=h)) for r in rooms for h in (9, 14) if not Booking(room=r, start=at(written, hour=h), end=at(written, hour=h + 4)).clashes().exists()), None)
+            if free_at and not course.bookings.exists():
+                Booking.objects.create(room=free_at[0], start=free_at[1], end=free_at[1] + timedelta(hours=4), person=self.staff['asa'], course=course, category_id='eignungspruefung')
         Participation.objects.bulk_create(rows)
         Score.objects.bulk_create(Score(participation=p, examiner=e, value=v) for p, e, v in scores)
         Document.objects.bulk_create(documents)
+        if not finished:  # those with a time have their invitation
+            for p in Participation.objects.filter(course__term=term, course__kind=Course.Kind.AUDITION, course__released=None, slot__isnull=False).select_related('course', 'study__person', 'study__program', 'study__subject', 'study__start_term'):
+                invite(p)
         if not finished:  # the Bachelor's Bescheide after the Videostufe are out; the Master's are still to send
             failed = Study.objects.filter(start_term=term, participations__course__released__isnull=False, participations__passed=False).exclude(program__degree='M.Mus.')
             Study.objects.filter(pk__in=failed.values('pk')).update(status=Study.Status.REJECTED, since=date(2026, 10, 21))
@@ -1939,7 +1967,7 @@ class Command(BaseCommand):
                     link='/pruefungen/'),
             Message(person=demo, subject='Ergebnis: Künstlerische Präsentation I · Künstlerisch-praktische Prüfung (20 Min.) · Violine', created=at(date(2026, 7, 30), hour=12),
                     body='Ihr Prüfungsergebnis ist freigegeben.', link='/pruefungen/', read=at(date(2026, 7, 30), hour=18)),
-            Message(person=applicant, subject='Bewerbung eingegangen', created=at(date(2026, 10, 3), hour=11), read=at(date(2026, 10, 3), hour=12),
+            Message(person=applicant, subject='Bewerbung eingegangen', created=at(date(2026, 9, 1), hour=10), read=at(date(2026, 9, 1), hour=10),
                     body='Ihre Bewerbung für B.Mus. Streichinstrumente und Harfe, Hauptfach Violoncello, ist eingegangen.', link='/aufnahme/meine/'),
             Message(person=applicant, subject='Einladung zur nächsten Prüfungsstufe', created=at(date(2026, 10, 20), hour=14),
                     body='Sie haben die Videostufe bestanden und sind zur Eignungsprüfung Hauptfach Violoncello eingeladen. Ihren Termin finden Sie unter „Meine Bewerbung“.',

@@ -353,6 +353,12 @@ def calendar(request, token):
     except signing.BadSignature:
         raise Http404
     now = timezone.now()
+    bookings = agenda(person).filter(start__gte=now - timedelta(days=7), start__lte=now + timedelta(days=183)).select_related('room', 'course', 'category')
+    return ics(request, [(f'buchung-{b.pk}', b.start, b.end, b.label, f'{b.room} {b.room.purpose}, {b.room.building}'.strip()) for b in bookings])
+
+
+def ics(request, events, filename=None):
+    """iCalendar of (uid, start, end, summary, location) for any calendar app; with a filename, to download."""
 
     def text(value):
         return str(value).replace('\\', '\\\\').replace(';', '\\;').replace(',', '\\,').replace('\n', '\\n')
@@ -360,12 +366,15 @@ def calendar(request, token):
     def stamp(moment):
         return moment.astimezone(UTC).strftime('%Y%m%dT%H%M%SZ')
 
-    name, host = Institution.get().name, request.get_host().split(':')[0]
+    name, host, now = Institution.get().name, request.get_host().split(':')[0], timezone.now()
     lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', f'PRODID:-//{text(name)}//Campus//DE', f'X-WR-CALNAME:{text(name)}']
-    for b in agenda(person).filter(start__gte=now - timedelta(days=7), start__lte=now + timedelta(days=183)).select_related('room', 'course', 'category'):
+    for uid, start, end, summary, location in events:
         lines += [
-            'BEGIN:VEVENT', f'UID:buchung-{b.pk}@{host}', f'DTSTAMP:{stamp(now)}', f'DTSTART:{stamp(b.start)}', f'DTEND:{stamp(b.end)}',
-            f'SUMMARY:{text(b.label)}', f'LOCATION:{text(f"{b.room} {b.room.purpose}, {b.room.building}".strip())}', 'END:VEVENT',
+            'BEGIN:VEVENT', f'UID:{uid}@{host}', f'DTSTAMP:{stamp(now)}', f'DTSTART:{stamp(start)}', f'DTEND:{stamp(end)}',
+            f'SUMMARY:{text(summary)}', f'LOCATION:{text(location)}', 'END:VEVENT',
         ]
     lines.append('END:VCALENDAR')
-    return HttpResponse('\r\n'.join(lines) + '\r\n', content_type='text/calendar; charset=utf-8')
+    response = HttpResponse('\r\n'.join(lines) + '\r\n', content_type='text/calendar; charset=utf-8')
+    if filename:
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response

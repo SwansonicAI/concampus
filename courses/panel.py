@@ -192,8 +192,7 @@ def schedule(course, rows, start, minutes, room, person, pause=0):
         booking.save()
         Participation.objects.bulk_update(rows, ['slot'])
         history.saved(rows)
+    if course.kind == course.Kind.AUDITION:  # applicants get a letter (admissions.views.invite)
+        return
     for p in rows:
-        texts.send(
-            'einladung', p.study.person, reverse('admissions:mine') if course.kind == course.Kind.AUDITION else reverse('exams:index'),
-            pruefung=course.title, termin=f'{timezone.localtime(p.slot):%d.%m.%Y, %H:%M}', raum=f'{room} ({room.building})',
-        )
+        texts.send('einladung', p.study.person, reverse('exams:index'), pruefung=course.title, termin=f'{timezone.localtime(p.slot):%d.%m.%Y, %H:%M}', raum=f'{room} ({room.building})')

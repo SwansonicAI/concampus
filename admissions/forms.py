@@ -9,20 +9,30 @@ from django.utils.formats import date_format
 
 from core import destatis
 from core.dates import DayField
+from core.forms import frequent
 from core.models import Person
 from courses.models import Course
 
 
 class SignupForm(BaseUserCreationForm):
-    birth_date = DayField(label='Geburtsdatum', widget=forms.DateInput(format='%d.%m.%Y', attrs={'data-day': '', 'placeholder': 'TT.MM.JJJJ'}))
+    """An account asks for little: whom, how to reach them, and the birth date, which decides whether parents must consent."""
+
+    birth_date = DayField(
+        label='Geburtsdatum', help_text='z. B. 10.11.2008', widget=forms.DateInput(format='%d.%m.%Y', attrs={'data-day': '', 'placeholder': 'TT.MM.JJJJ'}),
+    )
 
     class Meta:
         model = Person
-        fields = ['first_name', 'last_name', 'email', 'gender', 'birth_date', 'birth_place', 'nationality']
+        fields = ['first_name', 'last_name', 'email', 'birth_date']
+        labels = {'first_name': 'Vorname(n)', 'last_name': 'Familienname'}
+        help_texts = {
+            'first_name': 'Wie im Pass. Wer nur einen Namen hat, lässt dieses Feld leer.',
+            'last_name': 'Wie im Pass, gleich ob er dort vorn oder hinten steht.',
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        for field in ['first_name', 'last_name', 'email', 'gender', 'birth_date']:
+        for field in ['last_name', 'email', 'birth_date']:
             self.fields[field].required = True
         self.fields['password1'].help_text = 'Mindestens 8 Zeichen, nicht nur Ziffern und nicht Ihrem Namen ähnlich.'
         self.fields['password2'].help_text = ''
@@ -56,7 +66,7 @@ class Hauptfach(forms.Select):
 
 
 class ApplicationForm(forms.Form):
-    audition = IntakeField(label='Studiengang und Hauptfach', queryset=None, empty_label=None, widget=Hauptfach(attrs={'data-leads': 'teacher', 'data-describes': 'repertoire'}))
+    audition = IntakeField(label='Studiengang und Hauptfach', queryset=None, widget=Hauptfach(attrs={'data-leads': 'teacher', 'data-describes': 'repertoire'}))
     teacher = forms.ModelChoiceField(label='Wunschlehrer:in', queryset=None, required=False, empty_label='Keine Angabe')
     repertoire = forms.CharField(
         label='Prüfungsprogramm', widget=forms.Textarea(attrs={'rows': 5}),
@@ -75,6 +85,15 @@ class ApplicationForm(forms.Form):
 
     def __init__(self, *args, person, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['audition'].empty_label = 'Bitte wählen'
+        for name in ('nationality', 'gender'):  # asked once, with the first application
+            if not getattr(person, name):
+                self.fields[name] = Person._meta.get_field(name).formfield(required=True)
+        if 'nationality' in self.fields:
+            self.fields['nationality'].choices = [('', 'Bitte wählen'), *frequent('nationality', destatis.countries())]
+        self.fields['entrance'].choices = [('', 'Noch nicht erworben'), *frequent('entrance', destatis.ENTRANCE)]
+        self.fields['entrance_region'].choices = [('', '–'), *frequent('entrance_region', destatis.places())]
+        self.order_fields(['audition', 'teacher', 'repertoire', 'nationality', 'gender'])
         studies = person.studies.all()  # who applied before: their instrument first, then its Institut's, at their level
         applied = studies.filter(program=OuterRef('program'), subject=OuterRef('subject'), start_term=OuterRef('term'))
         level = Q(program__postgraduate__in=studies.values('program__postgraduate'))
@@ -87,7 +106,7 @@ class ApplicationForm(forms.Form):
             .order_by('near', 'program__degree', 'program__name', 'subject__name')
         )
         if person.home:  # where the HZB was most likely gained
-            self.fields['entrance_region'].choices = [('', '–'), ('Ihr Heimatwohnsitz', [(person.home, person.get_home_display())])] + destatis.places()
+            self.fields['entrance_region'].choices.insert(1, ('Ihr Heimatwohnsitz', [(person.home, person.get_home_display())]))
         classes = defaultdict(set)  # who teaches each Hauptfach one can apply for, grouped so applicants find their instrument
         for subject, pk in Course.objects.filter(kind=Course.Kind.LESSON, subject__in=auditions.values('subject'), staff__isnull=False).values_list('subject__name', 'staff'):
             classes[subject].add(pk)

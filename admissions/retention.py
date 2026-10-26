@@ -23,7 +23,7 @@ def forget(cutoff):
     here: no other study, no teaching, no office. Returns (documents deleted, people made anonymous)."""
     gone = ended(cutoff)
     documents = Document.objects.filter(study__in=gone)
-    for d in documents.exclude(file=''):
+    for d in documents.exclude(file='').exclude(file__in=Document.objects.exclude(study__in=gone).values('file')):  # a file another keeps stays
         d.file.delete(save=False)
     deleted = documents.delete()[0]
     people = (

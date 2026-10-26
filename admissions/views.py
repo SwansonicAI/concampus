@@ -1,4 +1,5 @@
 from collections import Counter, defaultdict
+from pathlib import Path
 from datetime import timedelta
 from decimal import InvalidOperation
 
@@ -25,6 +26,7 @@ from core.text import matching
 from courses import panel
 from courses.forms import SlotForm
 from courses.models import Course, Participation
+from rooms.views import ics
 from curriculum.models import Subject
 from students.models import Document, DocumentType, Study, StudyTerm
 from .forms import AcceptForm, ApplicationForm, SignupForm
@@ -272,6 +274,51 @@ def next_stages(course):
     return later.filter(subject=None) if course.subject_id else later.none()
 
 
+def held(p):
+    """(start, end, room) of an applicant's appointment: the slot, until the next one, in the booking around it."""
+    booking = next((b for b in p.course.bookings.select_related('room') if b.start <= p.slot < b.end), None)
+    later = p.course.participations.filter(slot__gt=p.slot).order_by('slot').values_list('slot', flat=True).first()
+    return p.slot, min(filter(None, [later, booking and booking.end]), default=p.slot + timedelta(minutes=30)), booking and booking.room
+
+
+def after(course):
+    """What follows a stage, for whoever passes it: each next stage with its first date and room, as far as they are booked."""
+    found = []
+    for c in next_stages(course).prefetch_related('bookings__room'):
+        first = min(c.bookings.all(), key=lambda b: b.start, default=None)
+        found.append(f'{c.title}: {date_format(timezone.localtime(first.start), "l, j. F Y, H:i")} Uhr, {first.room} ({first.room.building})' if first else f'{c.title}: Termin folgt')
+    return found
+
+
+def invite(p):
+    """The invitation to an appointment of the audition, as a letter in the Postfach and the file: when, where, what to play, what
+    follows; printable, e.g. for a visa."""
+    start, _, room = held(p)
+    p.study.notify(
+        'einladung_eignungspruefung', reverse('admissions:mine'), pruefung=p.course.title, termin=date_format(timezone.localtime(start), 'l, j. F Y, H:i'),
+        raum=f'{room} ({room.building})' if room else 'wird mitgeteilt', programm=p.note or '–', danach='\n'.join(f'– {line}' for line in after(p.course)) or '–',
+    )
+
+
+def calendar(request, pk):
+    """An applicant's appointment as a calendar file."""
+    p = get_object_or_404(Participation.objects.select_related('course'), pk=pk, study__person=request.user, slot__isnull=False, course__kind=Course.Kind.AUDITION)
+    start, end, room = held(p)
+    return ics(request, [(f'eignungspruefung-{p.pk}', start, end, p.course.title, f'{room}, {room.building}' if room else '')], 'eignungspruefung.ics')
+
+
+def blank(request, pk, kind):
+    """A form to print and sign for an application, like the parents' consent, its blanks filled in where known."""
+    study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject'), pk=pk, person=request.user)
+    kind = get_object_or_404(DocumentType.objects.exclude(template=''), key=kind)
+    person = study.person
+    body = kind.template.format_map(defaultdict(str, {
+        'name': person.legal_name, 'geburtsdatum': date_format(person.birth_date, 'j. F Y') if person.birth_date else '________',
+        'studiengang': study.program.title, 'hauptfach': study.subject, 'hochschule': Institution.get().name,
+    }))
+    return render(request, 'admissions/blank.html', {'kind': kind, 'body': body})
+
+
 def audition(request, pk):
     person = request.user
     course = get_object_or_404(Course.objects.select_related('term', 'program', 'subject'), pk=pk, kind=Course.Kind.AUDITION)
@@ -318,10 +365,12 @@ def plan(request, pk):
     rows = list(course.participations.filter(slot=None, study__status=Study.Status.APPLIED).select_related('study__person').order_by('created'))
     if form.is_valid() and rows:
         try:
-            panel.schedule(course, rows, form.cleaned_data['start'], form.cleaned_data['minutes'], form.cleaned_data['room'], request.user)
+            panel.schedule(course, rows, form.cleaned_data['start'], form.cleaned_data['minutes'], form.cleaned_data['room'], request.user, form.cleaned_data['pause'])
         except ValidationError as error:
             messages.error(request, ' '.join(error.messages))
         else:
+            for p in rows:
+                invite(p)
             messages.success(request, f'{len(rows)} Termine vergeben, Einladungen versandt.')
     else:
         messages.error(request, 'Bitte Beginn, Dauer und Raum angeben.' if rows else 'Alle Bewerbenden haben schon einen Termin.')
@@ -512,9 +561,12 @@ def apply(request):
             if not created:
                 messages.error(request, 'Für diesen Studiengang und dieses Hauptfach haben Sie sich bereits beworben.')
                 return redirect('admissions:mine')
+            given = [name for name in ('nationality', 'gender') if name in data]
             for field in entrance:
                 setattr(person, field, data[field] or getattr(person, field))
-            person.save(update_fields=entrance)
+            for field in given:
+                setattr(person, field, data[field])
+            person.save(update_fields=entrance + given)
             Participation.objects.create(course=audition, study=study, note=data['repertoire'])
             if data['accompanist'] and audition.accompaniment:
                 Participation.objects.create(course=audition.accompaniment, study=study)
@@ -549,7 +601,10 @@ def mine(request):
         study.deadline = next((p.course.deadline for p in study.stages if p.course.program_id), None)
         study.stages = list(study.stages)
         for p in study.stages:  # where an appointment takes place: the course's booking around it
-            p.room = p.slot and next((b.room for b in p.course.bookings.select_related('room') if b.start <= p.slot < b.end), None)
+            p.room = p.slot and held(p)[2]
+        ahead = [p for p in study.stages if p.slot and p.slot > timezone.now() and not p.course.released]
+        study.invited, study.ahead = bool(ahead), ahead
+        study.after = after(ahead[-1].course) if ahead else []
     return render(request, 'admissions/mine.html', {
         'studies': studies, 'documents': person.documents.exclude(message=None), 'accept': AcceptForm(instance=person),
         'insurers': Institution.get().insurers.splitlines(), 'bank': Institution.get(),
@@ -596,7 +651,7 @@ def document(request, pk):
         raise PermissionDenied
     if not d.file:
         raise Http404
-    return FileResponse(d.file.open('rb'), filename=d.title)
+    return FileResponse(d.file.open('rb'), filename=d.title if Path(d.title).suffix else d.title + Path(d.file.name).suffix)  # the type follows the name
 
 
 @require_POST
@@ -605,7 +660,7 @@ def discard(request, pk):
     document = get_object_or_404(Document.objects.select_related('study'), pk=pk, person=request.user, message=None)
     if not uploads_open(document.study):
         raise PermissionDenied
-    document.file.delete(save=False)
+    document.drop_file()
     document.delete()
     messages.success(request, f'„{document.title}“ entfernt.')
     return redirect('admissions:mine')
