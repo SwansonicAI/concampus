@@ -3,3 +3,14 @@
 	header X-Robots-Tag "noindex, nofollow"
 	reverse_proxy app:8000
 }
+
+# The product home page: github.com/SwansonicAI/concampus-home, cloned to /opt/concampus-home
+concampus.de {
+	encode zstd gzip
+	root * /srv/site
+	file_server
+}
+
+www.concampus.de {
+	redir https://concampus.de{uri} permanent
+}

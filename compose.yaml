@@ -26,6 +26,7 @@ services:
       DOMAIN: ${DOMAIN}
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - /opt/concampus-home/public:/srv/site:ro  # public/ only, so .git is never served
       - caddy:/data
     restart: unless-stopped
 
