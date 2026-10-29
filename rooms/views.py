@@ -13,7 +13,7 @@ from django.utils.dateparse import parse_datetime
 from django.utils.formats import date_format
 from django.views.decorators.http import require_POST
 
-from core.access import require
+from core.access import CODENAMES, require
 from core.apps import plural
 from core.dates import day as understood
 from core.forms import again, sent
@@ -57,12 +57,12 @@ def week(bookings, day, person=None):
     """Context for the week grid: the Monday-to-Sunday dates around `day` and the bookings placed on them. For one
     person's own plan, their lessons name the student (`who`) and a change of building without a break shows."""
     monday = day - timedelta(days=day.weekday())
-    placed = list(bookings.filter(start__date__range=(monday, monday + timedelta(days=6))).select_related('room', 'course', 'category').prefetch_related('participants'))
+    placed = list(bookings.filter(start__date__range=(monday, monday + timedelta(days=6))).select_related('room', 'course', 'category').prefetch_related('participants', 'absent'))
     if person:
         moves(placed)
         for b in placed:
             if b.course and b.course.kind == Course.Kind.LESSON and b.person_id == person.pk:
-                b.who = ', '.join(f'{p.first_name} {p.last_name}' for p in b.participants.all())
+                b.who = ', '.join(f'{p.first_name} {p.last_name}' + (' (abgemeldet)' if p in b.absent.all() else '') for p in b.participants.all())
     for n, b in enumerate(placed):
         column = 2 + timezone.localtime(b.start).weekday()
         b.place = f'{line(b.start)} / {column} / {line(b.end)} / {column + 1}'
@@ -111,6 +111,10 @@ def groups():
     ]
 
 
+ROOMS = ('student', 'teacher', *CODENAMES)  # who uses the rooms: not applicants or former students
+
+
+@require(*ROOMS)
 def index(request):
     person, today = request.user, timezone.localdate()
     day = understood(request.GET.get('tag', '')) or today
@@ -160,6 +164,7 @@ def opening():
     return max(hour, hour.replace(hour=OPEN))
 
 
+@require(*ROOMS)
 def find(request):
     """Free rooms for a time, a group size and equipment: the question people actually ask. Teachers also see the halls
     given out centrally that are free then, to ask for."""
@@ -193,6 +198,7 @@ def tried(person, room, day, begin, until):
     }, person=person)
 
 
+@require(*ROOMS)
 def room(request, pk):
     room = get_object_or_404(Room.objects.prefetch_related('institutes'), pk=pk)
     day = understood(request.GET.get('tag', '')) or timezone.localdate()
@@ -214,6 +220,7 @@ def series(bookings):
     return list(shown.values())
 
 
+@require(*ROOMS)
 def mine(request):
     person, today = request.user, timezone.localdate()
     context = {
@@ -228,6 +235,7 @@ def mine(request):
     return render(request, 'rooms/mine.html', context)
 
 
+@require(*ROOMS)
 def events(request):
     """What the Hochschule puts on, a month at a time: concerts, class evenings, master classes, lectures."""
     today = timezone.localdate()
@@ -281,6 +289,7 @@ def service(request, pk):
     return redirect('rooms:booking', pk=pk)
 
 
+@require(*ROOMS)
 def booking(request, pk=None):
     person = request.user
     booking = get_object_or_404(Booking.objects.select_related('course', 'person', 'room', 'category'), pk=pk) if pk else Booking()
@@ -448,6 +457,26 @@ def day_off(request):
         messages.success(request, f'{plural(len(chosen), "Termin", "Termine")} abgesagt. Nachricht an {plural(len(told), "Person", "Personen")}.')
         return redirect(f"{reverse('courses:timetable')}?tag={day:%Y-%m-%d}")
     return render(request, 'rooms/day_off.html', {'day': day, 'dates': dates})
+
+
+@require_POST
+def absent(request, pk):
+    """A participant says they cannot come to one date, such as a lesson: the one who booked it hears, with the note if
+    there is one; the date stays theirs to call off or move. Or they take it back."""
+    booking = get_object_or_404(Booking.objects.select_related('course', 'room', 'person'), pk=pk, participants=request.user, start__gt=timezone.now())
+    if request.POST.get('zurueck'):
+        booking.absent.remove(request.user)
+        messages.success(request, 'Abmeldung zurückgenommen.')
+    else:
+        booking.absent.add(request.user)
+        note = request.POST.get('note', '').strip()[:300]
+        subject, body = texts.render(
+            'abwesenheit', vorname=booking.person.first_name, nachname=booking.person.last_name, veranstaltung=booking.label,
+            termin=moment(booking.start, booking.end), von=request.user,
+        )
+        Message.send(booking.person, subject, body + (f'\n\n{note}' if note else ''), booking.course.get_absolute_url() if booking.course else reverse('rooms:booking', args=[booking.pk]))
+        messages.success(request, f'Abgemeldet für {moment(booking.start, booking.end)}. {booking.person} weiß Bescheid.')
+    return redirect(booking.course or 'rooms:mine')
 
 
 def requestable(person):

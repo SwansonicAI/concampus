@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 
 from core import history, texts
 from curriculum.models import Rounding, rounded
@@ -177,6 +178,8 @@ def rule(rows):
     found = {rounding(p) for p in rows}
     if len(found) > 1:
         return 'Das Mittel wird je nach Prüfungsordnung auf eine Nachkommastelle gerundet oder nach ihr abgeschnitten.'
+    if rows and rows[0].course.kind == Course.Kind.AUDITION:
+        return 'Das Mittel wird nach der ersten Nachkommastelle abgeschnitten, ohne Rundung (Eignungsprüfungsordnung § 6 Abs. 4).'
     return 'Das Mittel wird nach der ersten Nachkommastelle abgeschnitten, ohne Rundung.' if Rounding.CUT in found else 'Das Mittel wird auf eine Nachkommastelle kaufmännisch gerundet.'
 
 
@@ -292,4 +295,4 @@ def schedule(course, rows, start, minutes, room, person, pause=0):
     if course.kind == course.Kind.AUDITION:  # applicants get a letter (admissions.views.invite)
         return
     for p in rows:
-        texts.send('einladung', p.study.person, reverse('exams:index'), pruefung=course.title, termin=f'{timezone.localtime(p.slot):%d.%m.%Y, %H:%M}', raum=f'{room} ({room.building})')
+        texts.send('einladung', p.study.person, reverse('exams:index'), pruefung=course.title, termin=date_format(timezone.localtime(p.slot), 'l, j. F Y, G:i'), raum=f'{room} ({room.building})')

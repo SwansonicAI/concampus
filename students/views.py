@@ -68,7 +68,7 @@ def suggest(request):
         return JsonResponse({'found': []})
     studies = Study.objects.filter(status=Study.Status.ENROLLED).exclude(person=person).select_related('person', 'subject', 'program')
     near = Q(teacher=person) | Q(participations__course__staff=person, participations__course__term=Term.current()) | Q(ensembles__members__person=person)
-    found = matching(studies, q, 'person__first_name', 'person__last_name', 'person__birth_name').annotate(near=Count('pk', filter=near))
+    found = matching(studies, q, 'person__first_name', 'person__last_name', 'person__birth_name', starts=True).annotate(near=Count('pk', filter=near))
     shown = {}
     for s in found.order_by('-near', 'person__last_name', 'person__first_name')[:24]:
         shown.setdefault(s.person_id, s)

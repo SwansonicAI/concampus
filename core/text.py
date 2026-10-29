@@ -61,8 +61,9 @@ class Fold(Func):
         return sql, params
 
 
-def matching(queryset, query, *fields, names=''):
-    """Rows in which every word of `query` occurs, folded, in one of the fields; in any order, as fragments.
+def matching(queryset, query, *fields, names='', starts=False):
+    """Rows in which every word of `query` occurs, folded, in one of the fields; in any order, as fragments, or with
+    `starts` only where a word of the field begins with it (names: 'Chen' is not in 'Bühnensprechen').
 
     Words that name what the rows are (`names`, e.g. 'raum') pick no row: 'Räume' lists them all, 'Raum Orgel' the organ rooms.
     """
@@ -71,6 +72,12 @@ def matching(queryset, query, *fields, names=''):
     if not wanted:
         return queryset
     found = queryset.model.objects.annotate(**{f'_f{i}': Fold(field) for i, field in enumerate(fields)})
+
+    def where(i, word):
+        if not starts:
+            return Q(**{f'_f{i}__contains': word})
+        return reduce(or_, [Q(**{f'_f{i}__startswith': word}), *(Q(**{f'_f{i}__contains': mark + word}) for mark in ' -„(/')])
+
     for word in wanted:
-        found = found.filter(reduce(or_, (Q(**{f'_f{i}__contains': word}) for i in range(len(fields)))))
+        found = found.filter(reduce(or_, (where(i, word) for i in range(len(fields)))))
     return queryset.filter(pk__in=found.values('pk'))

@@ -4,6 +4,7 @@ from django.apps import AppConfig
 from django.db.models import Count, Prefetch, Q
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.formats import date_format
 
 from core.apps import Tile, feature, plural, task
 
@@ -103,5 +104,5 @@ class AdmissionsConfig(Tile, AppConfig):
                 found.append(task(f'Studienplatz {study.subject} annehmen oder ablehnen', reverse('admissions:mine'), accept_by(study, days)))
         for p in person.studies.filter(status=Study.Status.APPLIED).values_list('participations__course__title', 'participations__slot'):
             if p[1] and p[1] > timezone.now():
-                found.append(task(f'{p[0]} am {timezone.localtime(p[1]):%d.%m.%Y um %H:%M} Uhr', reverse('admissions:mine')))  # an appointment, not a deadline
+                found.append(task(f'{p[0]} am {date_format(timezone.localtime(p[1]), "j.n.Y, G:i")} Uhr', reverse('admissions:mine')))  # an appointment, not a deadline
         return found

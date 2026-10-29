@@ -56,8 +56,8 @@
       <tbody>
         {% for r in rows %}{% if r.kind != 'part' %}
         <tr>
-          <td class="nowrap">{{ r.node.code }}</td>
-          <td>{{ r.node.title }}{% if not r.node.done %} <small class="muted">(in progress)</small>{% endif %}</td>
+          <td class="nowrap">{% firstof r.node.code r.choice.code %}</td>
+          <td>{% if r.choice %}{{ r.choice.title }}: {% endif %}{{ r.node.title }}{% if not r.node.done %} <small class="muted">(in progress)</small>{% endif %}</td>
           <td class="num">{{ r.node.earned }}</td>
           <td class="num">{% if r.node.done %}{{ r.node.grade|default_if_none:"passed" }}{% endif %}</td>
         </tr>

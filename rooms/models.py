@@ -128,6 +128,7 @@ class Booking(Tracked, models.Model):
     category = models.ForeignKey(BookingCategory, models.PROTECT, to_field='key', related_name='bookings', verbose_name='Kategorie')
     person = models.ForeignKey(Person, models.CASCADE, related_name='bookings', verbose_name='Gebucht für')
     participants = models.ManyToManyField(Person, blank=True, related_name='attending', verbose_name='Teilnehmende')
+    absent = models.ManyToManyField(Person, blank=True, related_name='absences', verbose_name='Abgemeldet', help_text='Teilnehmende, die zu diesem Termin nicht kommen.')
     course = models.ForeignKey(Course, models.CASCADE, null=True, blank=True, related_name='bookings', verbose_name='Veranstaltung')
     title = models.CharField('Titel', max_length=120, blank=True)
     description = models.TextField('Beschreibung', blank=True)

@@ -25,7 +25,7 @@
   <div class="actions picked">
     <small class="muted">Angekreuzte:</small>
     <button class="btn ghost small" formaction="{% url 'students:compose' %}">Nachricht schreiben</button>
-    <button class="btn ghost small" formaction="{% url 'students:letters' %}">Bescheide drucken</button>
+    {% if 'manage_students' in user.roles %}<button class="btn ghost small" formaction="{% url 'students:letters' %}">Bescheide drucken</button>{% endif %}
   </div>
   <table data-panel>
     <thead><tr><th><input type="checkbox" onchange="this.form.querySelectorAll('[name=study]').forEach(box => box.checked = this.checked)" aria-label="Alle ankreuzen"></th>{% for title, key, order in columns %}<th data-sort="{{ key }}"{% if order %} aria-sort="{{ order }}"{% endif %}{% if key == 'fs' %} class="num"{% endif %}>{{ title }}</th>{% endfor %}</tr></thead>

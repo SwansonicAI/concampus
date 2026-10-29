@@ -17,6 +17,7 @@ urlpatterns = [
     path('buchung/<int:pk>/loeschen/', views.delete, name='delete'),
     path('buchung/<int:pk>/absagen/', views.cancel, name='cancel'),
     path('tag-absagen/', views.day_off, name='day_off'),
+    path('buchung/<int:pk>/abmelden/', views.absent, name='absent'),
     path('anfragen/', views.requests, name='requests'),
     path('anfragen/<int:pk>/', views.answer, name='answer'),
 ]

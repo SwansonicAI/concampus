@@ -274,6 +274,14 @@ def people(studies, limit, person):
     ]
 
 
+def ranked(queryset, q, *fields, limit, names=''):
+    """Matches where a word begins first, then those inside a word, as German compounds need ('plan' in
+    'Studienverlaufsplan'); at most `limit`."""
+    first = list(matching(queryset, q, *fields, names=names, starts=True)[:limit])
+    rest = matching(queryset, q, *fields, names=names).exclude(pk__in=[o.pk for o in first])[:limit - len(first)] if len(first) < limit else []
+    return first + list(rest)
+
+
 def found(person, q, limit):
     roles, sought = person.roles, words(q)
     groups = []
@@ -294,10 +302,10 @@ def found(person, q, limit):
         seen = Q(teacher=person) & ~Q(status__in=Study.APPLICATION) if 'teacher' in roles else Q(pk=None)
         seen |= Q(pk__in=person.within(Study.objects.exclude(status__in=Study.APPLICATION), 'view_files').values('pk'))
         seen |= Q(pk__in=person.within(Study.objects.filter(status__in=Study.APPLICATION), 'view_applications').values('pk'))
-        studies = matching(Study.objects.filter(seen).select_related('person', 'program', 'subject'), q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__matriculation', 'person__email')
+        studies = matching(Study.objects.filter(seen).select_related('person', 'program', 'subject'), q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__matriculation', 'person__email', starts=True)
         groups.append(('Studierende und Bewerbungen', people(studies, limit, person)))
     teaching = [Course.Kind.COURSE, Course.Kind.LESSON]
-    courses = matching(Course.objects.filter(term__end__gte=timezone.localdate()).select_related('term'), q, 'title', 'staff__last_name', 'subject__name')
+    courses = matching(Course.objects.filter(term__end__gte=timezone.localdate()).select_related('term'), q, 'title', 'staff__last_name', 'subject__name', starts=True)
     groups.append(('Lehrveranstaltungen', [hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in courses.filter(kind__in=teaching)[:limit]]))
     papers = Q(staff=person)  # exams and auditions: those the person examines, those within reach for the offices running them
     written = Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.RECOGNITION, Course.Kind.THESIS])
@@ -305,15 +313,15 @@ def found(person, q, limit):
     papers |= Q(pk__in=person.within(Course.objects.filter(kind=Course.Kind.AUDITION), 'run_auditions').values('pk'))
     exams = courses.exclude(kind__in=teaching).filter(papers).distinct()
     groups.append(('Prüfungen', [hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in exams[:limit]]))
-    groups.append(('Studiengänge', [hit(str(p), p.get_absolute_url()) for p in matching(Program.objects.all(), q, 'name', 'degree', names='studiengang studienplan')[:limit]]))
+    groups.append(('Studiengänge', [hit(str(p), p.get_absolute_url()) for p in ranked(Program.objects.all(), q, 'name', 'degree', limit=limit, names='studiengang studienplan')]))
     groups.append(('Module', [
         hit(f'{m.code} {m.title}', m.program.get_absolute_url(), str(m.program))
-        for m in matching(Module.objects.select_related('program'), q, 'code', 'title', names='modul')[:limit]
+        for m in ranked(Module.objects.select_related('program'), q, 'code', 'title', limit=limit, names='modul')
     ]))
     if roles - {'applicant', 'alumni'}:
         groups.append(('Räume', [
             hit(r.name, reverse('rooms:room', args=[r.pk]), ' · '.join(filter(None, [r.purpose, r.building, f'{r.capacity} Plätze'])))
-            for r in matching(Room.objects.all(), q, 'name', 'purpose', 'building', 'equipment', names='raum')[:limit]
+            for r in ranked(Room.objects.all(), q, 'name', 'purpose', 'building', 'equipment', limit=limit, names='raum')
         ]))
         # bookings by title or category: concerts for everyone, one's own dates, everything for the offices
         shown = Booking.objects.filter(end__gte=timezone.now()).select_related('room', 'course', 'category')

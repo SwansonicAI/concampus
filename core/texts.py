@@ -184,6 +184,10 @@ TEXTS = {
         '{von} hat Sie bestellt, in „{pruefung}“ {kandidat} an Stelle von {fuer} zu werten, die oder der befangen ist. Sie sehen und werten nur diese Person.',
         ('pruefung', 'kandidat', 'fuer', 'von'),
     ),
+    'abwesenheit': Spec(
+        NACHRICHT, 'Abmeldung von einem Termin', 'Abgemeldet: {veranstaltung}', '{von} kommt nicht zu „{veranstaltung}“ am {termin}.',
+        ('veranstaltung', 'termin', 'von'),
+    ),
     'tag_abgesagt': Spec(
         NACHRICHT, 'Termine eines Tages abgesagt', 'Abgesagt: Ihre Termine am {tag}', '{von} hat die Termine am {tag} abgesagt:\n{termine}',
         ('tag', 'termine', 'von'),

@@ -48,6 +48,19 @@ class TeacherTest(Seeded):
         self.assertFalse(Booking.objects.filter(pk__in=lessons, category__blocks=True).exists())
         self.assertEqual({p: p.messages.filter(subject__startswith='Abgesagt: Ihre Termine').count() for p in students}, dict.fromkeys(students, 1))
 
+    def test_a_student_reports_missing_a_lesson_and_the_teacher_hears(self):
+        mei, wendt = Person.objects.get(username='student'), Person.objects.get(username='lehre')
+        lesson = Booking.objects.filter(participants=mei, person=wendt, start__gt=timezone.now(), category__blocks=True).first()
+        self.login('student').post(f'/raeume/buchung/{lesson.pk}/abmelden/', {'note': 'Probe im Orchester'})
+        self.assertTrue(lesson.absent.filter(pk=mei.pk).exists())
+        self.assertTrue(wendt.messages.filter(subject__startswith='Abgemeldet', body__contains='Probe im Orchester').exists())
+
+    def test_rooms_and_admissions_say_whom_they_are_for(self):
+        self.assertEqual(self.login('bewerbung').get('/raeume/').status_code, 403)
+        refused = self.login('pruefungsamt').get('/aufnahme/')
+        self.assertEqual(refused.status_code, 403)
+        self.assertIn('für Bewerbende', refused.content.decode())
+
     def test_participants_are_found_by_name_not_listed(self):
         teacher = self.login('lehre')
         listed = teacher.get('/raeume/buchen/').context['form'].fields['participants']

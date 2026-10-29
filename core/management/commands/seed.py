@@ -481,7 +481,7 @@ BY_STUDENTS, BY_TEACHERS, COUNTED = {'students': True}, {'teachers': True}, {'qu
 PUBLIC = {'public': True}
 CATEGORIES = [  # key, name, colour, settings: the HfM's booking categories as its Asimut has them
     ('unterricht', 'Unterricht', 'teach', BY_TEACHERS), ('uebung', 'Übebuchung', 'practice', BY_STUDENTS | BY_TEACHERS | COUNTED),
-    ('kammermusik', 'Kammermusikprobe', 'practice', BY_STUDENTS | COUNTED | {'ahead_hours': 240, 'participants': 1}),
+    ('kammermusik', 'Kammermusikprobe', 'practice', BY_STUDENTS | {'ahead_hours': 240, 'participants': 1}),  # course work, not one's own practice time
     ('probe', 'Probe', 'teach', BY_TEACHERS), ('orchesterprobe', 'Orchesterprobe', 'teach', {}), ('registerprobe', 'Registerprobe', 'teach', BY_TEACHERS),
     ('pruefung', 'Prüfung', 'exam', BY_TEACHERS), ('eignungspruefung', 'Eignungsprüfung', 'exam', {}), ('vorspiel', 'Vorspiel', 'exam', BY_TEACHERS | PUBLIC),
     ('klassenabend', 'Klassenabend', 'event', BY_TEACHERS | PUBLIC), ('konzert', 'Konzert', 'event', PUBLIC), ('veranstaltung', 'Veranstaltung', 'event', PUBLIC),
@@ -606,7 +606,7 @@ ORIGINS = [  # pools wide enough that namesakes stay as rare as they are; no stu
         ['Mei Lin'] + syllables(['Mei', 'Xin', 'Jia', 'Ruo', 'Yu', 'Shu', 'Hui', 'Ying', 'Xiao', 'Yue', 'Jing', 'Lan'], ['lin', 'yi', 'xi', 'han', 'ting', 'qi', 'yan', 'wen', 'ning', 'xuan']),
         syllables(['Hao', 'Zi', 'Yi', 'Wen', 'Jun', 'Ming', 'Tian', 'Kai', 'Lei', 'Zhi', 'Bo', 'Jia'], ['ran', 'han', 'ming', 'jie', 'yu', 'hao', 'xuan', 'feng', 'long', 'yang']),
         ['Chen', 'Wang', 'Li', 'Zhang', 'Liu', 'Zhao', 'Huang', 'Zhou', 'Wu', 'Xu', 'Sun', 'Ma', 'Yang', 'Lin', 'He', 'Gao', 'Luo', 'Zheng', 'Guo', 'Hu'],
-        '479', dict.fromkeys(['Shanghai', 'Peking', 'Chengdu', 'Wuhan', 'Hangzhou', 'Xi’an'], ''), ['Renmin Road', 'Jiefang Road', 'Zhongshan Road'],
+        '479', dict.fromkeys(['Shanghai', 'Beijing', 'Chengdu', 'Wuhan', 'Hangzhou', 'Xi’an'], ''), ['Renmin Road', 'Jiefang Road', 'Zhongshan Road'],
         ['qq.com', '163.com', 'gmail.com'], '+86',
     ),
     Origin(
@@ -625,7 +625,7 @@ ORIGINS = [  # pools wide enough that namesakes stay as rare as they are; no stu
         ['Tanaka', 'Sato', 'Suzuki', 'Takahashi', 'Ito', 'Yamamoto', 'Nakamura', 'Kobayashi', 'Kato', 'Yoshida', 'Yamada', 'Sasaki', 'Yamaguchi',
          'Matsumoto', 'Inoue', 'Kimura', 'Hayashi', 'Shimizu', 'Yamazaki', 'Mori', 'Abe', 'Ikeda', 'Hashimoto', 'Ishikawa', 'Ogawa', 'Okada',
          'Hasegawa', 'Fujita', 'Goto', 'Kondo'],
-        '442', dict.fromkeys(['Tokio', 'Osaka', 'Nagoya', 'Kyoto'], ''), ['Chuo-dori', 'Meiji-dori', 'Omotesando'], ['gmail.com', 'yahoo.co.jp'], '+81',
+        '442', dict.fromkeys(['Tokyo', 'Osaka', 'Nagoya', 'Kyoto'], ''), ['Chuo-dori', 'Meiji-dori', 'Omotesando'], ['gmail.com', 'yahoo.co.jp'], '+81',
     ),
     Origin(
         1,
@@ -636,7 +636,7 @@ ORIGINS = [  # pools wide enough that namesakes stay as rare as they are; no stu
         ['Nowak', 'Wójcik', 'Kowalczyk', 'Woźniak', 'Mazur', 'Krawczyk', 'Kaczmarek', 'Zając', 'Król', 'Wieczorek', 'Wróbel', 'Stępień', 'Adamczyk',
          'Dudek', 'Pawlak', 'Walczak', 'Sikora', 'Baran', 'Michalak', 'Szewczyk', 'Pietrzak', 'Marciniak', 'Duda', 'Włodarczyk', 'Wilk', 'Lis',
          'Kubiak', 'Mazurek', 'Kołodziej', 'Sobczak'],
-        '152', dict.fromkeys(['Krakau', 'Warschau', 'Breslau', 'Posen', 'Danzig'], ''), ['ul. Długa', 'ul. Floriańska', 'ul. Mickiewicza'],
+        '152', dict.fromkeys(['Kraków', 'Warszawa', 'Wrocław', 'Poznań', 'Gdańsk'], ''), ['ul. Długa', 'ul. Floriańska', 'ul. Mickiewicza'],
         ['wp.pl', 'gmail.com', 'onet.pl'], '+48',
     ),
     Origin(
@@ -648,7 +648,7 @@ ORIGINS = [  # pools wide enough that namesakes stay as rare as they are; no stu
         ['Rossi', 'Bianchi', 'Romano', 'Ricci', 'Marino', 'Colombo', 'Greco', 'Conti', 'Russo', 'Ferrari', 'Esposito', 'Gallo', 'Costa', 'Fontana',
          'Rizzo', 'Moretti', 'Barbieri', 'Lombardi', 'Giordano', 'Mancini', 'Rinaldi', 'Caruso', 'Ferrara', 'Galli', 'Martini', 'Leone', 'Longo',
          'Gentile', 'Martinelli', 'Vitale', 'Serra', 'Coppola', 'De Luca', 'Bruno', 'Villa'],
-        '137', dict.fromkeys(['Mailand', 'Rom', 'Turin', 'Bologna', 'Florenz'], ''), ['Via Roma', 'Via Garibaldi', 'Corso Italia'], ['gmail.com', 'libero.it'], '+39',
+        '137', dict.fromkeys(['Milano', 'Roma', 'Torino', 'Bologna', 'Firenze'], ''), ['Via Roma', 'Via Garibaldi', 'Corso Italia'], ['gmail.com', 'libero.it'], '+39',
     ),
     Origin(
         1,
@@ -659,7 +659,7 @@ ORIGINS = [  # pools wide enough that namesakes stay as rare as they are; no stu
         ['Shevchenko', 'Bondarenko', 'Kovalenko', 'Tkachenko', 'Kravchenko', 'Boyko', 'Melnyk', 'Oliinyk', 'Shevchuk', 'Polishchuk', 'Kovalchuk',
          'Bondar', 'Tkachuk', 'Moroz', 'Lysenko', 'Rudenko', 'Savchenko', 'Petrenko', 'Klymenko', 'Marchenko', 'Pavlenko', 'Ivanenko', 'Kuzmenko',
          'Ponomarenko', 'Kharchenko', 'Levchenko', 'Karpenko', 'Vasylenko', 'Yurchenko', 'Honcharenko'],
-        '166', dict.fromkeys(['Kyjiw', 'Lwiw', 'Odesa', 'Charkiw'], ''), ['vul. Khreshchatyk', 'vul. Shevchenka', 'vul. Franka'], ['gmail.com', 'ukr.net'], '+380',
+        '166', dict.fromkeys(['Kyiv', 'Lviv', 'Odesa', 'Kharkiv'], ''), ['vul. Khreshchatyk', 'vul. Shevchenka', 'vul. Franka'], ['gmail.com', 'ukr.net'], '+380',
     ),
     Origin(
         1,
@@ -679,7 +679,7 @@ ORIGINS = [  # pools wide enough that namesakes stay as rare as they are; no stu
         ['Louis', 'Hugo', 'Gabriel', 'Arthur', 'Jules', 'Lucas', 'Raphaël', 'Théo', 'Antoine', 'Paul', 'Victor', 'Maxime', 'Baptiste', 'Étienne', 'Mathis'],
         ['Moreau', 'Laurent', 'Lefebvre', 'Garnier', 'Bernard', 'Durand', 'Leroy', 'Petit', 'Michel', 'Roux', 'Bertrand', 'Fontaine', 'Rousseau',
          'Vincent', 'Faure', 'André', 'Mercier', 'Blanc', 'Guérin', 'Girard', 'Bonnet', 'Lambert', 'Fournier', 'Chevalier', 'Morel'],
-        '129', dict.fromkeys(['Paris', 'Lyon', 'Straßburg', 'Toulouse'], ''), ['rue de la République', 'avenue Victor Hugo', 'rue Pasteur'],
+        '129', dict.fromkeys(['Paris', 'Lyon', 'Strasbourg', 'Toulouse'], ''), ['rue de la République', 'avenue Victor Hugo', 'rue Pasteur'],
         ['gmail.com', 'orange.fr'], '+33',
     ),
     Origin(

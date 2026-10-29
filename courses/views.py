@@ -176,7 +176,7 @@ def course(request, pk):
         'running': course.term.end >= timezone.localdate(),
         'from': max(course.term.lectures_start, timezone.localdate()), 'office': office,
         'modules': credited(course),
-        'bookings': upcoming.select_related('room', 'category').prefetch_related('participants')[:8],
+        'bookings': upcoming.select_related('room', 'category').prefetch_related('participants', 'absent')[:8],
         'plan': PlanForm(sent(request, 'plan'), person=person) if staffed and course.kind != Course.Kind.LESSON else None,
         'date': DateForm(sent(request, 'date'), person=person, course=course) if staffed else None,
         'lessons': timetable,

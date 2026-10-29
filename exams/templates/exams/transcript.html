@@ -27,10 +27,10 @@
         {% for i in r.items %}{% if i.done and not i.excused %}<tr><td></td><td class="muted">{{ i.title }}{% if i.semester %}, {{ i.semester }}. Semester{% endif %}</td><td></td><td class="num muted">{% if i.weight %}{{ i.weight|floatformat:"-2" }}{% endif %}</td><td class="num muted">{% if i.grade is not None %}{{ i.grade|floatformat:1 }}{% else %}bestanden{% endif %}</td></tr>{% endif %}{% endfor %}
         {% else %}
         <tr>
-          <td class="nowrap"><b>{{ r.node.code }}</b></td>
-          <td><b>{{ r.node.title }}</b>{% if not r.node.done %} <small class="muted">({% if r.node.earned >= r.node.credits %}Prüfung offen{% else %}laufend{% endif %})</small>{% endif %}</td>
+          <td class="nowrap"><b>{% firstof r.node.code r.choice.code %}</b></td>
+          <td><b>{% if r.choice %}{{ r.choice.title }}: {% endif %}{{ r.node.title }}</b>{% if not r.node.done %} <small class="muted">({% if r.node.earned >= r.node.credits %}Prüfung offen{% else %}laufend{% endif %})</small>{% endif %}</td>
           <td class="num">{{ r.node.earned }}{% if r.node.earned != r.node.credits %} / {{ r.node.credits }}{% endif %}</td>
-          <td class="num">{% if r.node.weight %}{{ r.node.weight|floatformat:"-2" }}{% endif %}</td>
+          <td class="num">{% if r.choice %}{{ r.choice.weight|floatformat:"-2" }}{% elif r.node.weight %}{{ r.node.weight|floatformat:"-2" }}{% endif %}</td>
           <td class="num"><b>{% if r.node.done %}{{ r.node.grade|default_if_none:"bestanden" }}{% endif %}</b></td>
         </tr>
         {% endif %}

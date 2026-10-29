@@ -18,7 +18,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from core import texts
-from core.access import require
+from core.access import CODENAMES, require
 from core.apps import plural
 from core.history import tables
 from core.models import Institution, Message, Term
@@ -49,6 +49,8 @@ def index(request):
         return redirect('admissions:board')
     if 'juror' in roles:
         return redirect('admissions:juries')
+    if roles & {'teacher', *CODENAMES} and not roles & {'applicant', 'student', 'alumni'}:  # staff apply to nothing here
+        raise PermissionDenied('Die Aufnahme ist für Bewerbende, ihre Kommissionen und die Ämter, die Bewerbungen bearbeiten.')
     return redirect('admissions:mine')
 
 

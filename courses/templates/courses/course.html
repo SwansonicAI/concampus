@@ -27,13 +27,14 @@
       <tr>
         <td data-value="{{ b.start|date:'c' }}">{% if staffed %}<a href="{% url 'rooms:booking' b.pk %}" title="Absagen, verlegen">{{ b.start|date:"D j.n." }}</a>{% else %}{{ b.start|date:"D j.n." }}{% endif %}</td>
         <td>{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</td>
-        {% if course.kind == 'lesson' and staffed %}<td>{% for p in b.participants.all %}{{ p.first_name }} {{ p.last_name }}{% endfor %}</td>
+        {% if course.kind == 'lesson' and staffed %}<td>{% for p in b.participants.all %}{{ p.first_name }} {{ p.last_name }}{% if p in b.absent.all %} <span class="badge wait">abgemeldet</span>{% endif %}{% endfor %}</td>
         {% elif course.allocation == 'ensemble' %}<td>{{ b.title|default:"alle" }}</td>{% endif %}
+        {% if not staffed and user in b.participants.all and b.category.blocks %}<td><form method="post" action="{% url 'rooms:absent' b.pk %}">{% csrf_token %}{% if user in b.absent.all %}<span class="badge wait">abgemeldet</span> <button class="link" name="zurueck" value="1"><small>zurücknehmen</small></button>{% else %}<button class="link" data-confirm="Für diesen Termin abmelden?"><small>abmelden</small></button>{% endif %}</form></td>{% endif %}
         <td>{% if b.category.blocks %}<a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a>{% else %}<span class="badge no">{{ b.category }}</span>{% endif %}</td>
       </tr>
       {% empty %}<tr><td class="empty">Noch keine Termine.</td></tr>{% endfor %}
     </table>
-    {% if staffed and bookings %}<p class="muted"><small>Ein Datum anklicken, um den Termin abzusagen oder zu verlegen.</small></p>{% endif %}
+    {% if staffed and bookings %}<p class="muted"><small>Ein Datum anklicken, um den Termin abzusagen oder zu verlegen.</small></p>{% elif bookings and course.kind == 'lesson' %}<p class="muted"><small>Können Sie zu einem Termin nicht kommen, melden Sie sich ab; {{ staff.0|default:"die Lehrperson" }} erfährt es. Einen Grund müssen Sie nicht nennen.</small></p>{% endif %}
     {% if plan %}
     <form method="post" action="{% url 'courses:plan' course.pk %}" class="panel" style="margin-top: 24px">
       {% csrf_token %}

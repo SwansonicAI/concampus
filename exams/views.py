@@ -542,10 +542,14 @@ def achievements(study):
     tree, average = study.progress()
     earned, total, honours = sum(m.earned for m in tree), sum(m.credits for m in tree), study.program.honours
     last = study.participations.filter(passed=True, course__released__isnull=False).aggregate(last=Max('course__released'))['last']
-    rows = [  # an exam the plan waives for the Hauptfach is no result
-        r for r in study_plan(tree, study.program.semesters)
-        if r['kind'] != 'part' and r['node'].earned or r['kind'] == 'part' and r['exam'] and any(i.done and not i.excused for i in r['items'])
-    ]
+    rows = []
+    for r in study_plan(tree, study.program.semesters):
+        if r['kind'] != 'part' and r['node'].earned or r['kind'] == 'part' and r['exam'] and any(i.done and not i.excused for i in r['items']):  # an exam waived is no result
+            above = rows[-1] if rows else None
+            if above and above['kind'] == 'group' and r['kind'] != 'part' and r['node'].parent_id == above['node'].pk and above['node'].offered > above['node'].credits:
+                rows[-1] = {**r, 'choice': above['node']}  # a choice and what was chosen, on one line with the choice's weight
+            else:
+                rows.append({**r, 'choice': None})
     thesis = study.participations.filter(course__kind=Course.Kind.THESIS, passed=True).select_related('course').first()
     return {
         'study': study, 'rows': rows, 'earned': earned, 'total': total, 'finished': earned >= total, 'average': average,
