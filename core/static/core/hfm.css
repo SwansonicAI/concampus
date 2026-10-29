@@ -12,6 +12,7 @@
   --wide: 1360px;
   --radius: 4px;  /* controls, pills and small boxes; layout surfaces stay square */
   --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 8H13M8.5 3.5 13 8l-4.5 4.5'/%3E%3C/svg%3E");
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 6 8 10.5 12.5 6'/%3E%3C/svg%3E");
 }
 
 * { box-sizing: border-box; }
@@ -69,7 +70,6 @@ section { margin-top: 52px; }
 .count { display: inline-block; min-width: 20px; margin-left: 5px; padding: 0 6px; border-radius: var(--radius); background: var(--green); color: #fff; font-size: 12px; font-weight: 700; text-align: center; }
 .menu { position: relative; }
 .menu summary { color: #fff; cursor: pointer; list-style: none; }
-.menu summary::after { content: " ▾"; color: #9a9a9a; }
 .menu[open] > div { position: absolute; right: 0; top: 30px; z-index: 10; display: grid; gap: 8px; min-width: 240px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; color: var(--ink); }
 .subnav { display: flex; gap: 28px; margin: 0 0 36px; border-bottom: 1px solid var(--line); font-weight: 600; }
 .subnav:not(:has(a + a)) { display: none; }  /* one page is no choice */
@@ -106,7 +106,7 @@ main.page { min-height: 70vh; padding-top: 32px; padding-bottom: 96px; }
 .link { padding: 0; border: 0; background: none; color: var(--green); font: inherit; cursor: pointer; }
 .link:hover { text-decoration: underline; }
 /* Arrows are drawn, not taken from the font, so they are as strong in every browser; they take the colour of their text */
-.arrow, .more::before, .todo .what::before, th[aria-sort] button::after {
+.arrow, .more::before, .todo .what::before, th[aria-sort] button::after, .menu summary::after {
   content: "";
   display: inline-block;
   width: 1em;
@@ -119,6 +119,8 @@ main.page { min-height: 70vh; padding-top: 32px; padding-bottom: 96px; }
 .arrow.left { transform: scaleX(-1); }
 .btn .arrow { height: 1lh; }  /* an arrow alone in a button keeps the height of one with text */
 .more::before { margin-right: 0.35em; }
+.menu summary::after { margin-left: 6px; background: #cfcfcf; -webkit-mask-image: var(--chevron); mask-image: var(--chevron); }
+.menu[open] summary::after { transform: rotate(180deg); }
 .more { font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 input, select, textarea {
