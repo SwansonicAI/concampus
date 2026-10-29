@@ -40,8 +40,8 @@
       {% empty %}<tr><td class="empty">–</td></tr>{% endfor %}
     </table>
     <nav class="actions">
-      {% if prev %}<a class="btn ghost small" href="?bewerbung={{ prev.pk }}">← Vorherige</a>{% endif %}
-      {% if next %}<a class="btn ghost small" href="?bewerbung={{ next.pk }}">Nächste →</a>{% endif %}
+      {% if prev %}<a class="btn ghost small" href="?bewerbung={{ prev.pk }}"><i class="arrow left"></i> Vorherige</a>{% endif %}
+      {% if next %}<a class="btn ghost small" href="?bewerbung={{ next.pk }}">Nächste <i class="arrow"></i></a>{% endif %}
       <a class="more" href="{% url 'admissions:audition' course.pk %}">Alle Wertungen</a>
     </nav>
   </div>

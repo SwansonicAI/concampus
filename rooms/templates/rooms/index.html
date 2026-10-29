@@ -6,9 +6,9 @@
   <h1>Raumplan</h1>
   <form class="actions">
     <input type="hidden" name="raeume" value="{{ group }}">
-    <a class="btn ghost" href="{% querystring tag=prev|date:'Y-m-d' %}" data-key="ArrowLeft" title="Vorheriger Tag (←)">←</a>
+    <a class="btn ghost" href="{% querystring tag=prev|date:'Y-m-d' %}" data-key="ArrowLeft" title="Vorheriger Tag (←)"><i class="arrow left"></i></a>
     <input name="tag" value="{{ day|date:'D d.m.Y' }}" data-day autocomplete="off" size="14" aria-label="Datum, z. B. morgen, fr oder 12.11.">
-    <a class="btn ghost" href="{% querystring tag=next|date:'Y-m-d' %}" data-key="ArrowRight" title="Nächster Tag (→)">→</a>
+    <a class="btn ghost" href="{% querystring tag=next|date:'Y-m-d' %}" data-key="ArrowRight" title="Nächster Tag (→)"><i class="arrow"></i></a>
     <a class="btn ghost" href="{% querystring tag=None %}" data-key="h" title="Heute (H)">Heute</a>
   </form>
 </div>

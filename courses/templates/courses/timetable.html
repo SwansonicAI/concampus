@@ -5,9 +5,9 @@
 <div class="head">
   <h1>Stundenplan</h1>
   <div class="actions">
-    <a class="btn ghost" href="?tag={{ prev|date:'Y-m-d' }}" data-key="ArrowLeft" title="Vorherige Woche (←)">← Woche</a>
+    <a class="btn ghost" href="?tag={{ prev|date:'Y-m-d' }}" data-key="ArrowLeft" title="Vorherige Woche (←)"><i class="arrow left"></i> Woche</a>
     <a class="btn ghost" href="?" data-key="h" title="Diese Woche (H)">Diese Woche</a>
-    <a class="btn ghost" href="?tag={{ next|date:'Y-m-d' }}" data-key="ArrowRight" title="Nächste Woche (→)">Woche →</a>
+    <a class="btn ghost" href="?tag={{ next|date:'Y-m-d' }}" data-key="ArrowRight" title="Nächste Woche (→)">Woche <i class="arrow"></i></a>
     <a class="btn ghost" href="{% url 'rooms:mine' %}#kalender">Kalender abonnieren</a>
   </div>
 </div>

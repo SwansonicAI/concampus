@@ -11,6 +11,7 @@
   --blue: #1f5fae;
   --wide: 1360px;
   --radius: 4px;  /* controls, pills and small boxes; layout surfaces stay square */
+  --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M2.5 8H13M8.5 3.5 13 8l-4.5 4.5'/%3E%3C/svg%3E");
 }
 
 * { box-sizing: border-box; }
@@ -104,7 +105,20 @@ main.page { min-height: 70vh; padding-top: 32px; padding-bottom: 96px; }
 .btn:disabled { opacity: 0.4; pointer-events: none; }
 .link { padding: 0; border: 0; background: none; color: var(--green); font: inherit; cursor: pointer; }
 .link:hover { text-decoration: underline; }
-.more::before { content: "→ "; }
+/* Arrows are drawn, not taken from the font, so they are as strong in every browser; they take the colour of their text */
+.arrow, .more::before, .todo .what::before, th[aria-sort] button::after {
+  content: "";
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  background: currentColor;
+  -webkit-mask: var(--arrow) center / contain no-repeat;
+  mask: var(--arrow) center / contain no-repeat;
+}
+.arrow.left { transform: scaleX(-1); }
+.btn .arrow { height: 1lh; }  /* an arrow alone in a button keeps the height of one with text */
+.more::before { margin-right: 0.35em; }
 .more { font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 input, select, textarea {
@@ -165,8 +179,9 @@ table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nu
 th { padding: 10px 12px; border-bottom: 2px solid var(--ink); font-size: 13px; font-weight: 700; letter-spacing: 0.03em; text-align: left; text-transform: uppercase; white-space: nowrap; }
 th button { padding: 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-align: inherit; text-transform: inherit; cursor: pointer; }
 th button:hover, th[aria-sort] button { color: var(--green); }
-th[aria-sort="ascending"] button::after { content: " ↑"; }
-th[aria-sort="descending"] button::after { content: " ↓"; }
+th[aria-sort] button::after { margin-left: 0.3em; }
+th[aria-sort="ascending"] button::after { transform: rotate(-90deg); }
+th[aria-sort="descending"] button::after { transform: rotate(90deg); }
 td { padding: 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
 td.mid { vertical-align: middle; }
 .num { text-align: right; }
@@ -182,7 +197,7 @@ main[aria-busy] :is(table, .todo, .tickets, .results) { opacity: 0.45; cursor: p
 .todo a:hover { background: var(--soft); text-decoration: none; }
 .todo a::before { content: none; }
 .todo .what { font-weight: 600; }
-.todo .what::before { content: "→ "; color: var(--green); }
+.todo .what::before { margin-right: 0.4em; background: var(--green); }
 .todo .where { color: var(--muted); font-size: 14px; }
 .todo .due { min-width: 92px; color: var(--muted); font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; }
 .todo .due.soon { color: var(--red); font-weight: 600; }

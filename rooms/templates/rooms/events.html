@@ -5,9 +5,9 @@
 <div class="head">
   <h1>Veranstaltungen</h1>
   <div class="actions no-print">
-    <a class="btn ghost" href="?monat={{ prev|date:'Y-m' }}" data-key="ArrowLeft">← {{ prev|date:"F" }}</a>
+    <a class="btn ghost" href="?monat={{ prev|date:'Y-m' }}" data-key="ArrowLeft"><i class="arrow left"></i> {{ prev|date:"F" }}</a>
     <a class="btn ghost" href="?" data-key="h">Dieser Monat</a>
-    <a class="btn ghost" href="?monat={{ next|date:'Y-m' }}" data-key="ArrowRight">{{ next|date:"F" }} →</a>
+    <a class="btn ghost" href="?monat={{ next|date:'Y-m' }}" data-key="ArrowRight">{{ next|date:"F" }} <i class="arrow"></i></a>
     <button class="btn ghost" onclick="window.print()">Drucken</button>
     {% if office %}<a class="btn" href="{% url 'rooms:new' %}?kategorie=konzert">Veranstaltung anlegen</a>{% endif %}
   </div>
