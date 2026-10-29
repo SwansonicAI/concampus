@@ -161,6 +161,8 @@ def restore(change):
         values = {name: before for name, (before, _) in change.fields.items() if name not in SECRET}
         if any(current(obj, name) != kept(meta.get_field(name), change.fields[name][1]) for name in values):
             raise ValidationError('Seitdem erneut geändert. Bitte zuerst die spätere Änderung zurücksetzen.')
+        if values.keys() & set(model.settled):
+            raise ValidationError('Mit einem Bescheid entschieden; ändern lässt es sich nur mit einem neuen.')
     links = {}
     for name, before in values.items():
         field = meta.get_field(name)
@@ -204,7 +206,7 @@ def describe(changes, person):
         if c.action == Change.Action.DELETED:
             c.restorable = not exists and allowed[c.model, c.row]
         else:
-            c.restorable = exists and c.action != Change.Action.CREATED and bool(c.fields.keys() - SECRET) and allowed[c.model, c.row]
+            c.restorable = exists and c.action != Change.Action.CREATED and bool(c.fields.keys() - SECRET) and not c.fields.keys() & set(c.model.settled) and allowed[c.model, c.row]
     return changes
 
 

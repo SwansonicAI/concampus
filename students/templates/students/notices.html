@@ -1,0 +1,31 @@
+{% extends base %}
+{% block title %}Versandte Bescheide{% endblock %}
+{% block subnav %}{% include "students/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Versandte Bescheide</h1>
+</div>
+<p class="lead">{{ count }} Bescheid{{ count|pluralize:"e" }} · Wer nicht in die elektronische Bekanntgabe eingewilligt hat, erhält den Bescheid per Post.</p>
+<form class="toolbar">
+  <div class="inline">
+    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name oder Matrikelnummer"></label>
+    <label>Art<select name="art" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for k in kinds %}<option{% if k == kind %} selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+  </div>
+</form>
+<table>
+  <thead><tr><th>Versandt</th><th>Bescheid</th><th>An</th><th>Studium</th><th>Zustellung</th></tr></thead>
+  <tbody>
+    {% for d in sent %}
+    <tr>
+      <td class="nowrap" data-value="{{ d.created|date:'c' }}">{{ d.created|date:"j.n.Y" }}</td>
+      <td>{% if d.message %}<a href="{% url 'letter' d.message.pk %}">{{ d.title }}</a> <small class="muted">{{ d.message.reference }}</small>{% else %}{{ d.title }}{% endif %}</td>
+      <td><a href="{{ d.study.get_absolute_url }}">{{ d.person.name }}</a></td>
+      <td>{{ d.study.program.title }} · {{ d.study.subject }}</td>
+      <td>{% if not d.person.electronic %}<span class="badge wait">per Post</span>{% elif d.message.read %}im Postfach geöffnet am {{ d.message.read|date:"j.n.Y" }}{% else %}<span class="muted">noch nicht geöffnet</span>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty">Keine Treffer.</td></tr>
+    {% endfor %}
+    {% if count > sent|length %}<tr><td colspan="5" class="empty">{{ sent|length }} von {{ count }}: Suche oder Art eingrenzen.</td></tr>{% endif %}
+  </tbody>
+</table>
+{% endblock %}

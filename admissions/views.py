@@ -23,6 +23,7 @@ from core.apps import plural
 from core.history import tables
 from core.models import Institution, Message, Term
 from core.text import matching, untimed
+from core.templatetags.marks import mark
 from core.views import preview
 from courses import panel
 from courses.forms import SlotForm, substitutes
@@ -87,7 +88,8 @@ def checklist(study, types=None):
         Condition.VIDEO: video,
         Condition.DEGREE: study.program.postgraduate,
         Condition.MINOR: bool(person.birth_date) and (today - person.birth_date).days < 18 * 365.25,
-        Condition.FOREIGN: person.nationality != '000',
+        Condition.FOREIGN: person.needs_german,
+        Condition.APS: person.needs_aps,
     }
     return [
         {'kind': t, 'label': t.name, 'note': t.note, 'required': t.required, 'documents': handed[t.key] or borrowed[t.key]}
@@ -200,7 +202,22 @@ def vacancies(term, person):
 def offer(study, status):
     """Decide an application and issue its Bescheid."""
     study.set_status(status)
-    study.notify(DECISIONS[status], reverse('admissions:mine'), frist=f'{accept_by(study, Institution.get().accept_days):%d.%m.%Y}')
+    study.notify(DECISIONS[status], reverse('admissions:mine'), frist=f'{accept_by(study, Institution.get().accept_days):%d.%m.%Y}', begruendung=grounds(study))
+
+
+def grounds(study):
+    """Why an application is turned down, for its Bescheid: the part of the Eignungsprüfung not passed, with its result."""
+    failed = study.participations.filter(course__kind=Course.Kind.AUDITION, course__released__isnull=False, passed=False).select_related('course').first()
+    if failed is None:
+        return 'Die Voraussetzungen für eine Zulassung liegen nicht vor.'
+    course = failed.course
+    part = {'Video': 'die Videostufe', 'Hauptfach': 'die Prüfung im Hauptfach'}.get(course.stage, f'den Prüfungsteil „{course.stage}“')
+    result = (
+        'nicht angetreten' if failed.grade is None
+        else f'{mark(failed.grade)} von {course.max_points} Punkten, bestanden ab {mark(course.pass_mark)}' if course.points
+        else f'Note {mark(failed.grade)}'
+    )
+    return f'Sie haben {part} der Eignungsprüfung nicht bestanden ({result}). Damit ist Ihre Eignung nicht festgestellt.'
 
 
 @require('view_applications')
@@ -507,7 +524,7 @@ def decide_many(request):
         return render(request, 'admissions/decide.html', {
             'term': term, 'chosen': chosen, 'ticked': [s.pk for group in plan.values() for s in group],
             'groups': [
-                (VERBS[status], BESCHEIDE[status], group, group[0].wording(DECISIONS[status], frist=f'{accept_by(group[0], days):%d.%m.%Y}'))
+                (VERBS[status], BESCHEIDE[status], group, group[0].wording(DECISIONS[status], frist=f'{accept_by(group[0], days):%d.%m.%Y}', begruendung=grounds(group[0])))
                 for status, group in plan.items() if status
             ],
             'waiting': plan.get(None, []),

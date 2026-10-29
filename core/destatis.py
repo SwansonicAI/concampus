@@ -818,6 +818,13 @@ DOCTORAL = [  # the CSV record of the Promovierenden, version 1: EF, name, lengt
 ]
 MUSIC = {'080', '163', '164', '165', '191', '192', '193', '194', '230'}  # the Studienfächer of the Studienbereich Musik
 ABROAD = '9990'  # Hochschule im Ausland, followed by its state
+SCHOOL_ABROAD = {'39', '59', '79'}  # HZB from a school abroad that is not a German one: assessed before the Immatrikulation
+GERMAN_SPEAKING = {'000', '141', '151', '158'}  # states whose HZB is in German
+APS = {'432', '436', '479'}  # Vietnam, India, China: an APS certificate of the Akademische Prüfstelle first
+FREE_MOVEMENT = {  # Germany, the EU, the EEA and Switzerland: no residence permit to study
+    '000', '124', '125', '126', '127', '128', '129', '130', '131', '134', '135', '136', '137', '139', '141', '142', '143', '145',
+    '148', '149', '151', '152', '153', '154', '155', '157', '158', '161', '164', '165', '181',
+}
 FOREIGN = [(code, name) for code, name in COUNTRIES if code not in ('000', '997', '998', '999')]
 
 

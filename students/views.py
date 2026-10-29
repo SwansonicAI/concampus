@@ -386,6 +386,17 @@ def insured(request, pk):
     return redirect(study.get_absolute_url())
 
 
+@require('manage_students')
+@require_POST
+def checked(request, pk):
+    """A Hochschulzugangsberechtigung from abroad is assessed and opens the study."""
+    study = get_object_or_404(request.user.within(Study.objects.select_related('person'), 'manage_students'), pk=pk)
+    study.person.entrance_checked = timezone.localdate()
+    study.person.save(update_fields=['entrance_checked'])
+    messages.success(request, 'Hochschulzugang als geprüft verbucht.')
+    return redirect(study.get_absolute_url())
+
+
 @require_POST
 def leave(request, pk):
     """Urlaubssemester for the upcoming term. Students ask within the Rückmeldung, never afterwards, for at most two
@@ -398,21 +409,23 @@ def leave(request, pk):
     registration = StudyTerm.objects.filter(study=study, term=term).first()
     leave = not (registration and registration.leave)
     reason = request.POST.get('reason', '') if leave else ''
-    refusal = leave and (
-        'Bitte den Grund der Beurlaubung wählen.' if reason not in dict(LEAVES)
-        else None if office
-        else f'Urlaubssemester für das {term} lassen sich nur bis zum {date_format(term.closes, "j.n.Y")} beantragen.' if not term.reregistration_start <= timezone.localdate() <= term.closes
-        else f'In der Regel sind höchstens {LEAVE_TERMS} Urlaubssemester möglich. Einen weiteren beantragen Sie bitte schriftlich.' if study.terms.filter(leave=True).count() >= LEAVE_TERMS
+    rule = leave and (  # what a student may ask for by themselves; the office decides beyond it, reminded
+        f'Urlaubssemester für das {term} lassen sich nur bis zum {date_format(term.closes, "j.n.Y")} beantragen.' if not office and not term.reregistration_start <= timezone.localdate() <= term.closes
+        else f'In der Regel sind höchstens {LEAVE_TERMS} Urlaubssemester möglich; ein weiteres nur auf schriftlichen Antrag.' if study.terms.filter(leave=True).count() >= LEAVE_TERMS
         else 'Im ersten Fachsemester ist eine Beurlaubung nur bei Erkrankung oder Mutterschutz und Elternzeit möglich.' if not study.semester and reason not in FIRST_TERM_LEAVES
         else None
     )
-    if refusal:
-        messages.error(request, refusal)
+    if leave and reason not in dict(LEAVES) or rule and not office:
+        messages.error(request, rule if reason in dict(LEAVES) else 'Bitte den Grund der Beurlaubung wählen.')
         return redirect(study.get_absolute_url())
     registration, _ = StudyTerm.objects.get_or_create(study=study, term=term)
     registration.leave, registration.leave_reason = leave, reason
     registration.save(update_fields=['leave', 'leave_reason'])
-    messages.success(request, f'{term}: {"Urlaubssemester eingetragen" if registration.leave else "Urlaubssemester zurückgenommen"}.')
+    if leave:
+        study.notify('beurlaubung', study.get_absolute_url(), rueckmeldesemester=term, grund=dict(LEAVES)[reason])
+    messages.success(request, f'{term}: {"Urlaubssemester eingetragen, Bescheid versandt" if leave else "Urlaubssemester zurückgenommen"}.')
+    if rule:
+        messages.warning(request, f'Als Ausnahme eingetragen: {rule} Antrag und Nachweis gehören zur Akte.')
     return redirect(study.get_absolute_url())
 
 
@@ -461,17 +474,33 @@ def exmatriculate(request, pk):
     else:
         still, later = leaving(study), study.terms.filter(term__start__gt=on)
         paid = [r.term for r in later.select_related('term') if r.paid]
-        after = ['erstattung'] * bool(paid) + ['rechtsbehelf'] * (reason in OFFICIAL)
+        after = ['erstattung'] * bool(paid) + ['auslaenderbehoerde'] * study.person.permit + ['rechtsbehelf'] * (reason in OFFICIAL)
+        insurer = study.person.insurer and f'Die {study.person.insurer} erhält die Meldung der Exmatrikulation im Studierendenmeldeverfahren.'
         values = {'grund': dict(EXITS)[reason], 'zum': date_format(on, 'j. F Y'), 'rueckmeldesemester': ', '.join(map(str, paid))}
         if not request.POST.get('bestaetigt'):
-            notes = [f'Noch offen: {what}{f" ({who})" if who else ""}' for what, who in still]
+            notes = [f'Noch offen: {what}{f" ({who})" if who else ""}' for what, who in still] + [insurer] * bool(insurer)
             return preview(request, f'Exmatrikulation, letzter Tag {date_format(on, "j.n.Y")}', [('Exmatrikulation', [study.person], study.wording('exmatrikulation', *after, **values))], 'Exmatrikulieren und Bescheid versenden', study.get_absolute_url(), notes)
         with transaction.atomic():
             later.delete()
             study.set_status(Study.Status.GRADUATED if reason == '1' else Study.Status.LEFT, reason, on)
         study.notify('exmatrikulation', after=after, **values)
-        messages.success(request, f'{study.person} mit Ablauf des {date_format(on, "j.n.Y")} exmatrikuliert. Bescheid versandt.' + (f' Noch offen: {"; ".join(f"{what} ({who})" if who else what for what, who in still)}.' if still else ''))
+        messages.success(request, f'{study.person} mit Ablauf des {date_format(on, "j.n.Y")} exmatrikuliert. Bescheid versandt.' + (f' {insurer}' if insurer else '') + (f' Noch offen: {"; ".join(f"{what} ({who})" if who else what for what, who in still)}.' if still else ''))
     return redirect(study.get_absolute_url())
+
+
+@require('manage_students')
+def notices(request):
+    """Versandte Bescheide: every Bescheid the office's studies received, newest first, how each reached its person."""
+    q, kind = request.GET.get('q', '').strip(), request.GET.get('art', '')
+    sent = (
+        Document.objects.filter(kind='notice', study__in=request.user.within(Study.objects.all(), 'manage_students'))
+        .select_related('person', 'study__program', 'study__subject', 'message').order_by('-created')
+    )
+    kinds = sorted(set(sent.values_list('title', flat=True)))
+    if kind:
+        sent = sent.filter(title=kind)
+    sent = matching(sent, q, 'person__first_name', 'person__last_name', 'person__matriculation', starts=True)
+    return render(request, 'students/notices.html', {'sent': sent[:SHOWN], 'count': sent.count(), 'kinds': kinds, 'kind': kind, 'q': q})
 
 
 @require('manage_students')

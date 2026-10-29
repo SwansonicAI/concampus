@@ -52,8 +52,9 @@ def handed_in(participation):
 
 def exhausted(study):
     """Modules the study has failed as often as its Prüfungsordnung allows and never passed: the Prüfungsanspruch is lost.
-    Each comes with its `failures` and `appeal`, the last day to object: a month after the Bescheid is taken as delivered, on
-    the fourth day after it went out (before it has, counted from the result)."""
+    Each comes with its `failures` and `appeal`, the last day to object: a month after the Bescheid is taken as delivered,
+    the day after it was opened in the Postfach where the person agreed to that, else on the fourth day after it went out
+    (before it has, counted from the result)."""
     failed = defaultdict(list)
     for p in Participation.objects.filter(study=study, passed=False, course__released__isnull=False).select_related('course__term').order_by('course__released'):
         failed[p.module_id].append(p)
@@ -62,8 +63,10 @@ def exhausted(study):
     for module in lost:
         module.failures = failed[module.pk]
         released = module.failures[-1].course.released
-        notice = study.documents.filter(kind='notice', created__gte=released).order_by('created').values_list('created', flat=True).first()
-        module.appeal = months_before(timezone.localtime(notice or released).date() + timedelta(days=4), -1)  # Bekanntgabe on the fourth day
+        notice = study.documents.filter(kind='notice', created__gte=released).select_related('message').order_by('created').first()
+        opened = study.person.electronic and notice and notice.message and notice.message.read
+        known = timezone.localtime(opened).date() + timedelta(days=1) if opened else timezone.localtime(notice.created if notice else released).date() + timedelta(days=4)
+        module.appeal = months_before(known, -1)
     return lost
 
 

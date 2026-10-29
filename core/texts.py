@@ -42,9 +42,9 @@ TEXTS = {
     ),
     'ablehnung': Spec(
         BESCHEID, 'Ablehnung', 'Bescheid über die Eignungsprüfung',
-        'Leider können wir Ihnen für den Studiengang {studiengang}, Hauptfach {hauptfach}, keinen Studienplatz anbieten. '
-        'Wir danken Ihnen für Ihre Bewerbung und wünschen Ihnen für Ihren weiteren Weg alles Gute.',
-        STUDY, appeal=True,
+        'Ihre Bewerbung für den Studiengang {studiengang}, Hauptfach {hauptfach}, zum {semester} wird abgelehnt.\n\n'
+        'Begründung: {begruendung}\n\nWir danken Ihnen für Ihre Bewerbung und wünschen Ihnen für Ihren weiteren Weg alles Gute.',
+        STUDY + ('begruendung',), appeal=True,
     ),
     'immatrikulation': Spec(
         BESCHEID, 'Immatrikulation', 'Immatrikulationsbescheid',
@@ -56,6 +56,12 @@ TEXTS = {
         BESCHEID, 'Exmatrikulation', 'Exmatrikulationsbescheid',
         'Sie sind mit Ablauf des {zum} aus dem Studiengang {studiengang}, Hauptfach {hauptfach}, exmatrikuliert. Grund: {grund}.',
         STUDY + ('grund', 'zum'),
+    ),
+    'beurlaubung': Spec(
+        BESCHEID, 'Beurlaubung', 'Bescheid über die Beurlaubung',
+        'Sie sind für das {rueckmeldesemester} im Studiengang {studiengang}, Hauptfach {hauptfach}, beurlaubt. Grund: {grund}.\n\n'
+        'Das Urlaubssemester zählt nicht als Fachsemester; Prüfungen können Sie trotzdem ablegen.',
+        STUDY + ('rueckmeldesemester', 'grund'),
     ),
     'exmatrikulation_rueckmeldung': Spec(
         BESCHEID, 'Exmatrikulation ohne Rückmeldung', 'Exmatrikulationsbescheid',
@@ -218,6 +224,10 @@ TEXTS = {
         BAUSTEIN, 'Erstattung des Semesterbeitrags', '',
         'Den Semesterbeitrag für das {rueckmeldesemester} erstattet auf Antrag das Studierendenwerk, sofern Sie das '
         'Deutschlandsemesterticket nicht abgerufen haben.', ('rueckmeldesemester',),
+    ),
+    'auslaenderbehoerde': Spec(
+        BAUSTEIN, 'Hinweis zur Ausländerbehörde', '',
+        'Bitte teilen Sie der Ausländerbehörde innerhalb von zwei Wochen mit, dass Ihr Studium hier beendet ist (§ 82 Abs. 6 Aufenthaltsgesetz).',
     ),
     'absender_bescheide': Spec(BAUSTEIN, 'Absender der Bescheide', '', '{hochschule}'),
     'absender_bescheinigungen': Spec(BAUSTEIN, 'Absender der Immatrikulationsbescheinigung', '', '{hochschule}'),

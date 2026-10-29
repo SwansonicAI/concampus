@@ -29,7 +29,7 @@ from django.utils.crypto import get_random_string
 from admissions.retention import forget
 from core.dates import months_before
 from core.text import untimed
-from admissions.views import DECISIONS, invite
+from admissions.views import DECISIONS, grounds, invite
 from core import destatis, history, texts
 from core.models import Change, Holiday, Institute, Institution, Membership, Message, Office, Person, Term, Text
 from courses import panel as sheets
@@ -437,7 +437,10 @@ DOCUMENTS = [  # key, name, condition, settings: what a complete application hol
         '{hochschule} für {studiengang}, Hauptfach {hauptfach}, bewirbt, an der Eignungsprüfung teilnimmt und im Fall der Zulassung das '
         'Studium aufnimmt.\n\nName der Erziehungsberechtigten: ________________________________')}),
     ('voice', 'Phoniatrisches Gutachten', 'subjects', {'required': False, 'shared': True}),
-    ('language', 'Sprachnachweis Deutsch', 'foreign', {'required': False, 'note': 'Niveau B2.', 'shared': True}),
+    ('language', 'Sprachnachweis Deutsch', 'foreign', {'required': False, 'note': 'Niveau B2; spätestens zur Immatrikulation.', 'shared': True}),
+    ('aps', 'APS-Zertifikat', 'aps', {'required': False, 'shared': True, 'note': (
+        'Von der Akademischen Prüfstelle (APS) der Deutschen Botschaft; in China für Musik im Verfahren für künstlerische '
+        'Studiengänge. Spätestens zur Immatrikulation.')}),
     ('notice', 'Bescheid', 'never', {}),
     ('other', 'Sonstiges', 'never', {}),
 ]
@@ -884,12 +887,14 @@ class Command(BaseCommand):
             self.exams()
             self.assessors()
             self.admissions()
+            self.abroad()
             self.professors()
             self.appointments()
             self.events()
             self.practice()
             self.letters()
             Study.objects.filter(status=Study.Status.GRADUATED).update(issued=models.F('since'))  # their Zeugnisse issued
+            Person.objects.filter(studies__isnull=False).update(electronic=models.F('date_joined'))  # Bescheide by Postfach, as they agreed when signing up
             forget(months_before(timezone.localdate(), Institution.get().retention_months))  # as the nightly prune would have
         self.changes()
         self.stdout.write(self.style.SUCCESS(
@@ -1736,6 +1741,23 @@ class Command(BaseCommand):
                 lost.study.participations.filter(course__term=now).delete()  # with the Prüfungsanspruch lost, nothing new this semester
                 lost.study.ensembles.clear()
 
+    def abroad(self):
+        """HZBs from abroad are assessed and the Sprachnachweis and APS certificate in for everyone who studies here or has a
+        place, but one who has taken up a place still waits for both: a case for the demo."""
+        studying = [Study.Status.ADMITTED, Study.Status.ENROLLED, *Study.FORMER]
+        waiting = (
+            Study.objects.filter(status=Study.Status.ADMITTED, terms__term=models.F('start_term'), person__entrance__in=destatis.SCHOOL_ABROAD, person__entrance_region__in=['99' + c for c in destatis.APS])
+            .order_by('pk').first()
+        )
+        people = Person.objects.filter(entrance__in=destatis.SCHOOL_ABROAD, studies__status__in=studying).exclude(pk=waiting and waiting.person_id).distinct()
+        people.update(entrance_checked=models.Subquery(Study.objects.filter(person=models.OuterRef('pk')).order_by('since').values('since')[:1]))
+        held = set(Document.objects.filter(kind__in=['language', 'aps']).values_list('person', 'kind'))
+        Document.objects.bulk_create(
+            Document(person=p, study=p.studies.order_by('-since').first(), kind_id=kind, title=name, file=self.placeholder(), created=at(p.entrance_checked, hour=9))
+            for p in people for kind, name, needed in [('language', 'Sprachnachweis Deutsch', p.needs_german), ('aps', 'APS-Zertifikat', p.needs_aps)]
+            if needed and (p.pk, kind) not in held
+        )
+
     def failed_before(self, p, back):
         """An earlier failed attempt at p's exam, `back` terms before."""
         term = self.calendar[self.calendar.index(p.course.term) - back]
@@ -2157,7 +2179,7 @@ class Command(BaseCommand):
         decided = Study.objects.filter(status__in=list(DECISIONS), start_term__in=[self.current, self.next])
         for study in decided.select_related('person', 'program', 'subject', 'start_term'):
             deadline = study.since + timedelta(days=Institution.get().accept_days)
-            notices.append((study, *study.wording(DECISIONS[study.status], frist=f'{deadline:%d.%m.%Y}', datum=f'{study.since:%d.%m.%Y}'), at(study.since, hour=10)))
+            notices.append((study, *study.wording(DECISIONS[study.status], frist=f'{deadline:%d.%m.%Y}', datum=f'{study.since:%d.%m.%Y}', begruendung=grounds(study)), at(study.since, hour=10)))
         for study in (s for s in self.enrolled if s.fs == 1):
             notices.append((study, *study.wording('immatrikulation'), at(study.start_term.start - timedelta(days=10), hour=10)))
         sender = texts.block('absender_bescheide')

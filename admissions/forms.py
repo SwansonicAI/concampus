@@ -20,6 +20,10 @@ class SignupForm(BaseUserCreationForm):
     birth_date = DayField(
         label='Geburtsdatum', help_text='z. B. 10.11.2008', widget=forms.DateInput(format='%d.%m.%Y', attrs={'data-day': '', 'placeholder': 'TT.MM.JJJJ'}),
     )
+    electronic = forms.BooleanField(
+        label='Bescheide elektronisch erhalten', required=False,
+        help_text='Ein Bescheid gilt dann am Tag, nachdem Sie ihn im Postfach geöffnet haben, als bekannt gegeben. Ohne Haken kommen Bescheide per Post.',
+    )
 
     class Meta:
         model = Person
@@ -45,6 +49,7 @@ class SignupForm(BaseUserCreationForm):
 
     def save(self, commit=True):
         self.instance.username = self.cleaned_data['email']
+        self.instance.electronic = timezone.now() if self.cleaned_data['electronic'] else None
         return super().save(commit)
 
 

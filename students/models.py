@@ -34,6 +34,7 @@ class Study(Tracked, models.Model):
     owner = 'person_id'
     capabilities = ('manage_students',)
     scope = (['subject__institute'], ['program'])
+    settled = ('status', 'since', 'exit_reason')  # Zulassung, Immatrikulation, Exmatrikulation: each with its Bescheid
 
     class Status(models.TextChoices):
         APPLIED = 'applied', 'Beworben'
@@ -145,6 +146,11 @@ class Study(Tracked, models.Model):
             reasons.insert(0, 'Semesterbeitrag noch nicht eingegangen')
         if not self.person.entrance:
             reasons.append('Hochschulzugangsberechtigung nicht erfasst')
+        elif self.person.abroad and not self.person.entrance_checked:
+            reasons.append('Hochschulzugangsberechtigung aus dem Ausland nicht geprüft')
+        from admissions.views import checklist  # which imports from here
+
+        reasons += [f'{item["label"]} fehlt' for item in checklist(self) if item['kind'].condition in DocumentType.ENROLMENT and not item['documents']]
         return reasons
 
     @property
@@ -225,8 +231,11 @@ class DocumentType(Tracked, Keyed):
         DEGREE = 'degree', 'wenn der Studiengang einen Abschluss voraussetzt'
         MINOR = 'minor', 'bei Minderjährigen'
         SUBJECTS = 'subjects', 'bei den gewählten Hauptfächern'
-        FOREIGN = 'foreign', 'bei ausländischer Staatsangehörigkeit'
+        FOREIGN = 'foreign', 'bei einer Hochschulzugangsberechtigung aus dem nicht deutschsprachigen Ausland'
+        APS = 'aps', 'bei einer Hochschulzugangsberechtigung aus China, Indien oder Vietnam'
         NEVER = 'never', 'nicht in der Checkliste'
+
+    ENROLMENT = (Condition.FOREIGN, Condition.APS)  # handed in by the Immatrikulation at the latest, not with the application
 
     SYSTEM = {  # what the code files itself
         'notice': {'name': 'Bescheid', 'condition': Condition.NEVER},

@@ -3,7 +3,7 @@
 {% block content %}
 <p class="eyebrow"><a href="{% url 'inbox' %}">Postfach</a></p>
 <h1>{{ letter.subject }}</h1>
-<p class="lead">{{ letter.created|date:"l, j. F Y, H:i" }} Uhr</p>
+<p class="lead">{{ letter.created|date:"l, j. F Y, H:i" }} Uhr{% if letter.reference %} · Aktenzeichen {{ letter.reference }}{% endif %}</p>
 <div class="document">{{ letter.body|linebreaks }}</div>
 {% if letter.link %}<p><a class="btn" href="{{ letter.link }}">{{ place }} öffnen</a></p>{% endif %}
 {% endblock %}

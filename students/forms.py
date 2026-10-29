@@ -15,6 +15,8 @@ class StudyForm(forms.ModelForm):
         study = self.instance
         teaching = Person.objects.filter(teaching__kind=Course.Kind.LESSON, teaching__subject=study.subject_id)  # Hauptfach classes
         self.fields['teacher'].queryset = (teaching | Person.objects.filter(pk=study.teacher_id)).distinct() if teaching.exists() else Person.teachers()
+        if study.status not in Study.FORMER:  # the ground comes with the Exmatrikulation
+            del self.fields['exit_reason']
         if not (study.program_id and study.program.kind == '5'):  # only a Promotion
             for field in ['structured', 'employed', 'cumulative']:
                 del self.fields[field]

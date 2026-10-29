@@ -50,10 +50,11 @@
       {% if remind %}<form method="post" action="{% url 'admissions:remind' %}">{% csrf_token %}<input type="hidden" name="study" value="{{ study.pk }}"><input type="hidden" name="next" value="{{ request.path }}"><button class="btn ghost small">Erinnern</button></form>{% endif %}
       {% if 'Semesterbeitrag noch nicht eingegangen' in missing %}<form method="post" action="{% url 'students:fee_paid' study.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><button class="btn ghost small" data-confirm="Eingang des Beitrags verbuchen?">Semesterbeitrag verbuchen</button></form>{% endif %}
       {% if not study.person.insurance_confirmed %}<form method="post" action="{% url 'students:insured' study.pk %}">{% csrf_token %}<button class="btn ghost small">Versicherungsmeldung verbuchen</button></form>{% endif %}
-      {% if not study.person.entrance %}<a class="btn ghost small" href="{% url 'setup:edit' 'personen' study.person.pk %}?next={{ request.path|urlencode }}" data-panel>Hochschulzugang erfassen</a>{% endif %}
+      {% if not study.person.entrance %}<a class="btn ghost small" href="{% url 'setup:edit' 'personen' study.person.pk %}?next={{ request.path|urlencode }}" data-panel>Hochschulzugang erfassen</a>
+      {% elif study.person.abroad and not study.person.entrance_checked %}<form method="post" action="{% url 'students:checked' study.pk %}">{% csrf_token %}<button class="btn ghost small">Hochschulzugang geprüft</button></form>{% endif %}
     </div>
     {% else %}
-    <form method="post" action="{% url 'students:enrol' study.pk %}">{% csrf_token %}<button class="btn" data-confirm="Immatrikulieren und Bescheid versenden?">Immatrikulieren</button></form>
+    <form method="post" action="{% url 'students:enrol' study.pk %}">{% csrf_token %}<button class="btn">Immatrikulieren</button> <small class="muted">Erst die Vorschau, dann versenden.</small></form>
     <p class="muted"><small>Vergibt die Matrikelnummer, verbucht den Semesterbeitrag und versendet den Immatrikulationsbescheid.</small></p>
     {% endif %}
     {% endif %}

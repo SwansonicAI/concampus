@@ -23,6 +23,7 @@ class Tracked:
     capabilities = ()  # who sees its history and may restore it
     keep = None  # how long its changes are kept (timedelta); None: as long as the person they are about
     scope = None  # (paths to its Institute, paths to its Studiengänge), for offices limited to some; None: only offices for the whole Hochschule
+    settled = ()  # fields a Bescheid changes: only another Bescheid changes them back, not the Verlauf
 
     @classmethod
     def from_db(cls, db, field_names, values):
@@ -223,6 +224,14 @@ class Person(Tracked, AbstractUser):
         'Versicherungsmeldung erhalten am', null=True, blank=True,
         help_text='Elektronische Meldung der Krankenkasse im Studierendenmeldeverfahren; Voraussetzung für Immatrikulation und Rückmeldung.',
     )
+    electronic = models.DateTimeField(
+        'Bescheide elektronisch seit', null=True, blank=True,
+        help_text='Einwilligung, dass Bescheide am Tag nach dem Öffnen im Postfach bekannt gegeben sind (§ 41 Abs. 2a VwVfG); ohne sie gehen Bescheide per Post.',
+    )
+    entrance_checked = models.DateField(
+        'Hochschulzugang geprüft am', null=True, blank=True,
+        help_text='Bei einer Hochschulzugangsberechtigung aus dem Ausland: bewertet nach anabin oder durch die Zeugnisanerkennungsstelle.',
+    )
     matriculation = models.CharField('Matrikelnummer', max_length=12, unique=True, null=True, blank=True)
     hold = models.CharField('Sperre', max_length=200, blank=True, help_text='Grund der Sperre; leer heißt keine Sperre.')
     institute = models.ForeignKey(
@@ -263,6 +272,25 @@ class Person(Tracked, AbstractUser):
         return Institute.objects.filter(
             models.Q(staff=self) | models.Q(subjects__studies__person=self, subjects__studies__status='enrolled'),
         ).distinct()
+
+    @property
+    def abroad(self):
+        """Whether the HZB comes from a school abroad that is not a German one: it is assessed before the Immatrikulation."""
+        return self.entrance in destatis.SCHOOL_ABROAD
+
+    @property
+    def needs_german(self):
+        """Whether German must be proved: an HZB from abroad, not in German."""
+        return self.abroad and self.entrance_region[2:] not in destatis.GERMAN_SPEAKING
+
+    @property
+    def needs_aps(self):
+        return self.abroad and self.entrance_region[2:] in destatis.APS
+
+    @property
+    def permit(self):
+        """Whether studying here takes a residence permit: no citizenship of the EU, the EEA or Switzerland."""
+        return bool(self.nationality) and not {self.nationality, self.second_nationality} & destatis.FREE_MOVEMENT
 
     def missing(self):
         """What blocks enrolment and Rückmeldung whatever has been paid: a Sperre, no confirmation from the health insurer,
@@ -551,6 +579,11 @@ class Message(models.Model):
 
     def get_absolute_url(self):
         return reverse('message', args=[self.pk])
+
+    @property
+    def reference(self):
+        """A Bescheid's Aktenzeichen, to quote in a Widerspruch; other messages have none."""
+        return f'{self.created:%Y}-{self.pk}' if self.sender else ''
 
     @classmethod
     def send(cls, person, subject, body, link='', sender=''):

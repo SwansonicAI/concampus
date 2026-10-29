@@ -9,7 +9,7 @@
 <div class="document letter">
   {% include "core/_letterhead.html" with office=letter.sender|default:institution.name %}
   <p class="address">{{ letter.person.legal_name }}<br>{{ letter.person.address|linebreaksbr }}</p>
-  <p class="dated">{% if institution.place %}{{ institution.place }}, {% endif %}{{ letter.created|date:"j. F Y" }}</p>
+  <p class="dated">{% if institution.place %}{{ institution.place }}, {% endif %}{{ letter.created|date:"j. F Y" }}{% if letter.reference %}<br><small>Aktenzeichen {{ letter.reference }}</small>{% endif %}</p>
   <h2>{{ letter.subject }}</h2>
   <p>Guten Tag {{ letter.person.first_name }} {{ letter.person.last_name }},</p>
   {{ letter.body|linebreaks }}

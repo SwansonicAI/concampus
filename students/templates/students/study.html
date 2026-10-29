@@ -47,7 +47,8 @@
       {% if p.phone %}<dt>Telefon</dt><dd>{{ p.phone }}</dd>{% endif %}
       {% endif %}
       {% if personal %}
-      <dt>Hochschulzugang</dt><dd>{{ p.get_entrance_display|default:"–" }}{% if p.entrance_date %}, {{ p.entrance_date|date:"j.n.Y" }}{% endif %}{% if p.entrance_region %}, {{ p.get_entrance_region_display }}{% endif %}</dd>
+      <dt>Hochschulzugang</dt><dd>{{ p.get_entrance_display|default:"–" }}{% if p.entrance_date %}, {{ p.entrance_date|date:"j.n.Y" }}{% endif %}{% if p.entrance_region %}, {{ p.get_entrance_region_display }}{% endif %}{% if p.abroad %}<br><small class="{% if p.entrance_checked %}muted{% else %}fail{% endif %}">{% if p.entrance_checked %}geprüft am {{ p.entrance_checked|date:"j.n.Y" }}{% else %}noch nicht geprüft{% endif %}</small>{% endif %}</dd>
+      <dt>Bescheide</dt><dd>{% if p.electronic %}elektronisch, eingewilligt am {{ p.electronic|date:"j.n.Y" }}{% else %}per Post{% endif %}</dd>
       <dt>Krankenversicherung</dt>
       <dd>
         {{ p.insurer|default:"–" }}{% if p.insurance %} · {{ p.get_insurance_display }}{% endif %}<br>
@@ -71,7 +72,7 @@
     <p>Keine Rückmeldung: der Prüfungsanspruch ist erloschen ({% for m in exhausted %}{{ m.code }}{% if not forloop.last %}, {% endif %}{% endfor %}). {% if final %}Der Bescheid ist bestandskräftig; die Exmatrikulation steht aus.{% else %}Die Exmatrikulation folgt, sobald der Bescheid bestandskräftig ist.{% endif %}</p>
     {% elif study.status == 'enrolled' and personal %}
     <h2>Rückmeldung {{ upcoming }}</h2>
-    <p>{% if paid and not missing %}<span class="badge green">zurückgemeldet</span>{% elif paid %}<span class="badge wait">bezahlt</span>{% elif upcoming.reregistration_open %}<span class="badge wait">offen</span> Semesterbeitrag {{ upcoming.fee }} € bis {{ upcoming.deadline|date:"j. F Y" }}{% else %}Semesterbeitrag {{ upcoming.fee }} € vom {{ upcoming.reregistration_start|date:"j. F" }} bis {{ upcoming.deadline|date:"j. F Y" }}{% endif %}{% if not paid and upcoming.late_deadline %}<br><small class="muted">Nachfrist bis {{ upcoming.late_deadline|date:"j. F" }} mit {{ late_fee }} € Säumnisgebühr; danach folgt die Exmatrikulation.</small>{% endif %}{% if next.leave %} · <span class="badge">Urlaubssemester</span>{% endif %}</p>
+    <p>{% if paid and not missing %}<span class="badge green">zurückgemeldet</span>{% elif paid %}<span class="badge wait">bezahlt</span>{% elif upcoming.reregistration_open %}<span class="badge wait">offen</span> Semesterbeitrag {{ upcoming.fee }} € bis {{ upcoming.deadline|date:"j. F Y" }}{% else %}Semesterbeitrag {{ upcoming.fee }} € vom {{ upcoming.reregistration_start|date:"j. F" }} bis {{ upcoming.deadline|date:"j. F Y" }}{% endif %}{% if not paid and upcoming.late_deadline %}<br><small class="muted">Nachfrist bis {{ upcoming.late_deadline|date:"j. F" }} mit {{ late_fee }} € Säumnisgebühr; danach folgt die Exmatrikulation.</small>{% endif %}{% if next.leave %} · <span class="badge">Urlaubssemester · {{ next.get_leave_reason_display }}</span>{% endif %}</p>
     {% if missing %}<p class="fail">Für die Rückmeldung fehlt noch: {{ missing|join:" · " }}</p>{% endif %}
     {% if own and not paid %}{% include "students/_transfer.html" with amount=owed reference=study.person.matriculation|add:" "|add:study.person.last_name %}{% endif %}
     {% if own or office %}
