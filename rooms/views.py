@@ -22,7 +22,7 @@ from core import texts
 from core.models import Institute, Institution, Message, Office, Person
 from core.text import matching
 from courses.models import Course
-from .forms import BookingForm, CancelForm, FindForm, ServiceForm, bookable, quota
+from .forms import BookingForm, CancelForm, FindForm, ServiceForm, bookable, free_again, quota
 from .models import Booking, BookingCategory, Room, RoomFunction
 
 OPEN, CLOSE, STEP = 8, 22, 5  # hours shown, minutes per grid line
@@ -44,13 +44,23 @@ def agenda(person):
     ).filter(category__blocks=True, requested=False).distinct()
 
 
+QUARTER = timedelta(minutes=15)  # the way from one building to another
+
+
 def moves(bookings):
     """Mark the bookings of one person that begin within a quarter of an hour of the one before, in another building:
     `move` is where they come from."""
     ordered = sorted(bookings, key=lambda b: b.start)
     for before, b in zip(ordered, ordered[1:]):
-        if timedelta(0) <= b.start - before.end <= timedelta(minutes=15) and before.room.building != b.room.building:
+        if timedelta(0) <= b.start - before.end <= QUARTER and before.room.building != b.room.building:
             b.move = before.room.building
+
+
+def around(person, start, end, exclude=None):
+    """The person's own dates ending within a quarter of an hour before `start` or beginning as soon after `end`: in
+    another building, no time for the way."""
+    near = Q(end__range=(start - QUARTER, start)) | Q(start__range=(end, end + QUARTER))
+    return agenda(person).filter(near).exclude(pk=exclude).select_related('room')
 
 
 def week(bookings, day, person=None):
@@ -66,6 +76,8 @@ def week(bookings, day, person=None):
     for n, b in enumerate(placed):
         column = 2 + timezone.localtime(b.start).weekday()
         b.place = f'{line(b.start)} / {column} / {line(b.end)} / {column + 1}'
+        b.short = b.end - b.start < timedelta(hours=1)  # room for two lines, the title and the room, one each
+        b.tiny = b.end - b.start < timedelta(minutes=40)  # for one: the room first
         overlapping = [o for o in placed if o is not b and o.start < b.end and b.start < o.end]
         b.clash = bool(overlapping)
         taken = {o.lane for o in overlapping if placed.index(o) < n}
@@ -152,6 +164,7 @@ def index(request):
         ],
         'now': line(now) if day == now.date() and OPEN <= now.hour < CLOSE else None,
         'tones': legend(),
+        'hidden': any(b.hidden for room in rooms for b in room.day),
         'left': None if 'student' not in person.roles else Institution.get().student_daily_hours - quota(person, day),
     })
 
@@ -168,23 +181,42 @@ def opening():
 @require(*ROOMS)
 def find(request):
     """Free rooms for a time, a group size and equipment: the question people actually ask. Teachers also see the halls
-    given out centrally that are free then, to ask for."""
+    given out centrally that are free then, to ask for. First the rooms one gets to in time from one's dates before and
+    after, then the smallest, those for one's Hauptfach first; when the smallest are all taken, when one is free again."""
     hour = opening()
     form = FindForm(request.GET or None, initial={'day': hour.date(), 'start': hour.time(), 'end': (hour + timedelta(hours=1)).time()})
-    rooms = asked = start = end = trial = None
+    rooms = asked = start = end = trial = came = smaller = left = counts = None
     if form.is_valid():
-        data = form.cleaned_data
+        data, person = form.cleaned_data, request.user
         start = timezone.make_aware(datetime.combine(data['day'], data['start']))
         end = timezone.make_aware(datetime.combine(data['day'], data['end']))
         taken = Booking.objects.filter(start__lt=end, end__gt=start, category__blocks=True, requested=False).values('room')
-        rooms = bookable(request.user).exclude(pk__in=taken).filter(capacity__gte=data['seats'] or 1)
-        rooms = matching(rooms, data['equipment'], 'equipment', 'name', 'purpose', 'building')
-        if requestable(request.user):
-            asked = matching(Room.objects.filter(function__central=True).exclude(pk__in=taken).exclude(pk__in=rooms.values('pk')).filter(capacity__gte=data['seats'] or 1), data['equipment'], 'equipment', 'name', 'purpose', 'building')
+        fitting = matching(bookable(person).filter(capacity__gte=data['seats'] or 1), data['equipment'], 'equipment', 'name', 'purpose', 'building')
+        if requestable(person):
+            asked = matching(Room.objects.filter(function__central=True).exclude(pk__in=taken).exclude(pk__in=fitting.values('pk')).filter(capacity__gte=data['seats'] or 1), data['equipment'], 'equipment', 'name', 'purpose', 'building')
             asked = asked.order_by('capacity', 'building', 'name')
-        rooms = rooms.order_by('capacity', 'building', 'name')
-        trial = tried(request.user, rooms.first(), data['day'], data['start'], data['end'])
-    return render(request, 'rooms/find.html', {'form': form, 'rooms': rooms, 'asked': asked, 'start': start, 'end': end, 'trial': trial})
+        near = list(around(person, start, end))
+        subjects = set(person.studies.filter(status='enrolled').values_list('subject__name', flat=True))
+        rooms = list(fitting.exclude(pk__in=taken).order_by('capacity', 'building', 'name'))
+        for r in rooms:
+            r.away = next((b for b in near if b.room.building != r.building), None)
+        rooms.sort(key=lambda r: (r.away is not None, r.capacity, not any(s in r.purpose for s in subjects)))
+        if came := next((b for b in near if b.end <= start and any(r.away == b for r in rooms)), None):
+            came.later = (came.end + QUARTER, came.end + QUARTER + (end - start))  # time enough for the way
+        smallest = min(fitting.values_list('capacity', flat=True), default=None)
+        if smallest is not None and min((r.capacity for r in rooms), default=smallest + 1) > smallest:  # the rooms that fit best are taken
+            free = [(at, r) for r in fitting.filter(capacity=smallest)[:10] if (at := free_again(r, start, end - start))]
+            if free:
+                at, room = min(free, key=lambda f: f[0])
+                smaller = (room, at, at + (end - start))
+        trial = tried(person, rooms[0] if rooms else None, data['day'], data['start'], data['end'])
+        if trial and trial.student and trial.is_valid():
+            rules = Institution.get()
+            left = rules.student_daily_hours - quota(person, data['day'])
+            counts = trial.cleaned_data['category'].quota and start - timezone.now() > timedelta(hours=rules.last_minute_hours)
+    return render(request, 'rooms/find.html', {
+        'form': form, 'rooms': rooms, 'asked': asked, 'start': start, 'end': end, 'trial': trial, 'came': came, 'smaller': smaller, 'left': left, 'counts': counts,
+    })
 
 
 def tried(person, room, day, begin, until):
@@ -336,8 +368,11 @@ def booking(request, pk=None):
             if booking.start - booking.created <= timedelta(hours=rules.last_minute_hours) else ''
         )
         messages.success(request, f'Buchung gespeichert. {free or ""}'.strip())
+        if way := next((b for b in around(booking.person, booking.start, booking.end, exclude=booking.pk) if b.room.building != booking.room.building), None):
+            messages.warning(request, f'Zwischen {way.label} in {way.room.building} und dieser Buchung bleibt keine Viertelstunde für den Weg.')
         return redirect(f"{reverse('rooms:index')}?tag={timezone.localtime(booking.start):%Y-%m-%d}")
     series = Booking.objects.filter(series=booking.series).count() if booking.series else 0
+    on = timezone.localtime(form.instance.start).date() if form.instance.start else start.date() if start else timezone.localdate()  # the day the quota is for
     told = None  # a date others come to can be called off and they hear of it
     if booking.pk and (booking.course_id or booking.participants.exists()):
         told = [p.name for p in recipients(booking, person)]
@@ -350,7 +385,7 @@ def booking(request, pk=None):
         'services': booking.services.select_related('category') if booking.pk else [],
         'serving': ServiceForm(initial={'begin': (timezone.localtime(booking.start) - timedelta(hours=2)).time(), 'until': (timezone.localtime(booking.start) - timedelta(hours=1)).time()})
         if booking.pk and booking.category.public else None,
-        'left': Institution.get().student_daily_hours - quota(person, timezone.localdate()) if form.student else None,
+        'left': Institution.get().student_daily_hours - quota(person, on) if form.student else None, 'on': on,
     })
 
 

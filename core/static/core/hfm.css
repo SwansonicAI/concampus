@@ -193,6 +193,7 @@ tr.wait td { color: var(--muted); }
 tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 700; }
 .scroll { overflow-x: auto; }
 main[aria-busy] :is(table, .todo, .tickets, .results) { opacity: 0.45; cursor: progress; }
+main[aria-busy] .results .empty { visibility: hidden; }
 
 /* Start page: tasks first, then a compact launcher */
 .todo { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; border-top: 2px solid var(--ink); }
@@ -216,6 +217,8 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .demo .people { display: grid; border-top: 2px solid var(--ink); }
 .demo .people button { display: flex; justify-content: space-between; gap: 16px; padding: 12px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .demo .people button:hover { background: var(--soft); }
+.demo .people[aria-busy] { cursor: progress; }
+.demo .people[aria-busy] button { pointer-events: none; }
 @container (max-width: 880px) { .cols { grid-template-columns: minmax(0, 1fr); } }  /* the side panel stacks what sits side by side on a page */
 .calm { color: var(--muted); }
 .launch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
@@ -313,7 +316,7 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .prow > * { grid-row: 1; }
 .prow.hours { min-height: 0; color: var(--muted); font-size: 13px; }
 .prow .room { position: sticky; left: 0; z-index: 2; display: flex; flex-direction: column; justify-content: center; padding: 4px 12px 4px 0; background: #fff; color: var(--ink); line-height: 1.25; }
-.prow .room small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.prow .room small { color: var(--muted); }
 .hour { padding: 6px 4px; }
 .slot:hover { background: var(--soft); }
 .slot.picked { background: #e5f3e5; }
@@ -350,6 +353,7 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .week .tick { grid-column: 1; padding-right: 8px; color: var(--muted); font-size: 12px; text-align: right; border-top: 1px solid var(--line); }
 .week .line { grid-column: 2 / -1; border-top: 1px solid var(--line); }
 .week .booking { margin: 1px 3px; white-space: normal; }
+.week .booking.short { white-space: nowrap; }
 .week .booking.clash { outline: 2px solid var(--red); outline-offset: -2px; }
 .week .booking.move { border-top: 3px solid var(--amber); }
 .week .booking.split { width: calc(100% / var(--lanes) - 4px); margin-left: calc(100% / var(--lanes) * var(--lane) + 2px); }

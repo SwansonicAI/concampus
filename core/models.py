@@ -410,6 +410,7 @@ class Office(Tracked, Group):
 
     institutes = models.ManyToManyField(Institute, blank=True, related_name='offices', verbose_name='Nur für die Institute')
     programs = models.ManyToManyField('curriculum.Program', blank=True, related_name='offices', verbose_name='Nur für die Studiengänge')
+    email = models.EmailField('E-Mail', blank=True, help_text='Das gemeinsame Postfach des Amts, etwa pruefungsamt@…; leer: die Adressen seiner Mitglieder.')
 
     class Meta:
         ordering = ['name']

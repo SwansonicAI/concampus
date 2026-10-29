@@ -144,6 +144,20 @@ class Program(Tracked, models.Model):
             walk(root)
         return found
 
+    def shares(self, chosen):
+        """{module pk: its share of the Gesamtnote in per cent} with `chosen` as the Schwerpunkt: the others count for nothing."""
+        others, found = set(self.foci()) - {chosen.pk}, {}
+
+        def walk(nodes, share):
+            counted = [n for n in nodes if n.weight and n.pk not in others]
+            total = sum(n.weight for n in counted)
+            for n in counted:
+                found[n.pk] = share * n.weight / total
+                walk(n.nodes, found[n.pk])
+
+        walk(self.curriculum(), 100)
+        return found
+
     def chosen_by(self):
         """{module pk: the Schwerpunkt it belongs to}, for every course work and exam under one."""
         found = {}

@@ -32,6 +32,16 @@ def quota(person, day, exclude=None):
     return round(sum((b.end - b.start).total_seconds() for b in counted if b.start - b.created > last_minute) / 3600, 1)
 
 
+def free_again(room, start, length, exclude=None):
+    """When `room` is next free for `length` from `start` on, that day; None if not before midnight."""
+    midnight = timezone.make_aware(datetime.combine(timezone.localtime(start).date() + timedelta(days=1), time()))
+    for other in Booking.objects.filter(room=room, category__blocks=True, end__gt=start, start__lt=midnight).exclude(pk=exclude).order_by('start'):
+        if other.start >= start + length:
+            break
+        start = max(start, other.end)
+    return start if start + length <= midnight else None
+
+
 class Buildings(forms.models.ModelChoiceIterator):
     """Rooms grouped by building, those booked lately first; read only when the choices are shown."""
 
@@ -201,13 +211,9 @@ class BookingForm(forms.ModelForm):
             return None
         taken = Booking.objects.filter(start__lt=b.end, end__gt=b.start, category__blocks=True).values('room')
         rooms = sorted(self.fields['room'].queryset.exclude(pk__in=taken), key=lambda r: (r.function_id != b.room.function_id, r.building != b.room.building, r.name))
-        midnight = timezone.make_aware(datetime.combine(timezone.localtime(b.start).date() + timedelta(days=1), time()))
-        start, length = b.start, b.end - b.start
-        for other in Booking.objects.filter(room=b.room_id, category__blocks=True, end__gt=b.start, start__lt=midnight).exclude(pk=b.pk).order_by('start'):
-            if other.start >= start + length:
-                break
-            start = max(start, other.end)
-        return {'rooms': rooms[:4], 'later': (start, start + length) if start + length <= midnight else None}
+        length = b.end - b.start
+        start = free_again(b.room_id, b.start, length, exclude=b.pk)
+        return {'rooms': rooms[:4], 'later': start and (start, start + length)}
 
     def check_rules(self, category, start, end, participants):
         """The Hochschule's booking rules (Institution) and those of the category."""

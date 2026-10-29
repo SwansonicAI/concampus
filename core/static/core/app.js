@@ -389,6 +389,7 @@ if (search) {
     timer = setTimeout(async () => {
       const q = input.value.trim();
       if (q !== shown) {
+        if (list.querySelector('.empty')) search.classList.remove('open');  // not the last query's „Nichts gefunden“ meanwhile
         const response = await fetch(`${search.action}?q=${encodeURIComponent(q)}`, {headers: {'X-Fragment': '1'}});
         if (q !== input.value.trim()) return;  // typing went on
         list.innerHTML = await response.text();
@@ -460,6 +461,22 @@ document.addEventListener('change', event => {
   }
 });
 
+// The browser says what is missing or wrong in its own language: here in German, as the page is.
+function wording(field) {
+  const v = field.validity;
+  if (v.valueMissing) return {radio: 'Bitte eine der Möglichkeiten wählen.', checkbox: 'Bitte bestätigen.', file: 'Bitte eine Datei wählen.', 'select-one': 'Bitte auswählen.'}[field.type] || 'Bitte ausfüllen.';
+  if (v.typeMismatch) return field.type === 'email' ? 'Bitte eine E-Mail-Adresse angeben.' : 'Bitte eine Webadresse angeben.';
+  if (v.rangeUnderflow) return `Mindestens ${field.min}.`;
+  if (v.rangeOverflow) return `Höchstens ${field.max}.`;
+  return '';
+}
+document.addEventListener('invalid', ({target}) => target.validity.customError || target.setCustomValidity(wording(target)), true);
+document.addEventListener('input', ({target}) => {
+  if (!target.willValidate || target.dataset.max) return;  // a file's size check keeps its own word
+  const group = target.type === 'radio' && target.form ? target.form.querySelectorAll(`[name="${CSS.escape(target.name)}"]`) : [target];
+  group.forEach(field => field.setCustomValidity(''));
+});
+
 // Uploads show their progress, since videos are large; then the page goes where the form leads.
 document.addEventListener('submit', event => {
   const form = event.target;
@@ -486,6 +503,7 @@ if (drawer) {
 
   const show = async (url, options = {}) => {
     const response = await fetch(url, {...options, headers: {'X-Panel': '1'}});
+    stale ||= response.headers.has('X-Stale');  // e.g. a message read: the Postfach's count
     if (response.status === 204) {
       stale = true;
       const next = new URL(response.headers.get('X-Location'), location.href);

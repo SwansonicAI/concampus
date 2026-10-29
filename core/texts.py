@@ -138,8 +138,10 @@ TEXTS = {
         ('beitrag', 'frist'),
     ),
     'schwerpunkt': Spec(
-        NACHRICHT, 'Schwerpunkt gewählt', 'Schwerpunkt: {schwerpunkt}', 'Sie haben im Studiengang {studiengang} den Schwerpunkt {schwerpunkt} gewählt.',
-        ('studiengang', 'schwerpunkt'),
+        NACHRICHT, 'Schwerpunkt gewählt', 'Schwerpunkt: {schwerpunkt}',
+        'Sie haben im Studiengang {studiengang} den Schwerpunkt {schwerpunkt} gewählt.\n\n{inhalt}\n\n'
+        'Belegen Sie die Lehrveranstaltungen dazu in den genannten Semestern. Ändern lässt sich die Wahl {aendern}.',
+        ('studiengang', 'schwerpunkt', 'inhalt', 'aendern'),
     ),
     'eingetragen': Spec(NACHRICHT, 'In eine Veranstaltung eingetragen', 'Eingetragen: {veranstaltung}', 'Sie wurden für „{veranstaltung}“ im {semester} eingetragen.', ('veranstaltung', 'semester')),
     'ensemble': Spec(

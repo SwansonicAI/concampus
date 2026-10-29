@@ -12,7 +12,7 @@
     <a class="btn ghost" href="{% querystring tag=None %}" data-key="h" title="Heute (H)">Heute</a>
   </form>
 </div>
-<p class="lead">{{ day|date:"l, j. F Y" }}{% if left is not None %} · Übezeit heute: noch {{ left|floatformat:"-1" }} von {{ institution.student_daily_hours }} Std.{% endif %}</p>
+<p class="lead">{{ day|date:"l, j. F Y" }}{% if left is not None %} · Übezeit: noch {{ left|floatformat:"-1" }} von {{ institution.student_daily_hours }} Std.{% endif %}</p>
 {% include "core/_days.html" %}
 <form class="toolbar">
   <input type="hidden" name="tag" value="{{ day|date:'Y-m-d' }}">
@@ -25,7 +25,7 @@
       {% endfor %}
     </select>
   </label>
-  <p class="legend">{% for tone, label in tones %}<span class="booking {{ tone }}">{{ label }}</span>{% endfor %}</p>
+  <p class="legend">{% for tone, label in tones %}<span class="booking {{ tone }}">{{ label }}</span>{% endfor %}{% if hidden %}<span class="booking">belegt</span>{% endif %}</p>
   <small class="muted">Freie Zeit anklicken oder ziehen, um zu buchen · ← → wechselt den Tag</small>
 </form>
 <div class="plan" data-panel>
@@ -35,10 +35,10 @@
   </div>
   {% for room in rooms %}
   <div class="prow">
-    <a class="room" href="{% url 'rooms:room' room.pk %}?tag={{ day|date:'Y-m-d' }}" title="{{ room.purpose }}"><b>{{ room.name }}</b><small>{{ room.purpose|default:room.building }} · {{ room.capacity }} Pl.</small></a>
+    <a class="room" href="{% url 'rooms:room' room.pk %}?tag={{ day|date:'Y-m-d' }}" title="{{ room.purpose }}"><b>{{ room.name }}</b><small>{{ room.purpose|default:room.building }} · {{ room.capacity }}&nbsp;Pl.</small></a>
     {% if room.bookable %}{% for columns, time in slots %}<a class="slot" style="grid-column: {{ columns }}" href="{% url 'rooms:new' %}?raum={{ room.pk }}&amp;start={{ day|date:'Y-m-d' }}T{{ time }}" title="{{ room.name }}, {{ time }} Uhr buchen"></a>{% endfor %}{% endif %}
     {% for b in room.day %}
-    {% if b.hidden %}<span class="booking" style="grid-column: {{ b.columns }}" title="{{ b.start|time:'H:i' }}–{{ b.end|time:'H:i' }}">belegt</span>
+    {% if b.hidden %}<span class="booking" style="grid-column: {{ b.columns }}" title="belegt, {{ b.start|time:'H:i' }}–{{ b.end|time:'H:i' }}"></span>
     {% else %}<a class="booking {{ b.tone }}{% if b.person_id == user.pk %} mine{% endif %}" style="grid-column: {{ b.columns }}" href="{% if b.course and not b.editable %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}" title="{{ b.start|time:'H:i' }}–{{ b.end|time:'H:i' }} · {{ b.get_category_display }} · {{ b.label }} · {{ b.person }}">{{ b.label }}</a>{% endif %}
     {% endfor %}
     {% if now %}<i class="now" style="grid-column: {{ now }}"></i>{% endif %}

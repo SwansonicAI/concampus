@@ -527,6 +527,10 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
     'Prüfungsausschuss': ['view_students', 'view_files', 'correct_scores', 'appoint_examiners', 'recognise', 'grant_compensation', 'view_curriculum'],
     'Prüfungsausschuss Lehramt': ['view_files', 'manage_exams', 'decide_results', 'correct_scores', 'recognise', 'grant_compensation', 'view_curriculum'],
 }
+MAILBOXES = {  # the offices' shared addresses, as the HfM gives them
+    'Akademische und Studentische Angelegenheiten (ASA)': 'studservice@hfm-weimar.de',
+    'Prüfungsamt': 'pruefungsamt@hfm-weimar.de',
+}
 LIMITS = {  # offices for some Institute or Studiengänge only
     'Institut Streichinstrumente und Harfe': (['SH'], []),
     'Prüfungsausschuss Lehramt': ([], [('B.Ed.', 'Musik an Gymnasien (Doppelfach)'), ('M.Ed.', 'Musik an Gymnasien (Doppelfach)'), ('Staatsexamen', 'Lehramt an Gymnasien, Studienfach Musik')]),
@@ -1050,7 +1054,7 @@ class Command(BaseCommand):
         )
         self.staff, offices = {}, {}
         for name, capabilities in OFFICES.items():
-            offices[name] = Office.objects.create(name=name)
+            offices[name] = Office.objects.create(name=name, email=MAILBOXES.get(name, ''))
             offices[name].permissions.set(Permission.objects.filter(codename__in=capabilities))
             institutes, programs = LIMITS.get(name, ([], []))
             offices[name].institutes.set(self.institutes[key] for key in institutes)

@@ -13,15 +13,18 @@
 {{ form.non_field_errors }}
 {% if trial.errors %}{% for errors in trial.errors.values %}{% for e in errors %}<p class="fail">{{ e }}</p>{% endfor %}{% endfor %}
 {% elif rooms is not None %}
+{% if left is not None %}<p class="lead">Übezeit am {{ start|date:"l, j.n." }}: noch {{ left|floatformat:"-1" }} von {{ institution.student_daily_hours }} Std. Diese Buchung {% if counts %}zählt dazu{% elif trial.cleaned_data.category.quota %}zählt nicht dazu: sie beginnt in weniger als {{ institution.last_minute_hours }} Stunden{% else %}zählt als {{ trial.cleaned_data.category }} nicht dazu{% endif %}.</p>{% endif %}
+{% if came %}<p class="lead">Bis {{ came.end|time:"H:i" }} Uhr: {{ came.label }} in {{ came.room.building }}. {% if not rooms.0.away %}Räume dort stehen oben; für{% else %}Für{% endif %} den Weg anderswohin <a href="{% querystring start=came.later.0|time:'H:i' end=came.later.1|time:'H:i' %}">ab {{ came.later.0|time:"H:i" }} Uhr suchen</a>.</p>{% endif %}
+{% if smaller %}<p class="lead">Räume mit {{ smaller.0.capacity }} Plätzen sind dann belegt; {{ smaller.0.name }} ist ab {{ smaller.1|time:"H:i" }} Uhr frei. <a href="{% querystring start=smaller.1|time:'H:i' end=smaller.2|time:'H:i' %}">Ab {{ smaller.1|time:"H:i" }} Uhr suchen</a></p>{% endif %}
 <table data-panel>
   <thead><tr><th>Raum</th><th class="num">Plätze</th><th></th></tr></thead>
   <tbody>
     {% for r in rooms %}
     <tr>
-      <td><a href="{% url 'rooms:room' r.pk %}?tag={{ start|date:'Y-m-d' }}"><b>{{ r.name }}</b></a> <small class="muted">{{ r.building }}</small><br><small class="muted">{{ r.purpose }}{% if r.equipment %} · {{ r.equipment }}{% endif %}</small></td>
+      <td><a href="{% url 'rooms:room' r.pk %}?tag={{ start|date:'Y-m-d' }}"><b>{{ r.name }}</b></a> <small class="muted">{{ r.building }}</small>{% if r.away %} <span class="badge wait">{% if r.away.end <= start %}direkt aus{% else %}direkt weiter in{% endif %} {{ r.away.room.building }}</span>{% endif %}<br><small class="muted">{{ r.purpose }}{% if r.equipment %} · {{ r.equipment }}{% endif %}</small></td>
       <td class="num mid">{{ r.capacity }}</td>
       <td class="num mid">
-        {% if trial.student %}<form method="post" action="{% url 'rooms:new' %}">{% csrf_token %}{% for name, value in trial.data.items %}{% if name != 'room' %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endif %}{% endfor %}<button class="btn small" name="room" value="{{ r.pk }}">Buchen</button></form>
+        {% if trial.student %}<form method="post" action="{% url 'rooms:new' %}">{% csrf_token %}{% for name, value in trial.data.items %}{% if name != 'room' %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endif %}{% endfor %}<button class="btn small" name="room" value="{{ r.pk }}" data-confirm="{{ r.name }}, {{ start|time:'H:i' }}–{{ end|time:'H:i' }} buchen?">Buchen</button></form>
         {% else %}<a class="btn small" href="{% url 'rooms:new' %}?raum={{ r.pk }}&amp;start={{ start|date:'Y-m-d\TH:i' }}&amp;ende={{ end|date:'Y-m-d\TH:i' }}">Buchen</a>{% endif %}
       </td>
     </tr>
@@ -48,6 +51,6 @@
   </table>
 </section>
 {% endif %}
-{% if trial.student %}<p class="muted"><small>Ein Klick bucht den Raum als {{ trial.cleaned_data.category }}.</small></p>{% endif %}
+{% if trial.student %}<p class="muted"><small>Gebucht wird als {{ trial.cleaned_data.category }}.</small></p>{% endif %}
 {% endif %}
 {% endblock %}

@@ -29,7 +29,7 @@ from .days import busy, strip
 from .forms import ContactForm
 from .history import describe, former, restore, tables
 from .dates import months_before
-from .models import Change, Institution, Message, Office, Person, Term, Tracked
+from .models import Change, Institution, Message, Office, Person, Term, Tracked, limited
 from .text import fold, matching, words
 
 
@@ -146,11 +146,15 @@ def demo(request):
 
 def message(request, pk):
     letter = get_object_or_404(Message, pk=pk, person=request.user)
-    if not letter.read:
+    fresh = not letter.read
+    if fresh:
         letter.read = timezone.now()
         letter.save(update_fields=['read'])
     place = letter.link and dict((app.label, title) for app, title in tiles(request.user)).get(resolve(urlsplit(letter.link).path).app_name)
-    return render(request, 'core/message.html', {'letter': letter, 'place': place or 'Campus'})
+    response = render(request, 'core/message.html', {'letter': letter, 'place': place or 'Campus'})
+    if fresh:  # read in the side panel: the Postfach underneath, its counter with it, reloads once the panel closes
+        response['X-Stale'] = '1'
+    return response
 
 
 def letter(request, pk):
@@ -325,15 +329,24 @@ def found(person, q, limit):
         for p in matching(taught.select_related('study__person', 'course'), q, 'study__person__first_name', 'study__person__last_name', starts=True)[:limit * 5]:
             first.setdefault(p.study.person_id, p)
         groups.append(('In Ihrem Unterricht', [hit(p.study.person.name, p.course.get_absolute_url(), p.course.title) for p in list(first.values())[:limit]]))
-    if roles - {'applicant', 'alumni', 'student'}:  # colleagues: who teaches or holds an office
+    if roles - {'applicant', 'alumni'}:  # whom to ask: who teaches or holds an office, and the offices
         staff = Person.objects.filter(Q(teaching__isnull=False) | Q(groups__isnull=False), is_active=True).distinct().select_related('institute')
         groups.append(('Personen', [
             hit(f'{p.title} {p.first_name} {p.last_name}'.strip(), f'mailto:{p.email}', ' · '.join(filter(None, [p.institute and str(p.institute), p.email])))
             for p in ranked(staff, q, 'first_name', 'last_name', limit=limit)
         ]))
+        offices = []
+        for o in ranked(Office.objects.prefetch_related('user_set', 'institutes', 'programs'), q, 'name', limit=limit, names='amt'):
+            members = [p for p in o.user_set.all() if p.is_active]
+            mail = o.email or ','.join(p.email for p in members)
+            offices.append(hit(o.name + limited(o), f'mailto:{mail}', ' · '.join(filter(None, [o.email, ', '.join(f'{p.first_name} {p.last_name}' for p in members)]))))
+        groups.append(('Ämter', offices))
     teaching = [Course.Kind.COURSE, Course.Kind.LESSON]
     courses = matching(Course.objects.filter(term__end__gte=timezone.localdate()).select_related('term'), q, 'title', 'staff__last_name', 'subject__name', starts=True)
-    groups.append(('Lehrveranstaltungen', [hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in courses.filter(kind__in=teaching)[:limit]]))
+    own = Exists(Module.objects.filter(courses=OuterRef('pk'), program__studies__person=person, program__studies__status=Study.Status.ENROLLED))  # one's own Studiengang's first
+    groups.append(('Lehrveranstaltungen', [
+        hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in courses.filter(kind__in=teaching).annotate(own=own).order_by('-own', 'title')[:limit]
+    ]))
     papers = Q(staff=person)  # exams and auditions: those the person examines, those within reach for the offices running them
     written = Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.RECOGNITION, Course.Kind.THESIS])
     papers |= Q(pk__in=person.within(written, 'manage_exams', 'decide_results', 'recognise').values('pk'))

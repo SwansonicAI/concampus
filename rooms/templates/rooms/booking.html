@@ -6,7 +6,7 @@
 {% if booking.pk %}
 <p class="lead">Gebucht für {{ booking.person }} am {{ booking.created|date:"j.n.Y, H:i" }}{% if booking.course %} · <a href="{{ booking.course.get_absolute_url }}">{{ booking.course.title }}</a>{% endif %}{% if series %} · Teil einer Serie mit {{ series }} Terminen{% endif %}{% if not booking.category.blocks %} · <span class="badge no">{{ booking.category }}</span>{% endif %}{% if history %} · <a href="{% url 'history' 'rooms.booking' booking.pk %}" data-panel>Verlauf</a>{% endif %}</p>
 {% elif left is not None %}
-<p class="lead">Übezeit heute: noch {{ left|floatformat:"-1" }} von {{ rules.student_daily_hours }} Stunden.</p>
+<p class="lead">Übezeit am {{ on|date:"l, j.n." }}: noch {{ left|floatformat:"-1" }} von {{ rules.student_daily_hours }} Stunden. Was in den nächsten {{ rules.last_minute_hours }} Stunden beginnt, zählt nicht dazu.</p>
 {% endif %}
 {% if booking.pk and booking.start < now %}<p class="lead">Läuft seit {{ booking.start|time:"H:i" }}: nur das Ende lässt sich noch ändern.</p>{% endif %}
 {% if booking.requested %}<p class="lead"><span class="badge wait">Angefragt</span> Der Raum wird zentral vergeben; die Anfrage wartet auf Bestätigung.</p>{% endif %}

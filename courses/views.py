@@ -605,7 +605,7 @@ def lessons(request, pk):
 def mine(request):
     person = request.user
     term = Term.pick(request.GET.get('semester'))
-    context = {'term': term, 'terms': Term.objects.filter(courses__isnull=False).distinct().order_by('-start')}
+    context = {'term': term, 'terms': Term.objects.filter(courses__isnull=False).distinct().order_by('-start').filter(**since(person))}
     if 'teacher' in person.roles:
         teaching = person.teaching.filter(term=term, kind__in=TEACHING)
         context.update(
@@ -617,10 +617,16 @@ def mine(request):
             students=taught(person, term),
         )
     if 'student' in person.roles:
-        context['registrations'] = (
+        registrations = list(
             Participation.objects.filter(study__person=person, course__term=term, course__kind__in=TEACHING)
             .select_related('course', 'module').annotate(ahead=ahead())
         )
+        coming = {}  # each course's next date the student comes to: of a lesson class, their own
+        for b in agenda(person).filter(course__term=term, start__gte=timezone.now()).select_related('room').order_by('start'):
+            coming.setdefault(b.course_id, b)
+        for p in registrations:
+            p.next = coming.get(p.course_id)
+        context['registrations'] = registrations
     return render(request, 'courses/mine.html', context)
 
 

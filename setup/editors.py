@@ -79,7 +79,7 @@ class OfficeForm(forms.ModelForm):
 
     class Meta:
         model = Office
-        fields = ['name', 'institutes', 'programs']
+        fields = ['name', 'email', 'institutes', 'programs']
         labels = {'name': 'Name des Amts'}
         help_texts = {
             'name': 'Wie es an der Hochschule heißt, z. B. „Studierendensekretariat“.',
@@ -229,7 +229,7 @@ EDITORS = {e.key: e for e in [
     ),
     Editor(
         'aemter', Office, 'Ämter und Rechte', 'manage_accounts', 'Verwaltung', form=OfficeForm,
-        columns=[('Amt', 'name'), ('Zuständig für', 'remit'), ('Mitglieder', 'user_set')], search=['name'], words='rollen rechte gruppen berechtigungen institut',
+        columns=[('Amt', 'name'), ('E-Mail', 'email'), ('Zuständig für', 'remit'), ('Mitglieder', 'user_set')], search=['name'], words='rollen rechte gruppen berechtigungen institut',
         queryset=lambda: Office.objects.prefetch_related('user_set', 'institutes', 'programs'),
     ),
     Editor(

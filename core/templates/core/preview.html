@@ -3,7 +3,7 @@
 {% block content %}
 <h1>{{ title }}</h1>
 {% if groups %}<p class="lead">Noch ist nichts versandt. Erst „{{ send }}“ legt die Bescheide ins Postfach.</p>{% endif %}
-{% for note in notes %}<div class="flash">{{ note }}</div>{% endfor %}
+{% for note in notes %}<div class="flash">{{ note|linebreaksbr }}</div>{% endfor %}
 {% for heading, people, wording in groups %}
 <section>
   <h2>{{ heading }} · {{ people|length }}</h2>

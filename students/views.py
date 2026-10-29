@@ -327,17 +327,48 @@ def focus(request, pk):
             f'{p.course.title} zählt für {chosen_by[p.module_id].title}, nicht für {chosen.title}.'
             for p in study.participations.filter(course__term=Term.current()).select_related('course') if p.module_id in chosen_by and chosen_by[p.module_id].pk != chosen.pk
         ]
-        later = 'Ändern lässt sie sich danach nur über ' + (Office.holding('decide_results', study.program) or 'die Hochschule') + '.'
-        return preview(request, f'{chosen.choice.title}: {chosen.title}', [], 'Eintragen' if office else 'Verbindlich wählen', study.get_absolute_url(), aside + [later] * (not office))
+        advice = [] if office or study.advised_id == chosen.pk else [  # the Studienfachberatung the plan provides for first
+            f'Die Lehrenden empfehlen {study.advised.title}.' if study.advised else 'Eine Empfehlung aus der Studienfachberatung ist noch nicht eingetragen'
+            + (f'; die Beratung vereinbaren Sie mit {study.teacher} ({study.teacher.email}).' if study.teacher else '.')
+        ]
+        later = [] if office else [f'Ändern lässt sich die Wahl {changes(study, chosen)}.']
+        title = f'{chosen.choice.title}: {chosen.title}'
+        return preview(request, title, [], 'Eintragen' if office else 'Verbindlich wählen', study.get_absolute_url(), [contents(study, chosen), *aside, *advice, *later])
     else:
         study.focus = chosen
         study.save(update_fields=['focus'])
         if office:
             study.notify('schwerpunkt_eingetragen', study.get_absolute_url(), schwerpunkt=chosen.title, grund=reason)
         else:
-            texts.send('schwerpunkt', study.person, study.get_absolute_url(), studiengang=study.program.title, schwerpunkt=chosen.title)
+            texts.send(
+                'schwerpunkt', study.person, study.get_absolute_url(), studiengang=study.program.title, schwerpunkt=chosen.title,
+                inhalt=contents(study, chosen), aendern=changes(study, chosen),
+            )
         messages.success(request, f'Eingetragen: {chosen.title}. Bescheid versandt.' if office else f'Gewählt: {chosen.title}. Die Bestätigung liegt in Ihrem Postfach.')
     return redirect(study)
+
+
+def contents(study, chosen):
+    """What a Schwerpunkt holds: its credits and share of the Gesamtnote, then each module with its semesters and
+    whether it is part of the Abschlussprüfung."""
+    share = study.program.shares(chosen)
+
+    def part(m):
+        return m.pk in share and f'{share[m.pk]:.0f} % der Gesamtnote'
+
+    lines = [f'{chosen.title}: ' + ', '.join(filter(None, [f'{chosen.credits} ECTS', part(chosen)]))]
+    for m in chosen.nodes:
+        semesters = m.first and (f'{m.first}. Semester' if m.first == m.last else f'{m.first}.–{m.last}. Semester')
+        lines.append('– ' + ', '.join(filter(None, [f'{m.title}: {m.credits} ECTS', semesters, m.final and 'Teil der Abschlussprüfung', part(m)])))
+    return '\n'.join(lines)
+
+
+def changes(study, chosen):
+    """Until when the student changes a Schwerpunkt themselves, and through whom after that."""
+    office = Office.holding('decide_results', study.program) or 'die Hochschule'
+    if chosen.first and study.semester < chosen.first:
+        return f'bis zum Beginn des {chosen.first}. Fachsemesters selbst unter Ihrem Studium, danach nur über {office}'
+    return f'nur über {office}'
 
 
 @require_POST
