@@ -84,7 +84,10 @@ class Seeded(Case):
 
     def login(self, username):
         client = Client()
-        client.force_login(Person.objects.get(username=username))
+        person = Person.objects.get(username=username)
+        if not person.is_active:  # the demo's system account, which nobody signs in with, stands in for all rights
+            Person.objects.filter(pk=person.pk).update(is_active=True)
+        client.force_login(person)
         return client
 
 

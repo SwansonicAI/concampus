@@ -3,7 +3,7 @@ import re
 from django.core import mail
 from django.test import Client
 
-from core.models import Change, Office, Person, Term
+from core.models import Change, Grant, Membership, Office, Person, Term
 from core.testing import Seeded, flashes
 from curriculum.models import Module, Program, Subject
 from rooms.models import Room
@@ -77,6 +77,11 @@ class EditorTest(Seeded):
         office = Office.objects.create(name='Bibliothek')
         campus.post(f'/einstellungen/aemter/{office.pk}/', {'name': 'Bibliothek', 'capabilities': ['view_students']})
         campus.post(f'/einstellungen/konten/{clerk.pk}/', {'username': 'clerk', 'groups': [office.pk], 'is_active': 'on'})
+        self.assertFalse(Person.objects.get(pk=clerk.pk).roles)  # nothing yet: a second person confirms rights and members
+        self.assertEqual(campus.post('/einstellungen/freigaben/', {'art': 'mitglied', 'id': Membership.objects.get(person=clerk).pk, 'decision': 'yes'}).status_code, 404)
+        second = self.login('jan.reuter')
+        second.post('/einstellungen/freigaben/', {'art': 'recht', 'id': Grant.objects.get(office=office).pk, 'decision': 'yes'})
+        second.post('/einstellungen/freigaben/', {'art': 'mitglied', 'id': Membership.objects.get(person=clerk).pk, 'decision': 'yes'})
         self.assertIn('view_students', Person.objects.get(pk=clerk.pk).roles)
         joined = Change.objects.filter(person=clerk, table='core.person').first()
         self.assertEqual(joined.fields['groups'], [[], [office.pk]])

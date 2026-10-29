@@ -9,7 +9,7 @@ from django.shortcuts import get_object_or_404
 
 from core.access import CAPABILITIES, EVERYWHERE
 from core.dates import DayField
-from core.models import Holiday, Institute, Institution, Office, Person, Term
+from core.models import Grant, Holiday, Institute, Institution, Membership, Office, Person, Term
 from courses.forms import AuditionForm
 from courses.models import Appointment, Area, Course, Format, Reduction
 from curriculum.forms import ModuleForm
@@ -104,8 +104,13 @@ class OfficeForm(forms.ModelForm):
         return data
 
     def save(self, commit=True):
+        """Rights taken away go at once; rights given wait for a second person to confirm them (Grant)."""
         office = super().save()
-        office.permissions.set(Permission.objects.filter(content_type__model='office', codename__in=self.cleaned_data['capabilities']))
+        chosen, held = set(self.cleaned_data['capabilities']), set(office.permissions.values_list('codename', flat=True))
+        office.permissions.set(Permission.objects.filter(content_type__model='office', codename__in=chosen & held))
+        if added := sorted(chosen - held):
+            Grant.objects.create(office=office, rights=added, by=self.by)
+        self.pending = bool(added)
         return office
 
 
@@ -134,11 +139,17 @@ class AccountForm(forms.ModelForm):
         return email
 
     def save(self, commit=True):
+        """Leaving an office takes effect at once; joining one waits for a second person to confirm it (Membership)."""
         person = super().save(commit=False)
         if not person.pk:
             person.set_unusable_password()  # signs in with the Hochschule's login
         person.save()
+        chosen, held = set(self.cleaned_data['groups']), set(Office.objects.filter(user=person))
+        self.cleaned_data['groups'] = list(chosen & held)
         self.save_m2m()
+        for office in chosen - held:
+            Membership.objects.get_or_create(person=person, office=office, until=None, confirmed_by=None, defaults={'by': self.by})
+        self.pending = bool(chosen - held)
         return person
 
 
@@ -151,6 +162,23 @@ class AppointmentForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['person'].queryset = Person.teachers().order_by('last_name', 'first_name')
+
+
+class MembershipForm(forms.ModelForm):
+    """An office held until a day, as a stand-in or for a term of office; it takes effect once a second person confirms it."""
+
+    class Meta:
+        model = Membership
+        fields = ['person', 'office', 'until', 'note']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['until'].required = True
+        self.fields['person'].queryset = Person.objects.filter(models.Q(groups__isnull=False) | models.Q(institute__isnull=False)).distinct().order_by('last_name')
+
+    def save(self, commit=True):
+        self.instance.by, self.pending = self.instance.by or self.by, self.instance.confirmed_by is None
+        return super().save(commit)
 
 
 class ReductionForm(forms.ModelForm):
@@ -209,6 +237,12 @@ EDITORS = {e.key: e for e in [
             .select_related('institute').prefetch_related('groups')
         ),
         deletable=False,
+    ),
+    Editor(
+        'mitgliedschaften', Membership, 'Vertretungen und Amtszeiten', 'manage_accounts', 'Verwaltung', form=MembershipForm,
+        columns=[('Person', 'person'), ('Amt', 'office'), ('Bis', 'until'), ('Anlass', 'note'), ('Bestätigt von', 'confirmed_by')],
+        search=['person__last_name', 'office__name', 'note'], words='vertretung befristet amtszeit stellvertretung urlaub elternzeit',
+        queryset=lambda: Membership.objects.exclude(until=None).select_related('person', 'office', 'confirmed_by'),
     ),
     Editor(
         'semester', Term, 'Semester', 'manage_terms', 'Verwaltung',

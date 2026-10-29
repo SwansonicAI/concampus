@@ -293,11 +293,13 @@ class Person(Tracked, AbstractUser):
     @cached_property
     def reach(self):
         """Where each capability of the person's offices holds: None for the whole Hochschule, else the ids of the
-        Institute and the Studiengänge it is limited to. Superusers hold all, everywhere."""
+        Institute and the Studiengänge it is limited to; offices held until a day count until then, once confirmed.
+        Superusers hold all, everywhere."""
         if self.is_superuser:
             return dict.fromkeys(CODENAMES)
         reach = {}
-        for office in Office.objects.filter(user=self).prefetch_related('permissions', 'institutes', 'programs'):
+        held = models.Q(user=self) | models.Q(memberships__person=self, memberships__confirmed_by__isnull=False, memberships__until__gte=timezone.localdate())
+        for office in Office.objects.filter(held).distinct().prefetch_related('permissions', 'institutes', 'programs'):
             institutes, programs = {i.pk for i in office.institutes.all()}, {p.pk for p in office.programs.all()}
             for capability in (p.codename for p in office.permissions.all() if p.codename in CODENAMES):
                 if not (institutes or programs) or reach.get(capability, ()) is None:
@@ -590,3 +592,67 @@ class Change(models.Model):
 
     def __str__(self):
         return f'{self.table} {self.row} {self.get_action_display()}'
+
+
+class Membership(Tracked, models.Model):
+    """Someone joining an office, waiting until a second person who keeps accounts confirms it (Vier-Augen-Prinzip): for
+    good, then they become one of its members; or until a day, as a stand-in or for a term of office, which ends by
+    itself."""
+
+    owner = 'person_id'
+    capabilities = ('manage_accounts',)
+
+    person = models.ForeignKey(Person, models.CASCADE, related_name='memberships', verbose_name='Person')
+    office = models.ForeignKey(Office, models.CASCADE, related_name='memberships', verbose_name='Amt')
+    until = models.DateField('Bis einschließlich', null=True, blank=True, help_text='Für eine Vertretung oder Amtszeit; leer: auf Dauer.')
+    note = models.CharField('Anlass', max_length=200, blank=True, help_text='Z. B. „Vertretung während der Elternzeit von …“.')
+    by = models.ForeignKey(Person, models.SET_NULL, null=True, related_name='+', verbose_name='Eingetragen von')
+    confirmed_by = models.ForeignKey(Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Bestätigt von')
+    created = models.DateTimeField('Eingetragen am', default=timezone.now)
+
+    class Meta:
+        ordering = ['-created']
+        verbose_name = 'Mitgliedschaft in einem Amt'
+        verbose_name_plural = 'Mitgliedschaften in Ämtern'
+
+    def __str__(self):
+        return f'{self.person} · {self.office}' + (f' bis {self.until:%d.%m.%Y}' if self.until else '')
+
+    def confirm(self, by):
+        """Take effect: a member for good, or until the day."""
+        if self.until is None:
+            self.person.groups.add(self.office)
+            self.delete()
+        else:
+            self.confirmed_by = by
+            self.save(update_fields=['confirmed_by'])
+
+
+class Grant(Tracked, models.Model):
+    """Rights given to an office, waiting until a second person who keeps accounts confirms them."""
+
+    capabilities = ('manage_accounts',)
+
+    office = models.ForeignKey(Office, models.CASCADE, related_name='grants', verbose_name='Amt')
+    rights = models.JSONField('Rechte', default=list)
+    by = models.ForeignKey(Person, models.SET_NULL, null=True, related_name='+', verbose_name='Eingetragen von')
+    created = models.DateTimeField('Eingetragen am', default=timezone.now)
+
+    class Meta:
+        ordering = ['-created']
+        verbose_name = 'Rechte für ein Amt'
+        verbose_name_plural = 'Rechte für Ämter'
+
+    def __str__(self):
+        return f'{self.office}: {", ".join(self.labels)}'
+
+    @property
+    def labels(self):
+        names = dict(c for _, group in CAPABILITIES for c in group)
+        return [names.get(r, r) for r in self.rights]
+
+    def confirm(self, by):
+        from django.contrib.auth.models import Permission
+
+        self.office.permissions.add(*Permission.objects.filter(content_type__model='office', codename__in=self.rights))
+        self.delete()

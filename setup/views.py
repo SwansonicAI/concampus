@@ -12,11 +12,31 @@ from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_en
 from django.views.decorators.http import require_POST
 
 from core.access import kept, needs, require
-from core.models import Person, Text
+from core.models import Grant, Membership, Person, Text
 from core.text import matching
 from core.texts import TEXTS, Values, basics, mail, wording
 from core.views import SHOWN
 from .editors import EDITORS, formfield
+
+
+@require('manage_accounts')
+def approvals(request):
+    """Rights given and offices joined that wait for a second person: whoever entered one cannot confirm it."""
+    if request.method == 'POST':
+        model = {'recht': Grant, 'mitglied': Membership}.get(request.POST.get('art'))
+        pending = get_object_or_404(model.objects.exclude(by=request.user), pk=request.POST.get('id'), **({'confirmed_by': None} if model is Membership else {})) if model else None
+        if pending is None:
+            raise PermissionDenied('Bestätigen kann nur eine zweite Person.')
+        if request.POST.get('decision') == 'yes':
+            pending.confirm(request.user)
+            messages.success(request, f'Bestätigt: {pending}.')
+        else:
+            pending.delete()
+            messages.success(request, f'Abgelehnt: {pending}.')
+        return redirect('setup:approvals')
+    return render(request, 'setup/approvals.html', {
+        'grants': Grant.objects.select_related('office', 'by'), 'members': Membership.objects.filter(confirmed_by=None).select_related('person', 'office', 'by'),
+    })
 
 
 def usable(person):
@@ -86,9 +106,10 @@ def edit(request, key, pk=None):
         raise Http404
     obj = get_object_or_404(e.objects(request.user), pk=pk) if pk else e.start(request)
     form = modelform_factory(e.model, form=e.form, fields=e.fields, formfield_callback=formfield)(request.POST or None, instance=obj)
+    form.by = request.user  # who gives a right, which a second person confirms
     if form.is_valid() and (saved := kept(form, request.user, e.capability)):
         obj = saved
-        messages.success(request, f'„{obj}“ gespeichert.')
+        messages.success(request, f'„{obj}“ gespeichert.' + (' Neue Rechte und Mitgliedschaften gelten, sobald eine zweite Person sie unter „Freigaben“ bestätigt.' if getattr(form, 'pending', False) else ''))
         return redirect(back(request, e))
     return render(request, 'setup/form.html', {
         'editor': e, 'form': form, 'object': obj, 'back': back(request, e),

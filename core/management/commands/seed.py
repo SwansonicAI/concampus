@@ -30,7 +30,7 @@ from admissions.retention import forget
 from core.dates import months_before
 from admissions.views import DECISIONS, invite
 from core import destatis, history, texts
-from core.models import Change, Holiday, Institute, Institution, Message, Office, Person, Term, Text
+from core.models import Change, Holiday, Institute, Institution, Membership, Message, Office, Person, Term, Text
 from courses import panel as sheets
 from courses.models import Appointment, Area, Course, Ensemble, Format, Participation, Recusal, Reduction, Score, Signup
 from courses.panel import mean, rounding
@@ -1032,7 +1032,10 @@ class Command(BaseCommand):
         )
 
     def people(self):
-        Person.objects.create(username='admin', first_name='System', last_name='Administration', email='campus@hfm-weimar.de', password=self.password, is_staff=True, is_superuser=True)
+        Person.objects.create(  # for setting up, not for daily work: nobody signs in with it
+            username='admin', first_name='System', last_name='Administration', email='campus@hfm-weimar.de', password=self.password, is_staff=True, is_superuser=True,
+            is_active=False,
+        )
         self.staff, offices = {}, {}
         for name, capabilities in OFFICES.items():
             offices[name] = Office.objects.create(name=name)
@@ -1055,6 +1058,14 @@ class Command(BaseCommand):
             if subject:
                 self.by_subject[subject].append(self.teachers[key])
         self.teachers['neumann'].groups.add(offices['Prüfungsausschuss'])  # chairs it, and teaches
+        second = Person.objects.create(  # the Campus-Team's second person, who confirms rights; made apart, so the other demo data stays as it was
+            username='jan.reuter', first_name='Jan', last_name='Reuter', email='jan.reuter@hfm-weimar.de', password=self.password, phone='+49 3643 555 120',
+        )
+        second.groups.add(offices['Campus-Team'])
+        Membership.objects.create(  # a stand-in, waiting for the Campus-Team's second person to confirm it
+            person=self.staff['monika.hartmann'], office=offices['Veranstaltungsbüro'], until=date(2027, 3, 31),
+            note='Vertretung während der Elternzeit von Michael Görlitz', by=self.staff['campus'],
+        )
         self.logins |= set(Person.objects.values_list('username', flat=True))
         self.pools = {  # one-to-one lessons beside the Hauptfach, with Lehrbeauftragte where the plan needs more hours than the staff has
             WS: [self.teachers[k] for k in ('popescu', 'hein', 'martens')] + [self.lecturer('DO') for _ in range(13)],

@@ -1,0 +1,26 @@
+{% extends base %}
+{% block title %}Freigaben{% endblock %}
+{% block content %}
+<h1>Freigaben</h1>
+<p class="lead">Neue Rechte für Ämter und neue Mitglieder gelten erst, wenn eine zweite Person sie bestätigt. Wer sie eingetragen hat, kann sie nicht selbst bestätigen.</p>
+<table>
+  <thead><tr><th>Änderung</th><th>Eingetragen</th><th></th></tr></thead>
+  <tbody>
+    {% for g in grants %}
+    <tr>
+      <td><b>{{ g.office }}</b>: neue Rechte<br><small class="muted">{{ g.labels|join:"; " }}</small></td>
+      <td><small>{{ g.by|default:"–" }}<br><span class="muted">{{ g.created|date:"j.n.Y, H:i" }}</span></small></td>
+      <td class="num">{% if g.by != user %}<form method="post" class="actions">{% csrf_token %}<input type="hidden" name="art" value="recht"><input type="hidden" name="id" value="{{ g.pk }}"><button class="btn small" name="decision" value="yes">Bestätigen</button><button class="btn ghost small" name="decision" value="no">Ablehnen</button></form>{% else %}<small class="muted">wartet auf eine zweite Person</small>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    {% for m in members %}
+    <tr>
+      <td><b>{{ m.person }}</b> ins Amt {{ m.office }}{% if m.until %}, bis {{ m.until|date:"j.n.Y" }}{% else %}, auf Dauer{% endif %}{% if m.note %}<br><small class="muted">{{ m.note }}</small>{% endif %}</td>
+      <td><small>{{ m.by|default:"–" }}<br><span class="muted">{{ m.created|date:"j.n.Y, H:i" }}</span></small></td>
+      <td class="num">{% if m.by != user %}<form method="post" class="actions">{% csrf_token %}<input type="hidden" name="art" value="mitglied"><input type="hidden" name="id" value="{{ m.pk }}"><button class="btn small" name="decision" value="yes">Bestätigen</button><button class="btn ghost small" name="decision" value="no">Ablehnen</button></form>{% else %}<small class="muted">wartet auf eine zweite Person</small>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    {% if not grants and not members %}<tr><td colspan="3" class="empty">Nichts wartet auf Bestätigung.</td></tr>{% endif %}
+  </tbody>
+</table>
+{% endblock %}
