@@ -9,6 +9,7 @@
     <a class="btn ghost" href="?tag={{ next|date:'Y-m-d' }}" data-key="ArrowRight" title="Nächste Woche (→)">Woche →</a>
     {% if edit %}<a class="btn ghost" href="{% url 'setup:edit' 'raeume' room.pk %}?next={{ request.path|urlencode }}" data-panel>Bearbeiten</a>{% endif %}
     {% if bookable %}<a class="btn" href="{% url 'rooms:new' %}?raum={{ room.pk }}">Buchen</a>{% endif %}
+    {% if requestable %}<a class="btn" href="{% url 'rooms:new' %}?raum={{ room.pk }}">Anfragen</a>{% endif %}
   </div>
 </div>
 <p class="lead">{{ room.purpose|default:room.function }} · {{ room.building }} · {{ room.capacity }} Plätze{% if room.equipment %} · {{ room.equipment }}{% endif %}</p>

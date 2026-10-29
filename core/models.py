@@ -110,6 +110,10 @@ class Institution(Tracked, models.Model):
     student_ahead_hours = models.PositiveSmallIntegerField('Vorlauf für Studierende (Std.)', default=24, help_text='So weit im Voraus buchen Studierende.')
     last_minute_hours = models.PositiveSmallIntegerField('Kurzfristig ohne Kontingent (Std.)', default=3, help_text='Was so bald beginnt, zählt nicht zum Tageskontingent.')
     teacher_ahead_days = models.PositiveSmallIntegerField('Vorlauf für Lehrende (Tage)', default=183)
+    load_since = models.DateField(
+        'Deputatskonto ab', null=True, blank=True,
+        help_text='Ab dem Semester, das an diesem Tag beginnt, rechnet das Deputat Mehr- und Minderleistungen über drei Studienjahre auf (ThürLVVO § 7); leer: nicht.',
+    )
 
     class Meta:
         verbose_name = 'Hochschule'
@@ -218,7 +222,7 @@ class Person(Tracked, AbstractUser):
     employment = models.CharField('Beschäftigung', max_length=12, choices=Employment, blank=True, help_text='Für Lehrende.')
     obligation = models.DecimalField(
         'Lehrverpflichtung (LVS)', max_digits=4, decimal_places=1, null=True, blank=True,
-        help_text='Was die Lehrverpflichtungsverordnung verlangt, nach Ermäßigungen; bei einem Lehrauftrag die vereinbarten SWS.',
+        help_text='Was die Lehrverpflichtungsverordnung verlangt, vor Ermäßigungen; bei einem Lehrauftrag die vereinbarten SWS.',
     )
 
     class Meta:

@@ -1,16 +1,18 @@
 import uuid
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
-from decimal import InvalidOperation
+from decimal import Decimal
+from types import SimpleNamespace
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Count, Exists, F, Min, OuterRef, Q, Subquery
+from django.db.models import Count, Exists, F, Max, Min, OuterRef, Q, Subquery
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from core import history, texts
@@ -18,16 +20,16 @@ from core.access import CODENAMES, kept, require
 from core.apps import plural
 from core.dates import day as understood
 from core.forms import again, sent
-from core.models import Holiday, Institute, Person, Term
+from core.models import Holiday, Institute, Institution, Person, Term
 from core.text import fold, matching
 from core.views import without_term
-from curriculum.models import Program
+from curriculum.models import Module, Program
 from rooms.models import Booking, BookingCategory
 from rooms.views import agenda, legend, week
 from students.models import Study
 from . import panel
-from .forms import AddForm, CourseForm, DateForm, EnsembleForm, Lessons, PlanForm
-from .models import Area, Course, Ensemble, Format, Participation, Signup
+from .forms import AddForm, CourseForm, DateForm, EnsembleForm, Lessons, PlanForm, TeachingForm
+from .models import Area, Course, Ensemble, Format, Participation, Recusal, Reduction, Signup
 
 TEACHING = [Course.Kind.COURSE, Course.Kind.LESSON]
 MANAGERS = {Course.Kind.EXAM: 'manage_exams', Course.Kind.RECOGNITION: 'recognise', Course.Kind.AUDITION: 'run_auditions'}
@@ -54,11 +56,6 @@ def credited(course):
     for m in course.modules.select_related('program').order_by('title', 'program__degree', 'program__name', 'code'):
         found[m.title][m.program].append(m.code)
     return [(title, list(programs.items())) for title, programs in found.items()]
-
-
-def enrolled():
-    """Everyone who can be entered into a course, for the name suggestions."""
-    return Study.objects.filter(status=Study.Status.ENROLLED).select_related('person', 'program', 'subject').order_by('person__last_name')
 
 
 def teaches(person, course):
@@ -127,21 +124,23 @@ def course(request, pk):
     course = get_object_or_404(Course.objects.select_related('term', 'subject'), pk=pk, kind__in=TEACHING)
     staffed = teaches(person, course)
     staff, rows = panel.sheet(course)
+    refused = None
     if request.method == 'POST':
         if not staffed or course.released:
             raise PermissionDenied
         try:
             panel.save(request.POST, rows, [], decide=True)
-        except panel.OffScale as error:
-            messages.error(request, str(error))
-        except InvalidOperation:
-            messages.error(request, 'Bitte nur Zahlen zwischen 0 und 99 eintragen.')
+        except panel.Refused as error:  # shown with what was typed, by its row
+            refused, (staff, rows) = error, panel.sheet(course)
+            messages.error(request, 'Nichts gespeichert. Bitte die markierte Zeile berichtigen.')
         else:
             messages.success(request, 'Ergebnisse gespeichert.')
-        return redirect(course)
-    rows.sort(key=lambda p: p.created)
+            return redirect(course)
+    rows.sort(key=lambda p: (p.created, p.pk))
     for n, p in enumerate(rows):
         p.waiting = course.capacity is not None and n >= course.capacity
+    if refused:
+        panel.retype(rows, request.POST, refused)
     own = [p for p in rows if p.study.person_id == person.pk]
     upcoming = course.bookings.filter(start__gte=timezone.now())
     if course.kind == Course.Kind.LESSON and not staffed:
@@ -156,6 +155,12 @@ def course(request, pk):
         )
     lessons = lesson_times(course) if staffed and course.kind == Course.Kind.LESSON and playing is None else []
     timetable = lessons and Lessons(sent(request, 'lessons'), initial=[row for _, row in lessons], form_kwargs={'person': person})
+    office = person.may('manage_courses', course)
+    ensembles = list(
+        (course.ensembles if staffed else course.ensembles.filter(members__person=person).distinct())
+        .select_related('coach', 'wish').prefetch_related('members__person', 'members__subject')
+    )
+    ensembles.sort(key=lambda e: (e.coach_id != person.pk, e.coach_id is not None, e.wish_id != person.pk))  # one's own, then those still open
     return render(request, 'courses/course.html', {
         'course': course, 'playing': playing,
         'staff': staff,
@@ -167,36 +172,39 @@ def course(request, pk):
         'staffed': staffed,
         'eligible': person.studies.filter(status=Study.Status.ENROLLED, program__modules__courses=course).distinct(),
         'running': course.term.end >= timezone.localdate(),
+        'from': max(course.term.lectures_start, timezone.localdate()), 'office': office,
         'modules': credited(course),
         'bookings': upcoming.select_related('room', 'category').prefetch_related('participants')[:8],
         'plan': PlanForm(sent(request, 'plan'), person=person) if staffed and course.kind != Course.Kind.LESSON else None,
         'date': DateForm(sent(request, 'date'), person=person, course=course) if staffed else None,
         'lessons': timetable,
         'lesson_rows': zip([s for s, _ in lessons], timetable or []),
-        'ensembles': (course.ensembles if staffed else course.ensembles.filter(members__person=person).distinct())
-        .select_related('coach', 'wish').prefetch_related('members__person', 'members__subject'),
+        'ensembles': ensembles,
         'grouping': EnsembleForm(course=course) if course.allocation == Course.Allocation.ENSEMBLE else None,
         'adding': AddForm() if staffed else None,
-        'enrolled': enrolled() if staffed else [],
         'reachable': Study.reachable(person, Study.objects.filter(Q(participations__course=course) | Q(signups__course=course))) if staffed else set(),
         'panel': False,
     })
 
 
 def edit(request, pk=None):
-    """Create or change a course; the office may do either for its Institute and Studiengänge, staff may change their own."""
+    """Create or change a course: the office for its Institute and Studiengänge; its teachers what is theirs to decide
+    (TeachingForm)."""
     person = request.user
     course = get_object_or_404(Course, pk=pk, kind__in=TEACHING) if pk else Course(term=Term.pick(request.GET.get('semester')))
-    staffed = pk and course.staff.filter(pk=person.pk).exists()
-    if not (staffed or 'manage_courses' in person.roles and (not pk or person.may('manage_courses', course))):
+    office = 'manage_courses' in person.roles and (not pk or person.may('manage_courses', course))
+    if not (office or pk and course.staff.filter(pk=person.pk).exists()):
         raise PermissionDenied
-    form = CourseForm(request.POST or None, instance=course, person=person)
-    if form.is_valid() and (saved := form.save() if staffed else kept(form, person, 'manage_courses')):
+    form = (CourseForm if office else TeachingForm)(request.POST or None, instance=course, person=person)
+    if form.is_valid() and (saved := kept(form, person, 'manage_courses') if office else form.save()):
         course = saved
         messages.success(request, 'Gespeichert. Jetzt Termine planen und Teilnehmende eintragen.' if not pk else 'Gespeichert.')
         return redirect(course)
     back = course.get_absolute_url() if pk else reverse('courses:catalogue')
-    return render(request, 'courses/form.html', {'form': form, 'course': course, 'menu': 'courses/_nav.html', 'heading': 'Neue Veranstaltung', 'back': back})
+    return render(request, 'courses/form.html', {
+        'form': form, 'course': course, 'menu': 'courses/_nav.html', 'heading': 'Neue Veranstaltung', 'back': back,
+        'note': None if office else 'Umfang (SWS), Lehrende, Module und Lehrform trägt das für die Lehre zuständige Amt ein: sie zählen im Deputat und in den Studienplänen.',
+    })
 
 
 @require_POST
@@ -295,28 +303,65 @@ def ensemble(request, pk):
             Participation.objects.get_or_create(course=course, study=s, defaults={'module': course.modules.filter(program=s.program_id).order_by('semester').first()})
     for s in members[1:]:
         texts.send('ensemble', s.person, course.get_absolute_url(), veranstaltung=course.title, besetzung=group.name, von=request.user)
-    messages.success(request, f'„{group.name}“ angemeldet. Die Betreuung teilen die Lehrenden zu.')
+    messages.success(request, f'„{group.name}“ angemeldet. Wer es betreut, erfahren Sie im Postfach.')
     return redirect(course)
 
 
 @require_POST
 def coach(request, pk):
-    """Give an ensemble its coach, or take it back; the members hear who it is."""
+    """A teacher of the course takes an ensemble nobody coaches yet, or gives their own back; the office that runs the
+    course gives any to any of its teachers, or dissolves it. The members hear who coaches them."""
     group = get_object_or_404(Ensemble.objects.select_related('course__term'), pk=pk)
-    course = group.course
-    if not teaches(request.user, course):
+    course, person = group.course, request.user
+    office = person.may('manage_courses', course)
+    if not (office or course.staff.filter(pk=person.pk).exists()):
         raise PermissionDenied
     if 'dissolve' in request.POST:
+        if not office:
+            raise PermissionDenied
         group.delete()
         messages.success(request, f'„{group.name}“ aufgelöst. Die Teilnahmen bleiben.')
         return redirect(course)
-    group.coach = course.staff.filter(pk=request.POST.get('coach') or None).first()
+    chosen = course.staff.filter(pk=request.POST.get('coach') or None).first()
+    if not office and not (chosen == person and group.coach_id is None or chosen is None and group.coach_id == person.pk):
+        raise PermissionDenied
+    group.coach = chosen
     group.save(update_fields=['coach'])
     if group.coach:
         for s in group.members.select_related('person'):
             texts.send('betreuung', s.person, course.get_absolute_url(), veranstaltung=course.title, besetzung=group.name, betreuung=group.coach)
     messages.success(request, f'„{group.name}“: {group.coach or "ohne Betreuung"}.')
     return redirect(course)
+
+
+@require_POST
+def recuse(request, pk):
+    """An examiner stands back from a candidate before marking them, giving the reason; the office that decides the
+    results (for auditions, the one that runs them) lifts it again. The result follows from the others' marks."""
+    course = get_object_or_404(Course, pk=pk, kind__in=Course.PANEL, released=None)
+    person = request.user
+    office = person.may('run_auditions' if course.kind == Course.Kind.AUDITION else 'decide_results', course)
+    overrides = {p.pk: p.override for p in panel.sheet(course)[1]}  # a grade set by hand stays; one that was the mean follows the marks
+    if lifted := request.POST.get('aufheben', ''):
+        participation, _, examiner = lifted.partition('-')
+        if not office:
+            raise PermissionDenied
+        Recusal.objects.filter(participation__course=course, participation=participation, examiner=examiner).delete()
+        participation, done = int(participation), 'Befangenheit aufgehoben.'
+    else:
+        participation = get_object_or_404(course.participations.exclude(scores__examiner=person), pk=request.POST.get('participation'))
+        reason = request.POST.get('reason', '').strip()[:200]
+        if not (reason and course.staff.filter(pk=person.pk).exists()):
+            raise PermissionDenied
+        Recusal.objects.get_or_create(participation=participation, examiner=person, defaults={'reason': reason})
+        participation, done = participation.pk, f'Befangenheit angezeigt. Sie werten {participation.study.person} nicht.'
+    rows = [p for p in panel.sheet(course)[1] if p.pk == participation]
+    for p in rows:
+        p.override = overrides[p.pk]
+    panel.save({}, rows, [], decide=False)  # the result as the others' marks make it
+    messages.success(request, done)
+    back = request.POST.get('next', '')
+    return redirect(back if url_has_allowed_host_and_scheme(back, request.get_host()) else course.get_absolute_url())
 
 
 @require_POST
@@ -495,10 +540,12 @@ def mine(request):
     if 'teacher' in person.roles:
         teaching = person.teaching.filter(term=term, kind__in=TEACHING)
         context.update(
-            teaching=teaching.annotate(size=Count('participations')).select_related('subject'),
+            teaching=teaching.annotate(
+                size=Count('participations', distinct=True), mine=Count('ensembles__members', filter=Q(ensembles__coach=person), distinct=True),
+            ).select_related('subject', 'format'),
             load=deputat(teaching, person),
             coached=person.coaching.filter(course__term=term).select_related('course').prefetch_related('members__person'),
-            students=Study.objects.filter(teacher=person, status=Study.Status.ENROLLED).select_related('person', 'program', 'subject'),
+            students=taught(person, term),
         )
     if 'student' in person.roles:
         context['registrations'] = (
@@ -508,26 +555,79 @@ def mine(request):
     return render(request, 'courses/mine.html', context)
 
 
+def taught(person, term):
+    """The person's class, each study with `lesson`, the person's own lesson class it is in in `term`, and else `until`,
+    the last semester its Studienplan has Hauptfach lessons in: past it, none is due; before it, one is `missing`."""
+    today = timezone.localdate()
+    studies = list(
+        Study.objects.filter(teacher=person, status=Study.Status.ENROLLED).select_related('person', 'program', 'subject', 'start_term')
+        .annotate(fs=F('prior_terms') + Count('terms', filter=Q(terms__leave=False, terms__term__start__lte=today)))
+    )
+    lessons = dict(Participation.objects.filter(study__in=studies, course__term=term, course__kind=Course.Kind.LESSON, course__staff=person).values_list('study', 'course__title'))
+    until = dict(  # the Hauptfach's lessons: classes of a Hauptfach, not Pflichtfach Klavier or Orchesterstudien
+        Module.objects.filter(program__in={s.program_id for s in studies}, courses__kind=Course.Kind.LESSON, courses__subject__isnull=False, semester__isnull=False)
+        .values('program').annotate(last=Max('semester')).values_list('program', 'last')
+    )
+    for s in studies:
+        s.lesson, s.until = lessons.get(s.pk), until.get(s.program_id)
+        s.missing = not s.lesson and (s.until is None or s.fs <= s.until)
+    return studies
+
+
 def timetable(request):
     day = understood(request.GET.get('tag', '')) or timezone.localdate()
-    return render(request, 'courses/timetable.html', {'day': day, 'clashes': True, 'tones': legend(), **week(agenda(request.user), day)})
+    return render(request, 'courses/timetable.html', {
+        'day': day, 'clashes': True, 'tones': legend(), 'off': 'teacher' in request.user.roles, **week(agenda(request.user), day, request.user),
+    })
 
 
-def loads(term, person, institute='', words=()):
-    """(teacher, [(course, SWS)], total, total less their obligation or None) of the teachers in the person's view: their
-    own load, and that of the Institute in reach."""
+def hours(term, seen):
+    """{teacher: [(course, SWS)]} of a term's teaching, for the teachers `seen` (pks; None: all)."""
     courses = term.courses.filter(kind__in=TEACHING).select_related('format').prefetch_related('staff', 'ensembles').annotate(size=Count('participations'))
-    teaching = Person.objects.filter(teaching__term=term, teaching__kind__in=TEACHING)
-    seen = None if person.everywhere('view_teaching_load') else {person.pk, *person.within(teaching, 'view_teaching_load').values_list('pk', flat=True)}
     if seen is not None:
         courses = courses.filter(pk__in=Course.objects.filter(staff__in=seen).values('pk'))
-    teachers = defaultdict(list)
+    found = defaultdict(list)
     for c in courses:
         coached = Counter(e.coach_id for e in c.ensembles.all())
         for s in c.staff.all():
-            if (seen is None or s.pk in seen) and institute in ('', str(s.institute_id)) and all(w in fold(s.name) for w in words):
-                teachers[s].append((c, (c.hours or 0) * share(c, coached[s.pk])))
-    return sorted(((t, cs, total, total - t.obligation if t.obligation is not None else None) for t, cs in teachers.items() for total in [sum(load for _, load in cs)]), key=lambda row: row[0].last_name)
+            if seen is None or s.pk in seen:
+                found[s].append((c, (c.hours or 0) * share(c, coached[s.pk])))
+    return found
+
+
+def loads(term, person, institute='', words=()):
+    """The Deputat of the teachers in the person's view: their own, and that of the Institute in reach. Each row has
+    `teacher`, `courses` [(course, SWS)], `total`, the term's `reductions` (ThürLVVO § 8), `due` (the Lehrverpflichtung
+    less them), `balance` (total less due), `low` (under half of it, which § 7 allows in no term) and `account`: the
+    balances of the three Studienjahre up to this term, to be evened out within them (§ 7), counted from when the
+    Hochschule began to keep it. A Lehrauftrag has no account: its hours are agreed each term."""
+    teaching = Person.objects.filter(teaching__term=term, teaching__kind__in=TEACHING)
+    seen = None if person.everywhere('view_teaching_load') else {person.pk, *person.within(teaching, 'view_teaching_load').values_list('pk', flat=True)}
+    now = {t: cs for t, cs in hours(term, seen).items() if institute in ('', str(t.institute_id)) and all(w in fold(t.name) for w in words)}
+    since = Institution.get().load_since
+    terms = [term, *(Term.objects.filter(start__lt=term.start, start__gte=since).order_by('-start')[:5] if since else [])]
+    reduced = defaultdict(list)
+    for r in Reduction.objects.filter(person__in=now, term__in=terms):
+        reduced[r.person_id, r.term_id].append(r)
+
+    def due(teacher, on):
+        return None if teacher.obligation is None else teacher.obligation - sum(r.hours for r in reduced[teacher.pk, on.pk])
+
+    account, first = defaultdict(Decimal), dict(Course.objects.filter(staff__in=now, kind__in=TEACHING).values('staff').annotate(first=Min('term__start')).values_list('staff', 'first'))
+    for earlier in terms[1:]:
+        taught = hours(earlier, {t.pk for t in now})
+        for t in now:
+            if first.get(t.pk) and first[t.pk] <= earlier.start and (owed := due(t, earlier)) is not None:
+                account[t.pk] += sum(h for _, h in taught.get(t, [])) - owed
+    rows = []
+    for t, cs in now.items():
+        total, owed = sum(h for _, h in cs), due(t, term)
+        rows.append(SimpleNamespace(
+            teacher=t, courses=cs, total=total, reductions=reduced[t.pk, term.pk], due=owed, balance=None if owed is None else total - owed,
+            low=owed is not None and total * 2 < owed,
+            account=None if owed is None or t.employment == Person.Employment.LEHRAUFTRAG or not since or term.start < since else account[t.pk] + total - owed,
+        ))
+    return sorted(rows, key=lambda row: row.teacher.last_name)
 
 
 @require('view_teaching_load', 'teacher')
@@ -540,9 +640,10 @@ def load(request):
     institute, q, stand = request.GET.get('institut', str(min(ours)) if len(ours) == 1 else ''), request.GET.get('q', '').strip(), request.GET.get('stand', '')
     rows = loads(term, person, institute, fold(q).split())
     if stand:
-        rows = [row for row in rows if row[3] is not None and (row[3] > 0 if stand == 'ueber' else row[3] < 0)]
+        rows = [row for row in rows if row.balance is not None and (row.balance > 0 if stand == 'ueber' else row.balance < 0)]
     return render(request, 'courses/load.html', {
-        'term': term, 'terms': Term.objects.order_by('-start'), 'rows': rows, 'total': sum(row[2] for row in rows), 'everyone': 'view_teaching_load' in person.roles,
+        'term': term, 'terms': Term.objects.order_by('-start'), 'rows': rows, 'total': sum(row.total for row in rows), 'everyone': 'view_teaching_load' in person.roles,
+        'since': Institution.get().load_since and Term.objects.filter(start__gte=Institution.get().load_since).order_by('start').first(),
         'institutes': Institute.objects.filter(pk__in=ours) if not person.everywhere('view_teaching_load') and ours else Institute.objects.all(),
         'institute': institute, 'q': q, 'stand': stand,
     })

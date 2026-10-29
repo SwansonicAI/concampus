@@ -179,6 +179,18 @@ TEXTS = {
         NACHRICHT, 'Termin abgesagt', 'Abgesagt: {veranstaltung}', '{von} hat „{veranstaltung}“ am {termin} in {raum} abgesagt.',
         ('veranstaltung', 'termin', 'raum', 'von'),
     ),
+    'tag_abgesagt': Spec(
+        NACHRICHT, 'Termine eines Tages abgesagt', 'Abgesagt: Ihre Termine am {tag}', '{von} hat die Termine am {tag} abgesagt:\n{termine}',
+        ('tag', 'termine', 'von'),
+    ),
+    'raumanfrage_bestaetigt': Spec(
+        NACHRICHT, 'Raumanfrage bestätigt', 'Bestätigt: {raum}, {termin}', 'Ihre Anfrage ist bestätigt: {raum}, {termin}, für „{buchung}“.',
+        ('raum', 'termin', 'buchung'),
+    ),
+    'raumanfrage_abgesagt': Spec(
+        NACHRICHT, 'Raumanfrage abgesagt', 'Nicht möglich: {raum}, {termin}', 'Ihre Anfrage für {raum}, {termin}, „{buchung}“, ist leider nicht möglich. {grund}',
+        ('raum', 'termin', 'buchung', 'grund'),
+    ),
     'termin_verlegt': Spec(
         NACHRICHT, 'Termin verlegt', 'Verlegt: {veranstaltung}', '{von} hat „{veranstaltung}“ vom {termin} auf {neuer_termin} in {raum} verlegt.',
         ('veranstaltung', 'termin', 'neuer_termin', 'raum', 'von'),

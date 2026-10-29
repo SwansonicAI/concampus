@@ -23,6 +23,37 @@ def times(start, minutes=60):
     return {'day': f'{start:%d.%m.%Y}', 'begin': f'{start:%H:%M}', 'until': f'{start + timedelta(minutes=minutes):%H:%M}'}
 
 
+class TeacherTest(Seeded):
+    """What teachers book beyond their Institut's rooms, and calling a day off."""
+
+    def test_a_hall_is_asked_for_and_given_by_the_office(self):
+        hall, start = Room.objects.get(name='Festsaal'), slot(24 * 40, 120)
+        self.assertTrue(hall.function.central)
+        self.login('lehre').post('/raeume/buchen/', {'room': hall.pk, 'category': 'klassenabend', 'title': 'Klassenabend', 'audience': 60, **times(start, 120)})
+        asked = Booking.objects.get(room=hall, start=start, title='Klassenabend')
+        self.assertTrue(asked.requested)
+        self.assertFalse(Booking(room=hall, start=start, end=start + timedelta(hours=1), category_id='konzert').clashes().exists())  # it holds nothing yet
+        self.login('veranstaltungsbuero').post(f'/raeume/anfragen/{asked.pk}/', {'decision': 'yes'})
+        self.assertFalse(Booking.objects.get(pk=asked.pk).requested)
+        self.assertTrue(asked.person.messages.filter(subject__startswith='Bestätigt').exists())
+
+    def test_a_day_called_off_tells_each_student_once(self):
+        wendt = Person.objects.get(username='lehre')
+        day = next(b.start for b in Booking.objects.filter(person=wendt, course__kind='lesson', start__gt=timezone.now() + timedelta(days=1), category__blocks=True).order_by('start'))
+        lessons = Booking.objects.filter(person=wendt, start__date=timezone.localdate(day), category__blocks=True)
+        students = set(Person.objects.filter(attending__in=lessons))
+        self.login('lehre').post(f'/raeume/tag-absagen/?tag={timezone.localdate(day):%Y-%m-%d}', {'booking': [b.pk for b in lessons]})
+        self.assertFalse(Booking.objects.filter(pk__in=lessons, category__blocks=True).exists())
+        self.assertEqual({p: p.messages.filter(subject__startswith='Abgesagt: Ihre Termine').count() for p in students}, dict.fromkeys(students, 1))
+
+    def test_participants_are_found_by_name_not_listed(self):
+        teacher = self.login('lehre')
+        listed = teacher.get('/raeume/buchen/').context['form'].fields['participants']
+        self.assertLess(len(list(listed.choices)), 40)  # the class and their ensembles, not every student
+        self.assertEqual(teacher.get('/studierende/vorschlaege/', {'q': 'ma'}).json()['found'], [])
+        self.assertLessEqual(len(teacher.get('/studierende/vorschlaege/', {'q': 'mar'}).json()['found']), 8)
+
+
 class BookingRulesTest(Seeded):
     """The HfM's rules as Asimut has them: Institut rooms, 24 hours ahead, 4 hours a day, last-minute, chamber music."""
 

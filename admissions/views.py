@@ -1,7 +1,7 @@
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
 from datetime import timedelta
-from decimal import InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth import login
@@ -307,6 +307,15 @@ def calendar(request, pk):
     return ics(request, [(f'eignungspruefung-{p.pk}', start, end, p.course.title, f'{room}, {room.building}' if room else '')], 'eignungspruefung.ics')
 
 
+def programme(note):
+    """An applicant's programme, a work a line: [(second it starts in the video or None, that time as written, work)]."""
+    found = []
+    for line in filter(None, map(str.strip, note.splitlines())):
+        at = re.match(r'(\d{1,2}):([0-5]\d)\s+(.+)', line)
+        found.append((int(at[1]) * 60 + int(at[2]), f'{at[1]}:{at[2]}', at[3]) if at else (None, '', line))
+    return found
+
+
 def blank(request, pk, kind):
     """A form to print and sign for an application, like the parents' consent, its blanks filled in where known."""
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject'), pk=pk, person=request.user)
@@ -326,19 +335,22 @@ def audition(request, pk):
     if not (office or course.staff.filter(pk=person.pk).exists()):
         raise PermissionDenied
     staff, rows = panel.sheet(course)
-    columns = staff if office else [person]
+    columns, refused = staff if office else [person], None
     if request.method == 'POST':
         if course.released:
             raise PermissionDenied
         try:
             panel.save(request.POST, rows, columns, decide=office)
-        except InvalidOperation:
-            messages.error(request, f'Bitte nur Punkte zwischen 0 und {course.max_points} eintragen.')
+        except panel.Refused as error:  # shown with what was typed, by its row
+            refused, (staff, rows) = error, panel.sheet(course)
+            messages.error(request, 'Nichts gespeichert. Bitte die markierte Zeile berichtigen.')
         else:
             messages.success(request, 'Wertungen gespeichert.')
-        return redirect(course)
+            return redirect(course)
     if not office:
         panel.blind(rows, person)
+    if refused:
+        panel.retype(rows, request.POST, refused)
     if request.GET.get('sortierung') == 'punkte' and not any(getattr(p, 'blind', False) for p in rows):  # a ranking would tell the others' marks
         rows.sort(key=lambda p: p.grade if p.grade is not None else (p.mean or 0), reverse=True)
     return render(request, 'admissions/audition.html', {
@@ -346,7 +358,8 @@ def audition(request, pk):
         'staff': staff,
         'rows': rows, 'timed': any(p.slot for p in rows), 'noted': any(p.note for p in rows),
         'columns': [e.pk for e in columns],
-        'office': office,
+        'office': office, 'rule': panel.rule(rows),
+        'recusable': [] if course.released else panel.recusable(rows, person),
         'history': Course.visible_to(person.roles),
         'slots': SlotForm(person=person, course=course) if office else None,
         'stages': next_stages(course) if office else [],
@@ -386,8 +399,8 @@ def advance(request, pk):
     names = ' und '.join(f'„{t.title}“' for t in targets)
     moved = set()
     for p in course.participations.filter(passed=True, study__status=Study.Status.APPLIED).select_related('study__person'):
-        for target in targets:
-            if Participation.objects.get_or_create(course=target, study=p.study, defaults={'note': p.note})[1]:
+        for target in targets:  # the programme goes along, without the times in the video
+            if Participation.objects.get_or_create(course=target, study=p.study, defaults={'note': re.sub(r'^\d{1,2}:[0-5]\d\s+', '', p.note, flags=re.M)})[1]:
                 moved.add(p.study)
     for study in moved:
         texts.send('naechste_stufe', study.person, reverse('admissions:mine'), pruefung=course.title, stufen=names)
@@ -673,36 +686,37 @@ def review(request, pk):
     juror = course.staff.filter(pk=person.pk).exists()
     if not (juror or person.may('run_auditions', course)):
         raise PermissionDenied
-    _, rows = panel.sheet(course)
-    filmed = set(Document.objects.filter(study__in=[p.study_id for p in rows], kind__condition=Condition.VIDEO).values_list('study', flat=True))
-    rows = [p for p in rows if p.study_id in filmed]  # nothing to watch yet: not in the jury's way
+    _, everyone = panel.sheet(course)
+    filmed = set(Document.objects.filter(study__in=[p.study_id for p in everyone], kind__condition=Condition.VIDEO).values_list('study', flat=True))
+    rows = [p for p in everyone if p.study_id in filmed]  # nothing to watch yet: not in the jury's way
     if not rows:
         return redirect(course)
-    rows.sort(key=lambda p: p.created)
+    panel.blind(rows, person)
     mine = {p.pk: dict((e.pk, v) for e, v in p.marks).get(person.pk) for p in rows}
+    todo = {p.pk for p in rows if mine[p.pk] is None and person.pk not in p.recused}
     picked = request.GET.get('bewerbung', '')
-    current = next((p for p in rows if str(p.pk) == picked), None) or next((p for p in rows if mine[p.pk] is None), rows[0])
-    at = rows.index(current)
+    current = next((p for p in rows if str(p.pk) == picked), None) or next((p for p in rows if p.pk in todo), rows[0])
+    at, error = rows.index(current), ''
     here = reverse('admissions:review', args=[course.pk])
     if request.method == 'POST':
         if course.released or not juror:
             raise PermissionDenied
         try:
             panel.save(request.POST, [current], [person], decide=False)
-        except InvalidOperation:
-            messages.error(request, f'Bitte Punkte zwischen 0 und {course.max_points} eintragen.')
-            return redirect(f'{here}?bewerbung={current.pk}')
-        messages.success(request, f'Wertung für {current.study.person.first_name} {current.study.person.last_name} gespeichert.')
-        following = next((p for p in rows[at + 1:] + rows[:at] if mine[p.pk] is None), None)
-        return redirect(f'{here}?bewerbung={following.pk}' if following else course)
+        except panel.Refused as refused:  # shown by the field, with what was typed
+            error, mine[current.pk] = str(refused), request.POST.get(f'score-{current.pk}-{person.pk}', '')
+        else:
+            messages.success(request, f'Wertung für {current.study.person.first_name} {current.study.person.last_name} gespeichert.')
+            following = next((p for p in rows[at + 1:] + rows[:at] if p.pk in todo - {current.pk}), None)
+            return redirect(f'{here}?bewerbung={following.pk}' if following else course)
     return render(request, 'admissions/review.html', {
         'course': course,
-        'p': current,
+        'p': current, 'error': error, 'programme': programme(current.note),
         'juror': juror,
         'mine': mine[current.pk],
         'videos': current.study.documents.filter(kind__condition=Condition.VIDEO),
-        'position': at + 1,
-        'count': len(rows),
+        'position': everyone.index(current) + 1,  # numbered as on the list of all applications
+        'count': len(everyone),
         'done': sum(1 for value in mine.values() if value is not None),
         'prev': rows[at - 1] if at else None,
         'next': rows[at + 1] if at + 1 < len(rows) else None,

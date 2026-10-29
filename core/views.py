@@ -21,7 +21,7 @@ from django.views.decorators.http import require_POST
 from courses.models import Course, Participation
 from curriculum.models import Module, Program
 from rooms.models import Booking, BookingCategory, Room
-from rooms.views import agenda
+from rooms.views import agenda, moves
 from students.models import Document, Study
 from . import dates
 from .apps import feature, plural, tile_apps, tiles
@@ -40,6 +40,7 @@ def home(request):
     shown = list(bookings.filter(start__date=day).select_related('room', 'course', 'category').prefetch_related('participants'))
     for b in shown:
         b.clash = any(o is not b and o.start < b.end and b.start < o.end for o in shown)
+    moves(shown)
     apps = tiles(person)
     tasks = sorted(
         ({**t, 'app': title} for app, title in apps for t in app.tasks(person)),
@@ -70,7 +71,8 @@ def account(request):
         form.save()
         messages.success(request, 'Kontaktdaten gespeichert.')
         return redirect('account')
-    return render(request, 'core/account.html', {'form': form, 'office': Office.holding('manage_students')})
+    staff = not request.user.roles & {'student', 'applicant', 'alumni'}  # employees: their personnel file is HR's
+    return render(request, 'core/account.html', {'form': form, 'office': 'die Personalabteilung' if staff else Office.holding('manage_students')})
 
 
 ROLES = {'student': 'Studierende', 'applicant': 'Bewerbende', 'teacher': 'Lehrende', 'alumni': 'Ehemalige'}

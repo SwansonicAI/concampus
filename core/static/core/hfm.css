@@ -121,6 +121,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--green); }
 .toolbar input[type=search], .head input[type=search] { width: 280px; }
 input.cell { width: 76px; padding: 4px 8px; text-align: right; }
 select.cell { padding: 4px 6px; }
+.cell.bad { border-color: var(--red); outline: 1px solid var(--red); }
 .form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; max-width: 640px; }
 .form > div:not(.actions) { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .form > div[hidden] { display: none; }
@@ -332,6 +333,7 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .week .line { grid-column: 2 / -1; border-top: 1px solid var(--line); }
 .week .booking { margin: 1px 3px; white-space: normal; }
 .week .booking.clash { outline: 2px solid var(--red); outline-offset: -2px; }
+.week .booking.move { border-top: 3px solid var(--amber); }
 .week .booking.split { width: calc(100% / var(--lanes) - 4px); margin-left: calc(100% / var(--lanes) * var(--lane) + 2px); }
 
 /* Print: certificates and transcripts */

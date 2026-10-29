@@ -1,0 +1,3 @@
+<div{% include "django/forms/widgets/attrs.html" %} data-search="{% url 'students:suggest' %}" data-name="{{ widget.name }}">{% for group, options, index in widget.optgroups %}{% for option in options %}<div>
+  {% include option.template_name with widget=option %}</div>{% endfor %}{% endfor %}
+</div>

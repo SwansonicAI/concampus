@@ -9,6 +9,7 @@ urlpatterns = [
     path('rueckmeldung/', views.reregistration, name='reregistration'),
     path('bescheide/', views.letters, name='letters'),
     path('nachricht/', views.compose, name='compose'),
+    path('vorschlaege/', views.suggest, name='suggest'),
     path('<int:pk>/', views.study, name='study'),
     path('<int:pk>/immatrikulieren/', views.enrol, name='enrol'),
     path('immatrikulieren/', views.enrol_many, name='enrol_many'),

@@ -5,6 +5,7 @@ from pathlib import Path
 from django.contrib.auth.models import Permission
 from django.core import mail
 from django.core.exceptions import ValidationError
+from django.db.models import Count
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -286,8 +287,8 @@ class HistoryFlowTest(Seeded):
     def test_marks_entered_in_bulk_are_kept_once(self):
         wendt = Person.objects.get(username='lehre')
         course = Course.objects.filter(video=True, released=None, staff=wendt).first()
-        p = course.participations.exclude(scores__examiner=wendt).select_related('study').first()
-        juror = self.login('lehre')
+        p = course.participations.exclude(scores__examiner=wendt).annotate(n=Count('scores')).filter(n__lt=course.staff.count() - 1).select_related('study').first()
+        juror = self.login('lehre')  # a row others still mark: Wendt's own mark stays hers to change
         url = f'/aufnahme/pruefung/{course.pk}/sichtung/?bewerbung={p.pk}'
         juror.post(url, {f'score-{p.pk}-{wendt.pk}': '17,5'})
         juror.post(url, {f'score-{p.pk}-{wendt.pk}': '18'})

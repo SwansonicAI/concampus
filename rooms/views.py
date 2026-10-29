@@ -13,6 +13,7 @@ from django.utils.dateparse import parse_datetime
 from django.utils.formats import date_format
 from django.views.decorators.http import require_POST
 
+from core.access import require
 from core.apps import plural
 from core.dates import day as understood
 from core.forms import again, sent
@@ -40,13 +41,28 @@ def agenda(person):
     return Booking.objects.filter(
         Q(person=person) | Q(participants=person) | Q(course__staff=person)
         | Q(course__kind=Course.Kind.COURSE, course__participations__study__person=person)
-    ).filter(category__blocks=True).distinct()
+    ).filter(category__blocks=True, requested=False).distinct()
 
 
-def week(bookings, day):
-    """Context for the week grid: the Monday-to-Sunday dates around `day` and the bookings placed on them."""
+def moves(bookings):
+    """Mark the bookings of one person that begin within a quarter of an hour of the one before, in another building:
+    `move` is where they come from."""
+    ordered = sorted(bookings, key=lambda b: b.start)
+    for before, b in zip(ordered, ordered[1:]):
+        if timedelta(0) <= b.start - before.end <= timedelta(minutes=15) and before.room.building != b.room.building:
+            b.move = before.room.building
+
+
+def week(bookings, day, person=None):
+    """Context for the week grid: the Monday-to-Sunday dates around `day` and the bookings placed on them. For one
+    person's own plan, their lessons name the student (`who`) and a change of building without a break shows."""
     monday = day - timedelta(days=day.weekday())
-    placed = list(bookings.filter(start__date__range=(monday, monday + timedelta(days=6))).select_related('room', 'course', 'category'))
+    placed = list(bookings.filter(start__date__range=(monday, monday + timedelta(days=6))).select_related('room', 'course', 'category').prefetch_related('participants'))
+    if person:
+        moves(placed)
+        for b in placed:
+            if b.course and b.course.kind == Course.Kind.LESSON and b.person_id == person.pk:
+                b.who = ', '.join(f'{p.first_name} {p.last_name}' for p in b.participants.all())
     for n, b in enumerate(placed):
         column = 2 + timezone.localtime(b.start).weekday()
         b.place = f'{line(b.start)} / {column} / {line(b.end)} / {column + 1}'
@@ -102,7 +118,7 @@ def index(request):
     group = request.GET.get('raeume') or ('zentral' if person.everywhere('book_any_room') else 'meine' if allowed else 'alle')
     kind, _, key = group.partition(':')
     rooms = Room.objects.prefetch_related(Prefetch(
-        'bookings', Booking.objects.filter(start__date=day).select_related('course', 'person', 'category').prefetch_related('participants'), to_attr='day',
+        'bookings', Booking.objects.filter(start__date=day, requested=False).select_related('course', 'person', 'category').prefetch_related('participants'), to_attr='day',
     ))
     rooms = {
         'meine': rooms.filter(pk__in=allowed), 'zentral': rooms.filter(function__central=True), 'haus': rooms.filter(building=key), 'funktion': rooms.filter(function=key),
@@ -135,22 +151,34 @@ def index(request):
     })
 
 
-def find(request):
-    """Free rooms for a time, a group size and equipment: the question people actually ask."""
+def opening():
+    """The next full hour the plans show, as the time a search starts from: tomorrow morning once the day is over."""
     now = timezone.localtime()
-    hour = (now + timedelta(hours=1)).replace(minute=0)
-    form = FindForm(request.GET or None, initial={'day': now.date(), 'start': hour.time(), 'end': (hour + timedelta(hours=1)).time()})
-    rooms = start = end = trial = None
+    hour = (now + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+    if hour.date() != now.date() or hour.hour >= CLOSE:
+        return (now + timedelta(days=1)).replace(hour=OPEN, minute=0, second=0, microsecond=0)
+    return max(hour, hour.replace(hour=OPEN))
+
+
+def find(request):
+    """Free rooms for a time, a group size and equipment: the question people actually ask. Teachers also see the halls
+    given out centrally that are free then, to ask for."""
+    hour = opening()
+    form = FindForm(request.GET or None, initial={'day': hour.date(), 'start': hour.time(), 'end': (hour + timedelta(hours=1)).time()})
+    rooms = asked = start = end = trial = None
     if form.is_valid():
         data = form.cleaned_data
         start = timezone.make_aware(datetime.combine(data['day'], data['start']))
         end = timezone.make_aware(datetime.combine(data['day'], data['end']))
-        taken = Booking.objects.filter(start__lt=end, end__gt=start, category__blocks=True).values('room')
+        taken = Booking.objects.filter(start__lt=end, end__gt=start, category__blocks=True, requested=False).values('room')
         rooms = bookable(request.user).exclude(pk__in=taken).filter(capacity__gte=data['seats'] or 1)
         rooms = matching(rooms, data['equipment'], 'equipment', 'name', 'purpose', 'building')
+        if requestable(request.user):
+            asked = matching(Room.objects.filter(function__central=True).exclude(pk__in=taken).exclude(pk__in=rooms.values('pk')).filter(capacity__gte=data['seats'] or 1), data['equipment'], 'equipment', 'name', 'purpose', 'building')
+            asked = asked.order_by('capacity', 'building', 'name')
         rooms = rooms.order_by('capacity', 'building', 'name')
         trial = tried(request.user, rooms.first(), data['day'], data['start'], data['end'])
-    return render(request, 'rooms/find.html', {'form': form, 'rooms': rooms, 'start': start, 'end': end, 'trial': trial})
+    return render(request, 'rooms/find.html', {'form': form, 'rooms': rooms, 'asked': asked, 'start': start, 'end': end, 'trial': trial})
 
 
 def tried(person, room, day, begin, until):
@@ -170,8 +198,8 @@ def room(request, pk):
     day = understood(request.GET.get('tag', '')) or timezone.localdate()
     return render(request, 'rooms/room.html', {
         'room': room, 'day': day, 'bookable': bookable(request.user).filter(pk=pk).exists(), 'central': Office.holding('book_any_room'),
-        'edit': request.user.may('manage_rooms', room),
-        **week(room.bookings.all(), day),
+        'edit': request.user.may('manage_rooms', room), 'requestable': room.function.central and requestable(request.user),
+        **week(room.bookings.filter(requested=False), day),
     })
 
 
@@ -209,7 +237,7 @@ def events(request):
         first = today.replace(day=1)
     following = (first + timedelta(days=32)).replace(day=1)
     picked, q = request.GET.get('kategorie', ''), request.GET.get('q', '').strip()
-    found = Booking.objects.filter(category__public=True, start__date__gte=first, start__date__lt=following).select_related('room', 'person', 'course', 'category')
+    found = Booking.objects.filter(category__public=True, requested=False, start__date__gte=first, start__date__lt=following).select_related('room', 'person', 'course', 'category')
     if picked:
         found = found.filter(category=picked)
     return render(request, 'rooms/events.html', {
@@ -224,7 +252,7 @@ def events(request):
 def programme(request):
     """The public events of the next half year as a calendar, for the Hochschule's website and anyone to subscribe to."""
     now = timezone.now()
-    found = Booking.objects.filter(category__public=True, internal=False, end__gte=now, start__lte=now + timedelta(days=183)).select_related('room')
+    found = Booking.objects.filter(category__public=True, internal=False, requested=False, end__gte=now, start__lte=now + timedelta(days=183)).select_related('room')
     return ics(request, [(f'veranstaltung-{b.pk}', b.start, b.end, b.label, f'{b.room.purpose or b.room}, {b.room.building}') for b in found])
 
 
@@ -256,10 +284,13 @@ def service(request, pk):
 def booking(request, pk=None):
     person = request.user
     booking = get_object_or_404(Booking.objects.select_related('course', 'person', 'room', 'category'), pk=pk) if pk else Booking()
-    if pk and not editable(booking, person):
-        if private(booking, person):
+    past = pk and booking.end <= timezone.now()  # what is over stays as it was: neither changed nor called off
+    if pk and (past or not editable(booking, person)):
+        if not editable(booking, person) and private(booking, person):
             raise PermissionDenied
-        return render(request, 'rooms/details.html', {'booking': booking, 'participants': booking.participants.all()})
+        return render(request, 'rooms/details.html', {
+            'booking': booking, 'participants': booking.participants.all(), 'past': past, 'history': Booking.visible_to(person.roles),
+        })
     initial, data = {}, request.POST.copy() or None
     if start := parse_datetime(request.GET.get('start', '')):
         end = parse_datetime(request.GET.get('ende', '')) or start + timedelta(hours=1)
@@ -283,6 +314,9 @@ def booking(request, pk=None):
                 'buchung_geaendert', booking.person, reverse('rooms:booking', args=[booking.pk]), buchung=booking.label, von=person, raum=booking.room,
                 termin=f'{timezone.localtime(booking.start):%d.%m.%Y %H:%M}–{timezone.localtime(booking.end):%H:%M}',
             )
+        if booking.requested:
+            messages.success(request, f'{booking.room} angefragt. Wer die Säle vergibt, bestätigt oder sagt ab; die Antwort kommt in Ihr Postfach.')
+            return redirect('rooms:mine')
         rules = Institution.get()
         free = form.student and (  # say why the counter did not move
             f'{booking.category} zählt nicht zu Ihren {rules.student_daily_hours} Stunden Übezeit am Tag.' if not booking.category.quota
@@ -300,7 +334,7 @@ def booking(request, pk=None):
         'form': form, 'booking': booking, 'series': series, 'central': Office.holding('book_any_room'),
         'told': told, 'cancel': CancelForm(sent(request, 'absagen'), person=person), 'instead': form.instead(),
         'rules': Institution.get(), 'special': BookingCategory.objects.filter(students=True).exclude(ahead_hours=None, participants=0),
-        'history': booking.pk and Booking.visible_to(person.roles), 'now': timezone.now(),
+        'history': booking.pk and Booking.visible_to(person.roles), 'now': timezone.now(), 'asking': bool(form.fields['room'].asked),
         'services': booking.services.select_related('category') if booking.pk else [],
         'serving': ServiceForm(initial={'begin': (timezone.localtime(booking.start) - timedelta(hours=2)).time(), 'until': (timezone.localtime(booking.start) - timedelta(hours=1)).time()})
         if booking.pk and booking.category.public else None,
@@ -342,12 +376,20 @@ def moment(start, end):
     return f'{date_format(start, "D j.n.Y")}, {start:%H:%M}–{end:%H:%M} Uhr'
 
 
+def called_off(booking, by):
+    """Call a date off: it stays on the plans as „Abgesagt“ and frees the room. Returns who is to hear of it."""
+    told = recipients(booking, by)
+    booking.category = BookingCategory.system('abgesagt')
+    booking.save(update_fields=['category'])
+    return told
+
+
 @require_POST
 def cancel(request, pk):
     """Call off one date: it stays on the plans as „Abgesagt“ and frees the room; whoever takes part hears of it, with
     the make-up date if there is one."""
     booking = get_object_or_404(Booking.objects.select_related('course', 'room', 'person'), pk=pk)
-    if not editable(booking, request.user):
+    if not editable(booking, request.user) or booking.end <= timezone.now():
         raise PermissionDenied
     form = CancelForm(request.POST, person=request.user)
     if not form.is_valid():
@@ -364,9 +406,7 @@ def cancel(request, pk):
         except ValidationError as error:
             messages.error(request, f'Nachholtermin: {" ".join(error.messages)}')
             return again(request, reverse('rooms:booking', args=[pk]), 'absagen')
-    told = recipients(booking, request.user)
-    booking.category = BookingCategory.system('abgesagt')
-    booking.save(update_fields=['category'])
+    told = called_off(booking, request.user)
     if makeup:
         makeup.save()
         makeup.participants.set(booking.participants.all())
@@ -383,6 +423,73 @@ def cancel(request, pk):
         told and f'Nachricht an {plural(len(told), "Person", "Personen")}.',
     ])))
     return redirect(booking.course or f"{reverse('rooms:index')}?tag={timezone.localtime(booking.start):%Y-%m-%d}")
+
+
+def day_off(request):
+    """Call off one's own dates of a day at once, as when ill: lessons, course dates, rehearsals one booked or teaches;
+    not exams, which whoever plans them moves. Whoever takes part hears once, with all their dates of the day."""
+    person = request.user
+    day = understood(request.GET.get('tag', '')) or timezone.localdate()
+    dates = list(
+        Booking.objects.filter(Q(person=person) | Q(course__staff=person), start__date=day, end__gt=timezone.now(), category__blocks=True, requested=False)
+        .exclude(course__kind__in=Course.PANEL).select_related('room', 'course', 'person').prefetch_related('participants').distinct().order_by('start')
+    )
+    for b in dates:
+        b.who = ', '.join(f'{p.first_name} {p.last_name}' for p in b.participants.all())
+    if request.method == 'POST':
+        chosen, told = [b for b in dates if str(b.pk) in request.POST.getlist('booking')], {}
+        for b in chosen:
+            for p in called_off(b, person):
+                told.setdefault(p, []).append(f'– {b.label}, {timezone.localtime(b.start):%H:%M}–{timezone.localtime(b.end):%H:%M} Uhr, {b.room}')
+        note = request.POST.get('note', '').strip()
+        for p, lines in told.items():
+            subject, body = texts.render('tag_abgesagt', vorname=p.first_name, nachname=p.last_name, tag=date_format(day, 'l, j. F Y'), termine='\n'.join(lines), von=person)
+            Message.send(p, subject, body + (f'\n\n{note}' if note else ''), reverse('courses:timetable') + f'?tag={day:%Y-%m-%d}')
+        messages.success(request, f'{plural(len(chosen), "Termin", "Termine")} abgesagt. Nachricht an {plural(len(told), "Person", "Personen")}.')
+        return redirect(f"{reverse('courses:timetable')}?tag={day:%Y-%m-%d}")
+    return render(request, 'rooms/day_off.html', {'day': day, 'dates': dates})
+
+
+def requestable(person):
+    """Whether the person asks for halls given out centrally instead of booking them: teachers without the right to."""
+    return 'teacher' in person.roles and not person.everywhere('book_any_room')
+
+
+@require('manage_bookings')
+def requests(request):
+    """Halls teachers ask for, in the rooms the office gives out: confirm, or decline with a word why."""
+    pending = list(
+        Booking.objects.filter(requested=True, end__gte=timezone.now(), room__in=request.user.reached(Room, 'manage_bookings'))
+        .select_related('room', 'person', 'category').order_by('start')
+    )
+    for b in pending:
+        b.taken = b.clashes().select_related('person').first()
+        b.rivals = [o for o in pending if o is not b and o.room_id == b.room_id and o.start < b.end and b.start < o.end]
+    return render(request, 'rooms/requests.html', {'pending': pending})
+
+
+@require('manage_bookings')
+@require_POST
+def answer(request, pk):
+    booking = get_object_or_404(Booking.objects.select_related('room', 'person'), pk=pk, requested=True)
+    if booking.room_id not in request.user.reached(Room, 'manage_bookings'):
+        raise PermissionDenied
+    when = moment(booking.start, booking.end)
+    if request.POST.get('decision') == 'yes':
+        booking.requested = False
+        try:
+            booking.full_clean()
+        except ValidationError as error:
+            messages.error(request, ' '.join(error.messages))
+            return redirect('rooms:requests')
+        booking.save(update_fields=['requested'])
+        texts.send('raumanfrage_bestaetigt', booking.person, reverse('rooms:booking', args=[booking.pk]), raum=booking.room, termin=when, buchung=booking.label)
+        messages.success(request, f'{booking.room} für {booking.person} bestätigt.')
+    else:
+        texts.send('raumanfrage_abgesagt', booking.person, reverse('rooms:find'), raum=booking.room, termin=when, buchung=booking.label, grund=request.POST.get('note', '').strip() or '–')
+        booking.delete()
+        messages.success(request, f'Anfrage von {booking.person} abgesagt.')
+    return redirect('rooms:requests')
 
 
 def feed(request):

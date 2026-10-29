@@ -8,7 +8,7 @@ from rooms.models import Room
 from core.testing import Seeded, flashes
 from students.models import Study
 from .models import Course, Ensemble, Participation, Signup
-from .views import deputat
+from .views import deputat, loads
 
 
 class RolloverTest(Seeded):
@@ -49,7 +49,7 @@ class EnsembleTest(Seeded):
         r = self.login('student').post(f'/lehre/{chamber.pk}/ensemble/', {
             'study': student.pk, 'name': 'Duo Violine/Violoncello', 'members': cellist.person.email, 'repertoire': 'Ravel: Sonate',
         }, follow=True)
-        self.assertEqual(flashes(r), ['„Duo Violine/Violoncello“ angemeldet. Die Betreuung teilen die Lehrenden zu.'])
+        self.assertEqual(flashes(r), ['„Duo Violine/Violoncello“ angemeldet. Wer es betreut, erfahren Sie im Postfach.'])
         duo = Ensemble.objects.get(name='Duo Violine/Violoncello')
         self.assertEqual(set(duo.members.all()), {student, cellist})
         self.assertTrue(chamber.participations.filter(study=cellist).exists())
@@ -57,6 +57,31 @@ class EnsembleTest(Seeded):
         before = deputat(wendt.teaching.filter(term=chamber.term), wendt)
         self.login('lehre').post(f'/lehre/ensemble/{duo.pk}/', {'coach': wendt.pk})
         self.assertEqual(deputat(wendt.teaching.filter(term=chamber.term), wendt), before + chamber.hours)
+
+    def test_teachers_take_open_ensembles_the_office_hands_out_the_rest(self):
+        chamber = Course.objects.get(term__name='WiSe 2026/27', title='Kammermusik')
+        wendt, teacher = Person.objects.get(username='lehre'), self.login('lehre')
+        others = chamber.ensembles.exclude(coach=None).exclude(coach=wendt).first()
+        self.assertEqual(teacher.post(f'/lehre/ensemble/{others.pk}/', {'coach': wendt.pk}).status_code, 403)
+        self.assertEqual(teacher.post(f'/lehre/ensemble/{others.pk}/', {'dissolve': '1'}).status_code, 403)
+        self.login('dekanat').post(f'/lehre/ensemble/{others.pk}/', {'coach': wendt.pk})
+        self.assertEqual(Ensemble.objects.get(pk=others.pk).coach, wendt)
+
+
+class TeachingTest(Seeded):
+    def test_teachers_change_what_is_theirs_not_hours_staff_or_modules(self):
+        course = Course.objects.get(title='Hauptfach Violine · Klasse Wendt', term__name='WiSe 2026/27')
+        hours, staff = course.hours, set(course.staff.all())
+        self.login('lehre').post(f'/lehre/{course.pk}/bearbeiten/', {
+            'hours': '9', 'staff': [Person.objects.get(username='dekanat').pk], 'title': 'Anders', 'capacity': '12', 'allocation': 'staff', 'description': 'Neu',
+        })
+        course.refresh_from_db()
+        self.assertEqual((course.hours, set(course.staff.all()), course.title, course.capacity), (hours, staff, 'Hauptfach Violine · Klasse Wendt', 12))
+
+    def test_the_deputat_counts_against_the_obligation_less_reductions(self):
+        wendt = Person.objects.get(username='lehre')
+        row = next(r for r in loads(Term.objects.get(name='WiSe 2026/27'), wendt) if r.teacher == wendt)
+        self.assertEqual((row.due, row.balance, row.account), (wendt.obligation - 2, row.total - row.due, row.total - row.due))  # the account starts this term
 
 
 class PlanTest(Seeded):

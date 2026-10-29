@@ -6,7 +6,8 @@ const fold = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
   .replace(/ß/g, 'ss').replace(/ae/g, 'a').replace(/oe/g, 'o').replace(/ue/g, 'u');
 
 function init(root) {
-  root.querySelectorAll('.form div[id^="id_"]').forEach(list => list.querySelectorAll('input[type=checkbox]').length > 8 && filterable(list));
+  root.querySelectorAll('.form div[id^="id_"]').forEach(list => (list.dataset.search || list.querySelectorAll('input[type=checkbox]').length > 8) && filterable(list));
+  root.querySelectorAll('datalist[data-suggest]').forEach(suggest);
   root.querySelectorAll('.form select').forEach(select => select.options.length > 60 && findable(select));
   root.querySelectorAll('select[data-leads]').forEach(lead);
   root.querySelectorAll('form:has([name=worst])').forEach(converted);
@@ -186,11 +187,40 @@ function lineChart(chart) {
   new ResizeObserver(draw).observe(svg);
 }
 
-// Type-to-filter for long choice lists.
+// People found by name from three letters, a few at a time: who can be added is found, never listed in full.
+const people = async (url, q) => q.length < 3 ? [] : (await (await fetch(`${url}?q=${encodeURIComponent(q)}`)).json()).found;
+
+function suggest(list) {
+  const input = document.querySelector(`[list="${list.id}"]`);
+  let timer;
+  input?.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const found = await people(list.dataset.suggest, input.value.trim());
+      list.replaceChildren(...found.map(p => Object.assign(document.createElement('option'), {value: p.value, textContent: p.text})));
+    }, 150);
+  });
+}
+
+// Type-to-filter for long choice lists; a list of people (data-search) adds whoever else the name finds.
 function filterable(list) {
-  const input = Object.assign(document.createElement('input'), {type: 'search', className: 'filter', placeholder: 'Liste filtern …'});
+  const input = Object.assign(document.createElement('input'), {type: 'search', className: 'filter', placeholder: list.dataset.search ? 'Name tippen …' : 'Liste filtern …'});
   list.before(input);
-  input.addEventListener('input', () => {
+  let timer;
+  list.dataset.search && input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      for (const p of await people(list.dataset.search, input.value.trim())) {
+        if (list.querySelector(`input[value="${p.id}"]`)) continue;
+        const row = document.createElement('div'), label = document.createElement('label');
+        label.append(Object.assign(document.createElement('input'), {type: 'checkbox', name: list.dataset.name, value: p.id}), p.text);
+        row.append(label);
+        list.append(row);
+      }
+      input.dispatchEvent(new Event('filter'));
+    }, 150);
+  });
+  const narrow = () => {
     const words = fold(input.value).split(/\s+/).filter(Boolean);
     for (const label of list.querySelectorAll('label:has(input)')) {
       const box = label.querySelector('input');
@@ -201,7 +231,9 @@ function filterable(list) {
         group.hidden = !group.querySelector(':scope > div:not([hidden])');
       }
     }
-  });
+  };
+  input.addEventListener('input', narrow);
+  input.addEventListener('filter', narrow);
 }
 
 // Type-to-find in a long dropdown, such as every Kreis and state: only entries matching the words, or their group, stay.
@@ -267,6 +299,15 @@ function converted(form) {
     hint.textContent = [foreign, best, worst].some(Number.isNaN) || best === worst ? '' : `ergibt ${grade.toFixed(1).replace('.', ',')}`;
   });
 }
+
+// A time in an applicant's programme (data-seek) plays the video from there.
+document.addEventListener('click', event => {
+  const mark = event.target.closest('[data-seek]');
+  const video = mark && document.querySelector('.review video');
+  if (!video) return;
+  video.currentTime = Number(mark.dataset.seek);
+  video.play();
+});
 
 // What cannot be undone (data-confirm="Wirklich auflösen?") asks once more: the first click turns the button into the
 // question, a second within some seconds does it.

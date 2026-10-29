@@ -1,0 +1,9 @@
+<form method="post" id="befangen" action="{% url 'courses:recuse' course.pk %}" class="inline" style="margin-top: 20px">
+  {% csrf_token %}
+  {% if recusable %}
+  <label>Befangen bei<select name="participation">{% for p in recusable %}<option value="{{ p.pk }}">{{ p.study.person.name }}</option>{% endfor %}</select></label>
+  <label>Grund<input name="reason" required maxlength="200" placeholder="z. B. Privatunterricht bis 2025"></label>
+  <button class="btn ghost small" data-confirm="Anzeigen? Sie werten dann nicht.">Befangenheit anzeigen</button>
+  <small class="muted">Etwa wer jemanden privat unterrichtet hat oder verwandt ist, wertet nicht mit; das Ergebnis bilden die anderen.</small>
+  {% endif %}
+</form>

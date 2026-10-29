@@ -1,0 +1,29 @@
+{% extends base %}
+{% block title %}Raumanfragen{% endblock %}
+{% block subnav %}{% include "rooms/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Raumanfragen</h1>
+<p class="lead">Zentral vergebene Räume, um die Lehrende bitten, etwa für einen Klassenabend. Bestätigt, belegt die Buchung den Raum; abgesagt, wird sie gelöscht. Beide hören davon.</p>
+<table>
+  <thead><tr><th>Termin</th><th>Raum</th><th>Wofür</th><th>Lage</th><th></th></tr></thead>
+  <tbody>
+    {% for b in pending %}
+    <tr>
+      <td data-value="{{ b.start|date:'c' }}">{{ b.start|date:"D j.n.Y" }}<br><small class="muted">{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</small></td>
+      <td><a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a><br><small class="muted">{{ b.room.capacity }} Plätze</small></td>
+      <td><a href="{% url 'rooms:booking' b.pk %}">{{ b.label }}</a><br><small class="muted">{{ b.person }}{% if b.audience %} · {{ b.audience }} erwartet{% endif %} · angefragt {{ b.created|date:"j.n." }}</small></td>
+      <td>{% if b.taken %}<span class="fail">belegt: {{ b.taken.label }}</span>{% elif b.rivals %}<span class="badge wait">auch angefragt: {% for o in b.rivals %}{{ o.person.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</span>{% else %}<span class="badge yes">frei</span>{% endif %}</td>
+      <td class="num">
+        <form method="post" action="{% url 'rooms:answer' b.pk %}" class="actions">
+          {% csrf_token %}
+          {% if not b.taken %}<button class="btn small" name="decision" value="yes">Bestätigen</button>{% endif %}
+          <input name="note" placeholder="Grund einer Absage" aria-label="Grund einer Absage" maxlength="200">
+          <button class="btn ghost small" name="decision" value="no" data-confirm="Absagen?">Absagen</button>
+        </form>
+      </td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty">Keine offenen Anfragen.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

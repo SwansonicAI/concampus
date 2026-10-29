@@ -2,7 +2,7 @@ import csv
 import io
 from collections import Counter, defaultdict
 from datetime import timedelta
-from decimal import ROUND_DOWN, Decimal, InvalidOperation
+from decimal import ROUND_DOWN, Decimal
 
 from django import forms
 from django.contrib import messages
@@ -26,7 +26,7 @@ from core.text import matching
 from core.views import without_term
 from courses import panel
 from courses.forms import AddForm, ExamForm, SlotForm, ThesisForm
-from courses.views import credited, enrolled
+from courses.views import credited
 from courses.models import Course, Participation, attempts
 from curriculum.models import Module, Program
 from curriculum.views import plan as study_plan
@@ -161,21 +161,22 @@ def exam(request, pk):
     if not (office or decide or course.staff.filter(pk=person.pk).exists()):
         raise PermissionDenied
     staff, rows = panel.sheet(course)
-    columns = staff if decide else [person]
+    columns, refused = staff if decide else [person], None
     if request.method == 'POST':
         if course.released:
             raise PermissionDenied
         try:
             panel.save(request.POST, rows, columns, decide=decide)
-        except panel.OffScale as error:
-            messages.error(request, str(error))
-        except InvalidOperation:
-            messages.error(request, 'Bitte nur Zahlen zwischen 0 und 99 eintragen.')
+        except panel.Refused as error:  # shown with what was typed, by its row
+            refused, (staff, rows) = error, panel.sheet(course)
+            messages.error(request, 'Nichts gespeichert. Bitte die markierte Zeile berichtigen.')
         else:
-            messages.success(request, 'Ergebnisse gespeichert.')
-        return redirect(course)
+            messages.success(request, 'Gutachten gespeichert.' if course.kind == Course.Kind.THESIS else 'Ergebnisse gespeichert.')
+            return redirect(course)
     if not decide:
         panel.blind(rows, person)
+    if refused:
+        panel.retype(rows, request.POST, refused)
     handed = handed_in(rows[0]) if course.kind == Course.Kind.THESIS and rows else None
     held = handed or course.bookings.filter(start__lte=timezone.now()).exists()  # marks are owed from then on, slots no more
     return render(request, 'exams/exam.html', {
@@ -185,7 +186,8 @@ def exam(request, pk):
         'columns': [e.pk for e in columns],
         'panel': course.kind in Course.PANEL,
         'office': office,
-        'decide': decide,
+        'decide': decide, 'rule': panel.rule(rows),
+        'recusable': [] if course.released else panel.recusable(rows, person),
         'history': Course.visible_to(person.roles),
         'slots': SlotForm(request.GET or None, person=person, course=course) if office and not held else None,
         'modules': credited(course),
@@ -198,7 +200,6 @@ def exam(request, pk):
         'handed': handed,
         'adding': AddForm(),
         'importing': not course.released and course.kind == Course.Kind.EXAM and (decide or person in staff),
-        'enrolled': enrolled() if office else [],
         'reachable': Study.reachable(person, Study.objects.filter(participations__course=course)),
     })
 
@@ -340,10 +341,9 @@ def marks(request, pk):
             post[f'score-{p.pk}-{person.pk}' if own else f'grade-{p.pk}'] = value
     try:
         panel.save(post, rows, [person] if own else [], decide=decide and not own)
-    except panel.OffScale as error:
-        messages.error(request, f'Nichts übernommen. {error}')
-    except InvalidOperation:
-        messages.error(request, 'Die Datei enthält eine Note, die keine Zahl zwischen 0 und 99 ist. Nichts übernommen.')
+    except panel.Refused as error:
+        name = next(p.study.person.name for p in rows if p.pk == error.row)
+        messages.error(request, f'Nichts übernommen. {name}: {error}')
     else:
         messages.success(request, f'{plural(len(found) - len(unknown), "Note", "Noten")} übernommen.' + (f' Nicht angemeldet: {", ".join(unknown)}.' if unknown else ''))
     return redirect(course)
@@ -527,7 +527,7 @@ def recognition(request):
         messages.success(request, f'{codes} für {study.person} anerkannt' + (f' mit {data["grade"]}.' if data['grade'] is not None else '.'))
         return redirect(f'{reverse("exams:recognition")}?studium={study.pk}')
     return render(request, 'exams/recognition.html', {
-        'form': form, 'course': course, 'study': study, 'enrolled': [] if study else enrolled(),
+        'form': form, 'course': course, 'study': study,
         'recent': course.participations.select_related('study__person', 'module').order_by('-created')[:20],
     })
 

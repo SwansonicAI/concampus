@@ -31,7 +31,8 @@ from core.dates import months_before
 from admissions.views import DECISIONS, invite
 from core import destatis, history, texts
 from core.models import Change, Holiday, Institute, Institution, Message, Office, Person, Term, Text
-from courses.models import Area, Course, Ensemble, Format, Participation, Score, Signup
+from courses import panel as sheets
+from courses.models import Area, Course, Ensemble, Format, Participation, Recusal, Reduction, Score, Signup
 from courses.panel import mean, rounding
 from curriculum.models import Module, Program, Rounding, Subject
 from instruments.models import Instrument, Loan
@@ -500,7 +501,7 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
         'view_students', 'view_files', 'manage_exams', 'decide_results', 'recognise', 'manage_courses', 'view_teaching_load',
         'view_curriculum', 'book_any_room', 'view_bookings',
     ],
-    'Dekanat': ['manage_courses', 'view_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings', 'view_statistics'],
+    'Dekanat': ['manage_courses', 'view_teaching_load', 'manage_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings', 'view_statistics'],
     'Veranstaltungsbüro': ['book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms', 'manage_instruments'],
     'Campus-Team': ['manage_accounts', 'manage_institution', 'manage_terms'],
     'Präsidium': ['view_statistics', 'view_curriculum', 'view_teaching_load'],
@@ -716,7 +717,7 @@ INTAKE = {  # applications a year by Hauptfach as of 2026, admission rate, share
     ('Zertifikat', 'Thüringer Opernstudio'): ({'Gesang': 60}, 0.16, 0),
 }
 WINTER_ONLY = {'Horn', 'Posaune', 'Tuba'}  # no summer intake, nor for Gesang and Klavier
-REPERTOIRE = {
+REQUIREMENTS = {  # what an Eignungsprüfung asks for, by family: applicants choose their works from it
     'strings': ['J. S. Bach: zwei Sätze aus einer Suite oder Partita für {i} solo', 'Ein Konzert der Klassik für {i}, 1. Satz mit Kadenz',
                 'Ein virtuoses Werk der Romantik', 'Ein Werk nach 1950', 'Eine Sonate für {i} und Klavier, ein schneller Satz'],
     'winds': ['W. A. Mozart: Konzert für {i}, 1. und 2. Satz', 'Ein Werk der Romantik für {i} und Klavier', 'Ein Werk nach 1950',
@@ -726,6 +727,56 @@ REPERTOIRE = {
     'piano': ['J. S. Bach: Präludium und Fuge aus dem Wohltemperierten Klavier', 'Eine Sonate der Wiener Klassik, ein schneller Satz',
               'F. Chopin: eine Etüde aus op. 10 oder op. 25', 'Ein Werk der Romantik', 'Ein Werk nach 1950'],
 }
+REPERTOIRE = {  # works as applicants and candidates list them, with their length in minutes: by Hauptfach, else by family ({i}: the instrument)
+    'Violine': [
+        ('J. S. Bach: Partita Nr. 2 d-Moll BWV 1004, Allemanda und Corrente', 8), ('W. A. Mozart: Violinkonzert Nr. 4 D-Dur KV 218, 1. Satz mit Kadenz von J. Joachim', 10),
+        ('N. Paganini: Caprice Nr. 24 a-Moll op. 1', 5), ('J. Brahms: Sonate Nr. 1 G-Dur op. 78, 1. Satz', 11), ('E. Ysaÿe: Sonate Nr. 3 d-Moll op. 27 „Ballade“', 7),
+        ('H. Wieniawski: Violinkonzert Nr. 2 d-Moll op. 22, 1. Satz', 12), ('J. Haydn: Violinkonzert C-Dur Hob. VIIa:1, 1. Satz mit Kadenz', 9),
+        ('S. Prokofjew: Sonate für Violine solo D-Dur op. 115, 1. Satz', 4),
+    ],
+    'Viola': [
+        ('J. S. Bach: Suite Nr. 2 d-Moll BWV 1008, Prélude und Sarabande', 7), ('C. Stamitz: Violakonzert D-Dur op. 1, 1. Satz mit Kadenz', 9),
+        ('J. Brahms: Sonate f-Moll op. 120 Nr. 1, 1. Satz', 8), ('P. Hindemith: Sonate für Viola solo op. 25 Nr. 1, 4. Satz „Rasendes Zeitmaß“', 2),
+        ('H. Vieuxtemps: Sonate B-Dur op. 36, 1. Satz', 9),
+    ],
+    'Violoncello': [
+        ('J. S. Bach: Suite Nr. 3 C-Dur BWV 1009, Prélude und Sarabande', 7), ('J. Haydn: Cellokonzert C-Dur Hob. VIIb:1, 1. Satz mit Kadenz', 10),
+        ('R. Schumann: Cellokonzert a-Moll op. 129, 1. Satz', 11), ('D. Popper: Hohe Schule des Violoncellospiels op. 73, Etüde Nr. 13', 3),
+        ('B. Britten: Suite Nr. 1 op. 72, Canto primo und Fuga', 6),
+    ],
+    'Kontrabass': [
+        ('J. S. Bach: Suite Nr. 2 d-Moll BWV 1008, Prélude', 4), ('C. D. von Dittersdorf: Kontrabasskonzert E-Dur Krebs 172, 1. Satz mit Kadenz', 9),
+        ('G. Bottesini: Elegia in Re', 6), ('Orchesterstellen: L. van Beethoven, Sinfonie Nr. 5, 3. Satz; G. Verdi, Otello, 4. Akt', 4),
+    ],
+    'Harfe': [
+        ('G. F. Händel: Harfenkonzert B-Dur HWV 294, 1. Satz', 6), ('G. Fauré: Impromptu op. 86', 8), ('C. Salzedo: Variations sur un thème dans le style ancien', 9),
+        ('M. Tournier: Vers la source dans le bois', 4),
+    ],
+    'Schlagwerk': [
+        ('J. S. Bach: Partita a-Moll BWV 1013, Allemande, auf der Marimba', 5), ('J. Delécluse: Douze Études für Kleine Trommel, Nr. 9', 3),
+        ('E. Carter: Eight Pieces for Four Timpani, Saëta', 4), ('N. Rosauro: Konzert für Marimba Nr. 1, 1. Satz', 6),
+    ],
+    'winds': [
+        ('W. A. Mozart oder J. Haydn: Konzert für {i}, 1. Satz mit Kadenz', 9), ('P. Hindemith: Sonate für {i} und Klavier, 1. Satz', 5),
+        ('C. Saint-Saëns, F. Poulenc oder C. Debussy: ein Werk für {i} und Klavier', 7), ('Orchesterstellen nach der Liste der Hochschule', 5),
+    ],
+    'voice': [
+        ('W. A. Mozart: „Porgi, amor“ aus Le nozze di Figaro', 4), ('F. Schubert: „Erlkönig“ D 328', 4), ('J. Brahms: „Wie Melodien zieht es mir“ op. 105 Nr. 1', 2),
+        ('G. F. Händel: „Lascia ch’io pianga“ aus Rinaldo', 5), ('G. Fauré: „Après un rêve“ op. 7 Nr. 1', 3), ('B. Britten: „The Salley Gardens“', 3),
+    ],
+    'piano': [
+        ('J. S. Bach: Präludium und Fuge cis-Moll BWV 849', 7), ('L. van Beethoven: Sonate Nr. 21 C-Dur op. 53 „Waldstein“, 1. Satz', 11),
+        ('F. Chopin: Etüde c-Moll op. 10 Nr. 12', 3), ('F. Liszt: Vallée d’Obermann aus Années de pèlerinage I', 13), ('J. Haydn: Sonate Es-Dur Hob. XVI:52, 1. Satz', 7),
+        ('C. Debussy: Estampes, Nr. 3 „Jardins sous la pluie“', 4),
+    ],
+}
+GUTACHTEN = (  # the second reader's report on the thesis handed in early
+    'Die Arbeit untersucht ein klar umrissenes Repertoire und stützt sich auf eine solide Auswahl an Quellen, darunter Erstdrucke und Briefe. '
+    'Die Fragestellung wird in der Einleitung präzise entwickelt, der Forschungsstand ist knapp, aber zutreffend dargestellt.\n\n'
+    'Besonders überzeugend sind die vergleichenden Analysen im dritten Kapitel, die Notentext und Aufführungspraxis sorgfältig aufeinander beziehen. '
+    'Schwächer bleibt das Fazit, das die Ergebnisse eher zusammenfasst als weiterführt; einzelne Belege sind uneinheitlich zitiert.\n\n'
+    'Insgesamt eine eigenständige, gut lesbare Arbeit, die die Anforderungen deutlich übertrifft. Note: 1,7 (gut).'
+)
 NOTES = [Decimal(n) for n in ('1.0', '1.3', '1.7', '2.0', '2.3', '2.7', '3.0', '3.3', '3.7', '4.0')]
 ARTISTIC = ('Künstlerisch-praktische', 'Rezital', 'Künstlerische Präsentation')
 
@@ -743,6 +794,11 @@ def phone(dial, rng):
     if dial == '+49':
         return f'+49 1{rng.choice(["51", "52", "57", "60", "62", "70", "72", "76"])} {rng.randint(1000000, 99999999)}'
     return f'{dial} {rng.randint(100, 999)} {rng.randint(1000000, 9999999)}'
+
+
+def unmarked(note):
+    """A programme without the times it starts at in a video, for the stage played in person."""
+    return re.sub(r'^\d{1,2}:[0-5]\d\s+', '', note, flags=re.M)
 
 
 def family(subject):
@@ -824,6 +880,7 @@ class Command(BaseCommand):
             self.teaching()
             self.allocation()
             self.contracts()
+            self.reductions()
             self.guests()
             self.loans()
             self.exams()
@@ -1672,12 +1729,14 @@ class Command(BaseCommand):
     def theses(self, theses):
         """Topics given out this October, due within the Prüfungsordnung's weeks; one handed in early, half marked: a task for the demo teacher."""
         rng, wendt, readers = self.rng, self.teachers['wendt'], [self.teachers[k] for k in ('voss', 'brandauer', 'roth')]
-        made = []
+        made, given_out = [], defaultdict(set)
         for study, leaf in theses:
             given = date(2026, 10, rng.randint(1, 20))
             first = study.teacher if study.program.degree in ('B.Mus.', 'M.Mus.', 'Diplom') else self.teachers['neumann']
+            topic = rng.choice([t for t in TOPICS if t not in given_out[study.subject_id]] or TOPICS)  # no two alike in a Hauptfach
+            given_out[study.subject_id].add(topic)
             course = Course.objects.create(
-                term=self.current, kind=Course.Kind.THESIS, title=rng.choice(TOPICS).format(i=study.subject.name),
+                term=self.current, kind=Course.Kind.THESIS, title=topic.format(i=study.subject.name),
                 deadline=given + timedelta(weeks=study.program.thesis_weeks or 12),
             )
             course.staff.set([first, rng.choice([r for r in readers if r != first])])
@@ -1691,7 +1750,7 @@ class Command(BaseCommand):
                 person=early.study.person, study=early.study, kind=DocumentType.system('abschlussarbeit'), title='Abschlussarbeit.pdf',
                 file=self.placeholder(), created=at(date(2026, 10, 22), hour=16),
             )
-            Score.objects.create(participation=early, examiner=second, value=Decimal('1.7'))
+            Score.objects.create(participation=early, examiner=second, value=Decimal('1.7'), report=GUTACHTEN)
 
     def assessors(self):
         """Oral and practical exams marked as such; with one examiner, a colleague of their Institut sits in. The demo
@@ -1708,6 +1767,15 @@ class Command(BaseCommand):
             examiner = course.staff.all()[0]
             course.assessor = next((t for t in colleagues[examiner.institute_id] if t != examiner), None)
         Course.objects.bulk_update(alone, ['assessor'])
+
+    def reductions(self):
+        """Ermäßigungen the Präsidium granted for this term (ThürLVVO § 8), and the Deputatskonto kept from this term on."""
+        for key, reason, hours, note in [
+            ('brandt', Reduction.Reason.DEAN, '4.5', 'Dekanin der Fakultät'), ('voss', Reduction.Reason.STUDY_DEAN, '3', 'Studiendekan'),
+            ('wendt', Reduction.Reason.TASK, '2', 'Fachgruppenleitung Streichinstrumente'),
+        ]:
+            Reduction.objects.create(person=self.teachers[key], term=self.current, reason=reason, hours=Decimal(hours), note=note)
+        Institution.objects.update(load_since=self.current.start)
 
     def contracts(self):
         """Lehraufträge as agreed: the hours each Lehrbeauftragte:r teaches this term, rounded up."""
@@ -1732,8 +1800,13 @@ class Command(BaseCommand):
             default_storage.save(name, ContentFile(PLACEHOLDER))
         return name
 
-    def repertoire(self, subject):
-        return '\n'.join(w.format(i=subject) for w in self.rng.sample(REPERTOIRE[family(subject)], 3))
+    def repertoire(self, subject, video=False):
+        """Three works of the person's choice, a line each; for a video, each with the time it starts at."""
+        lines, start = [], 0
+        for work, minutes in self.rng.sample(REPERTOIRE.get(subject) or REPERTOIRE[family(subject)], 3):
+            lines.append(f'{start // 60}:{start % 60:02d} {work.format(i=subject)}' if video else f'{work.format(i=subject)} ({minutes} Min.)')
+            start += minutes * 60 + 20
+        return '\n'.join(lines)
 
     # Admissions: the WiSe intake is decided, the SoSe intake is being marked
 
@@ -1793,7 +1866,7 @@ class Command(BaseCommand):
                     places = sum(1 for s, o in outcomes if (s.program_id, s.subject.name) == key and o in (Study.Status.ENROLLED, Study.Status.ADMITTED))
                 else:
                     places = max(1, round(subjects[subject] * rate * (sose if summer else 1 - sose)))
-                asked = '; '.join(w.format(i=subject) for w in REPERTOIRE[family(subject)])  # what the Prüfungsprogramm draws on
+                asked = '; '.join(w.format(i=subject) for w in REQUIREMENTS[family(subject)])  # what the Prüfungsprogramm draws on
                 intake = {'program': study.program, 'deadline': video_deadline if finished else JUDGED.get(subject, video_deadline), 'capacity': places,
                           'description': f'Drei Werke aus diesen, zusammen etwa 15 Minuten: {asked}.',  # the course one applies to
                           'accompaniment': None if subject in ('Klavier', 'Orgel') else accompanist}  # pianists and organists play alone
@@ -1820,7 +1893,7 @@ class Command(BaseCommand):
                 talent = rng.uniform(19.6 if master else 16.6, 20.2 if master else 18.0)
             else:
                 talent = rng.uniform(21.5 if master else 19.5, 23.5)
-            note = self.repertoire(subject)
+            note = self.repertoire(subject, video=bool(video))
             handed = ['cv', 'school'] + ['degree'] * master
             if finished or study.since.day < 15 or study.person == applicant:  # the latest applicants still owe the fee receipt
                 handed.append('fee')
@@ -1833,7 +1906,7 @@ class Command(BaseCommand):
                 for kind in handed
             ]
             if not video or (sit(study, video, talent + 1.5, panel, note).passed and video.released):  # videos are judged more kindly
-                sit(study, hall, talent, panel, note)
+                sit(study, hall, talent, panel, unmarked(note))
                 if finished and not master:
                     for course in shared:
                         sit(study, course, rng.uniform(13, 21), course.jury, '')
@@ -1867,6 +1940,13 @@ class Command(BaseCommand):
         Participation.objects.bulk_create(rows)
         Score.objects.bulk_create(Score(participation=p, examiner=e, value=v) for p, e, v in scores)
         Document.objects.bulk_create(documents)
+        if not finished:  # on the Violine video jury, a colleague taught one applicant privately and stands back from her
+            video, _, jury = next((r for (_, subject), r in rounds.items() if subject == 'Violine' and r[0] and r[0].program_id == self.bmsh.pk), (None, None, []))
+            colleague = next((e for e in jury if e != self.teachers['wendt']), None)
+            marked = {(p.pk, e.pk) for p, e, _ in scores}
+            if p := colleague and next((p for p in rows if p.course == video and (p.pk, colleague.pk) not in marked), None):
+                Recusal.objects.create(participation=p, examiner=colleague, reason='Privatunterricht bis Juli 2026', created=at(date(2026, 10, 20), hour=9))
+                sheets.save({}, [r for r in sheets.sheet(video)[1] if r.pk == p.pk], [], decide=False)
         if not finished:  # those with a time have their invitation
             for p in Participation.objects.filter(course__term=term, course__kind=Course.Kind.AUDITION, course__released=None, slot__isnull=False).select_related('course', 'study__person', 'study__program', 'study__subject', 'study__start_term'):
                 invite(p)
@@ -1970,6 +2050,14 @@ class Command(BaseCommand):
                     break
             if category == 'klassenabend':
                 booking.participants.set(s.person for s in Study.objects.filter(teacher=person, status=Study.Status.ENROLLED))
+        for person, title, audience in [  # two class evenings asking for the same hall: for the Veranstaltungsbüro to decide
+            (t['reinholdt'], 'Klassenabend Violoncello · Klasse Prof. Reinholdt', 80), (t['lindner'], 'Liederabend der Gesangsklasse Lindner', 90),
+        ]:
+            day = today + timedelta(days=26)
+            Booking.objects.create(
+                room=self.rooms['Festsaal'], start=at(day, clock('19:30')), end=at(day, clock('21:30')), person=person, category_id='klassenabend',
+                title=title, audience=audience, requested=True, created=at(today - timedelta(days=2), hour=10),
+            )
         held = {b.title: b for b in Booking.objects.filter(title__in=EVENTS.keys() | SERVICES.keys(), start__date__gte=today)}
         for title, (programme, admission, audience) in EVENTS.items():
             Booking.objects.filter(pk=held[title].pk).update(programme=programme, admission=admission, audience=audience)

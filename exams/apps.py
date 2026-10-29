@@ -80,6 +80,10 @@ class ExamsConfig(Tile, AppConfig):
             decided = person.within(exams, 'decide_results')
             for exam in decided.filter(open=0):
                 found.append(task(f'Ergebnisse freigeben: {exam.title}', exam.get_absolute_url()))
+            for thesis in decided.filter(kind=Course.Kind.THESIS).annotate(marked=Count('participations__scores')).filter(marked__gte=2):
+                if any(p.third for p in panel.sheet(thesis)[1]):  # Gutachten too far apart, or one failing it (RPSO § 15 Abs. 2)
+                    who = ', '.join(p.study.person.last_name for p in thesis.participations.select_related('study__person'))
+                    found.append(task(f'Drittes Gutachten bestellen: {who}, {thesis.title}', reverse('exams:edit', args=[thesis.pk])))
             for exam in decided.filter(open__gt=0, held__lte=now - timedelta(days=7)):  # a week after the exam, results are overdue
                 late = ', '.join(e.last_name for e, _ in panel.waiting(panel.sheet(exam)[1]))
                 found.append(task(
@@ -118,9 +122,13 @@ class ExamsConfig(Tile, AppConfig):
                 if missing:
                     found.append(task(f'{exam.title}: Ihre Wertung fehlt für {plural(missing, "Teilnahme", "Teilnahmen")}', exam.get_absolute_url()))
             handed = Q(participations__study__documents__kind='abschlussarbeit', participations__study__documents__created__gte=F('participations__created'))
-            theses = Course.objects.filter(handed, kind=Course.Kind.THESIS, staff=person, released=None).exclude(participations__scores__examiner=person)
-            for thesis in theses.distinct():
-                found.append(task(f'Gutachten: {thesis.title}', thesis.get_absolute_url()))
+            theses = (
+                Course.objects.filter(handed, kind=Course.Kind.THESIS, staff=person, released=None)
+                .exclude(participations__scores__examiner=person).exclude(participations__recusals__examiner=person)
+            )
+            for thesis in theses.distinct().prefetch_related('participations__study__person'):
+                who = ', '.join(str(p.study.person) for p in thesis.participations.all())
+                found.append(task(f'Gutachten: {who}, {thesis.title}', thesis.get_absolute_url()))
         if 'student' in person.roles:
             from courses.models import Participation
             from .views import handed_in, offered

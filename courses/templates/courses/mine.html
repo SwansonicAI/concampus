@@ -19,7 +19,7 @@
     <thead><tr><th>Veranstaltung</th><th>Art</th><th class="num">SWS</th><th class="num">Teilnahmen</th></tr></thead>
     <tbody>
       {% for c in teaching %}
-      <tr><td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a></td><td>{{ c.format|default:c.get_kind_display }}</td><td class="num">{{ c.hours|default_if_none:"" }}</td><td class="num">{{ c.size }}</td></tr>
+      <tr><td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a></td><td>{{ c.format|default:c.get_kind_display }}</td><td class="num">{{ c.hours|default_if_none:"" }}</td><td class="num" data-value="{% if c.allocation == 'ensemble' %}{{ c.mine }}{% else %}{{ c.size }}{% endif %}">{% if c.allocation == 'ensemble' %}{{ c.mine }}<br><small class="muted" title="In Ihren Ensembles, von allen Teilnehmenden">von {{ c.size }}</small>{% else %}{{ c.size }}{% endif %}</td></tr>
       {% empty %}<tr><td colspan="4" class="empty">Keine Veranstaltungen in diesem Semester.</td></tr>
       {% endfor %}
     </tbody>
@@ -42,10 +42,11 @@
 <section>
   <h2>Meine Klasse</h2>
   <table data-panel>
-    <thead><tr><th>Name</th><th>Studiengang</th><th>Hauptfach</th><th>Seit</th></tr></thead>
+    <thead><tr><th>Name</th><th>Studiengang</th><th class="num">FS</th><th>Einzelunterricht im {{ term }}</th></tr></thead>
     <tbody>
       {% for s in students %}
-      <tr><td><a href="{{ s.get_absolute_url }}">{{ s.person.name }}</a></td><td>{{ s.program }}</td><td>{{ s.subject }}</td><td data-value="{{ s.start_term.start|date:'c' }}">{{ s.start_term }}</td></tr>
+      <tr><td><a href="{{ s.get_absolute_url }}">{{ s.person.name }}</a><br><small class="muted">{{ s.subject }}</small></td><td>{{ s.program }}</td><td class="num">{{ s.fs }}</td>
+        <td>{% if s.lesson %}{{ s.lesson }}{% elif s.missing %}<span class="fail">nicht eingetragen</span>{% else %}<span class="muted">keiner; laut Studienplan bis zum {{ s.until }}. Semester</span>{% endif %}</td></tr>
       {% endfor %}
     </tbody>
   </table>

@@ -11,7 +11,7 @@ from core.access import CAPABILITIES, EVERYWHERE
 from core.dates import DayField
 from core.models import Holiday, Institute, Institution, Office, Person, Term
 from courses.forms import AuditionForm
-from courses.models import Area, Course, Format
+from courses.models import Area, Course, Format, Reduction
 from curriculum.forms import ModuleForm
 from curriculum.models import Module, Program, Subject
 from instruments.models import Instrument
@@ -142,6 +142,29 @@ class AccountForm(forms.ModelForm):
         return person
 
 
+class ReductionForm(forms.ModelForm):
+    class Meta:
+        model = Reduction
+        fields = ['person', 'term', 'reason', 'hours', 'note']
+        localized_fields = ['hours']
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['person'].queryset = Person.teachers().exclude(employment=Person.Employment.LEHRAUFTRAG).order_by('last_name', 'first_name')
+        self.fields['term'].queryset = Term.objects.order_by('-start')
+
+    def clean(self):
+        """At most what ThürLVVO § 8 allows the function, of the teacher's Lehrverpflichtung."""
+        data = super().clean()
+        person, reason, hours = data.get('person'), data.get('reason'), data.get('hours')
+        share = {'vizepraesidium': 75, 'dekanat': 50, 'prodekanat': 25, 'studiendekanat': 50, 'studiengangsleitung': 70}.get(reason)
+        if person and hours is not None and share and person.obligation is not None and hours > person.obligation * share / 100:
+            raise forms.ValidationError(f'Höchstens {share} % der Lehrverpflichtung von {person.obligation} LVS.')
+        if reason == Reduction.Reason.TASK and hours is not None and hours > 2:
+            raise forms.ValidationError('Für weitere Aufgaben höchstens 2 LVS.')
+        return data
+
+
 def new_module(request):
     program = get_object_or_404(Program, pk=request.GET.get('studiengang'))
     return Module(program=program, parent=program.modules.filter(pk=request.GET.get('unter') or None).first())
@@ -155,6 +178,7 @@ EDITORS = {e.key: e for e in [
             ('Aufnahme und Immatrikulation', ['matriculation_start', 'accept_days', 'retention_months', 'signup', 'insurers']),
             ('Rückmeldung und Prüfungen', ['late_fee', 'payee', 'iban', 'bic', 'withdraw_weeks']),
             ('Raumbuchung', ['student_daily_hours', 'student_ahead_hours', 'last_minute_hours', 'teacher_ahead_days']),
+            ('Deputat', ['load_since']),
             ('Amtliche Statistik', ['university', 'region', 'report_id']),
         ],
         columns=[('Name', 'name'), ('Ort', 'place')],
@@ -216,6 +240,13 @@ EDITORS = {e.key: e for e in [
         search=['degree', 'name'], words='prüfungsordnung po fpso diploma supplement abschlussarbeit bearbeitungszeit statistik abschlussprüfung studienfach',
     ),
     Editor('module', Module, 'Module', 'edit_curriculum', form=ModuleForm, new=new_module),
+    Editor(
+        'ermaessigungen', Reduction, 'Ermäßigungen der Lehrverpflichtung', 'manage_teaching_load', 'Studium und Lehre', form=ReductionForm,
+        columns=[('Lehrperson', 'person'), ('Semester', 'term'), ('Grund', 'reason'), ('LVS', 'hours'), ('Notiz', 'note')],
+        search=['person__last_name', 'person__first_name', 'note'], words='deputat lvs dekanat studiendekanat entlastung lehrverpflichtungsverordnung',
+        queryset=lambda: Reduction.objects.select_related('person', 'term'),
+        new=lambda request: Reduction(term=Term.current(), person_id=request.GET.get('person') or None),
+    ),
     Editor(
         'fachgebiete', Area, 'Fachgebiete', 'manage_courses', 'Studium und Lehre', fields=['name', 'order'],
         columns=[('Fachgebiet', 'name'), ('Reihenfolge', 'order')], search=['name'], words='vorlesungsverzeichnis bereiche gliederung',

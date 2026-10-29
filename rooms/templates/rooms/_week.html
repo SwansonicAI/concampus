@@ -1,10 +1,10 @@
 <div class="scroll" data-panel>
   <div class="week">
-    {% for d in dates %}<div class="dayhead{% if d == today %} today{% endif %}" style="grid-column: {{ forloop.counter|add:1 }}">{{ d|date:"D j.n." }}</div>{% endfor %}
+    {% for d in dates %}<div class="dayhead{% if d == today %} today{% endif %}" style="grid-column: {{ forloop.counter|add:1 }}">{{ d|date:"D j.n." }}{% if off and d >= today %} <a href="{% url 'rooms:day_off' %}?tag={{ d|date:'Y-m-d' }}" title="Alle eigenen Termine des Tages absagen, etwa bei Krankheit"><small>absagen</small></a>{% endif %}</div>{% endfor %}
     {% for rows, hour in ticks %}<span class="tick" style="grid-row: {{ rows }}">{{ hour }}:00</span><span class="line" style="grid-row: {{ rows }}"></span>{% endfor %}
     {% for b in placed %}
-    <a class="booking {{ b.tone }}{% if b.clash %} split{% if clashes %} clash{% endif %}{% endif %}" style="grid-area: {{ b.place }}; --lane: {{ b.lane }}; --lanes: {{ b.lanes }}" href="{% if b.course %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}" title="{{ b.start|time:'H:i' }}–{{ b.end|time:'H:i' }} · {{ b.label }} · {{ b.room }}">
-      {{ b.start|time:"H:i" }} {{ b.label }}<br><small>{{ b.room }}</small>
+    <a class="booking {{ b.tone }}{% if b.clash %} split{% if clashes %} clash{% endif %}{% endif %}{% if b.move %} move{% endif %}" style="grid-area: {{ b.place }}; --lane: {{ b.lane }}; --lanes: {{ b.lanes }}" href="{% if b.course %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}" title="{{ b.start|time:'H:i' }}–{{ b.end|time:'H:i' }} · {% if b.who %}{{ b.who }} · {% endif %}{{ b.label }} · {{ b.room }}{% if b.move %} · direkt vorher in {{ b.move }}{% endif %}">
+      {{ b.start|time:"H:i" }} {% firstof b.who b.label %}<br><small>{{ b.room }}{% if b.move %} · aus {{ b.move }}{% endif %}</small>
     </a>
     {% endfor %}
   </div>

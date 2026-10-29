@@ -57,16 +57,35 @@ with the administration (HfM Hanns Eisler Berlin, HMTM München, HfM Würzburg).
 
 ### Marks
 
-Examiners judge on their own: until an examiner has entered their own mark for a candidate, they see neither the other
-examiners' marks nor the mean, and no ranking (`courses/panel.py`, `blind()`). Offices that decide results see everything.
-A single examiner gives a step of the scale (1,0 to 4,0 by 0,3, or 5,0); with several examiners the grade is the mean of
-theirs and may fall between the steps (HfM Weimar RPSO 2026, Leistungsbewertung).
+Examiners judge on their own: until every examiner has marked a candidate, an examiner sees neither the others' marks
+nor the mean, and no ranking. Once all have marked, the marks show and are locked: an examiner can no longer change or
+delete theirs, so nobody adjusts to the others; only the office that decides results (for auditions, the one that runs
+them) changes a mark, and the Verlauf keeps it (`courses/panel.py`, `blind()`, `marks()`). A single examiner gives a
+step of the scale (1,0 to 4,0 by 0,3, or 5,0); with several examiners the grade is the mean of theirs and may fall
+between the steps (HfM Weimar RPSO 2026, § 15).
+
+An examiner who fears bias towards a candidate (Besorgnis der Befangenheit, § 21 VwVfG), say as their former private
+teacher, says so with a reason before marking them (`courses.Recusal`); the others' mean decides. The reason shows to
+the panel and the office on the sheet; only the office lifts it.
+
+Gutachten on a thesis (`Score.report`) belong to tier 2. Each Gutachter:in sees their own until all are in, then all;
+the office that decides results sees them throughout. Candidates see them on request (Einsicht, RPSO 2026 § 22), not
+in the portal.
+
+### Finding students by name
+
+Nobody gets a list of all students. Where a teacher or student adds someone to a course, a booking or an instrument
+loan, the form lists only who is near (their class, their courses' and ensembles' members, the ticked) and finds
+anyone else enrolled by name from three letters, eight at most, with Hauptfach and degree to tell namesakes apart and
+no Matrikelnummer (`students/views.py`, `suggest()`). Who already knows a Matrikelnummer may still type it.
 
 ### Staff
 
 A teacher's Beschäftigung and Lehrverpflichtung (`Person.employment`, `Person.obligation`) show only on the Deputat:
 to the teacher for their own row, and to `view_teaching_load` within the Institute its office is limited to
-(`courses/views.py`, `load()`). Accounts keep them (`manage_accounts`).
+(`courses/views.py`, `load()`). Accounts keep them (`manage_accounts`). Ermäßigungen (`courses.Reduction`) show the same
+way, their reason as the function (Dekan:in, Studiendekan:in …); `manage_teaching_load` enters them. A reduction for a
+Schwerbehinderung is health data (Art. 9): its reason shows only as that, never the condition.
 
 ### Forms
 

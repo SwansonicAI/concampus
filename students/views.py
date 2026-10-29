@@ -7,7 +7,7 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Count, F, Prefetch, Q
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.formats import date_format, number_format
@@ -15,7 +15,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from core import dates, texts
-from core.access import require
+from core.access import CODENAMES, require
 from core.history import tables
 from core.apps import plural
 from core.models import Institution, Message, Office, Person, Term
@@ -57,6 +57,25 @@ def own(person):
         person.studies.filter(status=Study.Status.ENROLLED).first()
         or person.studies.filter(status__in=Study.FORMER, terms__isnull=False).order_by('-since').first()
     )
+
+
+@require('teacher', 'student', *CODENAMES)
+def suggest(request):
+    """Enrolled students matching a name as it is typed, for adding someone to a course or a booking: from three letters,
+    a few at a time, one's own class, courses and ensembles first. Never the whole list (docs/privacy.md)."""
+    person, q = request.user, request.GET.get('q', '').strip()
+    if len(q) < 3:
+        return JsonResponse({'found': []})
+    studies = Study.objects.filter(status=Study.Status.ENROLLED).exclude(person=person).select_related('person', 'subject', 'program')
+    near = Q(teacher=person) | Q(participations__course__staff=person, participations__course__term=Term.current()) | Q(ensembles__members__person=person)
+    found = matching(studies, q, 'person__first_name', 'person__last_name', 'person__birth_name').annotate(near=Count('pk', filter=near))
+    shown = {}
+    for s in found.order_by('-near', 'person__last_name', 'person__first_name')[:24]:
+        shown.setdefault(s.person_id, s)
+    return JsonResponse({'found': [
+        {'id': s.person_id, 'text': f'{s.person.name} · {s.subject} {s.program.degree}', 'value': f'{s.person.first_name} {s.person.last_name}, {s.subject} {s.program.degree}'}
+        for s in list(shown.values())[:8]
+    ]})
 
 
 def index(request):

@@ -3,7 +3,7 @@ from collections import defaultdict
 from datetime import datetime, time, timedelta
 
 from django import forms
-from django.db.models import Exists, Min, OuterRef, Q
+from django.db.models import Min, Q
 from django.utils import timezone
 from django.utils.formats import number_format
 
@@ -42,21 +42,39 @@ class Buildings(forms.models.ModelChoiceIterator):
         if recent := [self.choice(room) for pk in self.field.recent for room in rooms if room.pk == pk]:
             yield 'Zuletzt gebucht', recent
         for room in rooms:
-            groups[room.building].append(self.choice(room))
-        yield from groups.items()
+            groups['Zentral vergeben, auf Anfrage' if room.pk in self.field.asked else room.building].append(self.choice(room))
+        yield from sorted(groups.items(), key=lambda group: group[0] == 'Zentral vergeben, auf Anfrage')
 
 
 class RoomField(forms.ModelChoiceField):
     """Rooms by building, each with what it is for: a room number alone tells few people anything."""
 
     iterator = Buildings
-    recent = ()
+    recent = asked = ()
 
     def label_from_instance(self, room):
         return f'{room.name} · {room.purpose}' if room.purpose not in ('', room.name) else room.name
 
 
+class Nearby(forms.models.ModelChoiceIterator):
+    """Only those a booking is likely for, the ticked first: who plays with the person, their class, their ensembles.
+    Anyone else enrolled is found by typing a name (students:suggest), never listed (docs/privacy.md)."""
+
+    def __iter__(self):
+        picked = {str(pk) for pk in self.field.picked}
+        shown = self.queryset.filter(Q(pk__in=self.field.picked) | self.field.near).distinct()
+        for person in sorted(shown, key=lambda p: (str(p.pk) not in picked, p.last_name, p.first_name)):
+            yield self.choice(person)
+
+
+class People(forms.CheckboxSelectMultiple):
+    template_name = 'core/people.html'
+
+
 class Participants(forms.ModelMultipleChoiceField):
+    iterator = Nearby
+    picked, near = (), Q(pk__in=[])
+
     def label_from_instance(self, person):  # the Hauptfach tells namesakes apart without showing anyone's Matrikel
         return f'{person.name} · {person.subject}'
 
@@ -66,8 +84,8 @@ class BookingForm(forms.ModelForm):
     begin = ClockField(label='Von')
     until = ClockField(label='Bis')
     participants = Participants(
-        label='Teilnehmende', queryset=None, required=False, widget=forms.CheckboxSelectMultiple,
-        help_text='Sehen den Termin in ihrem Stundenplan. Bei einer Kammermusikprobe mindestens eine weitere Person.',
+        label='Teilnehmende', queryset=None, required=False, widget=People,
+        help_text='Sehen den Termin in ihrem Stundenplan. Weitere Studierende finden Sie, wenn Sie oben einen Namen tippen. Bei einer Kammermusikprobe mindestens eine weitere Person.',
     )
     repeat_until = DayField(label='Wöchentlich wiederholen bis', required=False, help_text='Die Serie wird nur gespeichert, wenn jeder Termin frei ist.')
     field_order = ['room', 'category', 'day', 'begin', 'until', 'title', 'description', 'programme', 'admission', 'audience', 'internal', 'participants', 'repeat_until']
@@ -88,6 +106,10 @@ class BookingForm(forms.ModelForm):
         self.student = not (self.office or 'teacher' in roles)
         self.fields['room'].empty_label = 'Bitte wählen'
         rooms = self.fields['room'].queryset = bookable(person)
+        if 'teacher' in roles and not person.everywhere('book_any_room'):  # halls given out centrally: theirs to ask for
+            asked = Room.objects.filter(function__central=True).exclude(pk__in=rooms.values('pk'))
+            self.fields['room'].asked = set(asked.values_list('pk', flat=True))
+            self.fields['room'].queryset = Room.objects.filter(Q(pk__in=rooms.values('pk')) | Q(pk__in=asked.values('pk')))
         lately = person.bookings.filter(room__in=rooms).order_by('-created').values_list('room', flat=True)[:30]
         self.fields['room'].recent = list(dict.fromkeys(lately))[:3]
         if not self.instance.pk and not self.initial.get('room'):  # practice is mostly in the same room
@@ -107,12 +129,10 @@ class BookingForm(forms.ModelForm):
             self.fields[name].widget.attrs['data-for'] = f'category:{public}'
         self.fields['title'].required = False
         self.fields['title'].help_text = 'Leer: die Kategorie, z. B. „Übebuchung“.'
-        enrolled = Q(studies__status='enrolled')
-        mates = Person.objects.filter(studies__ensembles__members__person=person, pk=OuterRef('pk'))  # who plays with them comes first
-        self.fields['participants'].queryset = (
-            Person.objects.filter(enrolled).annotate(subject=Min('studies__subject__name', filter=enrolled), mate=Exists(mates))
-            .order_by('-mate', 'last_name', 'first_name').exclude(pk=person.pk)
-        )
+        enrolled, field = Q(studies__status='enrolled'), self.fields['participants']
+        field.queryset = Person.objects.filter(enrolled).annotate(subject=Min('studies__subject__name', filter=enrolled)).exclude(pk=person.pk)
+        field.near = Q(studies__ensembles__members__person=person) | Q(studies__teacher=person) | Q(studies__ensembles__coach=person)
+        field.picked = self.data.getlist('participants') if self.is_bound else list(self.instance.participants.values_list('pk', flat=True)) if self.instance.pk else []
         if self.student:  # practice needs a room and a time; a title and who else comes only for the categories that ask for others
             for name in ('description', 'programme', 'admission', 'audience', 'internal'):
                 del self.fields[name]
@@ -131,6 +151,9 @@ class BookingForm(forms.ModelForm):
             raise forms.ValidationError('„Bis“ muss nach „Von“ liegen.')
         start = self.instance.start = timezone.make_aware(datetime.combine(day, begin))
         end = self.instance.end = timezone.make_aware(datetime.combine(day, until))
+        self.instance.requested = bool(room and room.pk in self.fields['room'].asked)  # until the office confirms
+        if self.instance.requested and data.get('repeat_until'):
+            raise forms.ValidationError('Zentral vergebene Räume bitte je Termin anfragen.')
         if not self.office and data.get('category'):
             self.check_rules(data['category'], start, end, data.get('participants') or [])
         if self.student:  # nobody is in two places at once: not in two rooms, not practising during their own lesson

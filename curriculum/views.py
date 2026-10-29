@@ -1,13 +1,13 @@
 from collections import defaultdict
 
-from django.db.models import Count, Q
+from django.db.models import Count
 from django.shortcuts import get_object_or_404, render
 
 from core.models import Term
 from courses.models import Course
 from students.models import Study
 from .apps import OVERSIGHT
-from .models import Program
+from .models import Module, Program
 
 
 def plan(tree, semesters):
@@ -39,7 +39,10 @@ def plan(tree, semesters):
 
 
 def index(request):
-    programs = list(Program.objects.annotate(size=Count('modules', filter=Q(modules__parent=None))).prefetch_related('subjects'))
+    sizes = dict(Module.counted().values('program').annotate(n=Count('pk')).values_list('program', 'n'))
+    programs = list(Program.objects.prefetch_related('subjects'))
+    for p in programs:
+        p.size = sizes.get(p.pk, 0)
     figures = bool(request.user.roles & OVERSIGHT)
     if figures:
         counts = {(row['program'], row['status']): row['n'] for row in Study.objects.values('program', 'status').annotate(n=Count('pk'))}

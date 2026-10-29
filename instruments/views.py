@@ -10,7 +10,6 @@ from core import texts
 from core.access import require
 from core.models import Institute, Term
 from core.text import matching
-from courses.views import enrolled
 from .forms import LendForm
 from .models import Instrument, Loan
 
@@ -55,7 +54,7 @@ def instrument(request, pk):
     term = Term.current()  # lent for the semester, as a rule
     return render(request, 'instruments/instrument.html', {
         'instrument': instrument, 'state': state(instrument), 'loans': instrument.loans.select_related('person'),
-        'lending': LendForm(initial={'due': term and term.end, 'condition': instrument.note[:200]}) if state(instrument) == 'frei' else None, 'enrolled': enrolled(),
+        'lending': LendForm(initial={'due': term and term.end, 'condition': instrument.note[:200]}) if state(instrument) == 'frei' else None,
     })
 
 

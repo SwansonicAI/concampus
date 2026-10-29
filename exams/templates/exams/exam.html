@@ -1,4 +1,5 @@
 {% extends base %}
+{% load marks %}
 {% block title %}{{ course.title }}{% endblock %}
 {% block subnav %}{% include "exams/_nav.html" %}{% endblock %}
 {% block content %}
@@ -56,13 +57,40 @@
   {% endif %}
 </div>
 
+{% if course.kind == 'thesis' and rows %}{% with p=rows.0 %}{% scale as steps %}
+<section>
+  <h2>Gutachten</h2>
+  <p class="lead">Je Gutachter:in eine Note mit schriftlicher Begründung. Die anderen Gutachten sind zu sehen, sobald alle vorliegen; dann sind sie gesperrt. Liegen die Noten mehr als 1,0 auseinander oder lautet eine nicht ausreichend, holt der Prüfungsausschuss ein drittes Gutachten ein (RPSO § 15 Abs. 2).</p>
+  <div class="cols">
+    {% for e, value in p.marks %}
+    <div class="panel">
+      <h3>{{ e }}</h3>
+      {% if e.pk in p.recused %}<p class="muted">Befangen: {{ p.recused|of:e.pk }}</p>
+      {% elif e == user and e.pk in columns and not course.released and not p.locked %}
+      <form method="post" class="form">
+        {% csrf_token %}
+        {% if p.error %}<p class="fail">{{ p.error }}</p>{% endif %}
+        <div><label for="id_note">Note</label><select id="id_note" name="score-{{ p.pk }}-{{ e.pk }}"><option value="">Bitte wählen</option>{% for s in steps %}<option{% if value|mark == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>
+        <div><label for="id_report">Gutachten</label><textarea id="id_report" name="report-{{ p.pk }}-{{ e.pk }}" rows="14">{{ p.reports|of:e.pk|default:"" }}</textarea></div>
+        <div class="actions"><button class="btn">Gutachten speichern</button>{% if not handed %}<small class="muted">Die Arbeit ist noch nicht abgegeben.</small>{% endif %}</div>
+      </form>
+      {% elif p.blind and e != user %}<p class="muted">Zu sehen, sobald alle Gutachten vorliegen.</p>
+      {% elif value is None %}<p class="muted">Noch nicht eingereicht.</p>
+      {% else %}<p><b>Note {{ value|mark }}</b>{% if p.locked and e == user %} <small class="muted">gesperrt</small>{% endif %}</p>{{ p.reports|of:e.pk|linebreaks }}{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+{% endwith %}{% endif %}
+
 <section>
   <div class="head">
-    <h2>{% if course.kind == 'thesis' %}Gutachten{% else %}Kandidat:innen{% endif %}</h2>
+    <h2>{% if course.kind == 'thesis' %}Ergebnis{% else %}Kandidat:innen{% endif %}</h2>
     {% if waiting %}<form method="post" action="{% url 'exams:remind' course.pk %}" class="actions">{% csrf_token %}<small class="fail">Wertung fehlt: {% for e, n in waiting %}{{ e.last_name }} ({{ n }}){% if not forloop.last %}, {% endif %}{% endfor %}</small><button class="btn ghost small">Erinnern</button></form>{% endif %}
   </div>
-  {% if not decide %}<p class="lead">Sie tragen Ihre eigene Wertung ein. Das Ergebnis ergibt sich aus den Wertungen der ganzen Kommission.</p>{% endif %}
+  {% if not decide and course.kind != 'thesis' %}<p class="lead">Sie tragen Ihre eigene Wertung ein. Das Ergebnis ergibt sich aus den Wertungen der ganzen Kommission.</p>{% endif %}
   {% include "courses/_sheet.html" with decide=decide %}
+  {% include "courses/_recuse.html" %}
   {% if dropping %}<form id="austragen" method="post" action="{% url 'courses:drop' course.pk %}">{% csrf_token %}</form>{% endif %}
   {% if rows and course.kind == 'exam' %}
   <div class="inline" style="margin-top: 16px">

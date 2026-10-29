@@ -4,7 +4,7 @@ from django.apps import AppConfig
 from django.urls import reverse
 from django.utils.formats import number_format
 
-from core.apps import Tile, feature, task
+from core.apps import Tile, feature, plural, task
 
 
 class RoomsConfig(Tile, AppConfig):
@@ -52,8 +52,12 @@ class RoomsConfig(Tile, AppConfig):
 
         if 'manage_bookings' not in person.roles:
             return []
-        soon = Booking.objects.filter(category__public=True, internal=False, programme='', start__gte=timezone.now(), start__lte=timezone.now() + timedelta(days=14))
-        return [
+        soon = Booking.objects.filter(category__public=True, internal=False, requested=False, programme='', start__gte=timezone.now(), start__lte=timezone.now() + timedelta(days=14))
+        found = [
             task(f'Programm fehlt: {b.label}', reverse('rooms:booking', args=[b.pk]), timezone.localdate(b.start))
             for b in person.within(soon, 'manage_bookings').select_related('category', 'course')
         ]
+        asked = person.within(Booking.objects.filter(requested=True, end__gte=timezone.now()), 'manage_bookings').order_by('start')
+        if first := asked.first():
+            found.append(task(f'{plural(asked.count(), "Raumanfrage", "Raumanfragen")} entscheiden', reverse('rooms:requests'), timezone.localdate(first.start)))
+        return found

@@ -153,8 +153,10 @@ class Program(Tracked, models.Model):
         results = results or {}
         excused = set(self.modules.filter(waived=subject).values_list('pk', flat=True)) if subject else set()
         children = defaultdict(list)
-        for module in self.modules.order_by(models.F('semester').asc(nulls_last=True), 'code'):
+        for module in self.modules.order_by('pk'):  # areas and modules as the plan lists them; what is booked in them by semester
             children[module.parent_id].append(module)
+        for kids in children.values():
+            kids.sort(key=lambda m: (0, 0, '', m.pk) if m.pk in children else (1, m.semester or 99, m.code, m.pk))
 
         def walk(module):
             module.nodes = children[module.pk]
@@ -214,6 +216,12 @@ class Module(Tracked, models.Model):
 
     def __str__(self):
         return f'{self.code} {self.title}'.strip()
+
+    @classmethod
+    def counted(cls):
+        """Modules as a Studienplan counts them: those with course work or exams of their own, not the areas above them
+        nor what is booked in them."""
+        return cls.objects.filter(models.Exists(cls.objects.filter(parent=models.OuterRef('pk'), children=None)))
 
     def clean(self):
         """A module stays in its programme's tree and never ends up under itself."""

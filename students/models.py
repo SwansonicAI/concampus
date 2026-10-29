@@ -93,7 +93,7 @@ class Study(Tracked, models.Model):
         if number := re.search(r'\d{5,}', text):
             if exact := list(studies.filter(person__matriculation=number.group())):
                 return exact
-        return list(matching(studies, text, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__email')[:5])
+        return list(matching(studies, text, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__email', 'subject__name', 'program__degree')[:5])
 
     @classmethod
     def reachable(cls, person, studies):

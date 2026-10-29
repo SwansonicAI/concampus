@@ -26,4 +26,4 @@ class CurriculumConfig(Tile, AppConfig):
     def figure(self, person):
         from .models import Module, Program
 
-        return f'{Program.objects.count()} Studiengänge · {Module.objects.count()} Module'
+        return f'{Program.objects.count()} Studiengänge · {Module.counted().count()} Module'

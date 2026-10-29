@@ -180,7 +180,9 @@ class JuryTest(Seeded):
         url = f'/aufnahme/pruefung/{video_round.pk}/sichtung/?bewerbung={first.pk}'
         juror.post(url, {f'score-{first.pk}-{wendt.pk}': '19,5'}, headers=PANEL)
         self.assertEqual(str(Score.objects.get(participation=first, examiner=wendt).value), '19.50')
-        self.assertIn('Bitte Punkte zwischen 0 und 25 eintragen.', flashes(juror.post(url, {f'score-{first.pk}-{wendt.pk}': '31'}, follow=True)))
+        refused = juror.post(url, {f'score-{first.pk}-{wendt.pk}': '31'}, headers=PANEL)
+        self.assertTrue(refused.context['error'])  # out of range, or locked once the whole jury has marked
+        self.assertEqual(str(Score.objects.get(participation=first, examiner=wendt).value), '19.50')
         self.assertEqual(self.login('student').get(f'/aufnahme/pruefung/{video_round.pk}/sichtung/').status_code, 403)
 
     def test_an_audition_closes_only_with_every_result(self):

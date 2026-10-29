@@ -24,6 +24,7 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
     ('Lehre', [
         ('manage_courses', 'Veranstaltungen anlegen und alle bearbeiten'),
         ('view_teaching_load', 'Deputat aller Lehrenden einsehen'),
+        ('manage_teaching_load', 'Ermäßigungen der Lehrverpflichtung eintragen'),
         ('roll_over', 'Semesterwechsel'),
     ]),
     ('Studiengänge', [

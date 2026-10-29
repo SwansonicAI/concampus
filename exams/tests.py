@@ -4,7 +4,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import Count
 from django.test import Client
 
-from core.models import Message
+from core.models import Message, Person
 from core.testing import Seeded, flashes
 from courses.models import Course, Participation
 from courses.panel import mean
@@ -49,10 +49,28 @@ class ExamTest(Seeded):
         rows = examiner.get(f'/pruefungen/{resit.pk}/').context['rows']
         self.assertTrue(all(p.blind for p in rows))  # the others have marked, Hallmann not yet
         first = rows[0].pk
-        refused = examiner.post(f'/pruefungen/{resit.pk}/', {f'score-{first}-{hallmann.pk}': '1,5'}, follow=True)
-        self.assertIn('keine Note', flashes(refused)[-1])
+        refused = examiner.post(f'/pruefungen/{resit.pk}/', {f'score-{first}-{hallmann.pk}': '1,5'})
+        self.assertIn('keine Note', next(p.error for p in refused.context['rows'] if p.pk == first))
         examiner.post(f'/pruefungen/{resit.pk}/', {f'score-{first}-{hallmann.pk}': '1,7'})
-        self.assertFalse(next(p for p in examiner.get(f'/pruefungen/{resit.pk}/').context['rows'] if p.pk == first).blind)
+        row = next(p for p in examiner.get(f'/pruefungen/{resit.pk}/').context['rows'] if p.pk == first)
+        self.assertEqual((row.blind, row.locked), (False, True))  # all have marked: the others show, and nobody adjusts theirs to them
+        for changed in ('2,0', ''):
+            examiner.post(f'/pruefungen/{resit.pk}/', {f'score-{first}-{hallmann.pk}': changed})
+            self.assertEqual(resit.participations.get(pk=first).scores.get(examiner=hallmann).value, Decimal('1.7'))
+
+    def test_who_stands_back_for_bias_gives_no_mark_and_the_others_decide(self):
+        resit = Course.objects.get(title__contains='Wiederholung')
+        hallmann = resit.staff.get(last_name='Hallmann')
+        examiner = Client()
+        examiner.force_login(hallmann)
+        first = resit.participations.first()
+        examiner.post(f'/lehre/{resit.pk}/befangen/', {'participation': first.pk, 'reason': 'Privatunterricht'})
+        first.refresh_from_db()
+        others = list(first.scores.values_list('value', flat=True))
+        self.assertEqual(first.grade, mean(others, first.study.program.mean_rounding))
+        self.login('pruefungsamt').post(f'/lehre/{resit.pk}/befangen/', {'aufheben': f'{first.pk}-{hallmann.pk}'})
+        first.refresh_from_db()
+        self.assertIsNone(first.grade)
 
     def test_results_follow_the_panel_then_lock_on_release(self):
         resit = Course.objects.get(title__contains='Wiederholung')
@@ -153,10 +171,18 @@ class ThesisTest(Seeded):
         student.force_login(study.person)
         student.post(f'/pruefungen/teilnahme/{p.pk}/abgabe/', {'file': SimpleUploadedFile('arbeit.pdf', b'%PDF-1.4', content_type='application/pdf')})
         self.assertEqual(handed_in(p).title, 'arbeit.pdf')
-        for examiner, grade in zip(examiners, ['1,3', '2,0']):
-            self.login(examiner.username).post(f'/pruefungen/{p.course_id}/', {f'score-{p.pk}-{examiner.pk}': grade})
+
+        def mark(examiner, grade):
+            self.login(examiner.username).post(f'/pruefungen/{p.course_id}/', {f'score-{p.pk}-{examiner.pk}': grade, f'report-{p.pk}-{examiner.pk}': 'Gutachten.'})
+
+        mark(examiners[0], '1,3')
+        mark(examiners[1], '3,0')
+        self.assertIsNone(Participation.objects.get(pk=p.pk).grade)  # more than 1,0 apart: a third Gutachten decides (RPSO § 15 Abs. 2)
+        third = Person.teachers().exclude(pk__in=[e.pk for e in examiners]).first()
+        p.course.staff.add(third)
+        mark(third, '2,0')
         office.post(f'/pruefungen/{p.course_id}/freigabe/')
-        self.assertEqual({r.module_id: r.grade for r in study.record()}[module.pk], Decimal('1.7'))  # the mean of 1.3 and 2.0, rounded half up
+        self.assertEqual({r.module_id: r.grade for r in study.record()}[module.pk], Decimal('1.7'))  # the mean of the two better, 1.3 and 2.0, rounded half up
 
     def test_diploma_supplement(self):
         study = Study.objects.get(person__username='student')

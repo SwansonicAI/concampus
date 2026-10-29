@@ -141,6 +141,9 @@ class Booking(Tracked, models.Model):
         'self', models.CASCADE, null=True, blank=True, related_name='services', verbose_name='Gehört zu',
         help_text='Ein Dienst für eine Veranstaltung, etwa Stimmung oder Technik.',
     )
+    requested = models.BooleanField(
+        'Angefragt', default=False, help_text='Um einen zentral vergebenen Raum gebeten: belegt ihn erst, wenn das Amt bestätigt.',
+    )
 
     class Meta:
         ordering = ['start']
@@ -160,10 +163,10 @@ class Booking(Tracked, models.Model):
         return self.category.tone
 
     def clashes(self):
-        """Bookings that overlap in the same room. Cancelled ones stay visible but no longer block it; an event and the
-        services for it share the room."""
+        """Bookings that overlap in the same room. Cancelled ones stay visible but no longer block it, nor do requests not
+        yet confirmed; an event and the services for it share the room."""
         return (
-            Booking.objects.filter(room=self.room_id, start__lt=self.end, end__gt=self.start, category__blocks=True)
+            Booking.objects.filter(room=self.room_id, start__lt=self.end, end__gt=self.start, category__blocks=True, requested=False)
             .exclude(pk=self.pk).exclude(pk=self.parent_id).exclude(parent=self.pk or 0)
         )
 

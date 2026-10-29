@@ -50,8 +50,8 @@ Lessons = forms.formset_factory(LessonForm, extra=0)
 
 
 class EnsembleField(forms.ModelChoiceField):
-    def label_from_instance(self, ensemble):
-        return ensemble.name
+    def label_from_instance(self, ensemble):  # many a Streichquartett: who plays in it tells them apart
+        return f'{ensemble.name}: {", ".join(s.person.last_name for s in ensemble.members.all())}'
 
 
 class DateForm(forms.Form):
@@ -70,8 +70,16 @@ class DateForm(forms.Form):
                 label='Für', queryset=Person.objects.filter(studies__participations__course=course).distinct(), empty_label='Bitte wählen',
             )
             self.order_fields(['student'])
-        elif course and course.allocation == Course.Allocation.ENSEMBLE:  # a coaching session of one ensemble
-            self.fields['ensemble'] = EnsembleField(label='Für', queryset=course.ensembles.all(), required=False, empty_label='Alle')
+        elif course and course.allocation == Course.Allocation.ENSEMBLE:  # a coaching session of one's own ensembles; the office books for any
+            office = person.may('manage_courses', course)
+            ensembles = (course.ensembles.all() if office else course.ensembles.filter(coach=person)).select_related('coach').prefetch_related('members__person')
+            field = self.fields['ensemble'] = EnsembleField(label='Für', queryset=ensembles, required=False, empty_label='Alle')
+            if office:
+                own = [e for e in ensembles if e.coach_id == person.pk]
+                field.choices = [('', 'Alle'), *(
+                    (label, [(e.pk, field.label_from_instance(e)) for e in group]) for label, group in
+                    [('Meine Ensembles', own), ('Weitere', [e for e in ensembles if e not in own])] if group
+                )]
             self.order_fields(['ensemble'])
 
     def clean(self):
@@ -123,7 +131,8 @@ def leaf_modules(exams=False):
 
 class CourseForm(forms.ModelForm):
     programme = forms.ModelChoiceField(
-        label='Studiengang', queryset=Program.planned(), required=False, empty_label='Alle', help_text='Zeigt unten nur seine Module.',
+        label='Module zeigen für', queryset=Program.planned(), required=False, empty_label='alle Studiengänge',
+        help_text='Nur ein Filter für die Liste darunter: eine Veranstaltung kann für Module mehrerer Studiengänge zählen.',
         widget=forms.Select(attrs={'data-leads': 'modules'}),
     )
     opens = DayField(label='Anmeldung ab', required=False, help_text='Erster Tag der Anmeldung; leer: sofort.')
@@ -142,10 +151,12 @@ class CourseForm(forms.ModelForm):
 
     def __init__(self, *args, person=None, **kwargs):
         super().__init__(*args, **kwargs)
-        if 'kind' in self.fields:
-            self.fields['kind'].choices = [(k.value, k.label) for k in (Course.Kind.COURSE, Course.Kind.LESSON)]
-        self.fields['staff'].queryset = Person.teachers()
-        self.fields['staff'].choices = teachers(self.instance.subject, person.ours('manage_courses') | person.ours('manage_exams') if person else ())
+        if 'kind' in self.fields:  # the Lehrform says how it is taught; this, how it is organised
+            self.fields['kind'].choices = [(Course.Kind.COURSE.value, 'Lehrveranstaltung: gemeinsame Termine'), (Course.Kind.LESSON.value, 'Klasse: je Person eine eigene Unterrichtszeit')]
+            self.fields['kind'].label = 'Organisation'
+        if 'staff' in self.fields:
+            self.fields['staff'].queryset = Person.teachers()
+            self.fields['staff'].choices = teachers(self.instance.subject, person.ours('manage_courses') | person.ours('manage_exams') if person else ())
         if person and not self.instance.pk and 'teacher' in person.roles and not self.initial.get('staff'):  # who creates a course mostly teaches it
             self.initial['staff'] = [person.pk]
         if 'accompaniment' in self.fields:
@@ -166,6 +177,14 @@ class CourseForm(forms.ModelForm):
             self.fields['term'].queryset = self.fields['term'].queryset.order_by('-start')
         if 'area' in self.fields:
             self.fields['area'].empty_label = 'Keines'
+
+
+class TeachingForm(CourseForm):
+    """What a course's teachers decide themselves. Its hours count in their Deputat and its modules are the Studienpläne's:
+    those, its staff and its kind are for the office."""
+
+    class Meta(CourseForm.Meta):
+        fields = ['capacity', 'allocation', 'opens', 'deadline', 'description']
 
 
 class ExamForm(CourseForm):

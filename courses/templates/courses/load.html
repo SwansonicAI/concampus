@@ -3,7 +3,10 @@
 {% block subnav %}{% include "courses/_nav.html" %}{% endblock %}
 {% block content %}
 <h1>Deputat</h1>
-<p class="lead">Lehrumfang in SWS im {{ term }}, gegen die Lehrverpflichtung. Einzelunterricht zählt je Teilnahme, Ensembles je betreutem Ensemble.</p>
+<div class="head">
+  <p class="lead">Lehrumfang in SWS im {{ term }}, gegen die Lehrverpflichtung nach Ermäßigungen. Einzelunterricht zählt je Teilnahme, Ensembles je betreutem Ensemble. {% if since %}Das Konto rechnet Mehr- und Minderleistungen seit {{ since }} über drei Studienjahre auf; sie sind darin auszugleichen, und in keinem Semester soll die Lehre unter die Hälfte fallen (ThürLVVO § 7).{% endif %}</p>
+  {% if 'manage_teaching_load' in user.roles %}<div class="actions"><a class="btn ghost" href="{% url 'setup:list' 'ermaessigungen' %}">Ermäßigungen</a></div>{% endif %}
+</div>
 <form class="toolbar">
   <div class="inline">
     <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
@@ -15,18 +18,20 @@
   </div>
 </form>
 <table data-panel>
-  <thead><tr><th>Lehrende</th><th>Veranstaltungen</th><th class="num">SWS</th><th class="num">Soll</th></tr></thead>
+  <thead><tr><th>Lehrende</th><th>Veranstaltungen</th><th class="num">SWS</th><th class="num">Soll</th><th class="num">Saldo</th>{% if since %}<th class="num" title="Mehr- und Minderleistungen über drei Studienjahre">Konto</th>{% endif %}</tr></thead>
   <tbody>
-    {% for teacher, courses, total, balance in rows %}
+    {% for row in rows %}
     <tr>
-      <td data-value="{{ teacher.name }}"><b>{{ teacher }}</b>{% if teacher.employment %}<br><small class="muted">{{ teacher.get_employment_display }}</small>{% endif %}</td>
-      <td>{% for c, load in courses %}<a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a> <small class="muted">{{ load }}</small>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
-      <td class="num"><b>{{ total }}</b></td>
-      <td class="num" data-value="{{ balance|default_if_none:'' }}">{% if balance is None %}<span class="muted">–</span>{% else %}{{ teacher.obligation }}{% if teacher.employment == 'lehrauftrag' %} <small class="muted">vereinbart</small>{% endif %}{% if balance > 0 %}<br><small class="fail" title="Über der Lehrverpflichtung">+{{ balance }}</small>{% elif balance < 0 %}<br><small class="muted" title="Unter der Lehrverpflichtung">{{ balance }}</small>{% endif %}{% endif %}</td>
+      <td data-value="{{ row.teacher.name }}"><b>{{ row.teacher }}</b>{% if row.teacher.employment %}<br><small class="muted">{{ row.teacher.get_employment_display }}</small>{% endif %}</td>
+      <td>{% for c, load in row.courses %}<a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a> <small class="muted">{{ load }}</small>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+      <td class="num"><b>{{ row.total }}</b>{% if row.low %}<br><small class="fail" title="ThürLVVO § 7: in keinem Semester unter der Hälfte der Lehrverpflichtung">unter der Hälfte</small>{% endif %}</td>
+      <td class="num" data-value="{{ row.due|default_if_none:'' }}">{% if row.due is None %}<span class="muted">–</span>{% else %}{{ row.due }}{% if row.teacher.employment == 'lehrauftrag' %}<br><small class="muted">vereinbart</small>{% endif %}{% for r in row.reductions %}<br><small class="muted" title="{{ r.get_reason_display }}">− {{ r.hours }} {{ r.note|default:r.short }}</small>{% endfor %}{% endif %}</td>
+      <td class="num" data-value="{{ row.balance|default_if_none:'' }}">{% if row.balance is None %}<span class="muted">–</span>{% elif row.balance > 0 %}<span class="fail" title="Über dem Soll">+{{ row.balance }}</span>{% elif row.balance < 0 %}<span title="Unter dem Soll">{{ row.balance }}</span>{% else %}0{% endif %}</td>
+      {% if since %}<td class="num" data-value="{{ row.account|default_if_none:'' }}">{% if row.account is None %}<span class="muted">–</span>{% elif row.account > 0 %}+{{ row.account }}{% else %}{{ row.account }}{% endif %}</td>{% endif %}
     </tr>
-    {% empty %}<tr><td colspan="4" class="empty">Keine Lehre erfasst.</td></tr>
+    {% empty %}<tr><td colspan="6" class="empty">Keine Lehre erfasst.</td></tr>
     {% endfor %}
   </tbody>
-  {% if rows|length > 1 %}<tfoot><tr class="total"><td>Gesamt</td><td>{{ rows|length }} Lehrende</td><td class="num">{{ total }}</td><td></td></tr></tfoot>{% endif %}
+  {% if rows|length > 1 %}<tfoot><tr class="total"><td>Gesamt</td><td>{{ rows|length }} Lehrende</td><td class="num">{{ total }}</td><td></td><td></td>{% if since %}<td></td>{% endif %}</tr></tfoot>{% endif %}
 </table>
 {% endblock %}

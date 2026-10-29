@@ -1,5 +1,5 @@
 {% extends base %}
-{% load l10n %}
+{% load marks %}
 {% block title %}Sichtung {{ course.title }}{% endblock %}
 {% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
 {% block content %}
@@ -10,21 +10,35 @@
 <div class="review">
   <div>{% for d in videos %}{% include "admissions/_document.html" %}{% empty %}<p class="fail">Kein Video eingereicht.</p>{% endfor %}</div>
   <div>
-    {% if juror and not course.released %}
+    {% if juror and user.pk in p.recused %}
+    <p class="panel">Sie haben Befangenheit angezeigt ({{ p.recused|of:user.pk }}) und werten diese Bewerbung nicht.</p>
+    {% elif juror and not course.released and not p.locked %}
     <form method="post" class="panel">
       {% csrf_token %}
       <h3>Ihre Wertung</h3>
       <div class="inline">
-        <label>Punkte (0–{{ course.max_points }})<input class="cell" type="text" inputmode="decimal" name="score-{{ p.pk }}-{{ user.pk }}" value="{{ mine|default_if_none:''|unlocalize }}"></label>
+        <label>Punkte (0–{{ course.max_points }})<input class="cell{% if error %} bad{% endif %}" type="text" inputmode="decimal" name="score-{{ p.pk }}-{{ user.pk }}" value="{{ mine|mark }}"></label>
         <button class="btn">Speichern und weiter</button>
       </div>
-      <p class="muted" style="margin: 12px 0 0"><small>Bestanden ab {{ course.pass_mark }} Punkten im Mittel der Kommission. Weiter geht es zur nächsten Bewerbung ohne Ihre Wertung.</small></p>
+      {% if error %}<p class="fail" style="margin: 8px 0 0"><small>{{ error }}</small></p>{% endif %}
+      <p class="muted" style="margin: 12px 0 0"><small>Bestanden ab {{ course.pass_mark }} Punkten im Mittel der Kommission, nach der ersten Nachkommastelle abgeschnitten. Die Wertungen der anderen sehen Sie, sobald alle gewertet haben; dann ist Ihre gesperrt. Weiter geht es zur nächsten Bewerbung ohne Ihre Wertung.</small></p>
     </form>
+    {% if mine is None %}
+    <form method="post" action="{% url 'courses:recuse' course.pk %}" class="inline" style="margin-top: 12px">
+      {% csrf_token %}
+      <input type="hidden" name="participation" value="{{ p.pk }}"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+      <label>Befangen?<input name="reason" required maxlength="200" placeholder="Grund, z. B. Privatunterricht"></label>
+      <button class="btn ghost small" data-confirm="Anzeigen? Sie werten dann nicht.">Anzeigen</button>
+    </form>
+    {% endif %}
     {% elif mine is not None %}
-    <p>Ihre Wertung: <b>{{ mine }}</b></p>
+    <p>Ihre Wertung: <b>{{ mine|mark }}</b>{% if p.locked %} <small class="muted">gesperrt, alle haben gewertet</small>{% endif %}</p>
     {% endif %}
     <h3 style="margin-top: 24px">Prüfungsprogramm</h3>
-    <p>{{ p.note|linebreaksbr|default:"–" }}</p>
+    <table class="programme">
+      {% for seconds, at, work in programme %}<tr><td class="nowrap">{% if seconds is not None %}<button class="link" type="button" data-seek="{{ seconds }}" title="Im Video ab {{ at }}">{{ at }}</button>{% endif %}</td><td>{{ work }}</td></tr>
+      {% empty %}<tr><td class="empty">–</td></tr>{% endfor %}
+    </table>
     <nav class="actions">
       {% if prev %}<a class="btn ghost small" href="?bewerbung={{ prev.pk }}">← Vorherige</a>{% endif %}
       {% if next %}<a class="btn ghost small" href="?bewerbung={{ next.pk }}">Nächste →</a>{% endif %}

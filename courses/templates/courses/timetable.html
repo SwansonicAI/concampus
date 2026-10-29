@@ -11,7 +11,7 @@
     <a class="btn ghost" href="{% url 'rooms:mine' %}#kalender">Kalender abonnieren</a>
   </div>
 </div>
-<p class="lead">Woche vom {{ dates.0|date:"j. F" }} bis {{ dates.6|date:"j. F Y" }} · Überschneidungen sind rot umrandet.</p>
+<p class="lead">Woche vom {{ dates.0|date:"j. F" }} bis {{ dates.6|date:"j. F Y" }} · Überschneidungen sind rot umrandet, ein Gebäudewechsel ohne Pause oben orange.{% if off %} Wer krank ist, sagt über „absagen“ am Tag alle eigenen Termine auf einmal ab.{% endif %}</p>
 {% include "rooms/_week.html" %}
 <p class="legend">{% for tone, label in tones %}<span class="booking {{ tone }}">{{ label }}</span>{% endfor %}</p>
 {% endblock %}

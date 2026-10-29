@@ -80,13 +80,23 @@ class CoursesConfig(Tile, AppConfig):
                 found.append(task(f'Termine planen: {course.title}', course.get_absolute_url()))
             for course in person.teaching.filter(term=term, signups__isnull=False).annotate(n=Count('signups')):
                 found.append(task(f'{course.title}: {plural(course.n, "Anfrage", "Anfragen")} entscheiden', course.get_absolute_url()))
-            for course in person.teaching.filter(term=term).annotate(n=Count('ensembles', filter=Q(ensembles__coach=None))).filter(n__gt=0):
-                found.append(task(f'{course.title}: {plural(course.n, "Ensemble", "Ensembles")} ohne Betreuung', course.get_absolute_url()))
+            for course in person.teaching.filter(term=term).annotate(n=Count('ensembles', filter=Q(ensembles__coach=None, ensembles__wish=person))).filter(n__gt=0):
+                found.append(task(f'{course.title}: {plural(course.n, "Ensemble wünscht", "Ensembles wünschen")} Ihre Betreuung', course.get_absolute_url()))
+            if term:
+                from .views import taught
+
+                for s in taught(person, term):
+                    if s.missing:
+                        found.append(task(f'Klasse: {s.person} ohne Einzelunterricht im {term}', reverse('courses:mine')))
         if {'view_teaching_load', 'roll_over'} <= person.roles and term:  # who plans the teaching: whoever teaches more than they should
             from .views import loads
 
-            if over := sum(1 for row in loads(term, person, institute=str(min(person.ours('view_teaching_load'))) if len(person.ours('view_teaching_load')) == 1 else '') if row[3] and row[3] > 0):
+            if over := sum(1 for row in loads(term, person, institute=str(min(person.ours('view_teaching_load'))) if len(person.ours('view_teaching_load')) == 1 else '') if row.balance and row.balance > 0):
                 found.append(task(f'{plural(over, "Lehrperson", "Lehrpersonen")} über der Lehrverpflichtung', f"{reverse('courses:load')}?stand=ueber"))
+        if 'manage_courses' in person.roles and term:  # ensembles waiting for the office to give them a coach
+            ensembles = person.within(term.courses.filter(allocation=Course.Allocation.ENSEMBLE), 'manage_courses')
+            for course in ensembles.annotate(n=Count('ensembles', filter=Q(ensembles__coach=None))).filter(n__gt=0):
+                found.append(task(f'{course.title}: {plural(course.n, "Ensemble", "Ensembles")} ohne Betreuung zuteilen', course.get_absolute_url()))
         if 'manage_courses' in person.roles and not person.everywhere('manage_courses'):  # an Institut's office
             if n := person.within(untimed(Participation.objects.all()), 'manage_courses').values('study').distinct().count():
                 found.append(task(f'Einzelunterricht: {plural(n, "Person", "Personen")} ohne Unterrichtszeit', f"{reverse('students:list')}?stand=unterricht"))

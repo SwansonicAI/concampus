@@ -70,7 +70,7 @@ class ApplicationForm(forms.Form):
     teacher = forms.ModelChoiceField(label='Wunschlehrer:in', queryset=None, required=False, empty_label='Keine Angabe')
     repertoire = forms.CharField(
         label='Prüfungsprogramm', widget=forms.Textarea(attrs={'rows': 5}),
-        help_text='Werke mit Komponist:in, Satz und ungefährer Dauer.',
+        help_text='Ein Werk je Zeile, mit Komponist:in, Satz und Dauer; beim Video die Zeit, zu der es beginnt, z. B. „6:40 N. Paganini: Caprice Nr. 24 a-Moll (5 Min.)“.',
     )
     entrance = forms.ChoiceField(
         label='Hochschulzugangsberechtigung', choices=[('', 'Noch nicht erworben')] + destatis.ENTRANCE, required=False,

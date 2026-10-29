@@ -39,7 +39,7 @@
       {% csrf_token %}
       <h3>Wöchentlich planen</h3>
       <div class="inline">{% for field in plan %}<label>{{ field.label }}{{ field }}</label>{% endfor %}</div>
-      <p class="muted" style="margin: 12px 0"><small>Bucht den Raum über die ganze Unterrichtszeit ({{ course.term.lectures_start|date:"j.n." }}–{{ course.term.lectures_end|date:"j.n.Y" }}) ohne die unterrichtsfreien Tage, nur wenn alle Termine frei sind.</small></p>
+      <p class="muted" style="margin: 12px 0"><small>Bucht den Raum jede Woche {% if from > course.term.lectures_start %}ab heute{% else %}ab {{ from|date:"j.n." }}{% endif %} bis zum Ende der Unterrichtszeit am {{ course.term.lectures_end|date:"j.n.Y" }}, ohne die unterrichtsfreien Tage, nur wenn alle Termine frei sind.</small></p>
       <button class="btn">Termine buchen</button>
     </form>
     {% endif %}
@@ -105,6 +105,7 @@
 {% if ensembles %}
 <section>
   <h2>{% if staffed %}Ensembles{% else %}Mein Ensemble{% endif %}</h2>
+  {% if staffed and not office %}<p class="lead">Ensembles ohne Betreuung können Sie übernehmen, Ihre eigenen abgeben. Alles Weitere teilt das Institut zu.</p>{% endif %}
   <table>
     <thead><tr><th>Besetzung</th><th>Mitglieder</th><th>Repertoire</th><th>Betreuung</th></tr></thead>
     <tbody>
@@ -114,13 +115,17 @@
         <td><small>{% for s in e.members.all %}{{ s.person.name }} <span class="muted">{{ s.subject }}</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}</small></td>
         <td><small>{{ e.repertoire|linebreaksbr }}</small></td>
         <td>
-          {% if staffed %}
+          {% if office %}
           <form method="post" action="{% url 'courses:coach' e.pk %}" class="inline">
             {% csrf_token %}
             <select name="coach" aria-label="Betreuung"><option value="">Noch offen</option>{% for s in staff %}<option value="{{ s.pk }}"{% if s == e.coach %} selected{% endif %}>{{ s.last_name }}</option>{% endfor %}</select>
             <button class="btn ghost small">Speichern</button>
             <button class="link" name="dissolve" value="1" data-confirm="Wirklich auflösen?"><small>auflösen</small></button>
           </form>
+          {% elif staffed and e.coach == user %}
+          <form method="post" action="{% url 'courses:coach' e.pk %}" class="inline">{% csrf_token %}<b>Sie</b><button class="link" name="coach" value="" data-confirm="Betreuung abgeben?"><small>abgeben</small></button></form>
+          {% elif staffed and not e.coach %}
+          <form method="post" action="{% url 'courses:coach' e.pk %}">{% csrf_token %}<button class="btn ghost small" name="coach" value="{{ user.pk }}">Übernehmen</button></form>
           {% else %}{{ e.coach|default:"noch offen" }}{% endif %}
         </td>
       </tr>

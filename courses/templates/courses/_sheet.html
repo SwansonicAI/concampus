@@ -1,4 +1,4 @@
-{% load l10n marks %}
+{% load l10n marks %}{% scale as steps %}
 <form method="post" class="scroll"{% if panel %} data-wide{% endif %}>
   {% csrf_token %}
   <table>
@@ -26,21 +26,28 @@
       {% for p in rows %}
       <tr class="{% if p.waiting %}wait{% endif %}">
         <td class="mid muted">{{ forloop.counter }}</td>
-        <td class="mid">{% if p.study_id in reachable %}<a href="{{ p.study.get_absolute_url }}">{{ p.study.person.name }}</a>{% else %}{{ p.study.person.name }}{% endif %}<br><small class="muted">{{ p.study.subject }} · {{ p.study.program.degree }}{% if p.waiting %} · <b>Warteliste</b>{% endif %}{% if p.attempt > 1 %} · <b>{{ p.attempt }}. Versuch{% if p.last %}, letzter{% endif %}</b>{% elif p.attempt %} · 1. Versuch{% endif %}{% if dropping and p.mean is None and p.grade is None %} · <button class="link" form="austragen" name="participation" value="{{ p.pk }}" data-confirm="Austragen?">austragen</button>{% endif %}{% if review %} · <a href="{% url 'admissions:review' course.pk %}?bewerbung={{ p.pk }}">Video</a>{% endif %}</small></td>
+        <td class="mid">{% if p.study_id in reachable %}<a href="{{ p.study.get_absolute_url }}">{{ p.study.person.name }}</a>{% else %}{{ p.study.person.name }}{% endif %}<br><small class="muted">{{ p.study.subject }} · {{ p.study.program.degree }}{% if p.waiting %} · <b>Warteliste</b>{% endif %}{% if p.attempt > 1 %} · <b>{{ p.attempt }}. Versuch{% if p.last %}, letzter{% endif %}</b>{% elif p.attempt %} · 1. Versuch{% endif %}{% if dropping and p.mean is None and p.grade is None %} · <button class="link" form="austragen" name="participation" value="{{ p.pk }}" data-confirm="Austragen?">austragen</button>{% endif %}{% if review %} · <a href="{% url 'admissions:review' course.pk %}?bewerbung={{ p.pk }}">Video</a>{% endif %}</small>{% if p.error %}<br><small class="fail">{{ p.error }}</small>{% endif %}</td>
         {% if panel %}
         {% if timed %}<td class="mid" data-value="{{ p.slot|date:'c' }}">{{ p.slot|date:"j.n. H:i"|default:"–" }}</td>{% endif %}
         {% if noted %}<td class="mid"><small title="{{ p.note }}">{{ p.note|truncatechars:42 }}</small></td>{% endif %}
         {% for e, value in p.marks %}
-        <td class="num mid">{% if e.pk in columns and not course.released %}<input class="cell" type="text" inputmode="decimal" name="score-{{ p.pk }}-{{ e.pk }}" value="{{ value|default_if_none:''|unlocalize }}" aria-label="Wertung {{ e.last_name }}">{% elif p.blind %}<span class="muted" title="Zu sehen, sobald Sie gewertet haben">·</span>{% else %}{{ value|mark }}{% endif %}</td>
+        <td class="num mid">
+          {% if e.pk in p.recused %}<small class="muted" title="Befangen: {{ p.recused|of:e.pk }}">befangen</small>{% if decide and not course.released %} <button class="link" form="befangen" formaction="{% url 'courses:recuse' course.pk %}" formnovalidate name="aufheben" value="{{ p.pk }}-{{ e.pk }}" data-confirm="Aufheben?" title="Befangenheit aufheben"><small>×</small></button>{% endif %}
+          {% elif e.pk in columns and not course.released and not p.locked and course.kind != 'thesis' %}
+          {% if course.points or course.kind == 'recognition' %}<input class="cell{% if p.error %} bad{% endif %}" type="text" inputmode="decimal" name="score-{{ p.pk }}-{{ e.pk }}" value="{{ value|mark }}" aria-label="Wertung {{ e.last_name }}">
+          {% else %}<select class="cell{% if p.error %} bad{% endif %}" name="score-{{ p.pk }}-{{ e.pk }}" aria-label="Note {{ e.last_name }}"><option value="">–</option>{% for s in steps %}<option{% if value|mark == s %} selected{% endif %}>{{ s }}</option>{% endfor %}{% if value is not None and value|mark not in steps %}<option selected>{{ value|mark }}</option>{% endif %}</select>{% endif %}
+          {% elif p.blind %}<span class="muted" title="Zu sehen, sobald alle gewertet haben">·</span>
+          {% else %}{{ value|mark }}{% endif %}
+        </td>
         {% endfor %}
-        <td class="num mid">{% if p.blind %}<span class="muted">·</span>{% else %}<b>{% if p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</b>{% if p.grade is None and p.mean is not None %}<span class="muted" title="Noch nicht alle Wertungen">{{ p.mean }}…</span>{% endif %}{% if p.override is not None %} <small class="muted" title="Von Hand festgelegt">✎</small>{% endif %}{% endif %}</td>
-        <td class="mid">{% if p.passed %}<span class="badge yes">bestanden</span>{% elif p.passed is False %}<span class="badge no">nicht bestanden</span>{% elif p.remark %}<span class="badge wait">entschuldigt</span>{% else %}<span class="muted">offen</span>{% endif %}{% if p.remark %} <small class="muted" title="{{ p.get_remark_display }}">{{ p.remark|upper }}</small>{% endif %}</td>
-        {% if decide and not course.released %}<td class="num mid"><input class="cell" type="text" inputmode="decimal" name="grade-{{ p.pk }}" value="{{ p.override|default_if_none:''|unlocalize }}" aria-label="Abweichendes Ergebnis"></td>{% endif %}
+        <td class="num mid">{% if p.blind %}<span class="muted">·</span>{% else %}<b>{% if p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</b>{% if p.grade is None and p.mean is not None and not p.third %}<span class="muted" title="Noch nicht alle Wertungen">{{ p.mean }}…</span>{% endif %}{% if p.override is not None %} <small class="muted" title="Von Hand festgelegt">✎</small>{% endif %}{% endif %}</td>
+        <td class="mid">{% if p.passed %}<span class="badge yes">bestanden</span>{% elif p.passed is False %}<span class="badge no">nicht bestanden</span>{% elif p.remark %}<span class="badge wait">entschuldigt</span>{% elif p.third and not p.blind %}<span class="badge wait" title="Die Gutachten liegen mehr als 1,0 auseinander oder eines lautet nicht ausreichend (RPSO § 15 Abs. 2)">drittes Gutachten nötig</span>{% else %}<span class="muted">offen</span>{% endif %}{% if p.remark %} <small class="muted" title="{{ p.get_remark_display }}">{{ p.remark|upper }}</small>{% endif %}{% if p.locked %} <small class="muted" title="Alle haben gewertet; ändern kann jetzt nur das zuständige Amt">gesperrt</small>{% endif %}</td>
+        {% if decide and not course.released %}<td class="num mid"><input class="cell" type="text" inputmode="decimal" name="grade-{{ p.pk }}" value="{{ p.override|mark }}" aria-label="Abweichendes Ergebnis"></td>{% endif %}
         {% if decide and not course.released and remarks %}<td class="mid"><select class="cell" name="remark-{{ p.pk }}" aria-label="Vermerk"><option value="">–</option>{% for code, label in remarks %}<option value="{{ code }}" title="{{ label }}"{% if p.remark == code %} selected{% endif %}>{{ code|upper }}</option>{% endfor %}</select></td>{% endif %}
         {% else %}
         <td class="mid muted nowrap">{{ p.module.code|default:"" }}</td>
         <td class="mid muted" data-value="{{ p.created|date:'c' }}">{{ p.created|date:"j.n. H:i" }}</td>
-        <td class="num mid">{% if decide and not course.released %}<input class="cell" type="text" inputmode="decimal" name="grade-{{ p.pk }}" value="{{ p.grade|default_if_none:''|unlocalize }}" aria-label="Note">{% elif p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</td>
+        <td class="num mid">{% if decide and not course.released and course.points %}<input class="cell{% if p.error %} bad{% endif %}" type="text" inputmode="decimal" name="grade-{{ p.pk }}" value="{{ p.grade|mark }}" aria-label="Punkte">{% elif decide and not course.released %}<select class="cell{% if p.error %} bad{% endif %}" name="grade-{{ p.pk }}" aria-label="Note"><option value="">–</option>{% for s in steps %}<option{% if p.grade|mark == s %} selected{% endif %}>{{ s }}</option>{% endfor %}{% if p.grade is not None and p.grade|mark not in steps %}<option selected>{{ p.grade|mark }}</option>{% endif %}</select>{% elif p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</td>
         <td class="mid">
           {% if decide and not course.released %}
           <select class="cell" name="passed-{{ p.pk }}" aria-label="Bestanden">
@@ -59,8 +66,8 @@
   </table>
   {% if rows and not course.released %}{% if decide or columns %}
   <div class="actions" style="margin-top: 20px">
-    <button class="btn">Speichern</button>
-    <small class="muted">{% if panel %}{% if remarks and decide %}Vermerk: RT, Rücktritt mit triftigem Grund, zählt nicht als Versuch; NE, nicht erschienen, und TV, Täuschungsversuch, gelten als nicht bestanden. {% endif %}Das Ergebnis ist der Mittelwert, sobald alle Mitglieder gewertet haben. Bestanden folgt aus {% if course.points %}der Grenze von {{ course.pass_mark }} Punkten{% else %}der Note bis 4,0{% endif %}.{% else %}Eine Note bestimmt „bestanden“ selbst; ohne Note gilt die Auswahl.{% endif %}</small>
+    {% if decide or course.kind != 'thesis' %}<button class="btn">Speichern</button>{% endif %}
+    <small class="muted">{% if panel %}{% if remarks and decide %}Vermerk: RT, Rücktritt mit triftigem Grund, zählt nicht als Versuch; NE, nicht erschienen, und TV, Täuschungsversuch, gelten als nicht bestanden. {% endif %}{% if course.kind == 'thesis' %}Die Note ist das Mittel der beiden Gutachten; liegen sie mehr als 1,0 auseinander oder lautet eines nicht ausreichend, entscheidet ein drittes mit, dann zählt das Mittel der beiden besseren (RPSO § 15 Abs. 2).{% else %}Das Ergebnis ist der Mittelwert, sobald alle gewertet haben; wer befangen ist, zählt nicht mit.{% endif %} {{ rule }} {% if not decide %}Die Wertungen der anderen sehen Sie, sobald alle gewertet haben; dann ist Ihre gesperrt. {% endif %}Bestanden folgt aus {% if course.points %}der Grenze von {{ course.pass_mark }} Punkten{% else %}der Note bis 4,0{% endif %}.{% else %}Eine Note bestimmt „bestanden“ selbst; ohne Note gilt die Auswahl.{% endif %}</small>
   </div>
   {% endif %}{% endif %}
 </form>

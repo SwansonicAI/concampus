@@ -67,7 +67,7 @@ class Course(Tracked, models.Model):
         ORDER = 'order', 'in der Reihenfolge der Anmeldung'
         CHOICE = 'choice', 'die Lehrenden wählen aus den Anmeldungen'
         STAFF = 'staff', 'die Lehrenden teilen ein, ohne Anmeldung'
-        ENSEMBLE = 'ensemble', 'als Ensemble; die Lehrenden teilen die Betreuung zu'
+        ENSEMBLE = 'ensemble', 'als Ensemble; Lehrende übernehmen die Betreuung, das Institut teilt zu'
 
     PANEL = [Kind.EXAM, Kind.AUDITION, Kind.THESIS]
 
@@ -230,7 +230,7 @@ class Participation(Tracked, models.Model):
     created = models.DateTimeField('Angemeldet', default=timezone.now, help_text='Reihenfolge für die Warteliste.')
 
     class Meta:
-        ordering = ['slot', 'created']
+        ordering = ['slot', 'created', 'pk']  # registered at the same moment: in the order they were entered, never by chance
         verbose_name = 'Teilnahme'
         verbose_name_plural = 'Teilnahmen'
         constraints = [
@@ -261,7 +261,7 @@ class Signup(Tracked, models.Model):
     created = models.DateTimeField('Angefragt', default=timezone.now)
 
     class Meta:
-        ordering = ['created']
+        ordering = ['created', 'pk']
         verbose_name = 'Platzanfrage'
         verbose_name_plural = 'Platzanfragen'
         constraints = [models.UniqueConstraint(fields=['course', 'study'], name='unique_signup')]
@@ -285,7 +285,7 @@ class Ensemble(Tracked, models.Model):
     created = models.DateTimeField('Angemeldet', default=timezone.now)
 
     class Meta:
-        ordering = ['created']
+        ordering = ['created', 'pk']
         verbose_name = 'Ensemble'
         verbose_name_plural = 'Ensembles'
 
@@ -303,6 +303,7 @@ class Score(Tracked, models.Model):
     participation = models.ForeignKey(Participation, models.CASCADE, related_name='scores', verbose_name='Teilnahme')
     examiner = models.ForeignKey(Person, models.CASCADE, related_name='scores', verbose_name='Prüfer:in')
     value = models.DecimalField('Wertung', max_digits=4, decimal_places=2)
+    report = models.TextField('Gutachten', blank=True, help_text='Bei Abschlussarbeiten die schriftliche Begründung der Note.')
 
     class Meta:
         verbose_name = 'Wertung'
@@ -311,3 +312,61 @@ class Score(Tracked, models.Model):
 
     def __str__(self):
         return f'{self.participation} · {self.examiner}'
+
+
+class Recusal(Tracked, models.Model):
+    """An examiner standing back from one candidate for fear of bias (Besorgnis der Befangenheit, § 21 VwVfG), say as
+    their former private teacher: they give no mark, and the result is the others' mean."""
+
+    owner = 'participation.study.person_id'
+    capabilities = ('decide_results', 'run_auditions')
+    scope = Score.scope
+
+    participation = models.ForeignKey(Participation, models.CASCADE, related_name='recusals', verbose_name='Teilnahme')
+    examiner = models.ForeignKey(Person, models.CASCADE, related_name='recusals', verbose_name='Prüfer:in')
+    reason = models.CharField('Grund', max_length=200, help_text='Z. B. „Privatunterricht bis 2025“.')
+    created = models.DateTimeField('Angezeigt am', default=timezone.now)
+
+    class Meta:
+        verbose_name = 'Befangenheit'
+        verbose_name_plural = 'Befangenheiten'
+        constraints = [models.UniqueConstraint(fields=['participation', 'examiner'], name='unique_recusal')]
+
+    def __str__(self):
+        return f'{self.participation} · {self.examiner}'
+
+
+class Reduction(Tracked, models.Model):
+    """A term's Ermäßigung of a teacher's Lehrverpflichtung, granted on application for a function or another task
+    (ThürLVVO § 8): the Deputat counts against what is left."""
+
+    owner = 'person_id'
+    capabilities = ('manage_teaching_load',)
+    scope = (['person__institute'], [])
+
+    class Reason(models.TextChoices):  # ThürLVVO § 8 Abs. 1 and 2, with the most it allows
+        VICE_PRESIDENT = 'vizepraesidium', 'Vizepräsident:in (bis 75 %)'
+        DEAN = 'dekanat', 'Dekan:in (bis 50 %)'
+        VICE_DEAN = 'prodekanat', 'Prodekan:in (bis 25 %)'
+        STUDY_DEAN = 'studiendekanat', 'Studiendekan:in (bis 50 %)'
+        PROGRAMME = 'studiengangsleitung', 'Leitung von Studiengängen (bis 50 %, ab vier bis 70 %)'
+        TASK = 'aufgabe', 'Weitere Aufgabe (bis 2 LVS)'
+        DISABILITY = 'schwerbehinderung', 'Schwerbehinderung (§ 10)'
+
+    person = models.ForeignKey(Person, models.CASCADE, related_name='reductions', verbose_name='Lehrperson')
+    term = models.ForeignKey(Term, models.PROTECT, related_name='reductions', verbose_name='Semester')
+    reason = models.CharField('Grund', max_length=20, choices=Reason)
+    hours = models.DecimalField('Ermäßigung (LVS)', max_digits=4, decimal_places=1)
+    note = models.CharField('Notiz', max_length=200, blank=True, help_text='Z. B. die Aufgabe oder der Beschluss des Präsidiums.')
+
+    class Meta:
+        ordering = ['-term__start', 'person__last_name']
+        verbose_name = 'Ermäßigung'
+        verbose_name_plural = 'Ermäßigungen'
+
+    def __str__(self):
+        return f'{self.person} · {self.term}: {self.get_reason_display()}'
+
+    @property
+    def short(self):
+        return self.get_reason_display().split(' (')[0]

@@ -17,7 +17,7 @@
       <tr>
         <td>{{ b.start|date:"D j.n.Y" }}, {{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}{% if b.until %}<br><small class="muted">wöchentlich bis {{ b.until|date:"j.n.Y" }}</small>{% endif %}</td>
         <td><a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a></td>
-        <td><a href="{% url 'rooms:booking' b.pk %}">{{ b.label }}</a></td>
+        <td><a href="{% url 'rooms:booking' b.pk %}">{{ b.label }}</a>{% if b.requested %} <span class="badge wait">angefragt</span>{% endif %}</td>
       </tr>
       {% empty %}
       <tr><td colspan="3" class="empty">Keine anstehenden Buchungen.</td></tr>
