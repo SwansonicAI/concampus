@@ -138,7 +138,9 @@ SUPPLEMENT = {  # for the Diploma Supplement: qualification, field of study in E
     ),
 }
 THESIS_WEEKS = {'B.Mus.': 8, 'B.Ed.': 12, 'M.Ed.': 20, 'Staatsexamen': 16, 'Diplom': 12}
-THESES = ('Wissenschaftliche Arbeit', 'Wissenschaftliche Hausarbeit', 'Bachelorarbeit', 'Masterarbeit', 'Diplomarbeit')  # exams written as theses
+THESES = (  # exams written as theses, the written parts of final projects too: a topic, a deadline, two Gutachten
+    'Wissenschaftliche Arbeit', 'Wissenschaftliche Hausarbeit', 'Bachelorarbeit', 'Masterarbeit', 'Diplomarbeit', 'Schriftlicher Teil', 'Programmheft oder Dokumentation',
+)
 TOPICS = [
     'Historische Aufführungspraxis im Repertoire für {i}: Quellen und Folgen für heute', 'Werke für {i} im Weimarer Umfeld Franz Liszts',
     'Auftrittsangst und Vorbereitung im Studium des Fachs {i}', 'Zeitgenössische Spieltechniken für {i} seit 1960',
@@ -888,6 +890,7 @@ class Command(BaseCommand):
             self.exams()
             self.assessors()
             self.admissions()
+            self.professors()
             self.appointments()
             self.events()
             self.practice()
@@ -1771,6 +1774,15 @@ class Command(BaseCommand):
             examiner = course.staff.all()[0]
             course.assessor = next((t for t in colleagues[examiner.institute_id] if t != examiner), None)
         Course.objects.bulk_update(alone, ['assessor'])
+
+    def professors(self):
+        """A professor on the panel of every part of a final exam, as RPSO § 17 Abs. 5 asks: one of the Institut's, else
+        of the Musikwissenschaft."""
+        for course in Course.panels(Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], term=self.current, released=None)):
+            if course.final and course.examiners and not course.professors:
+                institute = course.staff.all()[0].institute_id
+                professor = Person.objects.filter(employment=Person.Employment.PROFESSUR, institute=institute).exclude(pk__in=course.staff.all()).first()
+                course.staff.add(professor or self.teachers['voss'])
 
     def appointments(self):
         """The Prüferliste of this Studienjahr as the Prüfungsausschuss appointed it: everyone on a panel, for its subject."""

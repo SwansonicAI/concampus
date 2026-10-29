@@ -2,7 +2,7 @@ import re
 from collections import defaultdict
 
 from django import forms
-from django.db.models import F, Q
+from django.db.models import Case, F, Q, When
 from django.utils import timezone
 
 from core.dates import ClockField, DayField, MomentField
@@ -242,9 +242,10 @@ class ThesisForm(CourseForm):
         if study is None:  # registered already: the module stays
             del self.fields['module']
             return
-        exams = study.program.modules.filter(children=None, exam=True).order_by(F('semester').desc(nulls_last=True), 'code')
-        self.fields['module'].queryset = exams
-        self.fields['module'].initial = exams.filter(title__icontains='arbeit').first()  # Bachelor-, Master-, Diplomarbeit come last in the plan
+        final = Q(final=True) | Q(parent__final=True)  # the final exam's parts first: theses and the written parts of final projects
+        exams = study.program.modules.filter(children=None, exam=True).annotate(part=Case(When(final, then=0), default=1))
+        self.fields['module'].queryset = exams.order_by('part', F('semester').desc(nulls_last=True), 'code')
+        self.fields['module'].initial = exams.filter(final, title__icontains='arbeit').first() or exams.filter(final).first()
         if study.teacher_id:  # the Hauptfachlehrer:in mostly reviews it
             self.initial['staff'] = [study.teacher_id]
 

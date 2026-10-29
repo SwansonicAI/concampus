@@ -405,7 +405,7 @@ BED = [
         ('Rhythmik', 4, 'Rhythmik', 'G 90'), ('Tonstudiotechnik', 4, 'Tonstudiotechnik & Akustik', 'S'),
         ('Elementare Musikpädagogik', 4, 'Elementare Musikpädagogik', 'S 90'), ('Hochschulorchester', 4, 'Hochschulorchester', 'G 180'),
     ], 1)], note='Mit Kammermusik, Unterrichtspraktikum und Lehrpraxis 2 bestätigt das Zeugnis zusätzlich die Qualifikation als Instrumental- oder Gesangspädagog:in.'),
-    M('BE-BA', 'Bachelorarbeit', 10, C('Bachelorarbeit', {6: 10}, 'Bachelorprojekt: Kolloquium', 'S'), X('Bachelorarbeit (30–40 Seiten)', 6), weight=30,
+    M('BE-BA', 'Bachelorarbeit', 10, C('Bachelorarbeit', {6: 10}, 'Bachelorprojekt: Kolloquium', 'S'), X('Bachelorarbeit (30–40 Seiten)', 6), weight=30, final=True,
       note='Anmeldung ab 120 CP; Thema aus Musikwissenschaft oder Musikpädagogik. Zählt dreifach.'),
 ]
 
@@ -436,7 +436,7 @@ MED = [
         ('Kammermusik', 8, 'Kammermusik', 'E+x 45'), ('Hochschulorchester', 8, 'Hochschulorchester', 'G 180'),
         ('Tonstudiotechnik', 8, 'Tonstudiotechnik & Akustik', 'S'), ('Musikvermittlung', 8, 'Einführung in die Musikvermittlung', 'S'),
     ], 1)]),
-    M('ME-MA-00', 'Masterarbeit', 20, C('Masterarbeit', {3: 10, 4: 10}, 'Masterprojekt: Kolloquium', 'S'), X('Masterarbeit (60–80 Seiten)', 4), weight=80,
+    M('ME-MA-00', 'Masterarbeit', 20, C('Masterarbeit', {3: 10, 4: 10}, 'Masterprojekt: Kolloquium', 'S'), X('Masterarbeit (60–80 Seiten)', 4), weight=80, final=True,
       note='Anmeldung ab 80 CP. Zählt vierfach.'),
 ]
 
@@ -463,7 +463,7 @@ STEX = [
       L('L1GR', 'Bildungswissenschaften 1', 10, JENA), L('L3GR', 'Schulpraktische Studien (Praxissemester)', 30, JENA),
       L('ZF2', 'Zweites Prüfungsfach', 90, JENA), L('BW', 'Bildungswissenschaften', 10, JENA), L('StP2', 'Staatsprüfungsmodule Zweitfach und Bildungswissenschaften', 28, JENA)),
     M('ZF-StPrA', 'Wissenschaftliche Hausarbeit', 20, C('Wissenschaftliche Hausarbeit', {9: 10, 10: 10}, 'Masterprojekt: Kolloquium', 'S'),
-      X('Wissenschaftliche Hausarbeit (60–80 Seiten)', 10), weight=6, note='Die Erste Staatsprüfung nimmt das Landesprüfungsamt ab (ThürEStPLGymVO).'),
+      X('Wissenschaftliche Hausarbeit (60–80 Seiten)', 10), weight=6, final=True, note='Die Erste Staatsprüfung nimmt das Landesprüfungsamt ab (ThürEStPLGymVO).'),
 ]
 
 # Kirchenmusik A (Diplom, FPSO 2012): module credits and final weights from the FPSO, the spread over semesters approximated.
