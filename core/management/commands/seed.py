@@ -24,6 +24,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import models, transaction
 from django.utils import timezone
 from django.utils.crypto import get_random_string
+from django.utils.formats import date_format
 
 from admissions.retention import forget
 from core.dates import months_before, working
@@ -1519,17 +1520,18 @@ class Command(BaseCommand):
         groups, formed = [], True
         while formed:  # one of each grouping in turn, so that every kind is played
             formed = False
-            for name, parts, family, repertoire in ENSEMBLES:
+            for name, parts, kind, repertoire in ENSEMBLES:
                 if all(len(pools[part]) >= parts.count(part) for part in parts):
-                    groups.append((name, [pools[part].pop(0) for part in parts], family, repertoire))
+                    groups.append((name, [pools[part].pop(0) for part in parts], kind, repertoire))
                     formed = True
         rest = [s for pool in pools.values() for s in pool]
         groups += [  # the rest in mixed trios, named by what they play
-            ('Ensemble ' + '/'.join(s.subject.name for s in rest[k:k + 3]), rest[k:k + 3], 'strings', 'Nach Absprache') for k in range(0, len(rest), 3)
+            ('Ensemble ' + '/'.join(s.subject.name for s in rest[k:k + 3]), rest[k:k + 3], Counter(family(s.subject.name) for s in rest[k:k + 3]).most_common(1)[0][0], 'Nach Absprache')
+            for k in range(0, len(rest), 3)
         ]
-        for k, (name, members, family, repertoire) in enumerate(groups):
+        for k, (name, members, kind, repertoire) in enumerate(groups):
             open_ = k >= len(groups) - 3  # registered last, coach not yet given
-            coach = coaches[family][k % len(coaches[family])]
+            coach = coaches[kind][k % len(coaches[kind])]
             group = Ensemble.objects.create(
                 course=chamber, name=name, repertoire=repertoire, wish=coach if k % 3 == 0 else None,
                 coach=None if open_ else coach, created=at(date(2026, 9, 8) + timedelta(days=k * 38 // len(groups)), hour=10 + k % 8),
@@ -2181,6 +2183,25 @@ class Command(BaseCommand):
 
     def letters(self):
         demo, applicant, wendt = self.demo, self.applicant, self.teachers['wendt']
+        Person.objects.filter(pk=demo.pk).update(email=f'{handle(demo.first_name, demo.last_name)}@stud.hfm-weimar.de')  # her own, not her login's
+        colloquium = Course.objects.filter(title='Masterprojekt: Kolloquium', term=self.current).first()
+        if colloquium:  # taught by the string professors together, not by one
+            colloquium.staff.set([t for subject in ('Violine', 'Viola', 'Violoncello', 'Kontrabass') for t in self.by_subject[subject][:1]])
+        study = self.demo_study()
+        lesson = Booking.objects.filter(participants=demo, course__kind=Course.Kind.LESSON, course__term=self.current).select_related('room', 'course').order_by('start').first()
+        past = [  # what she received before: her place, her Immatrikulation, her lesson time
+            (*study.wording('zulassung', frist=f'{date(2024, 6, 14):%d.%m.%Y}', begruendung=''), at(date(2024, 5, 31), hour=10), True),
+            (*study.wording('immatrikulation'), at(study.start_term.start - timedelta(days=10), hour=10), True),
+        ]
+        if lesson:
+            past.append((*texts.render(
+                'unterrichtszeit', vorname=demo.first_name, nachname=demo.last_name, veranstaltung=lesson.course.title, von=wendt,
+                zeit=date_format(timezone.localtime(lesson.start), 'l, G:i') + ' Uhr', raum=lesson.room, ab=date_format(timezone.localtime(lesson.start), 'j.n.Y'),
+            ), at(self.current.start - timedelta(days=5), hour=16), False))
+        for subject, body, when, notice in past:
+            sent = Message.objects.create(person=demo, subject=subject, body=body, created=when, read=when, sender=texts.block('absender_bescheide') if notice else '')
+            if notice:
+                Document.objects.create(person=demo, study=study, kind_id='notice', title=subject, message=sent, created=when)
         Message.objects.bulk_create([
             Message(person=demo, subject='Prüfungsanmeldung vom 01. bis 15.11.2026', created=at(date(2026, 10, 15), hour=9),
                     body='Melden Sie sich bitte vom 01. bis 15.11.2026 im Campus zu den Prüfungen dieses Semesters an. Abmelden können Sie sich bis zum 18.01.2027.',

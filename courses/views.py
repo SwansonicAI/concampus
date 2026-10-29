@@ -1,3 +1,4 @@
+import re
 import uuid
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
@@ -38,8 +39,26 @@ MANAGERS = {Course.Kind.EXAM: 'manage_exams', Course.Kind.RECOGNITION: 'recognis
 def deputat(courses, person):
     """A teacher's load in SWS: each course's hours; per participant in one-to-one teaching, per ensemble they coach in
     ensemble courses."""
-    courses = courses.select_related('format').annotate(size=Count('participations', distinct=True), coached=Count('ensembles', filter=Q(ensembles__coach=person), distinct=True))
-    return sum((c.hours or 0) * share(c, c.coached) for c in courses)
+    courses = (
+        courses.select_related('format').prefetch_related('participations__module')
+        .annotate(size=Count('participations', distinct=True), coached=Count('ensembles', filter=Q(ensembles__coach=person), distinct=True))
+    )
+    return sum(sws(c, c.coached) for c in courses)
+
+
+def sws(course, coached):
+    """A course's SWS for one of its teachers: a lesson class each participation by the weekly minutes its plan gives,
+    60 to an SWS (ThürLVVO § 2 Abs. 2), else the course's hours; otherwise the hours as often as `share` says. Reads
+    `participations.all()` with their modules; prefetch them for many courses."""
+    if course.kind == Course.Kind.LESSON:
+        return sum(minutes(p.module) or course.hours or 0 for p in course.participations.all())
+    return (course.hours or 0) * share(course, coached)
+
+
+def minutes(module):
+    """The SWS of one lesson in a plan whose form says its weekly minutes, 'E 60' or 'E 90'; None where it does not."""
+    found = module and re.search(r'(\d+)\s*$', module.description)
+    return Decimal(found[1]) / 60 if found else None
 
 
 def share(course, coached):
@@ -617,9 +636,20 @@ def taught(person, term):
         Module.objects.filter(program__in={s.program_id for s in studies}, courses__kind=Course.Kind.LESSON, courses__subject__isnull=False, semester__isnull=False)
         .values('program').annotate(last=Max('semester')).values_list('program', 'last')
     )
+    passed = set(Participation.objects.filter(study__in=studies, passed=True).values_list('study', 'module'))
+    failed = Counter(
+        Participation.objects.filter(study__in=studies, passed=False, course__kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], course__released__isnull=False)
+        .values_list('study', 'module')
+    )
+    choices = {}
     for s in studies:  # a plan without lessons, such as a doctorate's, owes none
         s.lesson, s.until = lessons.get(s.pk), until.get(s.program_id)
         s.missing = not s.lesson and s.until is not None and s.fs <= s.until
+        tries = [n for (study, module), n in failed.items() if study == s.pk and (study, module) not in passed]
+        s.lost, s.last = any(n >= s.program.attempts for n in tries), any(n == s.program.attempts - 1 for n in tries)
+        s.over = s.fs > s.program.semesters
+        options = choices.setdefault(s.program_id, s.program.choices())
+        s.open = options[0].choice.title if options and not s.focus_id and s.fs >= min(o.first or 99 for o in options) - 1 else ''
     return studies
 
 
@@ -632,7 +662,7 @@ def timetable(request):
 
 def hours(term, seen):
     """{teacher: [(course, SWS)]} of a term's teaching, for the teachers `seen` (pks; None: all)."""
-    courses = term.courses.filter(kind__in=TEACHING).select_related('format').prefetch_related('staff', 'ensembles').annotate(size=Count('participations'))
+    courses = term.courses.filter(kind__in=TEACHING).select_related('format').prefetch_related('staff', 'ensembles', 'participations__module').annotate(size=Count('participations'))
     if seen is not None:
         courses = courses.filter(pk__in=Course.objects.filter(staff__in=seen).values('pk'))
     found = defaultdict(list)
@@ -640,7 +670,7 @@ def hours(term, seen):
         coached = Counter(e.coach_id for e in c.ensembles.all())
         for s in c.staff.all():
             if seen is None or s.pk in seen:
-                found[s].append((c, (c.hours or 0) * share(c, coached[s.pk])))
+                found[s].append((c, sws(c, coached[s.pk])))
     return found
 
 

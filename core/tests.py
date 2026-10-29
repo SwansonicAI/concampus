@@ -82,7 +82,7 @@ class SmokeTest(Seeded):
         """Every tile, feature and search hit the person is offered; of the hits, two of each kind the words find."""
         urls = {app.url and reverse(app.url) for app, _ in tiles(person)}
         urls |= {f['url'] for app in tile_apps() for f in app.features(person)}
-        urls |= {h['url'] for q in ['Chen', 'Violine'] for _, hits in found(person, q, 2) for h in hits}
+        urls |= {h['url'] for q in ['Chen', 'Violine'] for _, hits in found(person, q, 2) for h in hits if not h['url'].startswith('mailto:')}  # colleagues are written to
         return urls - {None, reverse('admin:index')}
 
     def test_every_page_for_every_account(self):

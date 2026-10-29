@@ -108,7 +108,9 @@ never in the address: a note may say why someone was ill, and addresses end up i
   rows (`core.models.Export`), shown to `manage_accounts` under Einstellungen › Exporte.
 - `students/views.py`, `study()`: grades, Gesamtnote and Leistungsübersicht for the person, `view_files` and the
   Hauptfachlehrer:in; the student office sees outcomes only. The Schwerpunkt is recorded by `decide_results`.
-- `core/views.py`, `found()`: a rejection older than the retention period is no longer found.
+- `core/views.py`, `found()`: a rejection older than the retention period is no longer found. Teachers find the
+  applications they rate and the students of their courses and ensembles, by name and course only, not their file;
+  staff find colleagues with Institut and e-mail.
 - `students/views.py`, `verify()`: whoever holds an Immatrikulationsbescheinigung's Prüfcode sees what it says (name,
   Studiengang, semester) and whether the study has ended since; without the code, nothing.
 - `core/models.py`, `Tracked.keepers()`, `seen_by()`: a record's Verlauf and undoing its changes belong to the offices

@@ -4,7 +4,7 @@
 {% block content %}
 <h1>Deputat</h1>
 <div class="head">
-  <p class="lead">Lehrumfang in SWS im {{ term }}, gegen die Lehrverpflichtung nach Ermäßigungen. Einzelunterricht zählt je Teilnahme, Ensembles je betreutem Ensemble. {% if since %}Das Konto rechnet Mehr- und Minderleistungen seit {{ since }} über drei Studienjahre auf; sie sind darin auszugleichen, und in keinem Semester soll die Lehre unter die Hälfte fallen (ThürLVVO § 7).{% endif %}</p>
+  <p class="lead">Lehrumfang in SWS im {{ term }}, gegen die Lehrverpflichtung nach Ermäßigungen. Einzelunterricht zählt je Teilnahme mit ihren Minuten laut Plan, eine SWS sind 60 Minuten (ThürLVVO § 2 Abs. 2); Ensembles je betreutem Ensemble. {% if since %}Das Konto rechnet Mehr- und Minderleistungen seit {{ since }} über drei Studienjahre auf; sie sind darin auszugleichen, und in keinem Semester soll die Lehre unter die Hälfte fallen (ThürLVVO § 7).{% endif %}</p>
   {% if 'manage_teaching_load' in user.roles %}<div class="actions"><a class="btn ghost" href="{% url 'setup:list' 'ermaessigungen' %}">Ermäßigungen</a></div>{% endif %}
 </div>
 <form class="toolbar">

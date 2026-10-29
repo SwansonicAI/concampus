@@ -8,7 +8,7 @@ from django.contrib.auth.decorators import login_not_required
 from django.contrib import messages
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import Case, Exists, OuterRef, Q, When
+from django.db.models import Case, Exists, F, OuterRef, Q, When
 from django.http import Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import resolve, reverse
@@ -312,8 +312,25 @@ def found(person, q, limit):
         seen |= Q(pk__in=person.within(Study.objects.exclude(status__in=Study.APPLICATION), 'view_files', 'manage_students').values('pk'))
         lapsed = Q(status=Study.Status.REJECTED, since__lt=months_before(timezone.localdate(), Institution.get().retention_months))  # an old rejection is nobody's business
         seen |= Q(pk__in=person.within(Study.objects.filter(status__in=Study.APPLICATION).exclude(lapsed), 'view_applications').values('pk'))
+        rating = Study.objects.filter(status=Study.Status.APPLIED, participations__course__kind=Course.Kind.AUDITION, participations__course__staff=person)
+        seen |= Q(pk__in=rating.values('pk'))  # applications one rates, to their page for the jury
         studies = matching(Study.objects.filter(seen).select_related('person', 'program', 'subject'), q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__matriculation', 'person__email', starts=True)
         groups.append(('Studierende und Bewerbungen', people(studies, limit, person)))
+    if 'teacher' in roles:  # whom one teaches outside one's class, by the course: their file is not one's own
+        taught = (
+            Participation.objects.filter(course__term=Term.current(), study__status=Study.Status.ENROLLED)
+            .filter(Q(course__staff=person) | Q(study__ensembles__coach=person, study__ensembles__course=F('course'))).exclude(study__teacher=person)
+        )
+        first = {}
+        for p in matching(taught.select_related('study__person', 'course'), q, 'study__person__first_name', 'study__person__last_name', starts=True)[:limit * 5]:
+            first.setdefault(p.study.person_id, p)
+        groups.append(('In Ihrem Unterricht', [hit(p.study.person.name, p.course.get_absolute_url(), p.course.title) for p in list(first.values())[:limit]]))
+    if roles - {'applicant', 'alumni', 'student'}:  # colleagues: who teaches or holds an office
+        staff = Person.objects.filter(Q(teaching__isnull=False) | Q(groups__isnull=False), is_active=True).distinct().select_related('institute')
+        groups.append(('Personen', [
+            hit(f'{p.title} {p.first_name} {p.last_name}'.strip(), f'mailto:{p.email}', ' · '.join(filter(None, [p.institute and str(p.institute), p.email])))
+            for p in ranked(staff, q, 'first_name', 'last_name', limit=limit)
+        ]))
     teaching = [Course.Kind.COURSE, Course.Kind.LESSON]
     courses = matching(Course.objects.filter(term__end__gte=timezone.localdate()).select_related('term'), q, 'title', 'staff__last_name', 'subject__name', starts=True)
     groups.append(('Lehrveranstaltungen', [hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in courses.filter(kind__in=teaching)[:limit]]))

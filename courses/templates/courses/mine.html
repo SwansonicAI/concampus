@@ -45,7 +45,8 @@
     <thead><tr><th>Name</th><th>Studiengang</th><th class="num">FS</th><th>Einzelunterricht im {{ term }}</th></tr></thead>
     <tbody>
       {% for s in students %}
-      <tr><td><a href="{{ s.get_absolute_url }}">{{ s.person.name }}</a><br><small class="muted">{{ s.subject }}</small></td><td>{{ s.program }}</td><td class="num">{{ s.fs }}</td>
+      <tr><td><a href="{{ s.get_absolute_url }}">{{ s.person.name }}</a><br><small class="muted">{{ s.subject }}</small>
+        {% if s.lost %}<br><span class="badge no">Prüfungsanspruch erloschen</span>{% elif s.last %}<br><span class="badge wait">letzter Versuch</span>{% endif %}{% if s.over %} <span class="badge wait">über der Regelstudienzeit</span>{% endif %}{% if s.open %} <span class="badge">{{ s.open }} offen</span>{% endif %}</td><td>{{ s.program }}</td><td class="num">{{ s.fs }}</td>
         <td>{% if s.lesson %}{{ s.lesson }}{% elif s.missing %}<span class="fail">nicht eingetragen</span>{% elif s.until %}<span class="muted">keiner; laut Studienplan bis zum {{ s.until }}. Semester</span>{% else %}<span class="muted">keiner im Studienplan</span>{% endif %}</td></tr>
       {% endfor %}
     </tbody>
