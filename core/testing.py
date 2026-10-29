@@ -1,33 +1,71 @@
-"""What the tests share: the demo data, and acting as one of its people."""
+"""What the tests share: the demo data, the day it tells of, and acting as one of its people."""
 import re
 import shutil
 import tempfile
+from contextlib import ExitStack
 from io import StringIO
+from unittest import mock
 
-from django.conf import settings
+from django.apps import apps
 from django.core.management import call_command
+from django.db import connection
 from django.test import Client, TestCase, override_settings
-from django.test.runner import DiscoverRunner
+from django.test.runner import DiscoverRunner, get_max_test_processes
+from django.utils import timezone
 
+from .management.commands.seed import TODAY
 from .models import Person
 
 MEDIA = tempfile.mkdtemp(prefix='concampus-test-')
 
 
+def on_the_day():
+    """The clock on the demo data's day, at the time of day it is: its deadlines don't pass under the tests."""
+    real = timezone.now
+    shift = timezone.localtime(real()).date() - TODAY
+
+    def now():
+        return real() - shift
+
+    stack = ExitStack()
+    stack.enter_context(mock.patch.object(timezone, 'now', now))
+    for field in (f for model in apps.get_models() for f in model._meta.fields if f.default is real):  # default=timezone.now
+        stack.enter_context(mock.patch.object(field, 'default', now))
+    return stack
+
+
 class Runner(DiscoverRunner):
-    """Seeds the test database once; each test's changes are rolled back after it."""
+    """Runs the test classes in parallel processes unless `--parallel 1`; seeds the test database once, before each process
+    gets its copy. Each test's changes are rolled back after it."""
 
-    def setup_test_environment(self, **kwargs):
-        super().setup_test_environment(**kwargs)
-        settings.DEMO_CODE = ''  # no demo gate; the test of it sets a code
+    def __init__(self, parallel=0, **kwargs):
+        super().__init__(parallel=parallel or get_max_test_processes(), **kwargs)
 
-    def setup_databases(self, **kwargs):
-        databases = super().setup_databases(**kwargs)
-        call_command('seed', stdout=StringIO())
+    def setup_databases(self, aliases=None, **kwargs):
+        parallel, self.parallel = self.parallel, 0
+        databases = super().setup_databases(aliases=aliases, **kwargs)
+        self.parallel = parallel
+        if not aliases:  # tests without a database: none was made, so none to seed
+            return databases
+        with on_the_day():
+            call_command('seed', stdout=StringIO())
+        if parallel > 1:
+            for n in range(1, parallel + 1):
+                connection.creation.clone_test_db(suffix=str(n), verbosity=self.verbosity, keepdb=self.keepdb)
         return databases
 
 
-class Empty(TestCase):
+@override_settings(DEMO_CODE='')  # no demo gate; the test of it sets a code
+class Case(TestCase):
+    """A test on the demo data's day."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.enterClassContext(on_the_day())
+        super().setUpClass()
+
+
+class Empty(Case):
     """Tests on a database without the demo data; it is back for the next class."""
 
     @classmethod
@@ -36,7 +74,7 @@ class Empty(TestCase):
 
 
 @override_settings(MEDIA_ROOT=MEDIA)
-class Seeded(TestCase):
+class Seeded(Case):
     """Tests against the demo data."""
 
     @classmethod

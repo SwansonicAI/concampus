@@ -57,6 +57,7 @@ DEMO_VIDEO = (  # stand-in for every audition video: a real performance under CC
 VIDEO_SUBJECTS = {  # where the HfM's Eignungsprüfung starts with a video (Alles über die Eignungsprüfung)
     'Violine', 'Viola', 'Violoncello', 'Flöte', 'Oboe', 'Klarinette', 'Posaune', 'Schlagwerk', 'Gesang', 'Klavier', 'Jazz-Gesang', 'Orgel',
 }
+TODAY = date(2026, 10, 29)  # the day the data tells of, with these deadlines ahead and behind; the tests run on it (core.testing)
 APPLY_BY = date(2026, 11, 2)  # Bewerbungsfrist for the SoSe 2027 intake
 JUDGED = {'Violoncello': date(2026, 10, 1)}  # where that intake's videos were due earlier and are judged by now: their Frist
 KREISE = {  # the Kreise of the German places students come from (core.destatis)

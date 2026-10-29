@@ -1,10 +1,12 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import Count
 from django.test import Client
+from django.utils import timezone
 
-from core.models import Message, Person
+from core.models import Message, Person, Term
 from core.testing import Seeded, flashes
 from courses.models import Course, Participation
 from courses.panel import mean
@@ -14,14 +16,19 @@ from students.models import Study
 
 
 class ExamTest(Seeded):
-    def test_register(self):
+    def test_register_and_withdraw_until_weeks_before_the_exams(self):
         exam = Course.objects.get(title__startswith='Musikgeschichte I · Mündliche', term__name='WiSe 2026/27')
         exam.opens = None  # registration under way, whatever day the tests run
         exam.save()
-        study = Study.objects.get(person__username='student')
-        r = self.login('student').post(f'/pruefungen/{exam.pk}/anmelden/', {'study': study.pk}, follow=True)
+        study, student = Study.objects.get(person__username='student'), self.login('student')
+        r = student.post(f'/pruefungen/{exam.pk}/anmelden/', {'study': study.pk}, follow=True)
         self.assertEqual(flashes(r), ['Angemeldet. Die Bestätigung liegt in Ihrem Postfach.'])
-        self.assertTrue(exam.participations.filter(study=study).exists())
+        url, today = f'/pruefungen/teilnahme/{exam.participations.get(study=study).pk}/ruecktritt/', timezone.localdate()
+        Term.objects.filter(pk=exam.term_id).update(exams_start=today)
+        self.assertIn('Abmelden ging nur bis zum', flashes(student.post(url, follow=True))[0])
+        Term.objects.filter(pk=exam.term_id).update(exams_start=today + timedelta(weeks=4))
+        self.assertEqual(flashes(student.post(url, follow=True)), ['Abgemeldet.'])
+        self.assertFalse(exam.participations.filter(study=study).exists())
 
     def test_exams_of_a_hauptfach_are_for_its_students_only(self):
         exam = Course.objects.filter(kind='exam', term__name='WiSe 2026/27', subject__isnull=False).first()
@@ -103,7 +110,10 @@ class OfficeTest(Seeded):
         r = office.post(f'/pruefungen/{resit.pk}/freigabe/', follow=True)
         self.assertIn('1 Bescheid über endgültiges Nichtbestehen versandt.', ' '.join(flashes(r)))
         self.assertIn(last.module, exhausted(last.study))
-        self.assertIn(f'{last.study.person}, Prüfung endgültig nicht bestanden', self.login('asa').get('/').content.decode())
+        asa = self.login('asa')
+        self.assertIn(f'{last.study.person}, Prüfung endgültig nicht bestanden', asa.get('/').content.decode())
+        r = asa.post(f'/studierende/{last.study.pk}/exmatrikulieren/', {'reason': '8'}, follow=True)
+        self.assertIn('Erst nach der Widerspruchsfrist', flashes(r)[0])
         self.assertEqual(attempts(first.study.person, first.module), 1)  # the withdrawal is no attempt
 
     def test_the_office_enters_only_whom_the_exam_is_for_and_takes_a_mistake_back(self):

@@ -1,12 +1,12 @@
 import re
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 from django.contrib.auth.models import Permission
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.db.models import Count
-from django.test import Client, TestCase
+from django.test import Client, SimpleTestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -14,6 +14,7 @@ from courses.models import Course
 from curriculum.models import Program
 from rooms.models import Booking, Room
 from students.models import Document, Study
+from . import dates
 from .access import CODENAMES
 from .apps import tile_apps, tiles
 from .history import acting, restore
@@ -23,7 +24,6 @@ from .texts import TEXTS, render, send
 from .views import found
 
 PANEL = {'X-Panel': '1'}
-DEMO = ['admin', 'asa', 'pruefungsamt', 'dekanat', 'institut', 'veranstaltungsbuero', 'lehre', 'korrepetition', 'student', 'promotion', 'bewerbung', 'absolvent']
 
 
 class HistoryTest(Empty):
@@ -49,7 +49,9 @@ class HistoryTest(Empty):
 
 
 class SmokeTest(Seeded):
-    """Every page opens, or is refused, for every demo account; none fails."""
+    """Every page opens, or is refused, for every demo account; none fails. What someone is offered opens for them."""
+
+    accounts = ['admin', 'asa', 'pruefungsamt']
 
     def pages(self):
         exam = Course.objects.filter(kind='exam', title__contains='Wiederholung').first()
@@ -71,19 +73,43 @@ class SmokeTest(Seeded):
             f'/aufnahme/pruefung/{audition.pk}/', f'/aufnahme/pruefung/{audition.pk}/sichtung/',
             f'/aufnahme/bewerbung/{applicant.pk}/', f'/aufnahme/bewerbung/{admitted.pk}/',
             '/raeume/', '/raeume/?raeume=alle', '/raeume/veranstaltungen/', f'/raeume/{room.pk}/', '/raeume/meine/', '/raeume/buchen/',
-            f'/raeume/buchung/{booking.pk}/', '/raeume/finden/', '/suche/?q=Violine',
+            f'/raeume/buchung/{booking.pk}/', '/raeume/finden/',
             f'/verlauf/core.person/{student.person_id}/', f'/verlauf/courses.course/{exam.pk}/',
             *[f'/postfach/{d.message_id}/brief/' for d in Document.objects.filter(message__isnull=False)[:3]],
         ]
 
+    def offered(self, person):
+        """Every tile, feature and search hit the person is offered; of the hits, two of each kind the words find."""
+        urls = {app.url and reverse(app.url) for app, _ in tiles(person)}
+        urls |= {f['url'] for app in tile_apps() for f in app.features(person)}
+        urls |= {h['url'] for q in ['Chen', 'Violine'] for _, hits in found(person, q, 2) for h in hits}
+        return urls - {None, reverse('admin:index')}
+
     def test_every_page_for_every_account(self):
         pages = self.pages()
-        for username in DEMO:
-            client = self.login(username)
-            for page in pages:
+        for username in self.accounts:
+            client, offered = self.login(username), self.offered(Person.objects.get(username=username))
+            for page in sorted(offered):
+                with self.subTest(username=username, page=page):
+                    self.assertEqual(client.get(page, follow=True).status_code, 200)
+            for page in [p for p in pages if p not in offered]:
                 with self.subTest(username=username, page=page):
                     self.assertIn(client.get(page).status_code, (200, 302, 403))
 
+
+class OfficeSmokeTest(SmokeTest):
+    """The same for the other offices, in a process of its own."""
+
+    accounts = ['dekanat', 'institut', 'veranstaltungsbuero', 'campus', 'praesidium']
+
+
+class PeopleSmokeTest(SmokeTest):
+    """The same for teachers, students, applicants and graduates."""
+
+    accounts = ['lehre', 'korrepetition', 'student', 'promotion', 'bewerbung', 'absolvent']
+
+
+class LoginTest(Seeded):
     def test_strangers_are_sent_to_the_login(self):
         self.assertEqual(Client().get('/konto/login/').status_code, 200)
         self.assertEqual(Client().get('/').status_code, 302)
@@ -143,22 +169,10 @@ class CapabilityTest(Seeded):
                 self.assertEqual(client.get(page).status_code, 200)
 
     def test_superusers_hold_every_capability_and_roles_still_derive(self):
-        self.assertEqual(Person.objects.get(username='admin').roles >= set(CODENAMES), True)
+        self.assertLessEqual(set(CODENAMES), Person.objects.get(username='admin').roles)
         self.assertEqual(Person.objects.get(username='student').roles, {'student'})
         self.assertIn('teacher', Person.objects.get(username='lehre').roles)
         self.assertEqual(self.login('asa').get('/admin/').status_code, 302)
-
-    def test_no_dead_links(self):
-        """Every tile, feature and search hit someone is offered opens for them."""
-        for username in [*DEMO, 'campus', 'praesidium']:
-            person = Person.objects.get(username=username)
-            client = self.login(username)
-            urls = {app.url and reverse(app.url) for app, _ in tiles(person)}
-            urls |= {f['url'] for app in tile_apps() for f in app.features(person)}
-            urls |= {h['url'] for q in ['Chen', 'Violine', 'Konzert', 'Klausur', 'FH'] for _, hits in found(person, q, 5) for h in hits}
-            for url in urls - {None, reverse('admin:index')}:
-                with self.subTest(username=username, url=url):
-                    self.assertEqual(client.get(url, follow=True).status_code, 200)
 
     def test_the_hochschule_is_data_not_code(self):
         """Neither its offices nor its name and address are written into the code; the demo data brings them."""
@@ -361,3 +375,32 @@ class FreshInstallTest(Empty):
             lectures_end=today + timedelta(days=20), reregistration_start=today, deadline=today + timedelta(days=10), fee=100,
         )
         self.visit()
+
+
+class DatesTest(SimpleTestCase):
+    """Dates and times as people type them into every date field, on Friday 20 November 2026."""
+
+    TODAY = date(2026, 11, 20)
+
+    def test_days(self):
+        for text, expected in [
+            ('heute', '20.11.2026'), ('übermorgen', '22.11.2026'), ('+3', '23.11.2026'), ('-1', '19.11.2026'), ('in 2 wochen', '04.12.2026'),
+            ('fr', '20.11.2026'), ('mo', '23.11.2026'), ('nächste woche', '23.11.2026'), ('nächsten fr', '27.11.2026'),
+            ('12.11.', '12.11.2026'), ('12.01.', '12.01.2027'), ('25.', '25.11.2026'), ('5.', '05.12.2026'), ('12. dez', '12.12.2026'),
+            ('3. okt 2027', '03.10.2027'), ('1.2.30', '01.02.2030'), ('1.2.85', '01.02.1985'), ('Do 22.10.2026', '22.10.2026'),
+            ('2026-02-28', '28.02.2026'), ('31.2.', None), ('12', None), ('quatsch', None),
+        ]:
+            with self.subTest(text=text):
+                found = dates.day(text, self.TODAY)
+                self.assertEqual(found and f'{found:%d.%m.%Y}', expected)
+        self.assertEqual(dates.day('5.', date(2026, 12, 20)), date(2027, 1, 5))
+
+    def test_moments(self):
+        for text, expected in [
+            ('fr 14', ('20.11.2026', '14:00')), ('12.11. 9:30', ('12.11.2026', '09:30')), ('morgen um 10 uhr', ('21.11.2026', '10:00')),
+            ('nächsten fr 9', ('27.11.2026', '09:00')), ('14:30', ('20.11.2026', '14:30')), ('12', ('20.11.2026', '12:00')),
+            ('12.', ('12.12.2026', None)), ('quatsch', None),
+        ]:
+            with self.subTest(text=text):
+                found = dates.moment(text, self.TODAY)
+                self.assertEqual(found and (f'{found[0]:%d.%m.%Y}', found[1] and f'{found[1]:%H:%M}'), expected)

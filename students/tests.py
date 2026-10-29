@@ -1,3 +1,8 @@
+from datetime import timedelta
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
+
 from core.apps import tiles
 from core.models import Message, Person, Term
 from core.testing import Seeded, flashes
@@ -53,6 +58,67 @@ class ReregistrationTest(Seeded):
         asa.post('/studierende/rueckmeldung/', {'pay': '1', 'person': [held.pk]})
         self.assertIn('Sperre', held.messages.first().body)
         self.assertTrue(StudyTerm.objects.filter(study__person=held, term=Term.upcoming(), paid__isnull=False).exists())
+
+    def test_the_bank_statement_books_whom_it_names_with_the_full_fee(self):
+        term, asa = Term.upcoming(), self.login('asa')
+        full, short, camt = Person.objects.filter(studies__status='enrolled').exclude(
+            pk__in=StudyTerm.objects.filter(term=term, paid__isnull=False).values('study__person'),
+        ).distinct()[:3]
+        day, fee, less = f'{term.deadline:%d.%m.%Y}', f'{term.fee:.2f}'.replace('.', ','), f'{term.fee - 1:.2f}'.replace('.', ',')
+        csv = '\n'.join([
+            'Buchungstag;Valuta;Verwendungszweck;Betrag;Währung',
+            f'{day};{day};SEMESTERBEITRAG {full.matriculation} {full.last_name};{fee};EUR',
+            f'{day};{day};Beitrag {short.matriculation};{less};EUR',
+            f'{day};{day};Spende;50,00;EUR',
+            f'{day};{day};Rueckzahlung {camt.matriculation};-{fee};EUR',  # outgoing: no payment
+        ])
+        r = asa.post('/studierende/rueckmeldung/', {'statement': SimpleUploadedFile('umsaetze.csv', csv.encode())}, follow=True)
+        self.assertEqual(flashes(r), [f'1 Zahlung verbucht. Zu wenig überwiesen: {short.name} ({less} €). 1 Buchung ohne offene Matrikelnummer im Verwendungszweck.'])
+        camt053 = f'''<?xml version="1.0" encoding="UTF-8"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt><Stmt>
+            <Ntry><Amt Ccy="EUR">{term.fee}</Amt><CdtDbtInd>CRDT</CdtDbtInd><BookgDt><Dt>{term.deadline:%Y-%m-%d}</Dt></BookgDt>
+                <NtryDtls><TxDtls><RmtInf><Ustrd>Semesterbeitrag</Ustrd><Ustrd>Matr. {camt.matriculation}</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry>
+            <Ntry><Amt Ccy="EUR">{term.fee}</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>{term.deadline:%Y-%m-%d}</Dt></BookgDt></Ntry>
+        </Stmt></BkToCstmrStmt></Document>'''
+        r = asa.post('/studierende/rueckmeldung/', {'statement': SimpleUploadedFile('auszug.xml', camt053.encode())}, follow=True)
+        self.assertEqual(flashes(r), ['1 Zahlung verbucht.'])
+        booked = set(StudyTerm.objects.filter(term=term, paid=term.deadline).values_list('study__person', flat=True))
+        self.assertEqual(booked & {full.pk, short.pk, camt.pk}, {full.pk, camt.pk})
+
+
+class LeaveTest(Seeded):
+    """Urlaubssemester for the coming term: students ask within the Rückmeldung, for at most two, and in the first
+    Fachsemester only for illness or Mutterschutz; the office decides beyond that."""
+
+    def test_students_within_the_rules_the_office_beyond(self):
+        term, today = Term.upcoming(), timezone.localdate()
+        Term.objects.filter(pk=term.pk).update(deadline=today - timedelta(days=1), late_deadline=None)
+        new, old = (next(s for s in Study.objects.filter(status='enrolled', prior_terms=0).select_related('person') if s.semester == n) for n in (1, 3))
+
+        def ask(study, reason, client=None):
+            r = (client or self.login(study.person.username)).post(f'/studierende/{study.pk}/urlaub/', {'reason': reason}, follow=True)
+            return flashes(r)[0]
+
+        self.assertIn('nur bis zum', ask(new, '1'))
+        Term.objects.filter(pk=term.pk).update(reregistration_start=today, deadline=today)
+        new.terms.filter(term__start__lte=today).update(leave=True, leave_reason='1')  # ill all their first term: the coming one is their first Fachsemester
+        self.assertIn('nur bei Erkrankung', ask(new, '4'))
+        self.assertIn('Urlaubssemester eingetragen', ask(new, '1'))
+        old.terms.filter(pk__in=old.terms.filter(term__start__lte=today).values('pk')[:2]).update(leave=True, leave_reason='4')
+        self.assertIn('höchstens 2 Urlaubssemester', ask(old, '4'))
+        self.assertIn('Urlaubssemester eingetragen', ask(old, '4', self.login('asa')))
+        self.assertEqual({s: StudyTerm.objects.get(study=s, term=term).leave for s in (new, old)}, {new: True, old: True})
+
+
+class ExmatriculationTest(Seeded):
+    def test_on_a_day_of_the_term_for_a_ground_with_its_evidence(self):
+        asa, term, study = self.login('asa'), Term.current(), Study.objects.get(person__username='student')
+        url = f'/studierende/{study.pk}/exmatrikulieren/'
+        self.assertEqual(flashes(asa.post(url, {'reason': '8'}, follow=True)), ['Kein endgültig nicht bestandenes Modul.'])
+        self.assertIn('Bitte einen Tag im', flashes(asa.post(url, {'reason': '6', 'zum': f'{term.end + timedelta(days=1):%d.%m.%Y}'}, follow=True))[0])
+        asa.post(url, {'reason': '6', 'zum': f'{term.end:%d.%m.%Y}'})
+        study.refresh_from_db()
+        self.assertEqual((study.status, study.exit_reason, study.since), (Study.Status.LEFT, '6', term.end))
+        self.assertTrue(study.documents.filter(kind='notice', title='Exmatrikulationsbescheid').exists())
 
 
 class FocusTest(Seeded):
