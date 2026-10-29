@@ -502,7 +502,7 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
         'view_students', 'view_files', 'manage_exams', 'decide_results', 'recognise', 'manage_courses', 'view_teaching_load',
         'view_curriculum', 'book_any_room', 'view_bookings',
     ],
-    'Dekanat': ['manage_courses', 'view_teaching_load', 'manage_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings', 'view_statistics'],
+    'Dekanat': ['manage_courses', 'plan_teaching', 'view_teaching_load', 'manage_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings', 'view_statistics'],
     'Veranstaltungsbüro': ['book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms', 'manage_instruments'],
     'Campus-Team': ['manage_accounts', 'manage_institution', 'manage_terms'],
     'Präsidium': ['view_statistics', 'view_curriculum', 'view_teaching_load'],
@@ -510,7 +510,8 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
         'view_students', 'view_files', 'message_students', 'view_applications', 'run_auditions', 'manage_courses', 'view_teaching_load',
         'view_curriculum', 'book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms', 'manage_instruments', 'roll_over',
     ],
-    'Prüfungsausschuss Lehramt': ['view_files', 'manage_exams', 'decide_results', 'recognise', 'view_curriculum'],
+    'Prüfungsausschuss': ['view_files', 'correct_scores', 'view_curriculum'],
+    'Prüfungsausschuss Lehramt': ['view_files', 'manage_exams', 'decide_results', 'correct_scores', 'recognise', 'view_curriculum'],
 }
 LIMITS = {  # offices for some Institute or Studiengänge only
     'Institut Streichinstrumente und Harfe': (['SH'], []),
@@ -1043,12 +1044,13 @@ class Command(BaseCommand):
         self.staff['dekanat'].save(update_fields=['institute'])
         for key, title, first, last, subject in TEACHERS:
             institute = self.institutes[SUBJECT_INSTITUTE[subject] if subject else TEACHER_INSTITUTE[key]]
-            login = {'wendt': 'lehre', 'hein': 'korrepetition'}.get(key) or handle(first, last)  # the demo's teacher and accompanist
+            login = {'wendt': 'lehre', 'hein': 'korrepetition', 'neumann': 'pruefungsausschuss'}.get(key) or handle(first, last)  # the demo's teacher, accompanist and chair of the Prüfungsausschuss
             employment = Person.Employment.LEHRAUFTRAG if key == 'hein' else Person.Employment.PROFESSUR if title.startswith('Prof.') else Person.Employment.MITARBEIT
             obligation = {'Prof.': 18, 'Prof. Dr.': 9}.get(title)  # ThürLVVO § 4: artistic and academic subjects
             self.teachers[key] = self.person(login, first, last, title, institute=institute, employment=employment, obligation=obligation)
             if subject:
                 self.by_subject[subject].append(self.teachers[key])
+        self.teachers['neumann'].groups.add(offices['Prüfungsausschuss'])  # chairs it, and teaches
         self.logins |= set(Person.objects.values_list('username', flat=True))
         self.pools = {  # one-to-one lessons beside the Hauptfach, with Lehrbeauftragte where the plan needs more hours than the staff has
             WS: [self.teachers[k] for k in ('popescu', 'hein', 'martens')] + [self.lecturer('DO') for _ in range(13)],

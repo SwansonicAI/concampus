@@ -78,6 +78,12 @@ class TeachingTest(Seeded):
         course.refresh_from_db()
         self.assertEqual((course.hours, set(course.staff.all()), course.title, course.capacity), (hours, staff, 'Hauptfach Violine · Klasse Wendt', 12))
 
+    def test_hours_and_modules_are_planned_by_the_office_that_plans_teaching(self):
+        course = Course.objects.filter(kind='course', term__name='WiSe 2026/27', staff__institute__name='Streichinstrumente und Harfe').first()
+        form = self.login('institut').get(f'/lehre/{course.pk}/bearbeiten/').context['form']
+        self.assertFalse({'hours', 'modules', 'format', 'kind'} & set(form.fields))
+        self.assertTrue({'hours', 'modules', 'format', 'kind'} <= set(self.login('dekanat').get(f'/lehre/{course.pk}/bearbeiten/').context['form'].fields))
+
     def test_the_deputat_counts_against_the_obligation_less_reductions(self):
         wendt = Person.objects.get(username='lehre')
         row = next(r for r in loads(Term.objects.get(name='WiSe 2026/27'), wendt) if r.teacher == wendt)

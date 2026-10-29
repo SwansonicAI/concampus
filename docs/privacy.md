@@ -40,6 +40,7 @@ not mean seeing every field on it.
 | Jury | staff of an audition | – | name, Studiengang, Hauptfach, Wunschlehrer:in, Prüfungsprogramm, documents marked for the jury |
 | Institut office | `view_students`, `view_files`, `view_applications`, `run_auditions` | 1, 2 | all |
 | Prüfungsamt | `decide_results`, `view_students` for the list | 1, 2, 3 | – |
+| Prüfungsausschuss | `correct_scores`: corrects marks, sets an abweichende Note with its reason, reopens released results, undoes changes to them | 1, 2 | marks of auditions |
 | Student office | `manage_students` | 1 to 4 | all with `view_applications` |
 
 Grounded in practice: teachers see their own students' Leistungsdaten (KH Berlin-Weißensee, Dienstvereinbarung CMS 2017);

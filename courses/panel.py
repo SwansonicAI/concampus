@@ -185,13 +185,13 @@ def retype(rows, post, error):
     for p in rows:
         p.marks = [(e, post.get(f'score-{p.pk}-{e.pk}', v)) for e, v in p.marks]
         p.reports = {**p.reports, **{e.pk: post[f'report-{p.pk}-{e.pk}'] for e, _ in p.marks if f'report-{p.pk}-{e.pk}' in post}}
-        p.override = post.get(f'grade-{p.pk}', p.override)
+        p.override, p.reason = post.get(f'grade-{p.pk}', p.override), post.get(f'reason-{p.pk}', p.reason)
         if p.course.kind not in Course.PANEL:
             p.grade = post.get(f'grade-{p.pk}', p.grade)
         p.error = str(error) if p.pk == error.row else ''
 
 
-def marks(post, p, columns, decide):
+def marks(post, p, columns, decide, correct):
     """The scores a results form makes of one panel row: (new, changed, cleared pks). Sets the row's grade and result."""
     new, changed, cleared = [], [], []
     scores = {s.examiner_id: s for s in p.scores.all()}
@@ -219,7 +219,11 @@ def marks(post, p, columns, decide):
     if p.course.max_points is not None and any(v > p.course.max_points for v in given if v is not None):
         raise InvalidOperation
     auto = result(p, given) if given and None not in given and not p.vacant else None
-    override = number(post.get(f'grade-{p.pk}')) if decide else p.override
+    override = number(post.get(f'grade-{p.pk}')) if correct else p.override
+    if correct:  # a grade other than the panel's says why
+        p.reason = post.get(f'reason-{p.pk}', '').strip()[:200] if override is not None else ''
+        if override is not None and override != auto and not p.reason:
+            raise Refused('Eine abweichende Note braucht eine Begründung.')
     p.grade = override if override is not None else auto
     p.passed = p.course.passes(p.grade) if p.grade is not None else None
     if decide:
@@ -232,21 +236,22 @@ def marks(post, p, columns, decide):
     return new, changed, cleared
 
 
-def save(post, rows, columns, decide):
+def save(post, rows, columns, decide, correct=False):
     """Apply a results form. Raises Refused, with the row it stopped at, on a malformed number or a change to locked
     marks; nothing is saved then. Fields the form did not send stay as they are.
 
     Panels: examiners enter marks for themselves (`columns`), for a thesis with their Gutachten, none for whom they
-    stand back from. The result follows once all have marked (`result`), passing from the course's rule. Without
-    `decide`, marks are locked once all have marked. With `decide`, a grade entered by hand overrides the result, and a
-    Vermerk overrides both: absent or cheating fails, a withdrawal for good reason leaves no result.
+    stand back from; with `decide`, the office enters them from the Protokolle for every column, and a Vermerk:
+    absent or cheating fails, a withdrawal for good reason leaves no result. The result follows once all have marked
+    (`result`), passing from the course's rule. Without `decide`, marks are locked once all have marked. With
+    `correct`, a grade entered by hand overrides the result, with its reason.
     Courses: whoever decides enters a grade, or only passed / not passed for ungraded work.
     """
     new, changed, cleared = [], [], []
     for p in rows:
         try:
             if p.course.kind in Course.PANEL:
-                found = marks(post, p, columns, decide)
+                found = marks(post, p, columns, decide, correct)
                 new, changed, cleared = new + found[0], changed + found[1], cleared + found[2]
             elif decide and f'grade-{p.pk}' in post:
                 p.grade = grade(post[f'grade-{p.pk}'], p.course)
@@ -258,7 +263,7 @@ def save(post, rows, columns, decide):
         except InvalidOperation as error:
             raise Refused(f'Bitte nur Punkte zwischen 0 und {p.course.max_points} eintragen.' if p.course.points else 'Bitte eine Note wie 1,3 oder 2,7 eintragen.', p.pk) from error
     with transaction.atomic():
-        Participation.objects.bulk_update(rows, ['grade', 'passed', 'remark'])
+        Participation.objects.bulk_update(rows, ['grade', 'passed', 'remark', 'reason'])
         Score.objects.filter(pk__in=cleared).delete()
         Score.objects.bulk_create(new)
         Score.objects.bulk_update(changed, ['value', 'report'])

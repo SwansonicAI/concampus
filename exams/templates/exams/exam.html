@@ -12,7 +12,7 @@
     {% if course.kind != 'recognition' %}
     <form method="post" action="{% url 'exams:release' course.pk %}">
       {% csrf_token %}
-      {% if course.released %}{% if decide %}<button class="btn ghost">Wieder öffnen</button>{% endif %}
+      {% if course.released %}{% if correct %}<button class="btn ghost">Wieder öffnen</button>{% endif %}
       {% else %}<button class="btn" data-confirm="Freigeben, sperren und benachrichtigen?"{% if missing %} title="Noch {{ missing }} ohne Ergebnis" disabled{% elif not rows %} title="Niemand ist angemeldet" disabled{% endif %}>Ergebnisse freigeben</button>{% endif %}
     </form>
     {% endif %}
@@ -100,9 +100,10 @@
     <form method="post" enctype="multipart/form-data" action="{% url 'exams:marks' course.pk %}" class="inline">
       {% csrf_token %}
       <label>Noten aus Datei<input type="file" name="file" accept=".csv,.txt" required></label>
+      {% if user not in staff %}<label>Wertungen von<select name="spalte">{% for e in staff %}<option value="{{ e.pk }}">{{ e.last_name }}</option>{% endfor %}</select></label>{% endif %}
       <button class="btn ghost small">Übernehmen</button>
     </form>
-    <small class="muted">Je Zeile Matrikelnummer und Note, getrennt durch Semikolon oder Tabulator{% if user in staff %}; sie füllen Ihre Spalte{% endif %}.</small>
+    <small class="muted">Je Zeile Matrikelnummer und Note, getrennt durch Semikolon oder Tabulator; sie füllen {% if user in staff %}Ihre Spalte{% else %}die Spalte der gewählten Person{% endif %}.</small>
     {% endif %}
   </div>
   {% endif %}

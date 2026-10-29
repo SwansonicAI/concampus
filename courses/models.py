@@ -53,7 +53,7 @@ class Course(Tracked, models.Model):
     They share staff, participations, rooms and results; the kind decides which app shows them and how.
     """
 
-    capabilities = ('manage_courses', 'manage_exams', 'run_auditions')
+    capabilities = ('manage_courses', 'manage_exams', 'run_auditions', 'correct_scores')
     scope = (['subject__institute', 'staff__institute'], ['program', 'modules__program'])
 
     class Kind(models.TextChoices):
@@ -147,7 +147,10 @@ class Course(Tracked, models.Model):
         auditions for the one that runs them."""
         if record is None:
             return cls.capabilities
-        return {cls.Kind.COURSE: ('manage_courses',), cls.Kind.LESSON: ('manage_courses',), cls.Kind.AUDITION: ('run_auditions',)}.get(record.kind, ('manage_exams', 'decide_results'))
+        teaching = ('manage_courses',)
+        return {cls.Kind.COURSE: teaching, cls.Kind.LESSON: teaching, cls.Kind.AUDITION: ('run_auditions', 'correct_scores')}.get(
+            record.kind, ('manage_exams', 'decide_results', 'correct_scores'),
+        )
 
     def get_absolute_url(self):
         app = {self.Kind.EXAM: 'exams:exam', self.Kind.RECOGNITION: 'exams:exam', self.Kind.THESIS: 'exams:exam', self.Kind.AUDITION: 'admissions:audition'}
@@ -250,7 +253,8 @@ class Course(Tracked, models.Model):
 
 class Judged:
     """Mixin for the records of results (participations, scores, recusals): looked after by the office that runs
-    auditions for an audition's, else by the one that decides results. `course_path` leads to their course."""
+    auditions for an audition's, else by the one that decides results, and by the one that corrects them; only that
+    one undoes their changes. `course_path` leads to their course."""
 
     course_path = 'participation.course'
 
@@ -262,14 +266,18 @@ class Judged:
             course = None
         if course is None:
             return cls.capabilities
-        return ('run_auditions',) if course.kind == Course.Kind.AUDITION else ('decide_results',)
+        return ('run_auditions' if course.kind == Course.Kind.AUDITION else 'decide_results', 'correct_scores')
+
+    @classmethod
+    def undoers(cls, record):
+        return ('correct_scores',)
 
 
 class Participation(Judged, Tracked, models.Model):
     """A study taking part in a course. Passed, it credits `module`, one of the course's modules."""
 
     owner = 'study.person_id'
-    capabilities = ('decide_results', 'run_auditions')
+    capabilities = ('decide_results', 'run_auditions', 'correct_scores')
     scope = (['study__subject__institute', 'course__subject__institute'], ['study__program'])
     course_path = 'course'
 
@@ -284,6 +292,7 @@ class Participation(Judged, Tracked, models.Model):
     note = models.TextField('Notiz', blank=True, help_text='Repertoire bei Prüfungen, Herkunft bei Anerkennungen.')
     slot = models.DateTimeField('Termin', null=True, blank=True)
     grade = models.DecimalField('Note / Punkte', max_digits=4, decimal_places=2, null=True, blank=True)
+    reason = models.CharField('Begründung der abweichenden Note', max_length=200, blank=True)
     passed = models.BooleanField('Bestanden', null=True, blank=True)
     remark = models.CharField(
         'Vermerk', max_length=2, choices=Remark, blank=True,
@@ -359,7 +368,7 @@ class Score(Judged, Tracked, models.Model):
     """One examiner's mark. The participation's grade is the panel's decision, usually the mean."""
 
     owner = 'participation.study.person_id'
-    capabilities = ('decide_results', 'run_auditions')
+    capabilities = ('decide_results', 'run_auditions', 'correct_scores')
     scope = (['participation__study__subject__institute', 'participation__course__subject__institute'], ['participation__study__program'])
 
     participation = models.ForeignKey(Participation, models.CASCADE, related_name='scores', verbose_name='Teilnahme')

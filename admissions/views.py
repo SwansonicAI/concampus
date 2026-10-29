@@ -332,28 +332,29 @@ def blank(request, pk, kind):
 def audition(request, pk):
     person = request.user
     course = get_object_or_404(Course.objects.select_related('term', 'program', 'subject'), pk=pk, kind=Course.Kind.AUDITION)
-    office, member = person.may('run_auditions', course), course.staff.filter(pk=person.pk).exists()
-    if not (office or member or course.participations.filter(recusals__substitute=person).exists()):
-        raise PermissionDenied('Eine Eignungsprüfung sehen ihre Kommission und das Amt, das sie durchführt.')
+    office, correct = person.may('run_auditions', course), person.may('correct_scores', course)
+    member = course.staff.filter(pk=person.pk).exists()
+    if not (office or correct or member or course.participations.filter(recusals__substitute=person).exists()):
+        raise PermissionDenied('Eine Eignungsprüfung sehen ihre Kommission, das Amt, das sie durchführt, und der Prüfungsausschuss.')
 
     def sheet():  # a substitute sees only whom they mark
         staff, rows = panel.sheet(course)
-        return staff, rows if office or member else panel.substituting(rows, person)
+        return staff, rows if office or correct or member else panel.substituting(rows, person)
 
     staff, rows = sheet()
-    columns, refused = panel.scorers(staff, rows) if office else [person], None
+    columns, refused = panel.scorers(staff, rows) if correct else [] if office and not member else [person], None  # the office that runs it marks nothing
     if request.method == 'POST':
-        if course.released:
-            raise PermissionDenied
+        if course.released or not columns:
+            raise PermissionDenied('Wertungen tragen die Kommission und, berichtigend, der Prüfungsausschuss ein.')
         try:
-            panel.save(request.POST, rows, columns, decide=office)
+            panel.save(request.POST, rows, columns, decide=correct, correct=correct)
         except panel.Refused as error:  # shown with what was typed, by its row
             refused, (staff, rows) = error, sheet()
             messages.error(request, 'Nichts gespeichert. Bitte die markierte Zeile berichtigen.')
         else:
             messages.success(request, 'Wertungen gespeichert.')
             return redirect(course)
-    if not office:
+    if not (office or correct):
         panel.blind(rows, person)
     if refused:
         panel.retype(rows, request.POST, refused)
@@ -364,7 +365,7 @@ def audition(request, pk):
         'staff': staff,
         'rows': rows, 'timed': any(p.slot for p in rows), 'noted': any(p.note for p in rows),
         'columns': [e.pk for e in columns],
-        'office': office, 'rule': panel.rule(rows), 'composer': office, 'short': Course.panels(Course.objects.filter(pk=course.pk)).get().shortfall,
+        'office': office, 'correct': correct, 'rule': panel.rule(rows), 'composer': office, 'short': Course.panels(Course.objects.filter(pk=course.pk)).get().shortfall,
         'recusable': [] if course.released else panel.recusable(rows, person),
         'candidates': substitutes(course) if office and any(p.vacant for p in rows) else [],
         'history': bool(Course.seen_by(person, course.pk)),
@@ -419,7 +420,9 @@ def advance(request, pk):
 @require_POST
 def close(request, pk):
     """Lock the marks once every applicant has a result: applicants see a closed stage as passed or not."""
-    course = get_object_or_404(request.user.within(Course.objects.all(), 'run_auditions'), pk=pk, kind=Course.Kind.AUDITION)
+    course = get_object_or_404(request.user.within(Course.objects.all(), 'run_auditions', 'correct_scores'), pk=pk, kind=Course.Kind.AUDITION)
+    if course.released and not request.user.may('correct_scores', course):
+        raise PermissionDenied('Abgeschlossene Wertungen öffnet nur der Prüfungsausschuss wieder.')
     if not course.released and (missing := panel.gaps(panel.sheet(course)[1])):
         messages.error(request, missing)
         return redirect(course)

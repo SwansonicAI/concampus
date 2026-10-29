@@ -14,15 +14,17 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
     ('Aufnahme', [
         ('view_applications', 'Alle Bewerbungen einsehen'),
         ('decide_applications', 'Über Bewerbungen entscheiden'),
-        ('run_auditions', 'Eignungsprüfungen anlegen und durchführen, Wertungen festsetzen, Unterlagen nach Frist annehmen'),
+        ('run_auditions', 'Eignungsprüfungen anlegen und durchführen, Kommissionen zusammenstellen, Unterlagen nach Frist annehmen'),
     ]),
     ('Prüfungen', [
         ('manage_exams', 'Alle Prüfungen sehen, anlegen, bearbeiten und Termine planen'),
-        ('decide_results', 'Ergebnisse festsetzen, freigeben und wieder öffnen; Zeugnisse, mit Geburtsdaten, Anschrift und Unterlagen der Studierenden'),
+        ('decide_results', 'Ergebnisse aus den Protokollen eintragen und freigeben; Zeugnisse, mit Geburtsdaten, Anschrift und Unterlagen der Studierenden'),
+        ('correct_scores', 'Wertungen berichtigen, abweichende Noten mit Begründung festsetzen, freigegebene Ergebnisse wieder öffnen und zurücksetzen'),
         ('recognise', 'Leistungen anerkennen'),
     ]),
     ('Lehre', [
-        ('manage_courses', 'Veranstaltungen anlegen und alle bearbeiten'),
+        ('manage_courses', 'Veranstaltungen anlegen und bearbeiten: Titel, Lehrende, Termine, Plätze, Ensembles'),
+        ('plan_teaching', 'Umfang (SWS), Lehrform und Module von Veranstaltungen festlegen'),
         ('view_teaching_load', 'Deputat aller Lehrenden einsehen'),
         ('manage_teaching_load', 'Ermäßigungen der Lehrverpflichtung eintragen'),
         ('roll_over', 'Semesterwechsel'),

@@ -168,6 +168,17 @@ class VideoTest(Seeded):
         self.assertEqual(self.login('student').post(self.url, {'kind': 'cv', 'url': 'https://x.org/a.pdf'}).status_code, 403)
 
 
+class CorrectionTest(Seeded):
+    def test_the_office_running_auditions_marks_nothing(self):
+        video_round = Course.objects.get(title='Videostufe Violine', released=None)
+        score = Score.objects.filter(participation__course=video_round).select_related('participation').first()
+        p, before = score.participation, score.value
+        data = {f'score-{p.pk}-{score.examiner_id}': '1'}
+        self.assertEqual(self.login('institut').post(f'/aufnahme/pruefung/{video_round.pk}/', data).status_code, 403)
+        self.login('pruefungsausschuss').post(f'/aufnahme/pruefung/{video_round.pk}/', data)
+        self.assertNotEqual(Score.objects.get(pk=score.pk).value, before)  # corrections are the Prüfungsausschuss's, logged
+
+
 class JuryTest(Seeded):
     def test_juror_works_through_the_video_round(self):
         wendt = Person.objects.get(username='lehre')

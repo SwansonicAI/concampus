@@ -52,10 +52,16 @@ class Tracked:
         return cls.capabilities
 
     @classmethod
-    def held(cls, person, record, deleted=False):
-        """Of the capabilities that look after `record`, those the person holds for it; for a record no longer there,
-        only those of offices for the whole Hochschule."""
-        return {c for c in cls.keepers(record) if (person.everywhere(c) if deleted else c in person.reach and person.may(c, record))}
+    def undoers(cls, record):
+        """The capabilities that undo a record's changes: those that look after it; results narrow them."""
+        return cls.keepers(record)
+
+    @classmethod
+    def held(cls, person, record, deleted=False, undo=False):
+        """Of the capabilities that look after `record` (with `undo`, that undo its changes), those the person holds for
+        it; for a record no longer there, only those of offices for the whole Hochschule."""
+        found = cls.undoers(record) if undo else cls.keepers(record)
+        return {c for c in found if (person.everywhere(c) if deleted else c in person.reach and person.may(c, record))}
 
     @classmethod
     def seen_by(cls, person, pk):

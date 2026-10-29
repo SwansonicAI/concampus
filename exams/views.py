@@ -157,28 +157,29 @@ def index(request):
 def exam(request, pk):
     person = request.user
     course = get_object_or_404(Course.objects.select_related('term', 'subject'), pk=pk, kind__in=EXAMS)
-    office, decide, member = person.may('manage_exams', course), person.may('decide_results', course), course.staff.filter(pk=person.pk).exists()
-    if not (office or decide or member or course.participations.filter(recusals__substitute=person).exists()):
-        raise PermissionDenied('Eine Prüfung sehen ihre Prüfenden und die Ämter, die Prüfungen planen oder Ergebnisse festsetzen.')
+    office, decide, correct = person.may('manage_exams', course), person.may('decide_results', course), person.may('correct_scores', course)
+    member = course.staff.filter(pk=person.pk).exists()
+    if not (office or decide or correct or member or course.participations.filter(recusals__substitute=person).exists()):
+        raise PermissionDenied('Eine Prüfung sehen ihre Prüfenden, die Ämter, die Prüfungen planen oder Ergebnisse eintragen, und der Prüfungsausschuss.')
 
     def sheet():  # a substitute sees only whom they mark
         staff, rows = panel.sheet(course)
-        return staff, rows if office or decide or member else panel.substituting(rows, person)
+        return staff, rows if office or decide or correct or member else panel.substituting(rows, person)
 
     staff, rows = sheet()
-    columns, refused = panel.scorers(staff, rows) if decide else [person], None
+    columns, refused = panel.scorers(staff, rows) if decide or correct else [person], None
     if request.method == 'POST':
         if course.released:
-            raise PermissionDenied
+            raise PermissionDenied('Freigegebene Ergebnisse öffnet nur der Prüfungsausschuss wieder.')
         try:
-            panel.save(request.POST, rows, columns, decide=decide)
+            panel.save(request.POST, rows, columns, decide=decide or correct, correct=correct)
         except panel.Refused as error:  # shown with what was typed, by its row
             refused, (staff, rows) = error, sheet()
             messages.error(request, 'Nichts gespeichert. Bitte die markierte Zeile berichtigen.')
         else:
             messages.success(request, 'Gutachten gespeichert.' if course.kind == Course.Kind.THESIS else 'Ergebnisse gespeichert.')
             return redirect(course)
-    if not decide:
+    if not (decide or correct):
         panel.blind(rows, person)
     if refused:
         panel.retype(rows, request.POST, refused)
@@ -191,7 +192,7 @@ def exam(request, pk):
         'columns': [e.pk for e in columns],
         'panel': course.kind in Course.PANEL,
         'office': office,
-        'decide': decide, 'rule': panel.rule(rows), 'composer': office,
+        'decide': decide or correct, 'correct': correct, 'rule': panel.rule(rows), 'composer': office,
         'recusable': [] if course.released else panel.recusable(rows, person),
         'candidates': substitutes(course) if office and any(p.vacant for p in rows) else [],
         'history': bool(Course.seen_by(person, course.pk)),
@@ -202,10 +203,10 @@ def exam(request, pk):
         'short': Course.panels(Course.objects.filter(pk=course.pk)).get().shortfall,
         'dropping': office and not course.released and course.kind == Course.Kind.EXAM,
         'waiting': panel.waiting(rows) if (office or decide) and held and not course.released else [],
-        'remarks': Participation.Remark.choices if decide and course.kind in (Course.Kind.EXAM, Course.Kind.THESIS) else [],
+        'remarks': Participation.Remark.choices if (decide or correct) and course.kind in (Course.Kind.EXAM, Course.Kind.THESIS) else [],
         'handed': handed,
         'adding': AddForm(),
-        'importing': not course.released and course.kind == Course.Kind.EXAM and (decide or person in staff),
+        'importing': not course.released and course.kind == Course.Kind.EXAM and (decide or member),
         'reachable': Study.reachable(person, Study.objects.filter(participations__course=course)),
     })
 
@@ -326,32 +327,30 @@ def roster(request, pk):
 
 def marks(request, pk):
     """Take marks from a file, as a Klausur's examiner keeps them: Matrikelnummer and mark per line. An examiner fills
-    their own column; whoever decides results, not on the Kommission, the result."""
+    their own column; the office entering results the column of the examiner it names."""
     course = get_object_or_404(Course, pk=pk, kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], released=None)
     person = request.user
     own, decide = course.staff.filter(pk=person.pk).exists(), person.may('decide_results', course)
     if request.method != 'POST' or not (own or decide):
-        raise PermissionDenied
+        raise PermissionDenied('Noten übernehmen die Prüfenden und das Amt, das Ergebnisse einträgt.')
     staff, rows = panel.sheet(course)
+    column = person if own else next((e for e in staff if str(e.pk) == request.POST.get('spalte')), None)
+    if column is None:
+        messages.error(request, 'Bitte angeben, wessen Wertungen die Datei enthält.')
+        return redirect(course)
     text = request.FILES['file'].read().decode('utf-8-sig', errors='replace') if 'file' in request.FILES else ''
     delimiter = ';' if ';' in text else '\t' if '\t' in text else ','  # a semicolon first: German marks have decimal commas
     found = {line[0].strip(): line[1].strip() for line in csv.reader(io.StringIO(text), delimiter=delimiter) if len(line) >= 2 and line[0].strip().isdigit()}
-    unknown = []
     by_number = {p.study.person.matriculation: p for p in rows}
-    post = {f'score-{p.pk}-{e.pk}': str(v if v is not None else '') for p in rows for e, v in p.marks}
-    post |= {f'grade-{p.pk}': str(p.override if p.override is not None else '') for p in rows} | {f'remark-{p.pk}': p.remark for p in rows}
-    for number, value in found.items():
-        if (p := by_number.get(number)) is None:
-            unknown.append(number)
-        else:
-            post[f'score-{p.pk}-{person.pk}' if own else f'grade-{p.pk}'] = value
+    post = {f'score-{p.pk}-{column.pk}': value for number, value in found.items() if (p := by_number.get(number))}
+    unknown = [number for number in found if number not in by_number]
     try:
-        panel.save(post, rows, [person] if own else [], decide=decide and not own)
+        panel.save(post, rows, [column], decide=not own)
     except panel.Refused as error:
         name = next(p.study.person.name for p in rows if p.pk == error.row)
         messages.error(request, f'Nichts übernommen. {name}: {error}')
     else:
-        messages.success(request, f'{plural(len(found) - len(unknown), "Note", "Noten")} übernommen.' + (f' Nicht angemeldet: {", ".join(unknown)}.' if unknown else ''))
+        messages.success(request, f'{plural(len(found) - len(unknown), "Note", "Noten")} für {column.last_name} übernommen.' + (f' Nicht angemeldet: {", ".join(unknown)}.' if unknown else ''))
     return redirect(course)
 
 
@@ -360,12 +359,12 @@ def release(request, pk):
     """Release results to the candidates and lock them; only whoever decides results can reopen. A last attempt failed
     ends the Prüfungsanspruch: the candidate gets the Bescheid."""
     course = get_object_or_404(Course, pk=pk, kind__in=EXAMS)
-    office = request.user.may('decide_results', course)
-    if not (office or course.staff.filter(pk=request.user.pk).exists()):
-        raise PermissionDenied
+    office, correct = request.user.may('decide_results', course), request.user.may('correct_scores', course)
+    if not (office or correct or course.staff.filter(pk=request.user.pk).exists()):
+        raise PermissionDenied('Ergebnisse geben die Prüfenden und das Amt frei, das Ergebnisse einträgt.')
     if course.released:
-        if not office:
-            raise PermissionDenied
+        if not correct:
+            raise PermissionDenied('Freigegebene Ergebnisse öffnet nur der Prüfungsausschuss wieder.')
         course.released = None
         messages.success(request, 'Ergebnisse wieder zur Bearbeitung geöffnet.')
     else:

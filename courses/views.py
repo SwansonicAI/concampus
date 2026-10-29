@@ -20,7 +20,7 @@ from core.access import CODENAMES, kept, require
 from core.apps import plural
 from core.dates import day as understood
 from core.forms import again, sent
-from core.models import Holiday, Institute, Institution, Person, Term
+from core.models import Holiday, Institute, Institution, Office, Person, Term
 from core.text import fold, matching
 from core.views import without_term
 from curriculum.models import Module, Program
@@ -195,7 +195,8 @@ def edit(request, pk=None):
     office = 'manage_courses' in person.roles and (not pk or person.may('manage_courses', course))
     if not (office or pk and course.staff.filter(pk=person.pk).exists()):
         raise PermissionDenied
-    form = (CourseForm if office else TeachingForm)(request.POST or None, instance=course, person=person)
+    planning = person.may('plan_teaching', course) if pk else 'plan_teaching' in person.roles
+    form = CourseForm(request.POST or None, instance=course, person=person, planning=planning) if office else TeachingForm(request.POST or None, instance=course, person=person)
     if form.is_valid() and (saved := kept(form, person, 'manage_courses') if office else form.save()):
         course = saved
         messages.success(request, 'Gespeichert. Jetzt Termine planen und Teilnehmende eintragen.' if not pk else 'Gespeichert.')
@@ -203,7 +204,7 @@ def edit(request, pk=None):
     back = course.get_absolute_url() if pk else reverse('courses:catalogue')
     return render(request, 'courses/form.html', {
         'form': form, 'course': course, 'menu': 'courses/_nav.html', 'heading': 'Neue Veranstaltung', 'back': back,
-        'note': None if office else 'Umfang (SWS), Lehrende, Module und Lehrform trägt das für die Lehre zuständige Amt ein: sie zählen im Deputat und in den Studienplänen.',
+        'note': None if office and planning else f'{"Umfang (SWS), Lehrform und Module" if office else "Umfang (SWS), Lehrende, Module und Lehrform"} trägt {Office.holding("plan_teaching") or "das zuständige Amt"} ein: sie zählen im Deputat und in den Studienplänen.',
     })
 
 

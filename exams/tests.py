@@ -108,6 +108,20 @@ class ExamTest(Seeded):
         self.assertEqual(office.post(f'/pruefungen/{resit.pk}/', data).status_code, 403)
         study = resit.participations.first().study
         self.assertTrue(any(p.module.code.startswith('BM-BS-01') for p in study.record()))
+        self.assertEqual(office.post(f'/pruefungen/{resit.pk}/freigabe/').status_code, 403)  # reopening is the Prüfungsausschuss's
+        self.login('pruefungsausschuss').post(f'/pruefungen/{resit.pk}/freigabe/')
+        self.assertIsNone(Course.objects.get(pk=resit.pk).released)
+
+    def test_only_the_pruefungsausschuss_sets_another_grade_and_says_why(self):
+        resit = Course.objects.get(title__contains='Wiederholung')
+        p = resit.participations.first()
+        self.login('pruefungsamt').post(f'/pruefungen/{resit.pk}/', {f'grade-{p.pk}': '1,0'})
+        self.assertNotEqual(Participation.objects.get(pk=p.pk).grade, Decimal('1.0'))
+        chair = self.login('pruefungsausschuss')
+        refused = chair.post(f'/pruefungen/{resit.pk}/', {f'grade-{p.pk}': '1,0'})
+        self.assertIn('Begründung', next(r.error for r in refused.context['rows'] if r.pk == p.pk))
+        chair.post(f'/pruefungen/{resit.pk}/', {f'grade-{p.pk}': '1,0', f'reason-{p.pk}': 'Formfehler im Protokoll'})
+        self.assertEqual(Participation.objects.filter(pk=p.pk).values_list('grade', 'reason').get(), (Decimal('1.0'), 'Formfehler im Protokoll'))
 
 
 class OfficeTest(Seeded):

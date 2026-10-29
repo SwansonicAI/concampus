@@ -194,7 +194,7 @@ def keepers(model, record):
     its own name, which the refused may not know."""
     label = record.get_kind_display() if isinstance(record, Course) else model._meta.verbose_name
     offices = Office.holding(model.keepers(record))
-    return f'({label}) sehen und ändern nur die dafür zuständigen Ämter{": " + offices if offices else ""}'
+    return f'({label}) sehen nur die dafür zuständigen Ämter{": " + offices if offices else ""}'
 
 
 @require_POST
@@ -202,8 +202,9 @@ def undo(request, pk):
     change = get_object_or_404(Change, pk=pk)
     model = apps.get_model(change.table)
     record = model.objects.filter(pk=change.row).first()
-    if not model.held(request.user, record or former(change), deleted=record is None):
-        raise PermissionDenied(f'Diese Änderung {keepers(model, record)}.')
+    if not model.held(request.user, record or former(change), deleted=record is None, undo=True):
+        offices = Office.holding(model.undoers(record))
+        raise PermissionDenied(f'Diese Änderung setzen nur die dafür zuständigen Ämter zurück{": " + offices if offices else ""}.')
     try:
         restore(change)
     except ValidationError as error:

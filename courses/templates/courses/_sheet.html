@@ -12,7 +12,7 @@
         {% for e in staff %}<th class="num">{{ e.last_name }}</th>{% endfor %}
         <th class="num">{% if course.points %}Punkte{% else %}Note{% endif %}</th>
         <th>Ergebnis</th>
-        {% if decide and not course.released %}<th class="num" title="Nur ausfüllen, wenn das Ergebnis vom Mittelwert abweichen soll">Abweichend</th>{% endif %}
+        {% if correct and not course.released %}<th class="num" title="Nur ausfüllen, wenn das Ergebnis vom Mittelwert abweichen soll, mit Begründung">Abweichend</th>{% endif %}
         {% if decide and not course.released and remarks %}<th title="RT zählt nicht als Versuch; NE und TV gelten als nicht bestanden">Vermerk</th>{% endif %}
         {% else %}
         <th>Modul</th>
@@ -42,9 +42,9 @@
           {% if e not in staff %}<br><small class="muted" title="Ersatz für eine befangene Person">Ersatz: {{ e.last_name }}</small>{% endif %}
         </td>
         {% endfor %}
-        <td class="num mid">{% if p.blind %}<span class="muted">·</span>{% else %}<b>{% if p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</b>{% if p.grade is None and p.mean is not None and not p.third %}<span class="muted" title="Noch nicht alle Wertungen">{{ p.mean }}…</span>{% endif %}{% if p.override is not None %} <small class="muted" title="Von Hand festgelegt">✎</small>{% endif %}{% endif %}</td>
+        <td class="num mid">{% if p.blind %}<span class="muted">·</span>{% else %}<b>{% if p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</b>{% if p.grade is None and p.mean is not None and not p.third %}<span class="muted" title="Noch nicht alle Wertungen">{{ p.mean }}…</span>{% endif %}{% if p.override is not None %} <small class="muted" title="Von Hand festgelegt: {{ p.reason }}">✎</small>{% endif %}{% endif %}</td>
         <td class="mid">{% if p.passed %}<span class="badge yes">bestanden</span>{% elif p.passed is False %}<span class="badge no">nicht bestanden</span>{% elif p.remark %}<span class="badge wait">entschuldigt</span>{% elif p.third and not p.blind %}<span class="badge wait" title="Die Gutachten liegen mehr als 1,0 auseinander oder eines lautet nicht ausreichend (RPSO § 15 Abs. 2)">drittes Gutachten nötig</span>{% else %}<span class="muted">offen</span>{% endif %}{% if p.remark %} <small class="muted" title="{{ p.get_remark_display }}">{{ p.remark|upper }}</small>{% endif %}{% if p.locked %} <small class="muted" title="Alle haben gewertet; ändern kann jetzt nur das zuständige Amt">gesperrt</small>{% endif %}</td>
-        {% if decide and not course.released %}<td class="num mid"><input class="cell" type="text" inputmode="decimal" name="grade-{{ p.pk }}" value="{{ p.override|mark }}" aria-label="Abweichendes Ergebnis"></td>{% endif %}
+        {% if correct and not course.released %}<td class="num mid"><input class="cell" type="text" inputmode="decimal" name="grade-{{ p.pk }}" value="{{ p.override|mark }}" aria-label="Abweichendes Ergebnis"><br><input class="cell" name="reason-{{ p.pk }}" value="{{ p.reason }}" maxlength="200" placeholder="Begründung" aria-label="Begründung der abweichenden Note"></td>{% endif %}
         {% if decide and not course.released and remarks %}<td class="mid"><select class="cell" name="remark-{{ p.pk }}" aria-label="Vermerk"><option value="">–</option>{% for code, label in remarks %}<option value="{{ code }}" title="{{ label }}"{% if p.remark == code %} selected{% endif %}>{{ code|upper }}</option>{% endfor %}</select></td>{% endif %}
         {% else %}
         <td class="mid muted nowrap">{{ p.module.code|default:"" }}</td>

@@ -200,7 +200,7 @@ def describe(changes, person):
         c.record = f'{capfirst(c.model._meta.verbose_name)} {record or f"Nr. {c.row}"}'
         c.lines = [] if c.action == Change.Action.DELETED else [line(c.model._meta.get_field(name), pair, names) for name, pair in c.fields.items()]
         if (c.model, c.row) not in allowed and (exists or c.action == Change.Action.DELETED):
-            allowed[c.model, c.row] = bool(c.model.held(person, record) if exists else c.model.held(person, former(c), deleted=True))
+            allowed[c.model, c.row] = bool(c.model.held(person, record, undo=True) if exists else c.model.held(person, former(c), deleted=True, undo=True))
         if c.action == Change.Action.DELETED:
             c.restorable = not exists and allowed[c.model, c.row]
         else:

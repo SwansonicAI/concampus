@@ -155,8 +155,12 @@ class CourseForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'rows': 4}),
         }
 
-    def __init__(self, *args, person=None, **kwargs):
+    planned = ('kind', 'format', 'hours', 'modules', 'programme')  # what counts in the Deputat and the Studienpläne
+
+    def __init__(self, *args, person=None, planning=True, **kwargs):
         super().__init__(*args, **kwargs)
+        for name in () if planning else self.planned:
+            self.fields.pop(name, None)
         if 'kind' in self.fields:  # the Lehrform says how it is taught; this, how it is organised
             self.fields['kind'].choices = [(Course.Kind.COURSE.value, 'Lehrveranstaltung: gemeinsame Termine'), (Course.Kind.LESSON.value, 'Klasse: je Person eine eigene Unterrichtszeit')]
             self.fields['kind'].label = 'Organisation'
@@ -174,7 +178,7 @@ class CourseForm(forms.ModelForm):
             names.insert(names.index('modules'), 'programme')
             self.order_fields(names)
         else:
-            del self.fields['programme']
+            self.fields.pop('programme', None)
         if 'subject' in self.fields:
             self.fields['subject'].empty_label = 'Keines'
         if 'program' in self.fields:
