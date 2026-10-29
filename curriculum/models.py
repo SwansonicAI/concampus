@@ -131,6 +131,19 @@ class Program(Tracked, models.Model):
             walk(root)
         return found
 
+    def chosen_by(self):
+        """{module pk: the Schwerpunkt it belongs to}, for every course work and exam under one."""
+        found = {}
+
+        def walk(node, option):
+            for kid in node.nodes:
+                found[kid.pk] = option
+                walk(kid, option)
+
+        for option in self.choices():
+            walk(option, option)
+        return found
+
     @classmethod
     def planned(cls):
         """Programmes with a Studienplan, which courses, exams and auditions belong to; not a Gasthörerschaft."""

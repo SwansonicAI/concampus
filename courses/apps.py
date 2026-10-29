@@ -69,13 +69,17 @@ class CoursesConfig(Tile, AppConfig):
             for course in Course.objects.filter(pk__in=waiting).order_by('title'):
                 found.append(task(f'{course.title}: {plural(waiting[course.pk], "Person", "Personen")} ohne Unterrichtszeit', course.get_absolute_url()))
             choices, today = {}, timezone.localdate()
-            advising = (  # the class's Schwerpunkt, chosen by the student after a Studienfachberatung
-                person.class_studies.filter(status=Study.Status.ENROLLED, focus=None, advised=None).select_related('person', 'program')
+            advising = (  # the class's Schwerpunkt, chosen by the student after a Studienfachberatung; still open once its day has passed
+                person.class_studies.filter(status=Study.Status.ENROLLED, focus=None).select_related('person', 'program', 'advised')
                 .annotate(fs=F('prior_terms') + Count('terms', filter=Q(terms__leave=False, terms__term__start__lte=today)))
             )
             for s in advising:
                 if (options := choices.setdefault(s.program_id, s.program.choices())) and s.fs >= (first := min(o.first or 99 for o in options)) - 1:
-                    found.append(task(f'Studienfachberatung: {s.person} ({options[0].choice.title})', f'{s.get_absolute_url()}#studienverlauf', Study.choose_by(s.fs, first)))
+                    due, url = Study.choose_by(s.fs, first), f'{s.get_absolute_url()}#studienverlauf'
+                    if s.advised_id is None:
+                        found.append(task(f'Studienfachberatung: {s.person} ({options[0].choice.title})', url, due))
+                    elif due < today:
+                        found.append(task(f'{options[0].choice.title} nicht gewählt: {s.person}, empfohlen {s.advised.title}', url, due))
             for course in person.teaching.filter(term=term, kind=TEACHING[0], bookings=None):
                 found.append(task(f'Termine planen: {course.title}', course.get_absolute_url()))
             for course in person.teaching.filter(term=term, signups__isnull=False).annotate(n=Count('signups')):

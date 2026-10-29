@@ -260,6 +260,7 @@ def register(request, pk):
     study = get_object_or_404(Study, pk=request.POST.get('study'), person=request.user, status=Study.Status.ENROLLED)
     module = course.modules.filter(program=study.program).order_by('semester').first()
     late = not course.is_open and not course.upcoming  # the teachers may still take someone while the term runs
+    besides = besides_focus(course, study)
     if course.allocation == Course.Allocation.STAFF:
         messages.error(request, 'Die Lehrenden teilen die Plätze ein.')
     elif course.allocation == Course.Allocation.ENSEMBLE:
@@ -272,15 +273,28 @@ def register(request, pk):
         messages.error(request, 'Diese Veranstaltung ist in Ihrem Studiengang nicht anrechenbar.')
     elif course.allocation == Course.Allocation.CHOICE or late:
         Signup.objects.get_or_create(course=course, study=study, defaults={'module': module, 'note': request.POST.get('note', '').strip()})
-        messages.success(request, f'{"Nachmeldung angefragt" if late else "Angefragt"}. Die Lehrenden entscheiden; die Antwort kommt in Ihr Postfach.')
+        messages.success(request, f'{"Nachmeldung angefragt" if late else "Angefragt"}. Die Lehrenden entscheiden; die Antwort kommt in Ihr Postfach.{besides}')
     else:
         participation, _ = Participation.objects.get_or_create(course=course, study=study, module=module)
         place = course.participations.filter(created__lt=participation.created).count() + 1
         if course.capacity and place > course.capacity:
-            messages.success(request, f'Sie stehen auf Platz {place - course.capacity} der Warteliste.')
+            messages.success(request, f'Sie stehen auf Platz {place - course.capacity} der Warteliste.{besides}')
         else:
-            messages.success(request, 'Sie sind angemeldet.')
+            messages.success(request, f'Sie sind angemeldet.{besides}')
     return redirect(course)
+
+
+def besides_focus(course, study):
+    """What to tell a student who registers for a course that counts only for a Schwerpunkt other than theirs, or for
+    one while none is chosen; '' otherwise."""
+    chosen_by = study.program.chosen_by()
+    options = {chosen_by.get(m) for m in course.modules.filter(program=study.program).values_list('pk', flat=True)}
+    if not options or None in options or study.focus_id in {o.pk for o in options}:
+        return ''
+    names = ' oder '.join(sorted(o.title for o in options))
+    if study.focus_id:
+        return f' Sie zählt für {names}, nicht für Ihren Schwerpunkt {study.focus.title}.'
+    return f' Sie zählt für {names}; Ihren Schwerpunkt haben Sie noch nicht gewählt.'
 
 
 @require_POST

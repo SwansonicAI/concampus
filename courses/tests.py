@@ -68,6 +68,18 @@ class EnsembleTest(Seeded):
         self.assertEqual(Ensemble.objects.get(pk=others.pk).coach, wendt)
 
 
+class FocusTest(Seeded):
+    def test_a_course_of_a_schwerpunkt_not_chosen_says_so(self):
+        mei = Study.objects.get(person__username='student')
+        options = mei.program.chosen_by()
+        course = next(c for c in Course.objects.filter(term__name='WiSe 2026/27', kind='course', modules__in=list(options)).distinct()
+                      if {options.get(m.pk) for m in c.modules.filter(program=mei.program)} - {None} and None not in {options.get(m.pk) for m in c.modules.filter(program=mei.program)})
+        course.opens, course.deadline, course.allocation = None, None, 'order'
+        course.save()
+        r = self.login('student').post(f'/lehre/{course.pk}/anmelden/', {'study': mei.pk}, follow=True)
+        self.assertIn('noch nicht gewählt', flashes(r)[0])
+
+
 class TeachingTest(Seeded):
     def test_teachers_change_what_is_theirs_not_hours_staff_or_modules(self):
         course = Course.objects.get(title='Hauptfach Violine · Klasse Wendt', term__name='WiSe 2026/27')

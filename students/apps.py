@@ -99,7 +99,7 @@ class StudentsConfig(Tile, AppConfig):
             for study in Study.objects.filter(pk__in={f['study'] for f in fails if (f['study'], f['module']) not in passed}).select_related('person', 'program'):
                 final = max(m.appeal for m in exhausted(study)) + timedelta(days=1)  # once the Widerspruchsfrist is over
                 found.append(task(f'Exmatrikulieren{"" if final <= today else " ab " + date_format(final, "j.n.")}: {study.person}, Prüfung endgültig nicht bestanden', study.get_absolute_url(), final))
-        if 'view_students' in person.roles and not person.everywhere('view_students'):  # an Institut's office: its students who should have chosen
+        if 'view_students' in person.roles and (not person.everywhere('view_students') or 'decide_results' in person.roles):  # an Institut's office, and the office deciding results: who should have chosen
             from .views import cases, semesters
 
             if n := cases(semesters(person.within(enrolled, 'view_students')), 'schwerpunkt').count():
