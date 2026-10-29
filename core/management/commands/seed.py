@@ -2024,9 +2024,9 @@ class Command(BaseCommand):
                     bookings.append(Booking(room=room, start=begin, end=end, person=study.person, category_id='uebung', created=booked))
                     used[(study.person_id, day)] += 0 if last else minutes / 60
         Booking.objects.bulk_create(bookings)
-        ensembles = [s for s in self.enrolled if s.subject.institute_id in {self.institutes['SH'].pk, self.institutes['KL'].pk} and s.person != self.demo]
-        mei = next(s for s in self.enrolled if s.person == self.demo)
-        rehearsed = False  # the demo student's quartet rehearses once, on an evening that is free for them
+        own = Ensemble.objects.filter(members__person=self.demo, course__term=self.current).first()
+        others = list(Ensemble.objects.filter(course__term=self.current).exclude(pk=getattr(own, 'pk', None)).prefetch_related('members__person')[:12])
+        rehearsed = own is None  # the demo student's quartet rehearses once, on an evening that is free for them
         for n, name in enumerate(['FH 110', 'FH 212', 'FH 311', 'FH 324', 'FH 212', 'FH 110']):
             day = today + timedelta(days=1 + n)
             begin = at(day, 18 * 60)
@@ -2035,12 +2035,13 @@ class Command(BaseCommand):
                 continue
             mine = not rehearsed and clear(begin, begin + timedelta(hours=2))
             rehearsed |= mine
-            members = [mei, *rng.sample(ensembles, 2)] if mine else rng.sample(ensembles, 3)
+            ensemble = own if mine else others[n]
+            members = [s.person for s in ensemble.members.all()]
             rehearsal = Booking.objects.create(
-                room=room, start=begin, end=begin + timedelta(hours=2), person=members[0].person, category_id='kammermusik',
-                title='Kammermusikprobe Streichquartett' if mine else 'Kammermusikprobe Klaviertrio', created=at(today - timedelta(days=rng.randint(0, 3)), hour=10),
+                room=room, start=begin, end=begin + timedelta(hours=2), person=self.demo if mine else members[0], category_id='kammermusik',
+                title=f'Probe {ensemble.name}', ensemble=ensemble, course=ensemble.course, created=at(today - timedelta(days=rng.randint(0, 3)), hour=10),
             )
-            rehearsal.participants.set(m.person for m in members[1:])
+            rehearsal.participants.set(m for m in members if m != rehearsal.person)
 
     def events(self):
         """What is on in the coming weeks, and what it takes behind the scenes."""

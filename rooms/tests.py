@@ -7,7 +7,9 @@ from django.utils import timezone
 from core import history
 from core.models import Institute, Institution, Person
 from core.testing import Seeded, flashes
+from courses.models import Ensemble
 from .models import Booking, BookingCategory, Room
+from .views import agenda
 
 
 def slot(hours, minutes=60):
@@ -77,6 +79,15 @@ class BookingRulesTest(Seeded):
     def refused(self, response, text):
         self.assertEqual(response.status_code, 200)
         self.assertIn(text, response.context['form'].errors.as_text())
+
+    def test_a_rehearsal_is_the_ensemble_s(self):
+        ensemble = Ensemble.objects.filter(members__person=self.mei).first()
+        start = slot(26)
+        self.book(category='kammermusik', ensemble=ensemble.pk, **times(start))
+        rehearsal = Booking.objects.get(person=self.mei, start=start)
+        self.assertEqual((rehearsal.course, set(rehearsal.participants.all())), (ensemble.course, {s.person for s in ensemble.members.all()} - {self.mei}))
+        other = Person.objects.filter(studies__participations__course=ensemble.course).exclude(studies__ensembles=ensemble).first()
+        self.assertFalse(agenda(other).filter(pk=rehearsal.pk).exists())  # the course's other students see none of it
 
     def test_within_a_day_once(self):
         start = slot(5)

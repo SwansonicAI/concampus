@@ -141,6 +141,10 @@ class Booking(Tracked, models.Model):
         'self', models.CASCADE, null=True, blank=True, related_name='services', verbose_name='Gehört zu',
         help_text='Ein Dienst für eine Veranstaltung, etwa Stimmung oder Technik.',
     )
+    ensemble = models.ForeignKey(
+        'courses.Ensemble', models.SET_NULL, null=True, blank=True, related_name='bookings', verbose_name='Ensemble',
+        help_text='Eine Probe oder Betreuung dieses Ensembles: seine Mitglieder nehmen teil.',
+    )
     requested = models.BooleanField(
         'Angefragt', default=False, help_text='Um einen zentral vergebenen Raum gebeten: belegt ihn erst, wenn das Amt bestätigt.',
     )

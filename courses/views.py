@@ -143,10 +143,12 @@ def course(request, pk):
         panel.retype(rows, request.POST, refused)
     own = [p for p in rows if p.study.person_id == person.pk]
     upcoming = course.bookings.filter(start__gte=timezone.now())
+    if course.allocation == Course.Allocation.ENSEMBLE and staffed and not person.may('manage_courses', course):  # a coach: the course's own dates and their ensembles'
+        upcoming = upcoming.filter(Q(ensemble=None) | Q(ensemble__coach=person))
     if course.kind == Course.Kind.LESSON and not staffed:
         upcoming = upcoming.filter(participants=person)  # one's own lessons, not everyone's
     elif not staffed:  # the dates for everyone, and those of one's own ensemble
-        upcoming = upcoming.filter(Q(participants=None) | Q(participants=person)).distinct()
+        upcoming = upcoming.filter(Q(participants=None) | Q(participants=person) | Q(person=person)).distinct()
     playing = None
     if course.kind == Course.Kind.LESSON and Course.objects.filter(accompaniment=course).exists():  # accompaniment at auditions: who plays when, what
         playing = (
@@ -427,7 +429,7 @@ def date(request, pk):
         messages.error(request, ' '.join(error.messages))
         return again(request, course, 'date')
     if ensemble := data.get('ensemble'):
-        booking.title = ensemble.name
+        booking.title, booking.ensemble = ensemble.name, ensemble
     booking.save()
     if student := data.get('student'):
         booking.participants.set([student])

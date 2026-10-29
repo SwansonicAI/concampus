@@ -10,7 +10,7 @@ from django.utils.formats import number_format
 from core import history
 from core.dates import ClockField, DayField
 from core.apps import plural
-from core.models import Institution, Person
+from core.models import Institution, Person, Term
 from .models import Booking, BookingCategory, Room, later, span
 
 
@@ -88,11 +88,11 @@ class BookingForm(forms.ModelForm):
         help_text='Sehen den Termin in ihrem Stundenplan. Weitere Studierende finden Sie, wenn Sie oben einen Namen tippen. Bei einer Kammermusikprobe mindestens eine weitere Person.',
     )
     repeat_until = DayField(label='Wöchentlich wiederholen bis', required=False, help_text='Die Serie wird nur gespeichert, wenn jeder Termin frei ist.')
-    field_order = ['room', 'category', 'day', 'begin', 'until', 'title', 'description', 'programme', 'admission', 'audience', 'internal', 'participants', 'repeat_until']
+    field_order = ['room', 'category', 'day', 'begin', 'until', 'title', 'description', 'programme', 'admission', 'audience', 'internal', 'ensemble', 'participants', 'repeat_until']
 
     class Meta:
         model = Booking
-        fields = ['room', 'category', 'title', 'description', 'programme', 'admission', 'audience', 'internal', 'participants']
+        fields = ['room', 'category', 'title', 'description', 'programme', 'admission', 'audience', 'internal', 'ensemble', 'participants']
         field_classes = {'room': RoomField}
         widgets = {'description': forms.Textarea(attrs={'rows': 3}), 'programme': forms.Textarea(attrs={'rows': 4})}
 
@@ -129,6 +129,16 @@ class BookingForm(forms.ModelForm):
             self.fields[name].widget.attrs['data-for'] = f'category:{public}'
         self.fields['title'].required = False
         self.fields['title'].help_text = 'Leer: die Kategorie, z. B. „Übebuchung“.'
+        from courses.models import Ensemble
+
+        term = Term.current()  # the person's ensembles this term: as a member, or coached; their members take part
+        ensembles = Ensemble.objects.filter(Q(members__person=person) | Q(coach=person), course__term=term).distinct().prefetch_related('members__person')
+        if ensembles:
+            self.fields['ensemble'].queryset = ensembles
+            self.fields['ensemble'].label_from_instance = lambda e: f'{e.name}: {", ".join(s.person.last_name for s in e.members.all())}'
+            self.fields['ensemble'].empty_label = 'Keines'
+        else:
+            del self.fields['ensemble']
         enrolled, field = Q(studies__status='enrolled'), self.fields['participants']
         field.queryset = Person.objects.filter(enrolled).annotate(subject=Min('studies__subject__name', filter=enrolled)).exclude(pk=person.pk)
         field.near = Q(studies__ensembles__members__person=person) | Q(studies__teacher=person) | Q(studies__ensembles__coach=person)
@@ -137,8 +147,11 @@ class BookingForm(forms.ModelForm):
             for name in ('description', 'programme', 'admission', 'audience', 'internal'):
                 del self.fields[name]
             together = ','.join(BookingCategory.objects.filter(students=True, participants__gt=0).values_list('key', flat=True))
-            for name in ('title', 'participants'):
-                self.fields[name].widget.attrs['data-for'] = f'category:{together}'
+            for name in ('title', 'participants', 'ensemble'):
+                if name in self.fields:
+                    self.fields[name].widget.attrs['data-for'] = f'category:{together}'
+            if 'ensemble' in self.fields:
+                self.fields['participants'].help_text = 'Mit einem Ensemble nehmen seine Mitglieder teil; hier nur, wer dazukommt.'
         if self.student or self.instance.pk:
             del self.fields['repeat_until']
 
@@ -154,6 +167,10 @@ class BookingForm(forms.ModelForm):
         self.instance.requested = bool(room and room.pk in self.fields['room'].asked)  # until the office confirms
         if self.instance.requested and data.get('repeat_until'):
             raise forms.ValidationError('Zentral vergebene Räume bitte je Termin anfragen.')
+        if ensemble := data.get('ensemble'):  # its members take part, with whoever else is ticked
+            data['participants'] = list({*(data.get('participants') or []), *(s.person for s in ensemble.members.all())} - {self.person})
+            self.instance.course = ensemble.course
+            data['title'] = data.get('title') or f'Probe {ensemble.name}'
         if not self.office and data.get('category'):
             self.check_rules(data['category'], start, end, data.get('participants') or [])
         if self.student:  # nobody is in two places at once: not in two rooms, not practising during their own lesson

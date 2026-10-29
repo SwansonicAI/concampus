@@ -39,8 +39,8 @@ def line(moment):
 def agenda(person):
     """Bookings a person attends: booked for them or with them, taught or examined by them, or a group course they take part in."""
     return Booking.objects.filter(
-        Q(person=person) | Q(participants=person) | Q(course__staff=person)
-        | Q(course__kind=Course.Kind.COURSE, course__participations__study__person=person)
+        Q(person=person) | Q(participants=person) | Q(course__staff=person, ensemble=None) | Q(ensemble__coach=person)
+        | Q(course__kind=Course.Kind.COURSE, course__participations__study__person=person, ensemble=None)  # an ensemble's dates are its members'
     ).filter(category__blocks=True, requested=False).distinct()
 
 
@@ -364,7 +364,7 @@ def recipients(booking, by):
     """Who hears when a date is called off: whoever takes part, everyone in a group course, and whoever booked it when
     someone else calls it off."""
     people = set(booking.participants.all())
-    if booking.course_id and booking.course.kind == Course.Kind.COURSE:
+    if booking.course_id and booking.course.kind == Course.Kind.COURSE and not booking.ensemble_id:  # an ensemble's date, its members only
         people |= set(Person.objects.filter(studies__participations__course=booking.course_id))
     people.add(booking.person)
     people.discard(by)
