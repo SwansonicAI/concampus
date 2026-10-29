@@ -466,6 +466,15 @@ class Term(Tracked, models.Model):
     exam_signup_end = models.DateField('Prüfungsanmeldung bis', null=True, blank=True)
     exams_start = models.DateField('Beginn des Prüfungszeitraums', null=True, blank=True, help_text='Bis einige Wochen davor melden sich Studierende von Prüfungen ab.')
     exams_end = models.DateField('Ende des Prüfungszeitraums', null=True, blank=True)
+    planning = models.BooleanField(
+        'In Planung', default=False, help_text='Seine Lehrveranstaltungen sehen nur die Ämter und die Lehrenden, bis das Semester veröffentlicht ist.',
+    )
+    ready_by = models.DateField('Vorlesungsverzeichnis fertig bis', null=True, blank=True, help_text='Bis dahin ist das Semester geplant und veröffentlicht.')
+    replies_by = models.DateField('Rückmeldung der Lehrenden bis', null=True, blank=True, help_text='Bis dahin bestätigen die Lehrenden ihre Veranstaltungen.')
+    course_signup_start = models.DateField(
+        'Anmeldung zu Lehrveranstaltungen ab', null=True, blank=True, help_text='Neue und übernommene Lehrveranstaltungen übernehmen den Zeitraum.',
+    )
+    course_signup_end = models.DateField('Anmeldung zu Lehrveranstaltungen bis', null=True, blank=True)
 
     class Meta:
         ordering = ['start']
@@ -517,6 +526,15 @@ class Term(Tracked, models.Model):
             raise ValidationError({'exams_end': 'Der Prüfungszeitraum endet nach seinem Beginn.'})
         if self.parts and self.fee is not None and sum(amount for _, amount in self.parts) != self.fee:
             raise ValidationError({'fee_council': 'Die Teile ergeben zusammen nicht den Semesterbeitrag.'})
+
+    @classmethod
+    def shown(cls, person):
+        """The terms whose Lehrveranstaltungen the person sees: one in planning only the offices and the teachers."""
+        return cls.objects.all() if person.roles - {'student', 'applicant', 'alumni'} else cls.objects.filter(planning=False)
+
+    @property
+    def over(self):
+        return self.end < timezone.localdate()
 
     @classmethod
     def pick(cls, pk):
@@ -646,6 +664,7 @@ class Change(models.Model):
     row = models.PositiveIntegerField('Datensatz')
     action = models.CharField('Art', max_length=8, choices=Action)
     fields = models.JSONField('Felder', encoder=DjangoJSONEncoder, default=dict)
+    reason = models.CharField('Grund', max_length=200, blank=True, help_text='Bei einer Korrektur nach Ende des Semesters.')
 
     class Meta:
         ordering = ['-at', '-pk']

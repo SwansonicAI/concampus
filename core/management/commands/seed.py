@@ -515,7 +515,7 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
         'view_curriculum', 'book_any_room', 'view_bookings', 'manage_terms', 'view_statistics', 'report_statistics',
     ],
     'Prüfungsamt': ['view_students', 'view_files', 'manage_exams', 'decide_results', 'view_curriculum', 'book_any_room', 'view_bookings'],
-    'Dekanat': ['view_teaching_load', 'manage_teaching_load', 'view_curriculum', 'view_statistics'],  # the dean approves; the Referat does the work
+    'Dekanat': ['view_teaching_load', 'manage_teaching_load', 'publish_term', 'view_curriculum', 'view_statistics'],  # the dean approves; the Referat does the work
     'Dekanatsreferat': ['manage_courses', 'plan_teaching', 'view_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings'],
     'Veranstaltungsbüro': ['book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms', 'manage_instruments'],
     'Campus-Team': ['manage_accounts', 'manage_institution', 'manage_terms'],
@@ -910,6 +910,7 @@ class Command(BaseCommand):
                 p.electronic = at(first[p.pk] - timedelta(days=180), hour=12)
             Person.objects.bulk_update(agreed, ['electronic'], batch_size=2000)
             self.mailboxes()
+            self.planning()
             forget(months_before(timezone.localdate(), Institution.get().retention_months))  # as the nightly prune would have
         self.changes()
         self.stdout.write(self.style.SUCCESS(
@@ -1770,6 +1771,23 @@ class Command(BaseCommand):
             private = f'{p.email.split("@")[0]}@{providers[p.pk % len(providers)]}'
             p.private_email, p.email = (private, p.email) if p.studying else (private, private)
         Person.objects.bulk_update(people, ['email', 'private_email'])
+
+    def planning(self):
+        """The next semester in planning, its courses not yet taken over; each course with its Turnus as the years show it:
+        lesson classes and what both semesters offer every semester, what only one term offered once. A professor of
+        music theory has a Forschungssemester."""
+        seasons = defaultdict(set)
+        for title, name in Course.objects.filter(kind=Course.Kind.COURSE).values_list('title', 'term__name'):
+            seasons[title].add(name)
+        every = [title for title, names in seasons.items() if {name[:4] for name in names} == {'WiSe', 'SoSe'}]
+        Course.objects.filter(models.Q(kind=Course.Kind.LESSON) | models.Q(kind=Course.Kind.COURSE, title__in=every)).update(rhythm=Course.Rhythm.SEMESTER)
+        Course.objects.filter(kind=Course.Kind.COURSE, title__in=[title for title, names in seasons.items() if len(names) == 1]).update(rhythm=Course.Rhythm.ONCE)
+        upcoming = self.next
+        upcoming.planning, upcoming.ready_by = True, date(2027, 1, 15)  # the Vorlesungsverzeichnis ahead of the Rückmeldung
+        upcoming.course_signup_start, upcoming.course_signup_end = date(2027, 3, 1), upcoming.lectures_start + timedelta(days=14)
+        upcoming.save()
+        roth = self.teachers['roth']
+        Reduction.objects.create(person=roth, term=upcoming, reason=Reduction.Reason.LEAVE, hours=roth.obligation or Decimal(18), note='Beschluss des Präsidiums')
 
     def abroad(self):
         """HZBs from abroad are assessed and the Sprachnachweis and APS certificate in for everyone who studies here or has a

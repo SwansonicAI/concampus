@@ -24,6 +24,7 @@ SECRET = {'password'}  # that it changed is kept, not the value
 
 actor = ContextVar('actor', default=None)
 silent = ContextVar('silent', default=False)
+noted = ContextVar('noted', default='')
 
 
 @contextmanager
@@ -34,6 +35,16 @@ def acting(person):
         yield
     finally:
         actor.reset(token)
+
+
+@contextmanager
+def because(reason):
+    """Changes made inside are kept with their reason: a correction once the semester is over."""
+    token = noted.set(reason)
+    try:
+        yield
+    finally:
+        noted.reset(token)
 
 
 @contextmanager
@@ -89,7 +100,7 @@ def owner(obj):
 def entry(obj, action, values):
     return Change(
         by_id=getattr(actor.get(), 'pk', None), person_id=owner(obj), table=obj._meta.label_lower, row=obj.pk,
-        action=Change.Action.RESTORED if getattr(obj, '_restoring', False) else action, fields=values,
+        action=Change.Action.RESTORED if getattr(obj, '_restoring', False) else action, fields=values, reason=noted.get(),
     )
 
 

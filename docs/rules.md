@@ -105,6 +105,23 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 | Lehrverpflichtung 18 LVS artistic, 9 academic professors | ThürLVVO § 4 | `core/models.py` `Person.obligation` | Einstellungen › Konten |
 | Balanced over three Studienjahre, never under half in a term | ThürLVVO § 7 | `courses/views.py` `loads()` | Einstellungen › Hochschule (Deputatskonto ab) |
 | Reductions by function, one per person | ThürLVVO § 8 | `courses/models.py` `Reduction` | Einstellungen › Ermäßigungen |
+| A Freisemester sets the whole Lehrverpflichtung aside; courses planned for it are flagged | Hochschule | `courses/views.py` `rollover()` | Einstellungen › Ermäßigungen |
+| A lesson class of a coming semester not yet filled counts as many students as it had | Hochschule | `courses/views.py` `sws()` | – |
+
+## Semesterwechsel
+
+| Rule | Source | Code | Set in |
+|---|---|---|---|
+| A semester in planning is unseen by students: no Vorlesungsverzeichnis, search, course page or registration | Hochschule | `core/models.py` `Term.shown()` | Einstellungen › Semester (In Planung) |
+| Courses are proposed by Turnus: every semester from the term before, yearly from the same semester a year before, one-off ones only by choice | Hochschule | `courses/views.py` `missing()` | each course (Turnus) |
+| A copy keeps staff and Turnus and counts for the modules of its source and of the same semester a year before; the source stays as it was | Hochschule | `courses/views.py` `take_over()` | – |
+| New and copied courses take the semester's registration window | Hochschule | `courses/views.py` `take_over()`, `edit()` | Einstellungen › Semester |
+| Teachers, or the Institut for its courses, confirm or call off each copied course by the reply date | Hochschule | `courses/views.py` `reply()`, `courses/apps.py` | Semesterwechsel (Antwort bis) |
+| Last year's weekly time and room are booked only where the room is free on every date | Hochschule | `courses/views.py` `schedule()` | – |
+| Lesson classes are filled after the Rückmeldefrist: who re-registered without leave, and new students of their teachers in the Hauptfach, with the module of their next Fachsemester | Hochschule | `courses/views.py` `fill()` | Einstellungen › Semester (Rückmeldefrist) |
+| The Dekanat publishes, the Referat prepares; courses called off before publishing are deleted | Hochschule | `courses/views.py` `publish()` | Einstellungen › Ämter (Recht „Ein geplantes Semester veröffentlichen“) |
+| A published course called off stays listed as „entfällt“; its dates are called off, registrations without a result lifted, everyone told why | Hochschule | `courses/views.py` `cancel()` | – |
+| Once a semester is over, its courses are corrected only by the office, with a reason kept in the Verlauf | Hochschule | `courses/views.py` `edit()`, `core/history.py` `because()` | – |
 
 ## Rooms
 

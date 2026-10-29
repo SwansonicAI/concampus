@@ -12,16 +12,27 @@ from .views import deputat, loads
 
 
 class RolloverTest(Seeded):
-    def test_next_term_gets_the_courses_and_lesson_classes(self):
-        before = Course.objects.filter(term__name='SoSe 2027', kind__in=['course', 'lesson']).count()
-        dekanat = self.login('dekanatsreferat')
-        kept, *taken = dekanat.get('/lehre/semesterwechsel/').context['pending']  # one left out, e.g. for a sabbatical
-        r = dekanat.post('/lehre/semesterwechsel/', {'course': [c.pk for c in taken]}, follow=True)
-        self.assertEqual(flashes(r), [f'{len(taken)} Veranstaltungen nach SoSe 2027 übernommen.'])
-        self.assertEqual(Course.objects.filter(term__name='SoSe 2027', kind__in=['course', 'lesson']).count(), before + len(taken))
+    def test_next_term_is_planned_unseen_then_published(self):
+        referat, student = self.login('dekanatsreferat'), self.login('student')
+        rows = referat.get('/lehre/semesterwechsel/').context['rows']
+        once = [c for c in rows if c.rhythm == 'once']
+        kept, *taken = [c for c in rows if c.rhythm != 'once']  # one left out, e.g. for a sabbatical
+        r = referat.post('/lehre/semesterwechsel/', {'schritt': 'uebernehmen', 'course': [c.pk for c in taken]}, follow=True)
+        self.assertEqual(flashes(r), [f'{len(taken)} Veranstaltungen nach SoSe 2027 übernommen als Entwurf; Studierende sehen sie, sobald das Semester veröffentlicht ist.'])
         self.assertFalse(Course.objects.filter(term__name='SoSe 2027', title=kept.title).exists())
-        self.assertTrue(Participation.objects.filter(course__term__name='SoSe 2027', course__kind='lesson').exists())
-        self.assertEqual(self.login('student').post('/lehre/semesterwechsel/').status_code, 403)
+        self.assertTrue(once)  # offered, not ticked
+        self.assertFalse(Participation.objects.filter(course__term__name='SoSe 2027', course__kind='lesson', course__origin__isnull=False).exists())  # classes fill after the Rückmeldung
+        draft = Course.objects.filter(term__name='SoSe 2027', kind='course').first()
+        self.assertEqual(student.get(draft.get_absolute_url()).status_code, 404)
+        teacher = Client()
+        teacher.force_login(draft.staff.first())
+        teacher.post(f'/lehre/{draft.pk}/rueckmeldung/', {'antwort': 'entfaellt', 'grund': 'Forschungssemester'})
+        self.assertEqual(referat.post('/lehre/semesterwechsel/', {'schritt': 'veroeffentlichen'}).status_code, 403)  # the Dekanat's
+        self.login('dekanat').post('/lehre/semesterwechsel/', {'schritt': 'veroeffentlichen'})
+        self.assertFalse(Course.objects.filter(pk=draft.pk).exists())  # called off before anyone saw it
+        shown = Course.objects.filter(term__name='SoSe 2027', kind='course').first()
+        self.assertEqual(student.get(shown.get_absolute_url()).status_code, 200)
+        self.assertEqual(student.post('/lehre/semesterwechsel/').status_code, 403)
 
 
 class PlacesTest(Seeded):

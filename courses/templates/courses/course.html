@@ -5,9 +5,22 @@
 {% block content %}
 <div class="head">
   <h1>{{ course.title }}</h1>
-  {% if staffed %}<div class="actions"><a class="btn ghost" href="{% url 'courses:edit' course.pk %}">Bearbeiten</a></div>{% endif %}
+  {% if staffed and not course.term.over or office %}<div class="actions"><a class="btn ghost" href="{% url 'courses:edit' course.pk %}">{% if course.term.over %}Korrigieren{% else %}Bearbeiten{% endif %}</a></div>{% endif %}
 </div>
-<p class="lead">{{ course.format|default:course.get_kind_display }} · {{ course.term }}{% if course.area %} · {{ course.area }}{% endif %}{% if course.subject %} · {{ course.subject }}{% endif %}</p>
+<p class="lead">{{ course.format|default:course.get_kind_display }} · {{ course.term }}{% if course.area %} · {{ course.area }}{% endif %}{% if course.subject %} · {{ course.subject }}{% endif %}{% if course.cancelled %} · <span class="badge no">entfällt</span> {{ course.cancel_reason }}{% endif %}</p>
+{% if staffed and course.term.planning and course.origin_id %}
+<form method="post" action="{% url 'courses:reply' course.pk %}" class="panel" style="margin-bottom: 24px">
+  {% csrf_token %}
+  <h3>Planung {{ course.term }}</h3>
+  <p class="muted"><small>{% if course.cancelled %}Gemeldet: entfällt ({{ course.cancel_reason }}).{% elif course.confirmed %}Bestätigt am {{ course.confirmed|date:"j.n.Y" }}: findet so statt.{% else %}Noch nicht bestätigt{% if course.term.replies_by %}; Antwort bis zum {{ course.term.replies_by|date:"j.n.Y" }}{% endif %}. Was anders wird, unter „Bearbeiten“ ändern, dann bestätigen.{% endif %} Studierende sehen das Semester erst, wenn es veröffentlicht ist.</small></p>
+  <div class="inline">
+    {% if course.confirmed or course.cancelled %}<button class="btn ghost small" name="antwort" value="offen">Antwort zurücknehmen</button>
+    {% else %}<button class="btn small" name="antwort" value="findet">Findet so statt</button>
+    <label>Grund, falls sie entfällt<input name="grund" maxlength="200" placeholder="z. B. Forschungssemester"></label>
+    <button class="btn ghost small" name="antwort" value="entfaellt">Entfällt</button>{% endif %}
+  </div>
+</form>
+{% endif %}
 
 <div class="cols">
   <div>
@@ -43,6 +56,14 @@
       <div class="inline">{% for field in plan %}<label>{{ field.label }}{{ field }}</label>{% endfor %}</div>
       <p class="muted" style="margin: 12px 0"><small>Bucht den Raum jede Woche {% if from > course.term.lectures_start %}ab heute{% else %}ab {{ from|date:"j.n." }}{% endif %} bis zum Ende der Unterrichtszeit am {{ course.term.lectures_end|date:"j.n.Y" }}, ohne die unterrichtsfreien Tage, nur wenn alle Termine frei sind.</small></p>
       <button class="btn">Termine buchen</button>
+    </form>
+    {% endif %}
+    {% if cancelling %}
+    <form method="post" action="{% url 'courses:cancel' course.pk %}" class="panel" style="margin-top: 24px">
+      {% csrf_token %}
+      <h3>Entfällt</h3>
+      <div class="inline"><label>Grund<input name="grund" required maxlength="200" placeholder="z. B. Erkrankung der Lehrperson"></label><button class="btn danger small" data-confirm="Absagen und alle {{ count }} benachrichtigen?">Absagen</button></div>
+      <p class="muted" style="margin: 12px 0 0"><small>Sagt die kommenden Termine ab, hebt Anmeldungen ohne Ergebnis und Anfragen auf und benachrichtigt alle mit dem Grund. Die Veranstaltung bleibt im Verzeichnis, als „entfällt“.</small></p>
     </form>
     {% endif %}
     {% if date %}

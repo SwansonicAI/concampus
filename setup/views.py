@@ -114,13 +114,14 @@ def edit(request, key, pk=None):
     obj = get_object_or_404(e.objects(request.user), pk=pk) if pk else e.start(request)
     form = modelform_factory(e.model, form=e.form, fields=e.fields, formfield_callback=formfield)(request.POST or None, instance=obj)
     form.by = request.user  # who gives a right, which a second person confirms
+    if e.sections:
+        form.layout = e.sections
     if form.is_valid() and (saved := kept(form, request.user, e.capability)):
         obj = saved
         messages.success(request, f'„{obj}“ gespeichert.' + (' Neue Rechte und Mitgliedschaften gelten, sobald eine zweite Person sie unter „Freigaben“ bestätigt.' if getattr(form, 'pending', False) else ''))
         return redirect(back(request, e))
     return render(request, 'setup/form.html', {
         'editor': e, 'form': form, 'object': obj, 'back': back(request, e),
-        'sections': [(heading, [form[name] for name in names]) for heading, names in e.sections or []],
         'history': pk and bool(e.model.seen_by(request.user, pk)), 'table': e.model._meta.label_lower,
     })
 

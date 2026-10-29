@@ -328,10 +328,16 @@ document.addEventListener('click', event => {
 });
 document.addEventListener('keydown', event => event.key === 'Escape' && document.querySelectorAll('button[data-armed]').forEach(disarm));
 
+// A box that ticks a group (data-all="2") ticks every box of that group (data-part="2"); without a value, every box.
+document.addEventListener('change', ({target}) => {
+  if (!target.matches('[data-all]')) return;
+  target.form.querySelectorAll(target.dataset.all ? `[data-part="${target.dataset.all}"]` : '[data-part], [data-all]').forEach(box => { box.checked = target.checked; });
+});
+
 // Fields that matter only for some choices of another (data-for="category:kammermusik") show only then.
 function conditional(form) {
   const rules = new Map();
-  form.querySelectorAll('[data-for]').forEach(input => rules.set(input.closest('form > div'), input.dataset.for));
+  form.querySelectorAll('[data-for]').forEach(input => rules.set(input.closest('.row > div, form > div'), input.dataset.for));
   for (const [group, rule] of rules) {
     const [name, values] = rule.split(':');
     const choice = form.elements[name];

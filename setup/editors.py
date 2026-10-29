@@ -28,7 +28,7 @@ class Editor:
     capability: str
     section: str = ''  # where the start page of the settings lists it; empty: opened from elsewhere only
     fields: list = None
-    sections: list = None  # (heading, field names): a long form in parts; its fields follow from them
+    sections: list = None  # the form's layout (core.templatetags.layout): (heading or None, rows of field names); its fields follow from them
     form: type = forms.ModelForm
     columns: list = field(default_factory=list)  # (heading, attribute)
     search: list = field(default_factory=list)
@@ -42,7 +42,7 @@ class Editor:
 
     def __post_init__(self):
         if self.sections:
-            self.fields = [name for _, names in self.sections for name in names]
+            self.fields = [name for _, rows in self.sections for row in rows for name in (row if isinstance(row, tuple) else (row,))]
 
     def objects(self, person):
         """The records the person keeps up: all, or those of the Institute and Studiengänge their office is limited to."""
@@ -88,6 +88,8 @@ class OfficeForm(forms.ModelForm):
         }
         widgets = {'institutes': forms.CheckboxSelectMultiple, 'programs': forms.CheckboxSelectMultiple}
 
+    layout = [(None, [('name', 'email'), 'institutes', 'programs', 'capabilities'])]
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['capabilities'].help_text = 'Neue Rechte gelten, sobald eine zweite Person sie unter „Freigaben“ bestätigt.'
@@ -130,6 +132,8 @@ class AccountForm(forms.ModelForm):
         }
         widgets = {'groups': forms.CheckboxSelectMultiple}
 
+    layout = [(None, [('title', 'first_name', 'last_name'), ('email', 'username'), ('institute', 'employment', 'obligation'), 'groups', 'is_active'])]
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['groups'].queryset = Office.objects.all()
@@ -163,6 +167,8 @@ class AppointmentForm(forms.ModelForm):
         fields = ['person', 'year', 'subjects', 'general']
         widgets = {'subjects': forms.CheckboxSelectMultiple}
 
+    layout = [(None, [('person', 'year'), 'subjects', 'general'])]
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['person'].queryset = Person.teachers().order_by('last_name', 'first_name')
@@ -174,6 +180,8 @@ class MembershipForm(forms.ModelForm):
     class Meta:
         model = Membership
         fields = ['person', 'office', 'until', 'note']
+
+    layout = [(None, [('person', 'office'), ('until', 'note')])]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -190,6 +198,8 @@ class ReductionForm(forms.ModelForm):
         model = Reduction
         fields = ['person', 'term', 'reason', 'hours', 'note']
         localized_fields = ['hours']
+
+    layout = [(None, [('person', 'term'), ('reason', 'hours'), 'note'])]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -217,12 +227,12 @@ EDITORS = {e.key: e for e in [
     Editor(
         'hochschule', Institution, 'Hochschule', 'manage_institution', 'Verwaltung', single=True, deletable=False,
         sections=[
-            ('Briefkopf und Website', ['name', 'short_name', 'address', 'place', 'email', 'website', 'imprint', 'privacy', 'accessibility']),
-            ('Aufnahme und Immatrikulation', ['matriculation_start', 'student_mail', 'accept_days', 'retention_months', 'signup', 'insurers']),
-            ('Rückmeldung und Prüfungen', ['late_fee', 'payee', 'iban', 'bic', 'withdraw_weeks']),
-            ('Raumbuchung', ['student_daily_hours', 'student_ahead_hours', 'last_minute_hours', 'teacher_ahead_days']),
+            ('Briefkopf und Website', [('name', 'short_name'), 'address', ('place', 'email', 'website'), ('imprint', 'privacy', 'accessibility')]),
+            ('Aufnahme und Immatrikulation', [('matriculation_start', 'student_mail'), ('accept_days', 'retention_months'), 'signup', 'insurers']),
+            ('Rückmeldung und Prüfungen', [('late_fee', 'withdraw_weeks'), 'payee', ('iban', 'bic')]),
+            ('Raumbuchung', [('student_daily_hours', 'student_ahead_hours'), ('last_minute_hours', 'teacher_ahead_days')]),
             ('Deputat', ['load_since']),
-            ('Amtliche Statistik', ['university', 'region', 'report_id']),
+            ('Amtliche Statistik', [('university', 'region', 'report_id')]),
         ],
         columns=[('Name', 'name'), ('Ort', 'place')],
         words='hochschuldaten anschrift regeln buchungsregeln matrikelnummer fristen löschfristen datenschutz hochschulnummer statistik landesamt',
@@ -250,20 +260,24 @@ EDITORS = {e.key: e for e in [
     ),
     Editor(
         'semester', Term, 'Semester', 'manage_terms', 'Verwaltung',
-        fields=['name', 'start', 'end', 'lectures_start', 'lectures_end', 'reregistration_start', 'deadline', 'late_deadline', 'fee', 'fee_union', 'fee_ticket', 'fee_council'],
+        sections=[
+            (None, ['name', ('start', 'end'), ('lectures_start', 'lectures_end'), ('reregistration_start', 'deadline', 'late_deadline')]),
+            ('Semesterbeitrag', [('fee', 'fee_union', 'fee_ticket', 'fee_council')]),
+            ('Planung der Lehre', [('planning', 'ready_by'), ('course_signup_start', 'course_signup_end')]),
+        ],
         columns=[('Semester', 'name'), ('Beginn', 'start'), ('Ende', 'end'), ('Rückmeldefrist', 'deadline'), ('Beitrag', 'fee')],
         search=['name'], words='unterrichtszeit vorlesungszeit rückmeldefrist semesterbeitrag termine',
         queryset=lambda: Term.objects.order_by('-start'),
     ),
     Editor(
         'pruefungszeitraeume', Term, 'Prüfungszeiträume', 'manage_exams', 'Studium und Lehre',
-        fields=['exam_signup_start', 'exam_signup_end', 'exams_start', 'exams_end'],
+        sections=[(None, [('exam_signup_start', 'exam_signup_end'), ('exams_start', 'exams_end')])],
         columns=[('Semester', 'name'), ('Anmeldung ab', 'exam_signup_start'), ('bis', 'exam_signup_end'), ('Prüfungen ab', 'exams_start'), ('bis', 'exams_end')],
         search=['name'], words='prüfungsanmeldung prüfungszeitraum prüfungswochen fristen', queryset=lambda: Term.objects.order_by('-start'),
         adding=False, deletable=False,
     ),
     Editor(
-        'unterrichtsfrei', Holiday, 'Unterrichtsfreie Tage', 'manage_terms', 'Verwaltung', fields=['name', 'first', 'last', 'public'],
+        'unterrichtsfrei', Holiday, 'Unterrichtsfreie Tage', 'manage_terms', 'Verwaltung', sections=[(None, ['name', ('first', 'last'), 'public'])],
         columns=[('Bezeichnung', 'name'), ('Von', 'first'), ('Bis', 'last'), ('Feiertag', 'public')], search=['name'], words='feiertage ferien vorlesungsfrei weihnachten semesterplanung',
         queryset=lambda: Holiday.objects.order_by('-first'),
     ),
@@ -271,19 +285,22 @@ EDITORS = {e.key: e for e in [
     Editor(
         'personen', Person, 'Stammdaten', 'manage_students', deletable=False,
         sections=[  # what changes most often first
-            ('Kontakt', ['address', 'phone', 'email']),
-            ('Person', ['title', 'first_name', 'given_names', 'last_name', 'birth_name', 'gender', 'birth_date', 'birth_place', 'nationality', 'second_nationality']),
-            ('Krankenversicherung', ['insurer', 'insurance']),
-            ('Hochschulzugang', ['entrance', 'entrance_date', 'entrance_region']),
-            ('Bisheriges Studium', ['first_university', 'first_term', 'external_terms', 'degree_university', 'degree_exam', 'degree_field', 'degree_date', 'degree_grade', 'vocational', 'internship']),
-            ('Amtliche Statistik', ['home', 'residence']),
+            ('Kontakt', ['address', ('phone', 'email')]),
+            ('Person', [('title', 'first_name', 'given_names'), ('last_name', 'birth_name', 'gender'), ('birth_date', 'birth_place'), ('nationality', 'second_nationality')]),
+            ('Krankenversicherung', [('insurer', 'insurance')]),
+            ('Hochschulzugang', ['entrance', ('entrance_date', 'entrance_region')]),
+            ('Bisheriges Studium', [
+                'first_university', ('first_term', 'external_terms'), 'degree_university', ('degree_exam', 'degree_field'), ('degree_date', 'degree_grade'), ('vocational', 'internship'),
+            ]),
+            ('Amtliche Statistik', [('home', 'residence')]),
         ],
     ),
     Editor(
         'studiengaenge', Program, 'Studiengänge', 'edit_curriculum', 'Studium und Lehre',
-        fields=[
-            'degree', 'name', 'version', 'semesters', 'subjects', 'postgraduate', 'attempts', 'rounding', 'mean_rounding', 'honours', 'thesis_weeks',
-            'level', 'qualification', 'english', 'outcomes', 'exam', 'kind', 'field', 'exam_office',
+        sections=[
+            (None, [('degree', 'name', 'version'), ('semesters', 'attempts', 'thesis_weeks'), 'postgraduate', 'subjects']),
+            ('Noten', [('rounding', 'mean_rounding', 'honours')]),
+            ('Diploma Supplement und Statistik', [('level', 'kind', 'field'), ('qualification', 'english'), 'outcomes', ('exam', 'exam_office')]),
         ],
         columns=[('Abschluss', 'degree'), ('Studiengang', 'name'), ('PO-Version', 'version'), ('Regelstudienzeit', 'semesters')],
         search=['degree', 'name'], words='prüfungsordnung po fpso diploma supplement abschlussarbeit bearbeitungszeit statistik abschlussprüfung studienfach',
@@ -304,15 +321,15 @@ EDITORS = {e.key: e for e in [
         new=lambda request: Reduction(term=Term.current(), person_id=request.GET.get('person') or None),
     ),
     Editor(
-        'fachgebiete', Area, 'Fachgebiete', 'manage_courses', 'Studium und Lehre', fields=['name', 'order'],
+        'fachgebiete', Area, 'Fachgebiete', 'manage_courses', 'Studium und Lehre', sections=[(None, [('name', 'order')])],
         columns=[('Fachgebiet', 'name'), ('Reihenfolge', 'order')], search=['name'], words='vorlesungsverzeichnis bereiche gliederung',
     ),
     Editor(
-        'lehrformen', Format, 'Lehrformen', 'manage_courses', 'Studium und Lehre', fields=['name', 'short', 'per_head', 'order'],
+        'lehrformen', Format, 'Lehrformen', 'manage_courses', 'Studium und Lehre', sections=[(None, [('name', 'short', 'order'), 'per_head'])],
         columns=[('Lehrform', 'name'), ('Kürzel', 'short')], search=['name', 'short'], words='vorlesung seminar übung einzelunterricht veranstaltungsart',
     ),
     Editor(
-        'hauptfaecher', Subject, 'Hauptfächer', 'edit_curriculum', 'Studium und Lehre', fields=['name', 'institute', 'english', 'field'],
+        'hauptfaecher', Subject, 'Hauptfächer', 'edit_curriculum', 'Studium und Lehre', sections=[(None, [('name', 'english'), ('institute', 'field')])],
         columns=[('Hauptfach', 'name'), ('Institut', 'institute')], search=['name'], queryset=lambda: Subject.objects.select_related('institute'),
     ),
     Editor('studien', Study, 'Studium', 'manage_students', form=StudyForm, deletable=False),
@@ -325,30 +342,32 @@ EDITORS = {e.key: e for e in [
     ),
     Editor(
         'raeume', Room, 'Räume', 'manage_rooms', 'Räume',
-        fields=['name', 'purpose', 'building', 'function', 'institutes', 'capacity', 'equipment'],
+        sections=[(None, [('name', 'purpose'), ('building', 'function', 'capacity'), 'equipment', 'institutes'])],
         columns=[('Raum', 'name'), ('Bezeichnung', 'purpose'), ('Gebäude', 'building'), ('Funktion', 'function'), ('Plätze', 'capacity')],
         search=['name', 'purpose', 'building', 'equipment'], words='ausstattung flügel gebäude',
         queryset=lambda: Room.objects.select_related('function'),
     ),
     Editor(
-        'instrumente', Instrument, 'Leihinstrumente', 'manage_instruments', 'Räume', fields=['number', 'name', 'maker', 'institute', 'note', 'available'],
+        'instrumente', Instrument, 'Leihinstrumente', 'manage_instruments', 'Räume', sections=[(None, [('name', 'maker', 'number'), 'institute', 'note', 'available'])],
         columns=[('Instrument', 'name'), ('Inventarnummer', 'number'), ('Institut', 'institute'), ('Verleihbar', 'available')],
         search=['name', 'number', 'maker'], words='instrumentenpool inventar leihe', queryset=lambda: Instrument.objects.select_related('institute'),
     ),
     Editor(
         'unterlagen', DocumentType, 'Unterlagenarten', 'run_auditions', 'Aufnahme',
-        fields=['name', 'condition', 'subjects', 'required', 'shared', 'jury', 'health', 'note', 'template', 'amount', 'file_types', 'max_mb', 'single', 'order'],
+        sections=[(None, [
+            ('name', 'condition'), ('required', 'single', 'shared'), ('jury', 'health'), 'note', 'template', ('amount', 'file_types', 'max_mb', 'order'), 'subjects',
+        ])],
         columns=[('Unterlagen', 'name'), ('In der Checkliste', 'condition'), ('Pflicht', 'required')],
         search=['name'], words='checkliste bewerbung video zeugnis nachweis hochladen',
         queryset=lambda: DocumentType.objects.exclude(key__in=DocumentType.SYSTEM),  # Bescheide and theses are filed by the system
     ),
     Editor(
-        'raumfunktionen', RoomFunction, 'Raumfunktionen', 'manage_rooms', 'Räume', fields=['name', 'central', 'order'],
+        'raumfunktionen', RoomFunction, 'Raumfunktionen', 'manage_rooms', 'Räume', sections=[(None, [('name', 'order'), 'central'])],
         columns=[('Funktion', 'name'), ('Zentral vergeben', 'central')], search=['name'],
     ),
     Editor(
         'kategorien', BookingCategory, 'Buchungskategorien', 'manage_rooms', 'Räume',
-        fields=['name', 'tone', 'students', 'teachers', 'quota', 'ahead_hours', 'participants', 'public', 'blocks', 'order'],
+        sections=[(None, [('name', 'tone', 'order'), ('students', 'teachers', 'quota'), ('public', 'blocks'), ('ahead_hours', 'participants')])],
         columns=[('Kategorie', 'name'), ('Farbe', 'tone'), ('Studierende', 'students'), ('Lehrende', 'teachers'), ('Öffentlich', 'public')],
         search=['name'], words='buchungsregeln farben kontingent veranstaltungen',
     ),

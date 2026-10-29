@@ -138,9 +138,12 @@ input[type=checkbox], input[type=radio] { width: 18px; height: 18px; accent-colo
 input.cell { width: 76px; padding: 4px 8px; text-align: right; }
 select.cell { padding: 4px 6px; }
 .cell.bad { border-color: var(--red); outline: 1px solid var(--red); }
-.form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; max-width: 640px; }
-.form > div:not(.actions) { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
-.form > div[hidden] { display: none; }
+.form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; max-width: 840px; }
+.form > div:not(.actions), .form .row > div { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-content: start; }
+.form > div.row { display: flex; flex-wrap: wrap; gap: 18px; }  /* fields that belong together, side by side */
+.form .row > div { flex: 1 1 160px; min-width: 0; }
+.form div[hidden], .form .row:not(:has(> div:not([hidden]))) { display: none; }
+.form > h2 { margin: 14px 0 0; }
 .form fieldset { display: grid; gap: 6px; min-width: 0; margin: 0; padding: 0; border: 0; }
 .form legend { margin-bottom: 6px; padding: 0; font-weight: 600; }
 .form label.option { position: relative; padding-left: 30px; font-weight: 400; }

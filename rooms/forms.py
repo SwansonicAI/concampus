@@ -99,6 +99,9 @@ class BookingForm(forms.ModelForm):
     )
     repeat_until = DayField(label='Wöchentlich wiederholen bis', required=False, help_text='Die Serie wird nur gespeichert, wenn jeder Termin frei ist.')
     field_order = ['room', 'category', 'day', 'begin', 'until', 'title', 'description', 'programme', 'admission', 'audience', 'internal', 'ensemble', 'participants', 'repeat_until']
+    layout = [(None, [
+        'room', 'category', ('day', 'begin', 'until'), 'title', 'description', 'programme', ('admission', 'audience'), 'internal', 'ensemble', 'participants', 'repeat_until',
+    ])]
 
     class Meta:
         model = Booking

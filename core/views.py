@@ -342,7 +342,7 @@ def found(person, q, limit):
             offices.append(hit(o.name + limited(o), f'mailto:{mail}', ' · '.join(filter(None, [o.email, ', '.join(f'{p.first_name} {p.last_name}' for p in members)]))))
         groups.append(('Ämter', offices))
     teaching = [Course.Kind.COURSE, Course.Kind.LESSON]
-    courses = matching(Course.objects.filter(term__end__gte=timezone.localdate()).select_related('term'), q, 'title', 'staff__last_name', 'subject__name', starts=True)
+    courses = matching(Course.objects.filter(term__end__gte=timezone.localdate(), term__in=Term.shown(person)).select_related('term'), q, 'title', 'staff__last_name', 'subject__name', starts=True)
     own = Exists(Module.objects.filter(courses=OuterRef('pk'), program__studies__person=person, program__studies__status=Study.Status.ENROLLED))  # one's own Studiengang's first
     groups.append(('Lehrveranstaltungen', [
         hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in courses.filter(kind__in=teaching).annotate(own=own).order_by('-own', 'title')[:limit]

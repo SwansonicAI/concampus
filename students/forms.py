@@ -10,6 +10,8 @@ class StudyForm(forms.ModelForm):
         model = Study
         fields = ['teacher', 'prior_terms', 'exit_reason', 'structured', 'employed', 'cumulative']  # the Schwerpunkt is recorded on the study page, by the office deciding results
 
+    layout = [(None, [('teacher', 'prior_terms'), 'exit_reason', ('structured', 'employed', 'cumulative')])]
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         study = self.instance

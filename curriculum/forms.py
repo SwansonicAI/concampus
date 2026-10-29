@@ -9,6 +9,8 @@ class ModuleForm(forms.ModelForm):
         fields = ['parent', 'code', 'title', 'credits', 'semester', 'exam', 'final', 'weight', 'description', 'waived']
         widgets = {'description': forms.Textarea(attrs={'rows': 3})}
 
+    layout = [(None, ['parent', 'title', ('code', 'credits', 'semester', 'weight'), ('exam', 'final'), 'description', 'waived'])]
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         modules = list(self.instance.program.modules.all())

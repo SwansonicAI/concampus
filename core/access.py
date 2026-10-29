@@ -29,7 +29,8 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
         ('plan_teaching', 'Umfang (SWS), Lehrform und Module von Veranstaltungen festlegen'),
         ('view_teaching_load', 'Deputat aller Lehrenden einsehen'),
         ('manage_teaching_load', 'Ermäßigungen der Lehrverpflichtung eintragen'),
-        ('roll_over', 'Semesterwechsel'),
+        ('roll_over', 'Semesterwechsel: Veranstaltungen ins nächste Semester übernehmen und planen'),
+        ('publish_term', 'Ein geplantes Semester veröffentlichen'),
     ]),
     ('Studiengänge', [
         ('view_curriculum', 'Studiengänge mit Zahlen der Studierenden und Bewerbungen, als Kachel'),

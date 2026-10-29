@@ -34,9 +34,11 @@ def sent(request, name):
 
 
 class Renderer(DjangoTemplates):
-    """Every form's fields: labels without Django's trailing colon, a check box in front of its sentence."""
+    """Every form's fields: labels without Django's trailing colon, a check box in front of its sentence; grouped and side
+    by side as the form's `layout` says (core.templatetags.layout)."""
 
     field_template_name = 'core/field.html'
+    form_template_name = 'core/form.html'
 
 
 class ContactForm(forms.ModelForm):
@@ -48,6 +50,8 @@ class ContactForm(forms.ModelForm):
         widgets = {'address': forms.Textarea(attrs={'rows': 3})}
         labels = {'email': 'E-Mail, privat'}
         help_texts = {'email': 'Nach dem Studium gilt die Hochschuladresse nicht mehr; Nachrichten gehen hierhin.'}
+
+    layout = [(None, ['address', 'residence', ('phone', 'email'), 'private_email'])]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

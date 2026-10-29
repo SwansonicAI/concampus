@@ -34,6 +34,8 @@ class SignupForm(BaseUserCreationForm):
             'last_name': 'Wie im Pass, gleich ob er dort vorn oder hinten steht.',
         }
 
+    layout = [(None, [('first_name', 'last_name'), ('email', 'birth_date'), ('password1', 'password2'), 'electronic'])]
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in ['last_name', 'email', 'birth_date']:
@@ -87,6 +89,11 @@ class ApplicationForm(forms.Form):
     declaration = forms.BooleanField(
         label='Ich versichere, dass meine Angaben vollständig und richtig sind.', help_text='Ersetzt den unterschriebenen Bewerbungsantrag.',
     )
+    layout = [
+        (None, ['audition', 'teacher', 'repertoire', ('nationality', 'gender')]),
+        ('Hochschulzugangsberechtigung', ['entrance', ('entrance_date', 'entrance_region')]),
+        (None, ['accompanist', 'declaration']),
+    ]
 
     def __init__(self, *args, person, **kwargs):
         super().__init__(*args, **kwargs)
@@ -145,6 +152,14 @@ class AcceptForm(forms.ModelForm):
             'external_terms': 'An anderen deutschen Hochschulen, Urlaubssemester eingeschlossen.',
             'degree_university': 'Nur wenn Sie schon einen Hochschulabschluss haben.',
         }
+
+    layout = [
+        ('Krankenversicherung', [('insurer', 'insurance')]),
+        ('Wohnsitz', [('home', 'residence')]),
+        ('Bisheriges Studium', [
+            'first_university', ('first_term', 'external_terms'), 'degree_university', ('degree_exam', 'degree_field'), ('degree_date', 'degree_grade'), ('vocational', 'internship'),
+        ]),
+    ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

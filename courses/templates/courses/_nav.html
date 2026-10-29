@@ -4,6 +4,6 @@
   {% if 'teacher' in roles or 'student' in roles %}<a href="{% url 'courses:mine' %}" class="{% if here == 'mine' %}on{% endif %}">{% if 'teacher' in roles %}Meine Lehre{% else %}Meine Veranstaltungen{% endif %}</a>{% endif %}
   <a href="{% url 'courses:timetable' %}" class="{% if here == 'timetable' %}on{% endif %}">Stundenplan</a>
   {% if 'teacher' in roles or 'view_teaching_load' in roles %}<a href="{% url 'courses:load' %}" class="{% if here == 'load' %}on{% endif %}">Deputat</a>{% endif %}
-  {% if 'roll_over' in roles %}<a href="{% url 'courses:rollover' %}" class="{% if here == 'rollover' %}on{% endif %}">Semesterwechsel</a>{% endif %}
+  {% if 'roll_over' in roles or 'publish_term' in roles %}<a href="{% url 'courses:rollover' %}" class="{% if here == 'rollover' %}on{% endif %}">Semesterwechsel</a>{% endif %}
 </nav>
 {% endwith %}

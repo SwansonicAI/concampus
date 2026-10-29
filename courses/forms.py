@@ -158,7 +158,7 @@ class CourseForm(forms.ModelForm):
 
     class Meta:
         model = Course
-        fields = ['title', 'kind', 'area', 'format', 'subject', 'staff', 'modules', 'hours', 'capacity', 'allocation', 'opens', 'deadline', 'description']
+        fields = ['title', 'kind', 'area', 'format', 'subject', 'rhythm', 'staff', 'modules', 'hours', 'capacity', 'allocation', 'opens', 'deadline', 'description']
         labels = {'staff': 'Lehrende'}
         localized_fields = ['hours', 'pass_mark']  # a decimal comma, in a text box
         widgets = {
@@ -167,12 +167,20 @@ class CourseForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'rows': 4}),
         }
 
+    layout = [
+        (None, ['correction', 'title', ('kind', 'allocation'), ('area', 'format', 'subject', 'rhythm')]),
+        ('Umfang und Anmeldung', [('hours', 'capacity', 'opens', 'deadline')]),
+        ('Lehrende und Module', ['staff', 'programme', 'modules']),
+        (None, ['description']),
+    ]
     planned = ('kind', 'format', 'hours', 'modules', 'programme')  # what counts in the Deputat and the Studienpläne
 
-    def __init__(self, *args, person=None, planning=True, **kwargs):
+    def __init__(self, *args, person=None, planning=True, over=False, **kwargs):
         super().__init__(*args, **kwargs)
         for name in () if planning else self.planned:
             self.fields.pop(name, None)
+        if over:  # the semester is over: a correction, kept with its reason in the Verlauf
+            self.fields['correction'] = forms.CharField(label='Grund der Korrektur', max_length=200, help_text='Das Semester ist vorbei; der Verlauf hält den Grund fest.')
         if 'kind' in self.fields:  # the Lehrform says how it is taught; this, how it is organised
             self.fields['kind'].choices = [(Course.Kind.COURSE.value, 'Lehrveranstaltung: gemeinsame Termine'), (Course.Kind.LESSON.value, 'Klasse: je Person eine eigene Unterrichtszeit')]
             self.fields['kind'].label = 'Organisation'
@@ -218,6 +226,13 @@ class ExamForm(CourseForm):
         fields = ['title', 'staff', 'oral', 'assessor', 'modules', 'opens', 'deadline', 'pass_mark', 'max_points', 'description']
         labels = {'staff': 'Kommission', 'modules': 'Prüft das Modul'}
 
+    layout = [
+        (None, ['title', 'modules']),
+        ('Kommission', ['staff', ('oral', 'assessor')]),
+        ('Anmeldung und Bewertung', [('opens', 'deadline', 'pass_mark', 'max_points')]),
+        (None, ['description']),
+    ]
+
     def __init__(self, *args, person=None, **kwargs):
         super().__init__(*args, person=person, **kwargs)
         self.fields['deadline'].help_text = f'Letzter Tag der Anmeldung. Abmelden geht bis {Institution.get().withdraw_weeks} Wochen vor dem Prüfungszeitraum.'
@@ -239,6 +254,7 @@ class ThesisForm(CourseForm):
         label='Abgabe bis', help_text='Bei einer Verlängerung das neue Datum; die Person erhält einen Bescheid. Ein Samstag, Sonntag oder Feiertag wird zum nächsten Werktag.',
     )
     field_order = ['module', 'title', 'staff', 'deadline', 'description']
+    layout = ()  # one after another
 
     class Meta(CourseForm.Meta):
         fields = ['title', 'staff', 'deadline', 'description']
@@ -276,6 +292,11 @@ class AuditionForm(CourseForm):
             'video': 'Bewerbende reichen ein Video ein, die Kommission wertet online.',
         }
 
+    layout = [
+        (None, ['title', ('term', 'program', 'subject'), 'video', 'after']),
+        ('Kommission und Wertung', ['staff', ('deadline', 'marks_by'), ('capacity', 'pass_mark', 'max_points')]),
+        (None, ['accompaniment', 'description']),
+    ]
 
     def clean(self):
         data = super().clean()

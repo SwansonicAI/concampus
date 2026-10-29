@@ -8,6 +8,7 @@
 </div>
 
 {% if teaching is not None %}
+{% if term.planning %}<p class="lead"><span class="badge wait">in Planung</span> Bitte je Veranstaltung bestätigen, ändern oder absagen{% if term.replies_by %}, bis zum {{ term.replies_by|date:"j. F Y" }}{% endif %}. Studierende sehen das {{ term }} erst, wenn es veröffentlicht ist.</p>{% endif %}
 <div class="stats">
   <div class="stat"><b>{{ teaching|length }}</b><span>Veranstaltungen im {{ term }}</span></div>
   <div class="stat"><b>{{ load }}</b><span>SWS Deputat</span></div>
@@ -19,7 +20,9 @@
     <thead><tr><th>Veranstaltung</th><th>Art</th><th class="num">SWS</th><th class="num">Teilnahmen</th></tr></thead>
     <tbody>
       {% for c in teaching %}
-      <tr><td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a></td><td>{{ c.format|default:c.get_kind_display }}</td><td class="num">{{ c.hours|default_if_none:"" }}</td><td class="num" data-value="{% if c.allocation == 'ensemble' %}{{ c.mine }}{% else %}{{ c.size }}{% endif %}">{% if c.allocation == 'ensemble' %}{{ c.mine }}<br><small class="muted" title="In Ihren Ensembles, von allen Teilnehmenden">von {{ c.size }}</small>{% else %}{{ c.size }}{% endif %}</td></tr>
+      <tr><td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a>
+        {% if c.cancelled %} <span class="badge no">entfällt</span>{% elif term.planning and c.origin_id %}{% if c.confirmed %} <span class="badge yes">bestätigt</span>{% else %}
+        <form method="post" action="{% url 'courses:reply' c.pk %}" class="inline" style="margin-top: 6px">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn small" name="antwort" value="findet">Findet so statt</button><a class="more" href="{% url 'courses:course' c.pk %}"><small>ändern oder absagen</small></a></form>{% endif %}{% endif %}</td><td>{{ c.format|default:c.get_kind_display }}</td><td class="num">{{ c.hours|default_if_none:"" }}</td><td class="num" data-value="{% if c.allocation == 'ensemble' %}{{ c.mine }}{% else %}{{ c.size }}{% endif %}">{% if c.allocation == 'ensemble' %}{{ c.mine }}<br><small class="muted" title="In Ihren Ensembles, von allen Teilnehmenden">von {{ c.size }}</small>{% else %}{{ c.size }}{% endif %}</td></tr>
       {% empty %}<tr><td colspan="4" class="empty">Keine Veranstaltungen in diesem Semester.</td></tr>
       {% endfor %}
     </tbody>

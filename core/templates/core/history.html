@@ -9,7 +9,7 @@
     <tr>
       <td class="muted nowrap">{{ c.at|date:"j.n.Y, H:i" }}<br><small>{{ c.by|default:"System" }}</small></td>
       <td>
-        {{ c.record }} <span class="muted">{{ c.get_action_display }}</span>
+        {{ c.record }} <span class="muted">{{ c.get_action_display }}</span>{% if c.reason %}<br><small>Grund: {{ c.reason }}</small>{% endif %}
         {% for label, before, after in c.lines %}<br><small>{{ label }}: {% if c.action != 'created' %}<span class="muted">{{ before }}</span> <i class="arrow"></i> {% endif %}{{ after }}</small>{% endfor %}
       </td>
       <td class="num">

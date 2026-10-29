@@ -143,6 +143,19 @@ TEXTS = {
         'Belegen Sie die Lehrveranstaltungen dazu in den genannten Semestern. Ändern lässt sich die Wahl {aendern}.',
         ('studiengang', 'schwerpunkt', 'inhalt', 'aendern'),
     ),
+    'semesterplanung': Spec(
+        NACHRICHT, 'Planung des nächsten Semesters', 'Planung {semester}: bitte bis zum {frist} bestätigen',
+        'Für das {semester} sind Ihre Lehrveranstaltungen übernommen:\n{veranstaltungen}\n\nBitte bestätigen Sie bis zum {frist} je '
+        'Veranstaltung, ob sie so stattfindet; ändern Sie, was anders wird, oder sagen Sie ab, was entfällt. Studierende sehen das '
+        'Semester erst, wenn es veröffentlicht ist.',
+        ('semester', 'frist', 'veranstaltungen'),
+    ),
+    'entfaellt': Spec(
+        NACHRICHT, 'Lehrveranstaltung entfällt', 'Entfällt: {veranstaltung}',
+        '„{veranstaltung}“ im {semester} entfällt. Grund: {grund}.\n\nIhre Anmeldung oder Anfrage ist damit aufgehoben; die Termine sind '
+        'abgesagt. Bitte melden Sie sich gegebenenfalls zu einer anderen Veranstaltung an.',
+        ('veranstaltung', 'semester', 'grund'),
+    ),
     'eingetragen': Spec(NACHRICHT, 'In eine Veranstaltung eingetragen', 'Eingetragen: {veranstaltung}', 'Sie wurden für „{veranstaltung}“ im {semester} eingetragen.', ('veranstaltung', 'semester')),
     'ensemble': Spec(
         NACHRICHT, 'Mit einem Ensemble angemeldet', 'Ensemble: {besetzung}',

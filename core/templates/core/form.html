@@ -1,0 +1,5 @@
+{% load layout %}{{ errors }}
+{% for heading, rows in form|arranged %}{% if heading %}<h2>{{ heading }}</h2>{% endif %}
+{% for row in rows %}{% if row|length > 1 %}<div class="row">{% for field in row %}<div>{{ field.as_field_group }}</div>{% endfor %}</div>{% else %}<div>{{ row.0.as_field_group }}</div>{% endif %}
+{% endfor %}{% endfor %}
+{% for field in hidden_fields %}{{ field }}{% endfor %}

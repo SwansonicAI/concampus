@@ -571,6 +571,7 @@ class RecognitionForm(forms.Form):
     credits = forms.DecimalField(label='ECTS dort', required=False, min_value=0, decimal_places=1, localize=True)
     proof = forms.FileField(label='Nachweis', required=False, help_text='Transcript oder Bescheinigung; kommt in die Studienakte.')
     FIELDS = ['module', 'grade', 'foreign', 'best', 'worst', 'origin', 'place', 'taken', 'credits', 'proof']
+    layout = [(None, ['who', 'module', 'grade', ('foreign', 'best', 'worst'), ('origin', 'place'), ('taken', 'credits'), 'proof'])]
 
     def __init__(self, *args, study=None, **kwargs):
         super().__init__(*args, **kwargs)

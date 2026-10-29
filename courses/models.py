@@ -70,6 +70,11 @@ class Course(Tracked, models.Model):
         STAFF = 'staff', 'die Lehrenden teilen ein, ohne Anmeldung'
         ENSEMBLE = 'ensemble', 'als Ensemble; Lehrende übernehmen die Betreuung, das Institut teilt zu'
 
+    class Rhythm(models.TextChoices):
+        SEMESTER = 'semester', 'jedes Semester'
+        YEAR = 'year', 'jährlich, im selben Semester'
+        ONCE = 'once', 'einmalig'
+
     PANEL = [Kind.EXAM, Kind.AUDITION, Kind.THESIS]
 
     term = models.ForeignKey(Term, models.PROTECT, related_name='courses', verbose_name='Semester')
@@ -116,6 +121,13 @@ class Course(Tracked, models.Model):
         help_text='Nur bei Eignungsprüfungen: die Stufen davor; wer dort besteht, wird hierher eingeladen.',
     )
     description = models.TextField('Beschreibung', blank=True)
+    rhythm = models.CharField(
+        'Turnus', max_length=8, choices=Rhythm, default=Rhythm.YEAR, help_text='Wann der Semesterwechsel sie wieder vorschlägt; Einmaliges nur auf Wunsch.',
+    )
+    origin = models.ForeignKey('self', models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Übernommen aus')
+    confirmed = models.DateTimeField('Bestätigt', null=True, blank=True, help_text='Für ein Semester in Planung: von den Lehrenden oder dem Institut.')
+    cancelled = models.DateTimeField('Entfällt seit', null=True, blank=True)
+    cancel_reason = models.CharField('Grund', max_length=200, blank=True)
 
     class Meta:
         ordering = ['title']
@@ -459,6 +471,7 @@ class Reduction(Tracked, models.Model):
         STUDY_DEAN = 'studiendekanat', 'Studiendekan:in (bis 50 %)'
         PROGRAMME = 'studiengangsleitung', 'Leitung von Studiengängen (bis 50 %, ab vier bis 70 %)'
         TASK = 'aufgabe', 'Weitere Aufgabe (bis 2 LVS)'
+        LEAVE = 'freisemester', 'Forschungs- oder Freisemester (ganz)'
         DISABILITY = 'schwerbehinderung', 'Schwerbehinderung (§ 10)'
 
     person = models.ForeignKey(Person, models.CASCADE, related_name='reductions', verbose_name='Lehrperson')

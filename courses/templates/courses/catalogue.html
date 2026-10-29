@@ -6,7 +6,7 @@
   <h1>Vorlesungsverzeichnis</h1>
   {% if office %}<div class="actions"><a class="btn" href="{% url 'courses:new' %}?semester={{ term.pk }}">Neue Veranstaltung</a></div>{% endif %}
 </div>
-<p class="lead">{{ term }} · {{ courses|length }} Veranstaltung{{ courses|length|pluralize:"en" }}</p>
+<p class="lead">{{ term }} · {{ courses|length }} Veranstaltung{{ courses|length|pluralize:"en" }}{% if term.planning %} · <span class="badge wait">in Planung</span> Studierende sehen das Semester ab der Veröffentlichung{% if open %} · nur noch nicht bestätigte{% endif %}{% endif %}</p>
 <form class="toolbar">
   <div class="inline">
     <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
@@ -26,7 +26,7 @@
     <tbody>
       {% for c in group.list %}
       <tr>
-        <td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a><br><small class="muted">{{ c.format|default:c.get_kind_display }}{% if c.subject %} · {{ c.subject }}{% endif %}</small></td>
+        <td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a>{% if c.cancelled %} <span class="badge no">entfällt</span>{% elif term.planning and c.origin_id %} {% if c.confirmed %}<span class="badge yes">bestätigt</span>{% else %}<span class="badge wait">offen</span>{% endif %}{% endif %}<br><small class="muted">{{ c.format|default:c.get_kind_display }}{% if c.subject %} · {{ c.subject }}{% endif %}</small></td>
         <td>{% for s in c.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
         <td class="num">{{ c.hours|default_if_none:"" }}</td>
         <td class="num">{{ c.size }}{% if c.capacity %} / {{ c.capacity }}{% endif %}</td>

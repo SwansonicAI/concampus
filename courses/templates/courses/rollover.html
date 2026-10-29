@@ -2,20 +2,110 @@
 {% block title %}Semesterwechsel{% endblock %}
 {% block subnav %}{% include "courses/_nav.html" %}{% endblock %}
 {% block content %}
-<h1>Semesterwechsel</h1>
-<p class="lead">{{ pending|length }} Veranstaltung{{ pending|length|pluralize:"en" }} {{ pending|length|pluralize:"ist,sind" }} im {{ target }} noch nicht angelegt.</p>
-<div class="cols">
-  <div>
-    <p>Lehrveranstaltungen kommen aus dem Semester ein Jahr zuvor, weil die meisten zwischen Winter und Sommer wechseln; Einzelunterricht kommt aus dem laufenden Semester.</p>
-    <p>Übernommen werden Titel, Art, Hauptfach, SWS, Plätze, Beschreibung, Lehrende und anrechenbare Module. Einzelunterricht behält seine Klasse: immatrikulierte Studierende werden mitgenommen. Termine plant jede Veranstaltung neu.</p>
-    <p>Was nicht stattfindet, etwa wegen eines Forschungssemesters, ohne Haken lassen; es lässt sich später noch übernehmen.</p>
-    {% if pending %}<button class="btn" form="uebernahme">Angekreuzte übernehmen</button>{% endif %}
-  </div>
-  <form method="post" id="uebernahme">
-    {% csrf_token %}
-    <table>
-      {% for c in pending %}<tr><td class="mid"><input type="checkbox" name="course" value="{{ c.pk }}" checked aria-label="{{ c.title }}"></td><td>{{ c.title }}{% if c.others %}<br><small class="muted">auch {{ c.others|join:", " }}</small>{% endif %}</td><td class="muted nowrap">aus {{ c.term }}</td></tr>{% endfor %}
-    </table>
-  </form>
+<h1>Semesterwechsel {{ target }}</h1>
+<p class="lead">{% if target.planning %}<span class="badge wait">in Planung</span> Studierende sehen das {{ target }} erst, wenn es veröffentlicht ist{% if target.ready_by %}; Vorlesungsverzeichnis fertig bis zum {{ target.ready_by|date:"j. F Y" }}{% endif %}.{% else %}<span class="badge yes">veröffentlicht</span> Was jetzt übernommen wird, sehen Studierende sofort.{% endif %}</p>
+<div class="stats">
+  <div class="stat"><b>{{ planned }}</b><span>übernommen</span></div>
+  <div class="stat"><b>{{ confirmed }}</b><span>bestätigt</span></div>
+  <div class="stat"><b>{{ waiting|length }}</b><span>Lehrende ohne Antwort</span></div>
+  <div class="stat"><b>{{ dropped|length }}</b><span>entfallen</span></div>
 </div>
+
+{% if planner %}
+<section>
+  <h2>1 · Übernehmen</h2>
+  <p class="lead">Vorgeschlagen nach Turnus: was jedes Semester stattfindet und Einzelunterricht aus dem laufenden Semester, was jährlich stattfindet aus demselben Semester ein Jahr zuvor. Einmaliges steht ohne Haken. Übernommen wird als Entwurf; die Vorlage bleibt, wie sie war. Klassen kommen ohne Studierende, sie füllen sich nach der Rückmeldung (4).</p>
+  <form class="toolbar">
+    <div class="inline">
+      <label>Institut<select name="institut" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>
+      <label>Fachgebiet<select name="fachgebiet" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for a in areas %}<option value="{{ a.pk }}"{% if a.pk|stringformat:'s' == area %} selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+      <label>Art<select name="art" onchange="this.form.requestSubmit()"><option value="">Alle</option><option value="course"{% if kind == 'course' %} selected{% endif %}>Lehrveranstaltungen</option><option value="lesson"{% if kind == 'lesson' %} selected{% endif %}>Einzelunterricht</option></select></label>
+      <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Titel oder Lehrende"></label>
+    </div>
+  </form>
+  {% if rows %}
+  <form method="post">
+    {% csrf_token %}<input type="hidden" name="schritt" value="uebernehmen">
+    <table>
+      <thead><tr><th class="mid"><input type="checkbox" data-all="" aria-label="Alle"></th><th>Veranstaltung</th><th class="num">SWS</th><th class="num">Plätze</th><th>Turnus</th><th>Zuletzt</th></tr></thead>
+      {% regroup rows by group as groups %}
+      {% for g in groups %}
+      <tbody>
+        <tr><th class="mid"><input type="checkbox" data-all="{{ forloop.counter }}" aria-label="{{ g.grouper }}"></th><th colspan="5">{{ g.grouper }} <span class="muted">· {{ g.list|length }}</span></th></tr>
+        {% for c in g.list %}
+        <tr>
+          <td class="mid"><input type="checkbox" name="course" value="{{ c.pk }}" data-part="{{ forloop.parentloop.counter }}"{% if c.rhythm != 'once' %} checked{% endif %} aria-label="{{ c.title }}"></td>
+          <td><a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a><br><small class="muted">{% for s in c.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% empty %}ohne Lehrende{% endfor %}{% if c.others %} · auch {{ c.others|join:", " }}{% endif %}</small></td>
+          <td class="num">{{ c.hours|default_if_none:"" }}</td>
+          <td class="num">{{ c.capacity|default_if_none:"" }}</td>
+          <td>{{ c.get_rhythm_display }}</td>
+          <td>{% if c.slot %}{{ c.slot }}{% elif c.kind == 'lesson' %}je Person{% endif %}<br><small class="muted">aus {{ c.term }}</small></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% endfor %}
+    </table>
+    <p style="margin-top: 16px"><button class="btn">Angekreuzte übernehmen</button></p>
+  </form>
+  {% else %}<p class="muted">{% if q or institute or area or kind %}Nichts in dieser Auswahl.{% else %}Alles ist übernommen.{% endif %}</p>{% endif %}
+</section>
+
+<section>
+  <h2>2 · Lehrende fragen</h2>
+  <p class="lead">Jede Lehrperson bestätigt ihre Veranstaltungen, ändert sie oder sagt ab; ein Institut kann für seine antworten. Die Frage kommt ins Postfach, mit einer Aufgabe auf der Startseite.</p>
+  {% if waiting %}<details><summary>{{ waiting|length }} Lehrende ohne Antwort</summary><p>{% for t in waiting %}{{ t }} ({{ t.n }}){% if not forloop.last %}, {% endif %}{% endfor %}</p></details>{% endif %}
+  {% if dropped %}<p>Entfallen: {% for c in dropped %}{{ c.title }} <small class="muted">({{ c.cancel_reason }})</small>{% if not forloop.last %}, {% endif %}{% endfor %}. Beim Veröffentlichen werden sie gelöscht.</p>{% endif %}
+  <form method="post" class="inline">
+    {% csrf_token %}<input type="hidden" name="schritt" value="fragen">
+    <label>Antwort bis<input name="bis" data-day autocomplete="off" value="{{ target.replies_by|date:'d.m.Y' }}" placeholder="z. B. 15.12."></label>
+    <button class="btn{% if target.replies_by %} ghost{% endif %}"{% if not planned %} disabled{% endif %}>{% if target.replies_by %}Noch offene erneut fragen{% else %}Lehrende fragen{% endif %}</button>
+  </form>
+</section>
+
+<section>
+  <h2>3 · Wöchentliche Termine</h2>
+  <p class="lead">Übernommene Lehrveranstaltungen ohne Termin, mit ihrem Termin vom letzten Mal: gebucht wird jede Woche der Unterrichtszeit, nur wo der Raum an jedem Tag frei ist.</p>
+  {% if timeless %}
+  <form method="post">
+    {% csrf_token %}<input type="hidden" name="schritt" value="termine">
+    <table>
+      <thead><tr><th class="mid"><input type="checkbox" data-all="" checked aria-label="Alle"></th><th>Veranstaltung</th><th>Wie zuletzt</th></tr></thead>
+      <tbody>
+        {% for c in timeless %}
+        <tr>
+          <td class="mid">{% if c.slot %}<input type="checkbox" name="course" value="{{ c.pk }}" data-part="" checked aria-label="{{ c.title }}">{% endif %}</td>
+          <td><a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a></td>
+          <td>{% if c.slot %}{{ c.slot }}{% else %}<span class="muted">kein Termin zuletzt; auf der Seite der Veranstaltung planen</span>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <p style="margin-top: 16px"><button class="btn">Angekreuzte buchen</button></p>
+  </form>
+  {% else %}<p class="muted">{% if planned %}Alle übernommenen Lehrveranstaltungen haben Termine.{% else %}Noch nichts übernommen.{% endif %}</p>{% endif %}
+</section>
+
+<section>
+  <h2>4 · Klassen füllen</h2>
+  <p class="lead">Nach der Rückmeldefrist am {{ target.deadline|date:"j. F Y" }}: in jede Klasse, wer in ihr war und sich zurückgemeldet hat, ohne Urlaubssemester, und wer neu bei ihren Lehrenden im Hauptfach beginnt; jeweils mit dem Modul des nächsten Fachsemesters.</p>
+  {% if fillable %}<form method="post">{% csrf_token %}<input type="hidden" name="schritt" value="klassen"><button class="btn">Klassen füllen</button></form>
+  {% else %}<p class="muted">Ab dem {{ target.deadline|date:"j. F Y" }} möglich.</p>{% endif %}
+</section>
+{% endif %}
+
+<section>
+  <h2>{% if planner %}5 · {% endif %}Prüfen und veröffentlichen</h2>
+  <dl class="facts">
+    <dt>Rückmeldungen</dt><dd>{% if not planned %}–{% elif waiting %}{{ waiting|length }} Lehrende ohne Antwort{% else %}alle beantwortet{% endif %}</dd>
+    <dt>Ohne Termin</dt><dd>{{ timeless|length }} Lehrveranstaltung{{ timeless|length|pluralize:"en" }}</dd>
+    <dt>Deputat</dt><dd>{{ over|length }} über der Lehrverpflichtung, {{ under|length }} unter der Hälfte · <a href="{% url 'courses:load' %}?semester={{ target.pk }}">Deputat {{ target }}</a></dd>
+    <dt>Freisemester</dt><dd>{% for r in leave %}{{ r.person }} hat Veranstaltungen{% if not forloop.last %}; {% endif %}{% empty %}–{% endfor %}</dd>
+    <dt>Lehraufträge</dt><dd>{% if contracts %}{{ contracts }} Lehrbeauftragte mit zusammen {{ contract_hours|floatformat:"-1" }} SWS: ihre Verträge für das {{ target }}{% else %}–{% endif %}</dd>
+    <dt>Ohne Angebot</dt><dd>{% for m, n in gaps %}{{ m.code }} {{ m.title }} <small class="muted">{{ m.program.title }}, {{ m.semester }}. Semester: {{ n }} Studierende</small>{% if not forloop.last %}<br>{% endif %}{% empty %}{% if planned %}keine Lücken im Studienplan{% else %}–{% endif %}{% endfor %}</dd>
+  </dl>
+  {% if target.planning %}
+  {% if publisher %}<form method="post" style="margin-top: 16px">{% csrf_token %}<input type="hidden" name="schritt" value="veroeffentlichen"><button class="btn" data-confirm="{{ target }} für Studierende veröffentlichen?">{{ target }} veröffentlichen</button></form>
+  {% else %}<p class="muted">Veröffentlicht wird von: {{ publishers|default:"dem zuständigen Amt" }}.</p>{% endif %}
+  {% endif %}
+</section>
 {% endblock %}

@@ -51,7 +51,7 @@ class CoursesConfig(Tile, AppConfig):
             found.append(feature('Neue Veranstaltung', reverse('courses:new'), 'anlegen erstellen kurs'))
         if roles & {'view_teaching_load', 'teacher'}:
             found.append(feature('Deputat', reverse('courses:load'), 'lehrverpflichtung sws lehrende auslastung'))
-        if 'roll_over' in roles:
+        if roles & {'roll_over', 'publish_term'}:
             found.append(feature('Semesterwechsel', reverse('courses:rollover'), 'übernehmen nächstes semester planen kopieren'))
         return found
 
@@ -80,8 +80,13 @@ class CoursesConfig(Tile, AppConfig):
                         found.append(task(f'Studienfachberatung: {s.person} ({options[0].choice.title})', url, due))
                     elif due < today:  # advised: the choice is the student's, who has the to-do
                         found.append(task(f'{options[0].choice.title}: empfohlen {s.advised.title}, wartet auf {s.person}', url))
-            for course in person.teaching.filter(term=term, kind=TEACHING[0], bookings=None):
+            for course in person.teaching.filter(term=term, kind=TEACHING[0], bookings=None, cancelled=None):
                 found.append(task(f'Termine planen: {course.title}', course.get_absolute_url()))
+            for planned in Term.objects.filter(planning=True, replies_by__isnull=False):  # the next semester: one's courses to confirm
+                if n := person.teaching.filter(term=planned, kind__in=TEACHING, confirmed=None, cancelled=None, origin__isnull=False).count():
+                    found.append(task(
+                        f'{planned} planen: {plural(n, "Veranstaltung", "Veranstaltungen")} bestätigen oder absagen', f"{reverse('courses:mine')}?semester={planned.pk}", planned.replies_by,
+                    ))
             for course in person.teaching.filter(term=term, signups__isnull=False).annotate(n=Count('signups')):
                 found.append(task(f'{course.title}: {plural(course.n, "Anfrage", "Anfragen")} entscheiden', course.get_absolute_url()))
             for course in person.teaching.filter(term=term).annotate(n=Count('ensembles', filter=Q(ensembles__coach=None, ensembles__wish=person))).filter(n__gt=0):
@@ -108,10 +113,17 @@ class CoursesConfig(Tile, AppConfig):
         if 'manage_courses' in person.roles and not person.everywhere('manage_courses'):  # an Institut's office
             if n := person.within(untimed(Participation.objects.all()), 'manage_courses').values('study').distinct().count():
                 found.append(task(f'Einzelunterricht: {plural(n, "Person", "Personen")} ohne Unterrichtszeit', f"{reverse('students:list')}?stand=unterricht"))
+            for planned in Term.objects.filter(planning=True, replies_by__isnull=False):  # the Institut answers for its courses too
+                if n := person.within(planned.courses.filter(kind__in=TEACHING, confirmed=None, cancelled=None, origin__isnull=False), 'manage_courses').count():
+                    found.append(task(
+                        f'{planned} planen: {plural(n, "Veranstaltung", "Veranstaltungen")} noch ohne Antwort', f"{reverse('courses:catalogue')}?semester={planned.pk}&stand=offen", planned.replies_by,
+                    ))
         if 'roll_over' in person.roles:
             from .views import missing
 
             upcoming = Term.upcoming()
-            if upcoming and (count := person.within(missing(upcoming), 'roll_over').count()):
-                found.append(task(f'Semesterwechsel: {plural(count, "Veranstaltung", "Veranstaltungen")} für {upcoming} übernehmen', reverse('courses:rollover'), upcoming.start))
+            if upcoming and (count := person.within(missing(upcoming), 'roll_over').exclude(rhythm=Course.Rhythm.ONCE).count()):
+                found.append(task(f'Semesterwechsel: {plural(count, "Veranstaltung", "Veranstaltungen")} für {upcoming} übernehmen', reverse('courses:rollover'), upcoming.ready_by or upcoming.start))
+        if 'publish_term' in person.roles and (upcoming := Term.upcoming()) and upcoming.planning and upcoming.courses.filter(kind__in=TEACHING).exists():
+            found.append(task(f'{upcoming} prüfen und veröffentlichen', reverse('courses:rollover'), upcoming.ready_by))
         return found

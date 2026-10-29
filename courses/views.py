@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Count, Exists, F, Max, Min, OuterRef, Q, Subquery
+from django.db.models import Count, Exists, F, Max, Min, OuterRef, Prefetch, Q, Subquery
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -26,7 +26,7 @@ from core.text import fold, matching
 from core.views import without_term
 from curriculum.models import Module, Program
 from rooms.models import Booking, BookingCategory
-from rooms.views import agenda, legend, week
+from rooms.views import agenda, called_off, legend, week
 from students.models import Study
 from . import panel
 from .forms import AddForm, CourseForm, DateForm, EnsembleForm, Lessons, PlanForm, TeachingForm
@@ -40,7 +40,7 @@ def deputat(courses, person):
     """A teacher's load in SWS: each course's hours; per participant in one-to-one teaching, per ensemble they coach in
     ensemble courses."""
     courses = (
-        courses.select_related('format').prefetch_related('participations__module')
+        courses.filter(cancelled=None).select_related('format', 'term').prefetch_related('participations__module', 'origin__participations__module')
         .annotate(size=Count('participations', distinct=True), coached=Count('ensembles', filter=Q(ensembles__coach=person), distinct=True))
     )
     return sum(sws(c, c.coached) for c in courses)
@@ -48,10 +48,12 @@ def deputat(courses, person):
 
 def sws(course, coached):
     """A course's SWS for one of its teachers: a lesson class each participation by the weekly minutes its plan gives,
-    60 to an SWS (ThürLVVO § 2 Abs. 2), else the course's hours; otherwise the hours as often as `share` says. Reads
-    `participations.all()` with their modules; prefetch them for many courses."""
+    60 to an SWS (ThürLVVO § 2 Abs. 2), else the course's hours; a class of a coming term not yet filled as the one it was
+    taken over from. Otherwise the hours as often as `share` says. Reads `participations.all()` with their modules, and
+    the origin's; prefetch them for many courses."""
     if course.kind == Course.Kind.LESSON:
-        return sum(minutes(p.module) or course.hours or 0 for p in course.participations.all())
+        taking = course.participations.all() or (course.origin.participations.all() if course.origin_id and course.term.start > timezone.localdate() else [])
+        return sum(minutes(p.module) or course.hours or 0 for p in taking)
     return (course.hours or 0) * share(course, coached)
 
 
@@ -95,6 +97,8 @@ def index(request):
 def catalogue(request):
     person = request.user
     term = Term.pick(request.GET.get('semester'))
+    if term and not Term.shown(person).filter(pk=term.pk).exists():
+        term = Term.current()
     if term is None:
         return without_term(request, 'ein Semester mit Veranstaltungen')
     studies = person.studies.filter(status=Study.Status.ENROLLED)
@@ -120,11 +124,13 @@ def catalogue(request):
         courses = courses.filter(area=area)
     if form.isdigit():
         courses = courses.filter(format=form)
+    if open_ := term.planning and request.GET.get('stand') == 'offen':  # what its teachers have yet to confirm
+        courses = courses.filter(confirmed=None, cancelled=None).exclude(origin=None)
     if q := request.GET.get('q', '').strip():
         courses = matching(courses, q, 'title', 'staff__last_name', 'subject__name', 'area__name', 'description', 'modules__title', 'modules__code')  # also by the module's name in the Studienplan
     return render(request, 'courses/catalogue.html', {
         'term': term,
-        'terms': Term.objects.filter(courses__kind__in=TEACHING).distinct().order_by('-start').filter(**since(request.user)),
+        'terms': Term.shown(person).filter(courses__kind__in=TEACHING).distinct().order_by('-start').filter(**since(request.user)), 'open': open_,
         'courses': courses.order_by(F('area__order').asc(nulls_last=True), 'area__name', 'title'),
         'programs': Program.planned(),
         'program': program,
@@ -140,7 +146,7 @@ def catalogue(request):
 
 def course(request, pk):
     person = request.user
-    course = get_object_or_404(Course.objects.select_related('term', 'subject'), pk=pk, kind__in=TEACHING)
+    course = get_object_or_404(Course.objects.select_related('term', 'subject'), pk=pk, kind__in=TEACHING, term__in=Term.shown(person))
     staffed = teaches(person, course)
     office = person.may('manage_courses', course)
 
@@ -183,7 +189,8 @@ def course(request, pk):
             Participation.objects.filter(course__term=course.term, course__kind=Course.Kind.AUDITION, course__video=False, course__subject__isnull=False, study__in=course.participations.values('study'))
             .select_related('study__person', 'study__subject', 'course').order_by(F('slot').asc(nulls_last=True), 'study__person__last_name')
         )
-    lessons = lesson_times(course) if staffed and course.kind == Course.Kind.LESSON and playing is None else []
+    running = course.term.end >= timezone.localdate()  # what is over is planned no more
+    lessons = lesson_times(course) if staffed and running and course.kind == Course.Kind.LESSON and playing is None else []
     timetable = lessons and Lessons(sent(request, 'lessons'), initial=[row for _, row in lessons], form_kwargs={'person': person})
     ensembles = list(
         (course.ensembles if staffed else course.ensembles.filter(members__person=person).distinct())
@@ -201,12 +208,12 @@ def course(request, pk):
         'count': len(rows),
         'staffed': staffed,
         'eligible': person.studies.filter(status=Study.Status.ENROLLED, program__modules__courses=course).distinct(),
-        'running': course.term.end >= timezone.localdate(),
+        'running': running, 'cancelling': office and not course.term.planning and not course.cancelled and running,
         'from': max(course.term.lectures_start, timezone.localdate()), 'office': office,
         'modules': credited(course),
         'bookings': upcoming.select_related('room', 'category').prefetch_related('participants', 'absent')[:8],
-        'plan': PlanForm(sent(request, 'plan'), person=person) if staffed and course.kind != Course.Kind.LESSON else None,
-        'date': DateForm(sent(request, 'date'), person=person, course=course) if staffed else None,
+        'plan': PlanForm(sent(request, 'plan'), person=person) if staffed and running and not course.cancelled and course.kind != Course.Kind.LESSON else None,
+        'date': DateForm(sent(request, 'date'), person=person, course=course) if staffed and running and not course.cancelled else None,
         'lessons': timetable,
         'lesson_rows': zip([s for s, _ in lessons], timetable or []),
         'ensembles': ensembles,
@@ -221,16 +228,22 @@ def edit(request, pk=None):
     """Create or change a course: the office for its Institute and Studiengänge; its teachers what is theirs to decide
     (TeachingForm)."""
     person = request.user
-    course = get_object_or_404(Course, pk=pk, kind__in=TEACHING) if pk else Course(term=Term.pick(request.GET.get('semester')))
+    term = Term.pick(request.GET.get('semester'))
+    course = get_object_or_404(Course, pk=pk, kind__in=TEACHING) if pk else Course(term=term, opens=term and term.course_signup_start, deadline=term and term.course_signup_end)
     office = 'manage_courses' in person.roles and (not pk or person.may('manage_courses', course))
     if not (office or pk and course.staff.filter(pk=person.pk).exists()):
         raise PermissionDenied
+    over = bool(pk) and course.term.over
+    if over and not office:
+        raise PermissionDenied(f'Das {course.term} ist vorbei. Korrekturen trägt {Office.holding("manage_courses") or "das zuständige Amt"} ein, mit Grund.')
     planning = person.may('plan_teaching', course) if pk else 'plan_teaching' in person.roles
-    form = CourseForm(request.POST or None, instance=course, person=person, planning=planning) if office else TeachingForm(request.POST or None, instance=course, person=person)
-    if form.is_valid() and (saved := kept(form, person, 'manage_courses') if office else form.save()):
-        course = saved
-        messages.success(request, 'Gespeichert. Jetzt Termine planen und Teilnehmende eintragen.' if not pk else 'Gespeichert.')
-        return redirect(course)
+    form = CourseForm(request.POST or None, instance=course, person=person, planning=planning, over=over) if office else TeachingForm(request.POST or None, instance=course, person=person)
+    if form.is_valid():
+        with history.because(form.cleaned_data.get('correction', '')):
+            saved = kept(form, person, 'manage_courses') if office else form.save()
+        if saved:
+            messages.success(request, 'Gespeichert. Jetzt Termine planen und Teilnehmende eintragen.' if not pk else 'Gespeichert.')
+            return redirect(saved)
     back = course.get_absolute_url() if pk else reverse('courses:catalogue')
     return render(request, 'courses/form.html', {
         'form': form, 'course': course, 'menu': 'courses/_nav.html', 'heading': 'Neue Veranstaltung', 'back': back,
@@ -289,7 +302,9 @@ def register(request, pk):
     module = course.modules.filter(program=study.program).order_by('semester').first()
     late = not course.is_open and not course.upcoming  # the teachers may still take someone while the term runs
     besides = besides_focus(course, study)
-    if course.allocation == Course.Allocation.STAFF:
+    if course.cancelled or course.term.planning:
+        messages.error(request, 'Diese Veranstaltung entfällt.' if course.cancelled else 'Das Semester ist noch nicht veröffentlicht.')
+    elif course.allocation == Course.Allocation.STAFF:
         messages.error(request, 'Die Lehrenden teilen die Plätze ein.')
     elif course.allocation == Course.Allocation.ENSEMBLE:
         messages.error(request, 'Bitte als Ensemble anmelden.')
@@ -605,7 +620,7 @@ def lessons(request, pk):
 def mine(request):
     person = request.user
     term = Term.pick(request.GET.get('semester'))
-    context = {'term': term, 'terms': Term.objects.filter(courses__isnull=False).distinct().order_by('-start').filter(**since(person))}
+    context = {'term': term, 'terms': Term.shown(person).filter(courses__isnull=False).distinct().order_by('-start').filter(**since(person))}
     if 'teacher' in person.roles:
         teaching = person.teaching.filter(term=term, kind__in=TEACHING)
         context.update(
@@ -669,7 +684,10 @@ def timetable(request):
 
 def hours(term, seen):
     """{teacher: [(course, SWS)]} of a term's teaching, for the teachers `seen` (pks; None: all)."""
-    courses = term.courses.filter(kind__in=TEACHING).select_related('format').prefetch_related('staff', 'ensembles', 'participations__module').annotate(size=Count('participations'))
+    courses = (
+        term.courses.filter(kind__in=TEACHING, cancelled=None).select_related('format', 'term')
+        .prefetch_related('staff', 'ensembles', 'participations__module', 'origin__participations__module').annotate(size=Count('participations'))
+    )
     if seen is not None:
         courses = courses.filter(pk__in=Course.objects.filter(staff__in=seen).values('pk'))
     found = defaultdict(list)
@@ -743,11 +761,14 @@ def since(person):
 
 
 def missing(target):
-    """Courses `target` still lacks: lesson classes as this term has them, courses as the term a year before
-    offered them, since most alternate between winter and summer."""
-    before = Term.objects.filter(start__lte=target.start - timedelta(days=365)).last()
-    return Course.objects.filter(
-        Q(term=Term.current(), kind=Course.Kind.LESSON) | Q(term=before, kind=Course.Kind.COURSE)
+    """What `target` may take over, each course by its Turnus: lesson classes and what runs every semester from the term
+    before, what runs yearly from the same semester a year before, one-off courses from either, offered again only by
+    choice; nothing `target` has already."""
+    before = Term.objects.filter(start__lt=target.start).order_by('-start').first()
+    year = Term.objects.filter(start__lte=target.start - timedelta(days=365)).order_by('-start').first()
+    every = Q(kind=Course.Kind.LESSON) | Q(rhythm=Course.Rhythm.SEMESTER)
+    return Course.objects.filter(kind__in=TEACHING).filter(
+        Q(term=before) & (every | Q(rhythm=Course.Rhythm.ONCE)) | Q(term=year, kind=Course.Kind.COURSE) & ~Q(rhythm=Course.Rhythm.SEMESTER),
     ).exclude(title__in=target.courses.values('title'))
 
 
@@ -758,32 +779,251 @@ def untimed(participations):
         Exists(booked)).exclude(course__in=Course.objects.filter(accompaniment__isnull=False).values('accompaniment'))
 
 
-@require('roll_over')
+WEEKDAYS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
+
+
+def usual(courses):
+    """{course pk: (weekday, time, minutes, room)}: each course's weekly date as it mostly took place."""
+    found = defaultdict(Counter)
+    for b in Booking.objects.filter(course__in=courses, ensemble=None, category__blocks=True).select_related('room'):
+        start = timezone.localtime(b.start)
+        found[b.course_id][start.weekday(), start.time(), int((b.end - b.start).total_seconds() // 60), b.room] += 1
+    return {pk: seen.most_common(1)[0][0] for pk, seen in found.items()}
+
+
+def described(slot):
+    """A weekly date (usual) as people read it: 'Di 10:00, 90 Min. · FH 311'."""
+    return slot and f'{WEEKDAYS[slot[0]]} {slot[1]:%H:%M}, {slot[2]} Min. · {slot[3]}'
+
+
+def gaps(target):
+    """Course work of a Studienplan that everyone on it takes in the Fachsemester they reach in `target`, taught as a
+    course before, that no course of `target` offers: [(module, students)], the most students first."""
+    today = timezone.localdate()
+    reach = Counter(
+        Study.objects.filter(status=Study.Status.ENROLLED)
+        .annotate(fs=F('prior_terms') + Count('terms', filter=Q(terms__leave=False, terms__withdrawn=False, terms__term__start__lte=today)))
+        .values_list('program', 'fs')
+    )
+    taught = set(Module.objects.filter(courses__kind__in=TEACHING).values_list('pk', flat=True))
+    offered = set(Module.objects.filter(courses__term=target, courses__cancelled=None).values_list('pk', flat=True))
+    found = []
+
+    def walk(node, program):
+        if node.nodes and node.credits < node.offered:  # a choice: each option only some take
+            return
+        if not node.nodes and node.pk in taught and node.pk not in offered and (n := reach[program.pk, (node.semester or 0) - 1]):
+            found.append((node, n))
+        for kid in node.nodes:
+            walk(kid, program)
+
+    for program in Program.objects.filter(pk__in={program for program, _ in reach}):
+        for root in program.curriculum():
+            walk(root, program)
+    return sorted(found, key=lambda f: -f[1])
+
+
+@require('roll_over', 'publish_term')
 def rollover(request):
-    """Copy the missing courses to the next term, with staff and modules; lesson classes keep their students."""
+    """The next semester planned in steps, unseen by students until it is published: take its courses over as drafts, ask
+    the teachers to confirm them, book last year's weekly times, fill the classes after the Rückmeldung, check, publish."""
     target = Term.upcoming()
     if target is None:
         return without_term(request, 'das nächste Semester, in das die Veranstaltungen übernommen werden')
-    pending = request.user.within(missing(target), 'roll_over')
+    person = request.user
+    pending = person.within(missing(target), 'roll_over')
     if request.method == 'POST':
-        chosen = list(pending.filter(pk__in=request.POST.getlist('course')).prefetch_related('modules', 'staff'))
-        with transaction.atomic():
-            for c in chosen:
-                copy = Course.objects.create(
-                    term=target, kind=c.kind, title=c.title, area=c.area, format=c.format, subject=c.subject, hours=c.hours,
-                    capacity=c.capacity, allocation=c.allocation, description=c.description,
-                )
-                copy.modules.set(c.modules.all())
-                copy.staff.set(c.staff.all())
-                if c.kind == Course.Kind.LESSON:
-                    history.saved(Participation.objects.bulk_create(
-                        Participation(course=copy, study=p.study, module=p.module)
-                        for p in c.participations.filter(study__status=Study.Status.ENROLLED).select_related('study')
-                    ))
-        messages.success(request, f'{plural(len(chosen), "Veranstaltung", "Veranstaltungen")} nach {target} übernommen.')
-        return redirect(f"{reverse('courses:catalogue')}?semester={target.pk}")
-    ours = request.user.ours('roll_over')
-    pending = list(pending.select_related('term', 'subject__institute').prefetch_related('staff__institute').order_by('title'))
-    for c in pending:  # taught with other Institute too: theirs to decide as well
-        c.others = sorted({str(s.institute) for s in c.staff.all() if s.institute_id and s.institute_id not in ours}) if ours else []
-    return render(request, 'courses/rollover.html', {'target': target, 'pending': pending})
+        step = {'uebernehmen': take_over, 'fragen': ask, 'termine': schedule, 'klassen': fill, 'veroeffentlichen': publish}.get(request.POST.get('schritt'))
+        if step is None or ('publish_term' if step is publish else 'roll_over') not in person.roles:
+            raise PermissionDenied
+        step(request, target, pending)
+        return redirect('courses:rollover')
+    institute, area, kind, q = (request.GET.get(name, '').strip() for name in ('institut', 'fachgebiet', 'art', 'q'))
+    if institute.isdigit():
+        pending = pending.filter(Q(subject__institute=institute) | Q(staff__institute=institute))
+    if area.isdigit():
+        pending = pending.filter(area=area)
+    if kind in TEACHING:
+        pending = pending.filter(kind=kind)
+    if q:
+        pending = matching(pending, q, 'title', 'staff__last_name')
+    ours, rows, titles = person.ours('roll_over'), [], set()
+    for c in pending.distinct().select_related('term', 'area', 'subject__institute').prefetch_related('staff__institute').order_by('-term__start', 'title'):
+        if c.title not in titles:  # the newest offering once
+            titles.add(c.title)
+            c.others = sorted({str(s.institute) for s in c.staff.all() if s.institute_id and s.institute_id not in ours}) if ours else []
+            c.group = f'Einzelunterricht · {c.subject.institute}' if c.kind == Course.Kind.LESSON and c.subject and c.subject.institute else c.area.name if c.area else 'Ohne Fachgebiet'
+            rows.append(c)
+    slots = usual([c.pk for c in rows if c.kind == Course.Kind.COURSE])
+    for c in rows:
+        c.slot = described(slots.get(c.pk))
+    rows.sort(key=lambda c: (c.kind == Course.Kind.LESSON, c.group, c.title))
+    planned = target.courses.filter(kind__in=TEACHING).exclude(origin=None)  # taken over: for their teachers to confirm
+    live = planned.filter(cancelled=None)
+    waiting = live.filter(confirmed=None)
+    timeless = list(target.courses.filter(kind=Course.Kind.COURSE, cancelled=None, bookings__isnull=True).select_related('origin').order_by('title'))
+    slots = usual([c.origin_id for c in timeless if c.origin_id])
+    for c in timeless:
+        c.slot = described(slots.get(c.origin_id))
+    load = loads(target, person) if 'view_teaching_load' in person.roles else []
+    contracts = [row.total for row in load if row.teacher.employment == Person.Employment.LEHRAUFTRAG]
+    return render(request, 'courses/rollover.html', {
+        'target': target, 'rows': rows, 'planner': 'roll_over' in person.roles, 'publisher': 'publish_term' in person.roles,
+        'institutes': Institute.objects.all(), 'areas': Area.objects.all(), 'institute': institute, 'area': area, 'kind': kind, 'q': q,
+        'planned': planned.count(), 'confirmed': live.exclude(confirmed=None).count(), 'dropped': planned.exclude(cancelled=None).select_related('origin'),
+        'waiting': Person.objects.filter(teaching__in=waiting).annotate(n=Count('teaching', filter=Q(teaching__in=waiting))).order_by('last_name'),
+        'timeless': timeless, 'fillable': timezone.localdate() > target.deadline,
+        'over': [row for row in load if row.balance and row.balance > 0], 'under': [row for row in load if row.low],
+        'contracts': len(contracts), 'contract_hours': sum(contracts),
+        'leave': Reduction.objects.filter(term=target, reason=Reduction.Reason.LEAVE, person__teaching__in=live).distinct().select_related('person'),
+        'gaps': gaps(target)[:12] if planned.exists() else [],
+        'publishers': Office.holding('publish_term'),
+    })
+
+
+def take_over(request, target, pending):
+    """The ticked courses as drafts of `target`, from what they were: staff, Turnus, and the modules they counted for, also
+    as the same semester a year before had them; registration as the semester sets it; lesson classes without their
+    students, who come once they have re-registered (fill)."""
+    chosen, titles = [], set()
+    for c in pending.filter(pk__in=request.POST.getlist('course')).prefetch_related('modules', 'staff').order_by('-term__start'):
+        if c.title not in titles:
+            titles.add(c.title)
+            chosen.append(c)
+    year = Term.objects.filter(start__lte=target.start - timedelta(days=365)).order_by('-start').first()
+    earlier = defaultdict(set)  # what runs every semester may count for other semesters' modules in summer and in winter
+    for title, module in Course.objects.filter(term=year, title__in=titles, kind__in=TEACHING).values_list('title', 'modules'):
+        if module:
+            earlier[title].add(module)
+    with transaction.atomic():
+        for c in chosen:
+            copy = Course.objects.create(
+                term=target, kind=c.kind, title=c.title, area=c.area, format=c.format, subject=c.subject, hours=c.hours, capacity=c.capacity,
+                allocation=c.allocation, description=c.description, rhythm=c.rhythm, origin=c, opens=target.course_signup_start, deadline=target.course_signup_end,
+            )
+            copy.modules.set({m.pk for m in c.modules.all()} | earlier[c.title])
+            copy.staff.set(c.staff.all())
+    hidden = ' als Entwurf; Studierende sehen sie, sobald das Semester veröffentlicht ist' if target.planning else ''
+    messages.success(request, f'{plural(len(chosen), "Veranstaltung", "Veranstaltungen")} nach {target} übernommen{hidden}.')
+
+
+def ask(request, target, pending):
+    """Ask every teacher with a course still unconfirmed to confirm, change or call it off by a day; asked again, those
+    still open."""
+    by = understood(request.POST.get('bis', ''))
+    if by is None or by <= timezone.localdate():
+        messages.error(request, 'Bitte einen Tag in der Zukunft angeben, bis zu dem die Lehrenden antworten.')
+        return
+    target.replies_by = by
+    target.save(update_fields=['replies_by'])
+    waiting = target.courses.filter(kind__in=TEACHING, confirmed=None, cancelled=None).exclude(origin=None)
+    teachers = list(Person.objects.filter(teaching__in=waiting).distinct().prefetch_related(Prefetch('teaching', waiting, to_attr='open')))
+    for t in teachers:
+        texts.send(
+            'semesterplanung', t, f"{reverse('courses:mine')}?semester={target.pk}", semester=str(target), frist=date_format(by, 'j. F Y'),
+            veranstaltungen='\n'.join(f'– {c.title}' for c in t.open),
+        )
+    messages.success(request, f'{plural(len(teachers), "Lehrperson", "Lehrpersonen")} gefragt, Antwort bis zum {date_format(by, "j.n.Y")}.')
+
+
+def schedule(request, target, pending):
+    """Book the ticked drafts weekly as their course took place last time, where the room is free on every date."""
+    courses = list(target.courses.filter(pk__in=request.POST.getlist('course'), kind=Course.Kind.COURSE, cancelled=None, bookings__isnull=True).exclude(origin=None))
+    slots, booked, taken = usual([c.origin_id for c in courses]), 0, []
+    for c in courses:
+        if (slot := slots.get(c.origin_id)) is None:
+            continue
+        weekday, time, minutes, room = slot
+        dates = weekly(c, request.user, {'weekday': weekday, 'time': time, 'minutes': minutes, 'room': room})
+        if not dates:
+            continue
+        busy = Booking.objects.filter(room=room, category__blocks=True, start__lt=dates[-1].end, end__gt=dates[0].start).values_list('start', 'end')
+        if any(s < b.end and b.start < e for s, e in busy for b in dates):
+            taken.append(f'{c.title} ({room})')
+            continue
+        history.saved(Booking.objects.bulk_create(dates))
+        booked += 1
+    messages.success(request, f'{plural(booked, "Veranstaltung hat", "Veranstaltungen haben")} ihre wöchentlichen Termine.')
+    if taken:
+        messages.error(request, f'Raum belegt, nicht gebucht: {"; ".join(taken)}. Diese bitte auf ihrer Seite planen.')
+
+
+def fill(request, target, pending):
+    """After the Rückmeldefrist: each lesson class of `target` gets whoever was in it and re-registered, not on leave, and
+    the new students of its teachers in its Hauptfach; each with the module of their next Fachsemester."""
+    if timezone.localdate() <= target.deadline:
+        messages.error(request, f'Erst nach der Rückmeldefrist am {date_format(target.deadline, "j.n.Y")}.')
+        return
+    today = timezone.localdate()
+    studies = Study.objects.filter(status=Study.Status.ENROLLED, terms__term=target, terms__leave=False, terms__withdrawn=False).annotate(
+        fs=F('prior_terms') + Count('terms', filter=Q(terms__leave=False, terms__withdrawn=False, terms__term__start__lte=today)),
+    ).in_bulk()
+    added = 0
+    for c in target.courses.filter(kind=Course.Kind.LESSON, cancelled=None).prefetch_related('modules', 'staff'):
+        staff = {p.pk for p in c.staff.all()}
+        had = set(Participation.objects.filter(course=c.origin_id).values_list('study', flat=True)) if c.origin_id else set()
+        new = {s.pk for s in studies.values() if s.start_term_id == target.pk and s.teacher_id in staff and s.subject_id == c.subject_id}
+        rows = []
+        for pk in (had | new) & (studies.keys() - set(c.participations.values_list('study', flat=True))):
+            s = studies[pk]
+            plan = [m for m in c.modules.all() if m.program_id == s.program_id]
+            module = next((m for m in plan if m.semester == s.fs + 1), None) or min(plan, key=lambda m: m.semester or 99, default=None)
+            rows.append(Participation(course=c, study=s, module=module))
+        history.saved(Participation.objects.bulk_create(rows))
+        added += len(rows)
+    messages.success(request, f'{plural(added, "Person", "Personen")} in die Klassen des {target} eingetragen.')
+
+
+def publish(request, target, pending):
+    """Publish `target`: students see its courses; those its teachers called off, never offered, are deleted."""
+    dropped = target.courses.filter(kind__in=TEACHING, cancelled__isnull=False, participations=None)
+    with transaction.atomic():
+        n = dropped.count()
+        dropped.delete()
+        target.planning = False
+        target.save(update_fields=['planning'])
+    messages.success(request, f'{target} veröffentlicht: Studierende sehen seine Lehrveranstaltungen.' + (f' {plural(n, "abgesagte Veranstaltung", "abgesagte Veranstaltungen")} gelöscht.' if n else ''))
+
+
+@require_POST
+def reply(request, pk):
+    """For a semester in planning, the answer of a course's teachers or of its Institut: it takes place as planned, or it
+    is called off with its reason; or the answer taken back."""
+    course = get_object_or_404(Course.objects.select_related('term'), pk=pk, kind__in=TEACHING, term__planning=True)
+    if not teaches(request.user, course):
+        raise PermissionDenied
+    answer, reason = request.POST.get('antwort'), request.POST.get('grund', '').strip()[:200]
+    if answer == 'entfaellt' and not reason:
+        messages.error(request, 'Bitte den Grund angeben, etwa ein Forschungssemester.')
+    else:
+        course.confirmed = timezone.now() if answer == 'findet' else None
+        course.cancelled, course.cancel_reason = (timezone.now(), reason) if answer == 'entfaellt' else (None, '')
+        course.save(update_fields=['confirmed', 'cancelled', 'cancel_reason'])
+        messages.success(request, {'findet': f'{course.title}: findet so statt.', 'entfaellt': f'{course.title}: entfällt.'}.get(answer, f'{course.title}: Antwort zurückgenommen.'))
+    back = request.POST.get('next', '')
+    return redirect(back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else course.get_absolute_url())
+
+
+@require_POST
+def cancel(request, pk):
+    """A published course that does not take place after all: its coming dates are called off, registrations without a
+    result and requests lifted, and whoever had one hears of it with the reason. It stays listed as „entfällt“."""
+    course = get_object_or_404(Course.objects.select_related('term'), pk=pk, kind__in=TEACHING, term__planning=False, cancelled=None)
+    if not request.user.may('manage_courses', course) or course.term.over:
+        raise PermissionDenied
+    if not (reason := request.POST.get('grund', '').strip()[:200]):
+        messages.error(request, 'Bitte den Grund angeben; er steht in der Nachricht an die Angemeldeten.')
+        return redirect(course)
+    people = list(Person.objects.filter(
+        Q(studies__participations__course=course, studies__participations__passed=None) | Q(studies__signups__course=course)).distinct())
+    with transaction.atomic():
+        course.cancelled, course.cancel_reason = timezone.now(), reason
+        course.save(update_fields=['cancelled', 'cancel_reason'])
+        for b in course.bookings.filter(start__gte=timezone.now(), category__blocks=True):
+            called_off(b, request.user)
+        course.participations.filter(passed=None).delete()
+        course.signups.all().delete()
+    for p in people:
+        texts.send('entfaellt', p, course.get_absolute_url(), veranstaltung=course.title, semester=str(course.term), grund=reason)
+    messages.success(request, f'{course.title} entfällt. {plural(len(people), "Person hat", "Personen haben")} Nachricht erhalten.')
+    return redirect(course)
