@@ -83,6 +83,9 @@ class EditorTest(Seeded):
         second.post('/einstellungen/freigaben/', {'art': 'recht', 'id': Grant.objects.get(office=office).pk, 'decision': 'yes'})
         second.post('/einstellungen/freigaben/', {'art': 'mitglied', 'id': Membership.objects.get(person=clerk).pk, 'decision': 'yes'})
         self.assertIn('view_students', Person.objects.get(pk=clerk.pk).roles)
+        second.post(f'/einstellungen/konten/{Person.objects.get(username="campus").pk}/', {'username': 'campus', 'first_name': 'Lena', 'last_name': 'Hofmann', 'groups': [office.pk, *Person.objects.get(username='campus').groups.values_list('pk', flat=True)], 'is_active': 'on'})
+        own = Membership.objects.get(person__username='campus', office=office)
+        self.assertEqual(campus.post('/einstellungen/freigaben/', {'art': 'mitglied', 'id': own.pk, 'decision': 'yes'}).status_code, 404)  # nobody confirms their own
         joined = Change.objects.filter(person=clerk, table='core.person').first()
         self.assertEqual(joined.fields['groups'], [[], [office.pk]])
 

@@ -9,7 +9,7 @@ from core.dates import ClockField, DayField, MomentField
 from core.models import Institution, Person
 from curriculum.models import Module, Program
 from rooms.forms import RoomField, bookable
-from rooms.models import Room
+from rooms.models import Booking, Room
 from students.models import Study
 from .models import Appointment, Course
 
@@ -100,6 +100,8 @@ class SlotForm(forms.Form):
     def __init__(self, *args, person, course, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['room'].queryset = Room.objects.filter(Q(pk__in=bookable(person).values('pk')) | Q(bookings__course=course)).distinct()
+        lately = Booking.objects.filter(course__kind=course.kind).order_by('-created').values_list('room', flat=True)[:40]  # the halls such exams and auditions are held in
+        self.fields['room'].recent = list(dict.fromkeys(lately))[:5]
         booked = course.bookings.order_by('start').first()
         if booked:  # the block starts where the exam is booked
             self.fields['room'].initial, self.fields['start'].initial = booked.room_id, timezone.localtime(booked.start)

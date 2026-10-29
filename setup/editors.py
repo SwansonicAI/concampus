@@ -90,10 +90,12 @@ class OfficeForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields['capabilities'].help_text = 'Neue Rechte gelten, sobald eine zweite Person sie unter „Freigaben“ bestätigt.'
         if self.instance.pk:
             self.initial['capabilities'] = list(self.instance.permissions.values_list('codename', flat=True))
             members = ', '.join(str(p) for p in self.instance.user_set.order_by('last_name'))
-            self.note = f'Mitglieder: {members or "noch niemand"}. Wer dazugehört, wird bei den Konten eingetragen.'
+            waiting = '; '.join(', '.join(g.labels) for g in self.instance.grants.all())
+            self.note = f'Mitglieder: {members or "noch niemand"}. Wer dazugehört, wird bei den Konten eingetragen.' + (f' Wartet auf Bestätigung: {waiting}.' if waiting else '')
 
     def clean(self):
         data = super().clean()
@@ -121,7 +123,7 @@ class AccountForm(forms.ModelForm):
         localized_fields = ['obligation']
         labels = {'groups': 'Ämter', 'is_active': 'Aktiv', 'username': 'Benutzername'}
         help_texts = {
-            'groups': 'Was jemand darf, ergibt sich aus den Rechten der Ämter.',
+            'groups': 'Was jemand darf, ergibt sich aus den Rechten der Ämter. Ein neues Amt gilt, sobald eine zweite Person es unter „Freigaben“ bestätigt; befristet unter „Vertretungen und Amtszeiten“.',
             'institute': 'Für Lehrende: das Institut, dessen Räume sie buchen.',
             'is_active': 'Ohne Haken ist keine Anmeldung möglich.',
             'username': 'Wie beim Hochschulkonto.',
@@ -131,6 +133,8 @@ class AccountForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['groups'].queryset = Office.objects.all()
+        if self.instance.pk and (waiting := Membership.objects.filter(person=self.instance, confirmed_by=None).select_related('office')):
+            self.note = 'Wartet auf Bestätigung: ' + ', '.join(f'{m.office}' + (f' bis {m.until:%d.%m.%Y}' if m.until else '') for m in waiting) + '.'
 
     def clean_email(self):
         email = self.cleaned_data['email']

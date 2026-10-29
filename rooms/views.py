@@ -87,11 +87,12 @@ def editable(booking, person):
 
 
 def private(booking, person):
-    """Students see that a room is taken, not by whom or for what, unless it is a public event or they take part; staff
-    need the right to see bookings, for the rooms it holds for. Needs the booking's participants, best prefetched."""
+    """Students see that a room is taken, not by whom or for what, unless it is a public event or they take part;
+    teachers see teaching and events, but of practice only that the room is taken; the offices that see bookings, all
+    in the rooms the right holds for. Needs the booking's participants, best prefetched."""
     return not (
-        'teacher' in person.roles or booking.room_id in person.reached(Room, 'view_bookings') or booking.category.public
-        or person in booking.participants.all()
+        'teacher' in person.roles and booking.category.tone != BookingCategory.Tone.PRACTICE
+        or booking.room_id in person.reached(Room, 'view_bookings') or booking.category.public or person in booking.participants.all()
     )
 
 

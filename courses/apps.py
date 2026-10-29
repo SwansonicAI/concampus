@@ -89,16 +89,20 @@ class CoursesConfig(Tile, AppConfig):
             if term:
                 from .views import taught
 
-                for s in taught(person, term):
-                    if s.missing:
-                        found.append(task(f'Klasse: {s.person} ohne Einzelunterricht im {term}', reverse('courses:mine')))
+                if missing := [s.person for s in taught(person, term) if s.missing]:
+                    found.append(task(f'Klasse: {plural(len(missing), "Person", "Personen")} ohne Einzelunterricht im {term}: {", ".join(p.last_name for p in missing)}', reverse('courses:mine')))
         if {'view_teaching_load', 'roll_over'} <= person.roles and term:  # who plans the teaching: whoever teaches more than they should
             from .views import loads
 
             if over := sum(1 for row in loads(term, person, institute=str(min(person.ours('view_teaching_load'))) if len(person.ours('view_teaching_load')) == 1 else '') if row.balance and row.balance > 0):
                 found.append(task(f'{plural(over, "Lehrperson", "Lehrpersonen")} über der Lehrverpflichtung', f"{reverse('courses:load')}?stand=ueber"))
-        if 'manage_courses' in person.roles and term:  # ensembles waiting for the office to give them a coach
+        if 'manage_courses' in person.roles and term:  # ensembles waiting for the office to give them a coach: an Institut's, where one keeps the course
             ensembles = person.within(term.courses.filter(allocation=Course.Allocation.ENSEMBLE), 'manage_courses')
+            if person.everywhere('manage_courses'):
+                from core.models import Office
+
+                kept = Office.objects.filter(permissions__codename='manage_courses').exclude(institutes=None).values('institutes')
+                ensembles = ensembles.exclude(Q(subject__institute__in=kept) | Q(staff__institute__in=kept))
             for course in ensembles.annotate(n=Count('ensembles', filter=Q(ensembles__coach=None))).filter(n__gt=0):
                 found.append(task(f'{course.title}: {plural(course.n, "Ensemble", "Ensembles")} ohne Betreuung zuteilen', course.get_absolute_url()))
         if 'manage_courses' in person.roles and not person.everywhere('manage_courses'):  # an Institut's office

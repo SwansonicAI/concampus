@@ -46,7 +46,7 @@
     <tbody>
       {% for s in students %}
       <tr><td><a href="{{ s.get_absolute_url }}">{{ s.person.name }}</a><br><small class="muted">{{ s.subject }}</small></td><td>{{ s.program }}</td><td class="num">{{ s.fs }}</td>
-        <td>{% if s.lesson %}{{ s.lesson }}{% elif s.missing %}<span class="fail">nicht eingetragen</span>{% else %}<span class="muted">keiner; laut Studienplan bis zum {{ s.until }}. Semester</span>{% endif %}</td></tr>
+        <td>{% if s.lesson %}{{ s.lesson }}{% elif s.missing %}<span class="fail">nicht eingetragen</span>{% elif s.until %}<span class="muted">keiner; laut Studienplan bis zum {{ s.until }}. Semester</span>{% else %}<span class="muted">keiner im Studienplan</span>{% endif %}</td></tr>
       {% endfor %}
     </tbody>
   </table>

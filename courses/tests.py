@@ -58,6 +58,12 @@ class EnsembleTest(Seeded):
         self.login('lehre').post(f'/lehre/ensemble/{duo.pk}/', {'coach': wendt.pk})
         self.assertEqual(deputat(wendt.teaching.filter(term=chamber.term), wendt), before + chamber.hours)
 
+    def test_a_coach_grades_their_own_ensembles(self):
+        chamber = Course.objects.get(term__name='WiSe 2026/27', title='Kammermusik')
+        rows = self.login('lehre').get(f'/lehre/{chamber.pk}/').context['rows']
+        coached = set(Study.objects.filter(ensembles__course=chamber, ensembles__coach__username='lehre').values_list('pk', flat=True))
+        self.assertEqual({p.study_id for p in rows}, coached)
+
     def test_teachers_take_open_ensembles_the_office_hands_out_the_rest(self):
         chamber = Course.objects.get(term__name='WiSe 2026/27', title='Kammermusik')
         wendt, teacher = Person.objects.get(username='lehre'), self.login('lehre')

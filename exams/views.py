@@ -360,7 +360,7 @@ def release(request, pk):
     ends the Prüfungsanspruch: the candidate gets the Bescheid."""
     course = get_object_or_404(Course, pk=pk, kind__in=EXAMS)
     office, correct = request.user.may('decide_results', course), request.user.may('correct_scores', course)
-    if not (office or correct or course.staff.filter(pk=request.user.pk).exists()):
+    if not (office or correct or course.kind == Course.Kind.EXAM and course.staff.filter(pk=request.user.pk).exists()):  # a thesis, the office releases
         raise PermissionDenied('Ergebnisse geben die Prüfenden und das Amt frei, das Ergebnisse einträgt.')
     if course.released:
         if not correct:
@@ -569,6 +569,12 @@ def finished(studies):
             yield study, done
 
 
+def leaving(study):
+    from students.views import leaving
+
+    return leaving(study)
+
+
 def transcript(request, pk):
     """Leistungsübersicht or, once all credits are earned, Zeugnis."""
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'focus'), pk=pk)
@@ -579,6 +585,7 @@ def transcript(request, pk):
     return render(request, 'exams/transcript.html', found | {
         'complete': found['finished'] and (office or copy), 'copy': copy, 'supplement': (office or copy) and study.program.level,
         'issue': office and found['finished'] and study.issued is None and study.status == Study.Status.ENROLLED,
+        'still': [item for item in leaving(study) if not item[0].startswith('Zeugnis')] if office and found['finished'] and study.issued is None else [],
         'verbal': verbal(found['average']) if found['average'] else '', 'sender': texts.block('absender_leistungen'),
     })
 

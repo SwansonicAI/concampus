@@ -22,7 +22,7 @@ from core.access import CODENAMES, require
 from core.apps import plural
 from core.history import tables
 from core.models import Institution, Message, Term
-from core.text import matching
+from core.text import matching, untimed
 from courses import panel
 from courses.forms import SlotForm, substitutes
 from courses.models import Course, Participation
@@ -412,7 +412,7 @@ def advance(request, pk):
     moved = set()
     for p in course.participations.filter(passed=True, study__status=Study.Status.APPLIED).select_related('study__person'):
         for target in targets:  # the programme goes along, without the times in the video
-            if Participation.objects.get_or_create(course=target, study=p.study, defaults={'note': re.sub(r'^\d{1,2}:[0-5]\d\s+', '', p.note, flags=re.M)})[1]:
+            if Participation.objects.get_or_create(course=target, study=p.study, defaults={'note': untimed(p.note)})[1]:
                 moved.add(p.study)
     for study in moved:
         texts.send('naechste_stufe', study.person, reverse('admissions:mine'), pruefung=course.title, stufen=names)

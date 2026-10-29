@@ -141,8 +141,11 @@ class BookingForm(forms.ModelForm):
             del self.fields['ensemble']
         enrolled, field = Q(studies__status='enrolled'), self.fields['participants']
         field.queryset = Person.objects.filter(enrolled).annotate(subject=Min('studies__subject__name', filter=enrolled)).exclude(pk=person.pk)
-        field.near = Q(studies__ensembles__members__person=person) | Q(studies__teacher=person) | Q(studies__ensembles__coach=person)
-        field.picked = self.data.getlist('participants') if self.is_bound else list(self.instance.participants.values_list('pk', flat=True)) if self.instance.pk else []
+        field.near = Q(studies__teacher=person) | Q(studies__ensembles__coach=person) if 'teacher' in roles else Q(pk__in=[]) if ensembles else Q(studies__ensembles__members__person=person)
+        field.picked = self.data.getlist('participants') if self.is_bound else list(  # with an ensemble, only who joins it
+            self.instance.participants.exclude(studies__ensembles=self.instance.ensemble_id).values_list('pk', flat=True) if self.instance.ensemble_id
+            else self.instance.participants.values_list('pk', flat=True)
+        ) if self.instance.pk else []
         if self.student:  # practice needs a room and a time; a title and who else comes only for the categories that ask for others
             for name in ('description', 'programme', 'admission', 'audience', 'internal'):
                 del self.fields[name]

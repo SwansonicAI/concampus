@@ -9,7 +9,7 @@
     {% if office %}<a class="btn ghost" href="{% url 'exams:edit' course.pk %}">Bearbeiten</a>{% endif %}
     {% if course.kind != 'recognition' %}<a class="btn ghost" href="{% url 'exams:roster' course.pk %}">Notenliste</a>{% endif %}
     {% if history %}<a class="btn ghost" href="{% url 'history' 'courses.course' course.pk %}" data-panel>Verlauf</a>{% endif %}
-    {% if course.kind != 'recognition' %}
+    {% if course.kind != 'recognition' and decide or course.kind == 'exam' and user in staff %}
     <form method="post" action="{% url 'exams:release' course.pk %}">
       {% csrf_token %}
       {% if course.released %}{% if correct %}<button class="btn ghost">Wieder öffnen</button>{% endif %}

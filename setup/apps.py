@@ -39,7 +39,7 @@ class SetupConfig(Tile, AppConfig):
         if 'manage_accounts' in person.roles:  # rights and offices someone else gave, for this person to confirm
             from core.models import Grant, Membership
 
-            if n := Grant.objects.exclude(by=person).count() + Membership.objects.filter(confirmed_by=None).exclude(by=person).count():
+            if n := Grant.objects.exclude(by=person).count() + Membership.objects.filter(confirmed_by=None).exclude(by=person).exclude(person=person).count():
                 found.append(task(f'{plural(n, "Rechteänderung", "Rechteänderungen")} bestätigen', reverse('setup:approvals')))
         if 'manage_accounts' in person.roles:  # an office nobody holds: what it decides goes nowhere
             for office in Office.objects.filter(user=None).order_by('name'):

@@ -61,6 +61,11 @@ class Fold(Func):
         return sql, params
 
 
+def untimed(note):
+    """A programme without the times its works start at in a video ('6:40 N. Paganini: …'), as played in person."""
+    return re.sub(r'^\d{1,2}:[0-5]\d\s+', '', note, flags=re.M)
+
+
 def matching(queryset, query, *fields, names='', starts=False):
     """Rows in which every word of `query` occurs, folded, in one of the fields; in any order, as fragments, or with
     `starts` only where a word of the field begins with it (names: 'Chen' is not in 'Bühnensprechen').

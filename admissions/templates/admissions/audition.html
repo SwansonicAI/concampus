@@ -24,7 +24,7 @@
   </dl>
   {% if office %}
   <div>
-    {% if not course.released %}
+    {% if not course.released and not course.video %}
     <form method="post" action="{% url 'admissions:plan' course.pk %}" class="panel">
       {% csrf_token %}
       <h3>Termine vergeben</h3>

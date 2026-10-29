@@ -14,6 +14,14 @@ def mark(value):
 
 
 @register.filter
+def programme(note):
+    """A programme as a sheet lists it, without the times in the video."""
+    from core.text import untimed
+
+    return untimed(note)
+
+
+@register.filter
 def of(mapping, key):
     """mapping[key] in a template, None if missing: a row's Gutachten or reason by its examiner."""
     return mapping.get(key)

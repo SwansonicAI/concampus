@@ -55,6 +55,10 @@ class TeacherTest(Seeded):
         self.assertTrue(lesson.absent.filter(pk=mei.pk).exists())
         self.assertTrue(wendt.messages.filter(subject__startswith='Abgemeldet', body__contains='Probe im Orchester').exists())
 
+    def test_teachers_see_that_a_student_practises_not_who(self):
+        practice = Booking.objects.filter(category__tone='practice', person__studies__status='enrolled', end__gt=timezone.now()).first()
+        self.assertEqual(self.login('lehre').get(f'/raeume/buchung/{practice.pk}/').status_code, 403)
+
     def test_rooms_and_admissions_say_whom_they_are_for(self):
         self.assertEqual(self.login('bewerbung').get('/raeume/').status_code, 403)
         refused = self.login('pruefungsamt').get('/aufnahme/')

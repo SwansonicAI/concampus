@@ -24,7 +24,8 @@ def approvals(request):
     """Rights given and offices joined that wait for a second person: whoever entered one cannot confirm it."""
     if request.method == 'POST':
         model = {'recht': Grant, 'mitglied': Membership}.get(request.POST.get('art'))
-        pending = get_object_or_404(model.objects.exclude(by=request.user), pk=request.POST.get('id'), **({'confirmed_by': None} if model is Membership else {})) if model else None
+        mine = {'confirmed_by': None} if model is Membership else {}
+        pending = get_object_or_404(model.objects.exclude(by=request.user).exclude(**({'person': request.user} if model is Membership else {})), pk=request.POST.get('id'), **mine) if model else None
         if pending is None:
             raise PermissionDenied('Bestätigen kann nur eine zweite Person.')
         if request.POST.get('decision') == 'yes':

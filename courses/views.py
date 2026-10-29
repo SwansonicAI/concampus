@@ -123,15 +123,24 @@ def course(request, pk):
     person = request.user
     course = get_object_or_404(Course.objects.select_related('term', 'subject'), pk=pk, kind__in=TEACHING)
     staffed = teaches(person, course)
-    staff, rows = panel.sheet(course)
+    office = person.may('manage_courses', course)
+
+    def sheet():  # a coach of an ensemble course sees and grades the members of their own ensembles
+        staff, rows = panel.sheet(course)
+        if course.allocation == Course.Allocation.ENSEMBLE and not office:
+            coached = set(Study.objects.filter(ensembles__course=course, ensembles__coach=person).values_list('pk', flat=True))
+            rows = [p for p in rows if p.study_id in coached]
+        return staff, rows
+
+    staff, rows = sheet()
     refused = None
     if request.method == 'POST':
         if not staffed or course.released:
-            raise PermissionDenied
+            raise PermissionDenied('Ergebnisse tragen die Lehrenden der Veranstaltung ein.')
         try:
             panel.save(request.POST, rows, [], decide=True)
         except panel.Refused as error:  # shown with what was typed, by its row
-            refused, (staff, rows) = error, panel.sheet(course)
+            refused, (staff, rows) = error, sheet()
             messages.error(request, 'Nichts gespeichert. Bitte die markierte Zeile berichtigen.')
         else:
             messages.success(request, 'Ergebnisse gespeichert.')
@@ -157,7 +166,6 @@ def course(request, pk):
         )
     lessons = lesson_times(course) if staffed and course.kind == Course.Kind.LESSON and playing is None else []
     timetable = lessons and Lessons(sent(request, 'lessons'), initial=[row for _, row in lessons], form_kwargs={'person': person})
-    office = person.may('manage_courses', course)
     ensembles = list(
         (course.ensembles if staffed else course.ensembles.filter(members__person=person).distinct())
         .select_related('coach', 'wish').prefetch_related('members__person', 'members__subject')
@@ -600,9 +608,9 @@ def taught(person, term):
         Module.objects.filter(program__in={s.program_id for s in studies}, courses__kind=Course.Kind.LESSON, courses__subject__isnull=False, semester__isnull=False)
         .values('program').annotate(last=Max('semester')).values_list('program', 'last')
     )
-    for s in studies:
+    for s in studies:  # a plan without lessons, such as a doctorate's, owes none
         s.lesson, s.until = lessons.get(s.pk), until.get(s.program_id)
-        s.missing = not s.lesson and (s.until is None or s.fs <= s.until)
+        s.missing = not s.lesson and s.until is not None and s.fs <= s.until
     return studies
 
 

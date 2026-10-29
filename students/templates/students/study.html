@@ -103,7 +103,7 @@
         <label>zum<input name="zum" data-day autocomplete="off" placeholder="TT.MM.JJJJ" size="11" required value="{{ leaving_day|date:'d.m.Y' }}"></label>
         <button class="btn danger" data-confirm="Wirklich exmatrikulieren?">Exmatrikulieren</button>
       </form>
-      <p class="muted"><small>Auf Antrag zum gewünschten Tag, spätestens zum Ende des Semesters; nach dem Abschluss in der Regel das Ende des Semesters; nach endgültigem Nichtbestehen ab dem Tag, an dem der Bescheid bestandskräftig ist.</small></p>
+      <p class="muted"><small>Auf Antrag zum gewünschten Tag, spätestens zum Ende des Semesters; nach dem Abschluss in der Regel das Ende des Semesters; nach endgültigem Nichtbestehen ab dem Tag, an dem der Bescheid bestandskräftig ist, frühestens zu Beginn des laufenden Semesters, für das zurückgemeldet ist.</small></p>
       <form method="post" action="{% url 'students:change' study.pk %}" class="inline" style="margin-top: 16px">
         {% csrf_token %}
         {% for field in change %}<label>{{ field.label }}{{ field }}</label>{% endfor %}

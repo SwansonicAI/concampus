@@ -28,6 +28,7 @@ from django.utils.crypto import get_random_string
 
 from admissions.retention import forget
 from core.dates import months_before
+from core.text import untimed
 from admissions.views import DECISIONS, invite
 from core import destatis, history, texts
 from core.models import Change, Holiday, Institute, Institution, Membership, Message, Office, Person, Term, Text
@@ -508,7 +509,7 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
     'Präsidium': ['view_statistics', 'view_curriculum', 'view_teaching_load'],
     'Institut Streichinstrumente und Harfe': [
         'view_students', 'view_files', 'message_students', 'view_applications', 'run_auditions', 'manage_courses', 'view_teaching_load',
-        'view_curriculum', 'book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms', 'manage_instruments', 'roll_over',
+        'view_curriculum', 'book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms', 'manage_instruments',  # the Semesterwechsel is the Dekanatsreferat's
     ],
     'Prüfungsausschuss': ['view_students', 'view_files', 'correct_scores', 'appoint_examiners', 'recognise', 'view_curriculum'],
     'Prüfungsausschuss Lehramt': ['view_files', 'manage_exams', 'decide_results', 'correct_scores', 'recognise', 'view_curriculum'],
@@ -796,11 +797,6 @@ def phone(dial, rng):
     if dial == '+49':
         return f'+49 1{rng.choice(["51", "52", "57", "60", "62", "70", "72", "76"])} {rng.randint(1000000, 99999999)}'
     return f'{dial} {rng.randint(100, 999)} {rng.randint(1000000, 9999999)}'
-
-
-def unmarked(note):
-    """A programme without the times it starts at in a video, for the stage played in person."""
-    return re.sub(r'^\d{1,2}:[0-5]\d\s+', '', note, flags=re.M)
 
 
 def family(subject):
@@ -1951,7 +1947,7 @@ class Command(BaseCommand):
                 for kind in handed
             ]
             if not video or (sit(study, video, talent + 1.5, panel, note).passed and video.released):  # videos are judged more kindly
-                sit(study, hall, talent, panel, unmarked(note))
+                sit(study, hall, talent, panel, untimed(note))
                 if finished and not master:
                     for course in shared:
                         sit(study, course, rng.uniform(13, 21), course.jury, '')
