@@ -162,7 +162,7 @@ class OfficeTest(Seeded):
 
     def test_a_whole_module_is_recognised_with_a_converted_grade(self):
         study = Study.objects.filter(status='enrolled', program__degree='B.Mus.').first()
-        office = self.login('pruefungsamt')
+        office = self.login('pruefungsausschuss')  # recognitions are the Prüfungsausschuss's (RPSO § 16)
         choices = office.get(f'/pruefungen/anerkennung/?studium={study.pk}').context['form'].fields['module'].choices
         options = next(options for _, options in choices[1:] if options[0][1] == 'Ganzes Modul')
         office.post(f'/pruefungen/anerkennung/?studium={study.pk}', {'module': options[0][0], 'foreign': '8', 'best': '10', 'worst': '5', 'origin': '9990151', 'place': 'mdw Wien', 'taken': 'SoSe 2024', 'credits': '12'})

@@ -497,14 +497,12 @@ CATEGORIES = [  # key, name, colour, settings: the HfM's booking categories as i
 OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
     'Akademische und Studentische Angelegenheiten (ASA)': [
         'view_students', 'view_files', 'manage_students', 'manage_reregistration', 'message_students',
-        'view_applications', 'decide_applications', 'run_auditions', 'manage_courses', 'view_teaching_load',
+        'view_applications', 'decide_applications', 'run_auditions',  # halls for the auditions too
         'view_curriculum', 'book_any_room', 'view_bookings', 'manage_terms', 'view_statistics', 'report_statistics',
     ],
-    'Prüfungsamt': [
-        'view_students', 'view_files', 'manage_exams', 'decide_results', 'recognise', 'manage_courses', 'view_teaching_load',
-        'view_curriculum', 'book_any_room', 'view_bookings',
-    ],
-    'Dekanat': ['manage_courses', 'plan_teaching', 'view_teaching_load', 'manage_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings', 'view_statistics'],
+    'Prüfungsamt': ['view_students', 'view_files', 'manage_exams', 'decide_results', 'view_curriculum', 'book_any_room', 'view_bookings'],
+    'Dekanat': ['view_teaching_load', 'manage_teaching_load', 'view_curriculum', 'view_statistics'],  # the dean approves; the Referat does the work
+    'Dekanatsreferat': ['manage_courses', 'plan_teaching', 'view_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings'],
     'Veranstaltungsbüro': ['book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms', 'manage_instruments'],
     'Campus-Team': ['manage_accounts', 'manage_institution', 'manage_terms'],
     'Präsidium': ['view_statistics', 'view_curriculum', 'view_teaching_load'],
@@ -512,7 +510,7 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
         'view_students', 'view_files', 'message_students', 'view_applications', 'run_auditions', 'manage_courses', 'view_teaching_load',
         'view_curriculum', 'book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms', 'manage_instruments', 'roll_over',
     ],
-    'Prüfungsausschuss': ['view_files', 'correct_scores', 'appoint_examiners', 'view_curriculum'],
+    'Prüfungsausschuss': ['view_students', 'view_files', 'correct_scores', 'appoint_examiners', 'recognise', 'view_curriculum'],
     'Prüfungsausschuss Lehramt': ['view_files', 'manage_exams', 'decide_results', 'correct_scores', 'recognise', 'view_curriculum'],
 }
 LIMITS = {  # offices for some Institute or Studiengänge only
@@ -1062,6 +1060,9 @@ class Command(BaseCommand):
             username='jan.reuter', first_name='Jan', last_name='Reuter', email='jan.reuter@hfm-weimar.de', password=self.password, phone='+49 3643 555 120',
         )
         second.groups.add(offices['Campus-Team'])
+        Person.objects.create(  # the Dekanatsreferentin, who plans the teaching for the dean
+            username='dekanatsreferat', first_name='Ines', last_name='Weißgerber', email='ines.weissgerber@hfm-weimar.de', password=self.password, phone='+49 3643 555 140',
+        ).groups.add(offices['Dekanatsreferat'])
         Membership.objects.create(  # a stand-in, waiting for the Campus-Team's second person to confirm it
             person=self.staff['monika.hartmann'], office=offices['Veranstaltungsbüro'], until=date(2027, 3, 31),
             note='Vertretung während der Elternzeit von Michael Görlitz', by=self.staff['campus'],

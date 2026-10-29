@@ -14,7 +14,7 @@ from .views import deputat, loads
 class RolloverTest(Seeded):
     def test_next_term_gets_the_courses_and_lesson_classes(self):
         before = Course.objects.filter(term__name='SoSe 2027', kind__in=['course', 'lesson']).count()
-        dekanat = self.login('dekanat')
+        dekanat = self.login('dekanatsreferat')
         kept, *taken = dekanat.get('/lehre/semesterwechsel/').context['pending']  # one left out, e.g. for a sabbatical
         r = dekanat.post('/lehre/semesterwechsel/', {'course': [c.pk for c in taken]}, follow=True)
         self.assertEqual(flashes(r), [f'{len(taken)} Veranstaltungen nach SoSe 2027 übernommen.'])
@@ -64,7 +64,7 @@ class EnsembleTest(Seeded):
         others = chamber.ensembles.exclude(coach=None).exclude(coach=wendt).first()
         self.assertEqual(teacher.post(f'/lehre/ensemble/{others.pk}/', {'coach': wendt.pk}).status_code, 403)
         self.assertEqual(teacher.post(f'/lehre/ensemble/{others.pk}/', {'dissolve': '1'}).status_code, 403)
-        self.login('dekanat').post(f'/lehre/ensemble/{others.pk}/', {'coach': wendt.pk})
+        self.login('dekanatsreferat').post(f'/lehre/ensemble/{others.pk}/', {'coach': wendt.pk})
         self.assertEqual(Ensemble.objects.get(pk=others.pk).coach, wendt)
 
 
@@ -94,7 +94,7 @@ class TeachingTest(Seeded):
         course = Course.objects.filter(kind='course', term__name='WiSe 2026/27', staff__institute__name='Streichinstrumente und Harfe').first()
         form = self.login('institut').get(f'/lehre/{course.pk}/bearbeiten/').context['form']
         self.assertFalse({'hours', 'modules', 'format', 'kind'} & set(form.fields))
-        self.assertTrue({'hours', 'modules', 'format', 'kind'} <= set(self.login('dekanat').get(f'/lehre/{course.pk}/bearbeiten/').context['form'].fields))
+        self.assertTrue({'hours', 'modules', 'format', 'kind'} <= set(self.login('dekanatsreferat').get(f'/lehre/{course.pk}/bearbeiten/').context['form'].fields))
 
     def test_the_deputat_counts_against_the_obligation_less_reductions(self):
         wendt = Person.objects.get(username='lehre')
@@ -107,7 +107,7 @@ class PlanTest(Seeded):
         term, dekanat = Term.objects.get(name='WiSe 2026/27'), Person.objects.get(username='dekanat')
         course = Course.objects.create(term=term, title='Samstagsseminar')
         course.staff.add(dekanat)
-        self.login('dekanat').post(f'/lehre/{course.pk}/planen/', {'weekday': 5, 'time': '08:00', 'minutes': 60, 'room': Room.objects.get(name='HzH 313').pk})
+        self.login('dekanatsreferat').post(f'/lehre/{course.pk}/planen/', {'weekday': 5, 'time': '08:00', 'minutes': 60, 'room': Room.objects.get(name='HzH 313').pk})
         days = {timezone.localtime(b.start).date() for b in course.bookings.all()}
         self.assertTrue(days)
         self.assertFalse(days & Holiday.days(term.lectures_start, term.lectures_end))  # Reformationstag and the Christmas break fall on Saturdays

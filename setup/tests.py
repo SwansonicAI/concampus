@@ -89,7 +89,7 @@ class EditorTest(Seeded):
 
 class CurriculumEditorTest(Seeded):
     def test_modules_are_added_under_a_node_and_never_under_themselves(self):
-        dekanat = self.login('dekanat')
+        dekanat = self.login('dekanatsreferat')
         program = Program.objects.get(degree='B.Mus.', name='Streichinstrumente und Harfe')
         root = program.modules.filter(parent=None).first()
         dekanat.post(f'/einstellungen/module/neu/?studiengang={program.pk}&unter={root.pk}', {'parent': root.pk, 'code': 'X-01', 'title': 'Neues Modul', 'credits': '5', 'weight': '0'})
