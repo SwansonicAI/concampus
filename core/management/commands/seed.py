@@ -1733,6 +1733,8 @@ class Command(BaseCommand):
                 when = lost.course.released + timedelta(days=2)
                 notice = Message.objects.create(person=lost.study.person, subject=subject, body=body, sender=texts.block('absender_bescheide'), created=when, read=when)
                 Document.objects.create(person=lost.study.person, study=lost.study, kind_id='notice', title=subject, message=notice, created=when)
+                lost.study.participations.filter(course__term=now).delete()  # with the Prüfungsanspruch lost, nothing new this semester
+                lost.study.ensembles.clear()
 
     def failed_before(self, p, back):
         """An earlier failed attempt at p's exam, `back` terms before."""

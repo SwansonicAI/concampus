@@ -1,0 +1,20 @@
+{% extends base %}
+{% block title %}Bescheide prüfen{% endblock %}
+{% block content %}
+<h1>{{ title }}</h1>
+<p class="lead">Noch ist nichts versandt. Erst „{{ send }}“ legt die Bescheide ins Postfach.</p>
+{% for note in notes %}<div class="flash">{{ note }}</div>{% endfor %}
+{% for heading, people, wording in groups %}
+<section>
+  <h2>{{ heading }} · {{ people|length }}</h2>
+  <p>{% for p in people %}{{ p }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>
+  <details{% if people|length == 1 %} open{% endif %}><summary>Bescheid an {{ people.0 }} lesen</summary><div class="panel"><h3>{{ wording.0 }}</h3>{{ wording.1|linebreaks }}</div></details>
+</section>
+{% endfor %}
+<form method="post" class="actions" style="margin-top: 24px">
+  {% csrf_token %}
+  {% for name, value in fields %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}<input type="hidden" name="bestaetigt" value="1">
+  <button class="btn">{{ send }}</button>
+  <a class="btn ghost" href="{{ back }}">Zurück</a>
+</form>
+{% endblock %}

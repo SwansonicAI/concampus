@@ -26,7 +26,7 @@
         <td class="num">{{ intake.capacity }}</td>
         <td>{% for s in lapsed %}<a href="{% url 'admissions:application' s.pk %}" data-panel>{{ s.person.name }}</a><br>{% empty %}–{% endfor %}</td>
         <td>{% for s in waiting %}<a href="{% url 'admissions:application' s.pk %}" data-panel>{{ s.person.name }}</a> <small class="muted">{{ s.points|floatformat:1 }} Punkte</small><br>{% empty %}<span class="muted">Niemand auf der Nachrückliste</span>{% endfor %}</td>
-        <td class="num"><form method="post" action="{% url 'admissions:move_up' intake.pk %}">{% csrf_token %}<button class="btn small" data-confirm="{% if waiting %}Nachrücken und Bescheide versenden?{% else %}Abgelaufene Zulassungen schließen?{% endif %}">{% if waiting %}Nachrücken{% else %}Schließen{% endif %}</button></form></td>
+        <td class="num"><form method="post" action="{% url 'admissions:move_up' intake.pk %}">{% csrf_token %}<button class="btn small"{% if not waiting %} data-confirm="Abgelaufene Zulassungen schließen?"{% endif %}>{% if waiting %}Nachrücken{% else %}Schließen{% endif %}</button></form></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -69,7 +69,7 @@
   <form method="post" action="{% url 'students:enrol_many' %}">
     {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
     <table data-panel>
-      <thead><tr><th><input type="checkbox" onchange="this.form.querySelectorAll('[name=study]').forEach(box => box.checked = this.checked)" aria-label="Alle ankreuzen"></th><th>Name</th><th>Studiengang und Hauptfach</th><th>Es fehlt noch</th></tr></thead>
+      <thead><tr><th>{% if ready %}<input type="checkbox" onchange="this.form.querySelectorAll('[name=study]').forEach(box => box.checked = this.checked)" aria-label="Alle ankreuzen">{% endif %}</th><th>Name</th><th>Studiengang und Hauptfach</th><th>Es fehlt noch</th></tr></thead>
       <tbody>
         {% for s in accepted %}
         <tr>
@@ -82,8 +82,8 @@
       </tbody>
     </table>
     <div class="actions" style="margin-top: 16px">
-      <button class="btn" data-confirm="Immatrikulieren und Bescheide versenden?">Angekreuzte immatrikulieren</button>
-      <small class="muted">Vergibt die Matrikelnummern, verbucht den Semesterbeitrag und versendet die Immatrikulationsbescheide.</small>
+      <button class="btn"{% if not ready %} disabled{% endif %}>Angekreuzte immatrikulieren</button>
+      <small class="muted">{% if ready %}Vergibt die Matrikelnummern und versendet die Immatrikulationsbescheide; erst die Vorschau, dann versenden.{% else %}Bei allen fehlt noch etwas.{% endif %}</small>
     </div>
   </form>
   <form id="erinnern" method="post" action="{% url 'admissions:remind' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"></form>

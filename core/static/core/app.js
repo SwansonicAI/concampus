@@ -310,16 +310,23 @@ document.addEventListener('click', event => {
 });
 
 // What cannot be undone (data-confirm="Wirklich auflösen?") asks once more: the first click turns the button into the
-// question, a second within some seconds does it.
+// question, no narrower than before, a second does it. A click elsewhere or Escape takes the question back.
+function disarm(button) {
+  button.innerHTML = button.dataset.label;
+  button.style.minWidth = '';
+  delete button.dataset.armed;
+}
 document.addEventListener('click', event => {
   const button = event.target.closest('button[data-confirm]');
+  document.querySelectorAll('button[data-armed]').forEach(armed => armed === button || disarm(armed));
   if (!button || button.dataset.armed) return;
   event.preventDefault();
-  const label = button.innerHTML;
+  button.style.minWidth = `${button.offsetWidth}px`;
+  button.dataset.label = button.innerHTML;
   button.dataset.armed = '1';
   button.textContent = button.dataset.confirm;
-  setTimeout(() => { delete button.dataset.armed; button.innerHTML = label; }, 10000);
 });
+document.addEventListener('keydown', event => event.key === 'Escape' && document.querySelectorAll('button[data-armed]').forEach(disarm));
 
 // Fields that matter only for some choices of another (data-for="category:kammermusik") show only then.
 function conditional(form) {

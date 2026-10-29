@@ -54,12 +54,12 @@ TEXTS = {
     ),
     'exmatrikulation': Spec(
         BESCHEID, 'Exmatrikulation', 'Exmatrikulationsbescheid',
-        'Sie sind zum {zum} aus dem Studiengang {studiengang}, Hauptfach {hauptfach}, exmatrikuliert. Grund: {grund}.',
+        'Sie sind mit Ablauf des {zum} aus dem Studiengang {studiengang}, Hauptfach {hauptfach}, exmatrikuliert. Grund: {grund}.',
         STUDY + ('grund', 'zum'),
     ),
     'exmatrikulation_rueckmeldung': Spec(
         BESCHEID, 'Exmatrikulation ohne Rückmeldung', 'Exmatrikulationsbescheid',
-        'Sie haben sich nicht fristgerecht zum {rueckmeldesemester} zurückgemeldet und sind daher zum {zum} aus dem '
+        'Sie haben sich nicht fristgerecht zum {rueckmeldesemester} zurückgemeldet und sind daher mit Ablauf des {zum} aus dem '
         'Studiengang {studiengang}, Hauptfach {hauptfach}, exmatrikuliert.',
         STUDY + ('rueckmeldesemester', 'zum'), appeal=True,
     ),
@@ -214,6 +214,11 @@ TEXTS = {
         'Rechtsbehelfsbelehrung: Gegen diesen Bescheid kann innerhalb eines Monats nach seiner Bekanntgabe Widerspruch erhoben werden. '
         'Der Widerspruch ist schriftlich oder zur Niederschrift bei der {hochschule}, {anschrift}, einzulegen.',
     ),
+    'erstattung': Spec(
+        BAUSTEIN, 'Erstattung des Semesterbeitrags', '',
+        'Den Semesterbeitrag für das {rueckmeldesemester} erstattet auf Antrag das Studierendenwerk, sofern Sie das '
+        'Deutschlandsemesterticket nicht abgerufen haben.', ('rueckmeldesemester',),
+    ),
     'absender_bescheide': Spec(BAUSTEIN, 'Absender der Bescheide', '', '{hochschule}'),
     'absender_bescheinigungen': Spec(BAUSTEIN, 'Absender der Immatrikulationsbescheinigung', '', '{hochschule}'),
     'absender_leistungen': Spec(BAUSTEIN, 'Absender der Leistungsübersichten und Zeugnisse', '', '{hochschule}'),
@@ -290,12 +295,13 @@ def basics():
     }
 
 
-def render(key, **values):
-    """(subject, body) with the placeholders filled in; a Bescheid that turns someone down gets the Rechtsbehelfsbelehrung."""
+def render(key, *after, **values):
+    """(subject, body) with the placeholders filled in and the text blocks `after` following; a Bescheid that turns
+    someone down gets the Rechtsbehelfsbelehrung, others where they name it."""
     values = Values(basics(), **{name: str(value) for name, value in values.items()})
     subject, body = (part.format_map(values) for part in wording(key))
-    if TEXTS[key].appeal:
-        body += '\n\n' + wording('rechtsbehelf')[1].format_map(values)
+    for block in dict.fromkeys([*after, *(['rechtsbehelf'] if TEXTS[key].appeal else [])]):
+        body += '\n\n' + wording(block)[1].format_map(values)
     return subject, body
 
 

@@ -18,7 +18,7 @@ class EnrolmentTest(Seeded):
         self.assertIn('Versicherungsmeldung der Krankenkasse fehlt', study.missing())
         self.assertIn('Versicherungsmeldung', flashes(asa.post(f'/studierende/{study.pk}/immatrikulieren/', follow=True))[0])
         asa.post(f'/studierende/{study.pk}/versicherung/')
-        asa.post(f'/studierende/{study.pk}/immatrikulieren/')
+        asa.post(f'/studierende/{study.pk}/immatrikulieren/', {'bestaetigt': '1'})
         study.refresh_from_db()
         self.assertEqual(study.status, Study.Status.ENROLLED)
         self.assertTrue(study.person.matriculation)
@@ -116,8 +116,10 @@ class ExmatriculationTest(Seeded):
         asa, term, study = self.login('asa'), Term.current(), Study.objects.get(person__username='student')
         url = f'/studierende/{study.pk}/exmatrikulieren/'
         self.assertEqual(flashes(asa.post(url, {'reason': '8'}, follow=True)), ['Kein endgültig nicht bestandenes Modul.'])
-        self.assertIn('Bitte einen Tag im', flashes(asa.post(url, {'reason': '6', 'zum': f'{term.end + timedelta(days=1):%d.%m.%Y}'}, follow=True))[0])
-        asa.post(url, {'reason': '6', 'zum': f'{term.end:%d.%m.%Y}'})
+        self.assertIn('Bitte einen Tag vom', flashes(asa.post(url, {'reason': '6', 'zum': f'{term.end + timedelta(days=1):%d.%m.%Y}'}, follow=True))[0])
+        self.assertContains(asa.post(url, {'reason': '6', 'zum': f'{term.end:%d.%m.%Y}'}), 'Exmatrikulationsbescheid')  # first the preview
+        self.assertEqual(Study.objects.get(pk=study.pk).status, Study.Status.ENROLLED)
+        asa.post(url, {'reason': '6', 'zum': f'{term.end:%d.%m.%Y}', 'bestaetigt': '1'})
         study.refresh_from_db()
         self.assertEqual((study.status, study.exit_reason, study.since), (Study.Status.LEFT, '6', term.end))
         self.assertTrue(study.documents.filter(kind='notice', title='Exmatrikulationsbescheid').exists())
@@ -128,7 +130,7 @@ class ExmatriculationTest(Seeded):
         self.assertTrue(any(what.startswith('Leihinstrument') for what, _ in asa.get(borrowing.get_absolute_url()).context['leaving']))
         lost = next(s for s in Study.objects.filter(status='enrolled') if exhausted(s))
         page = asa.get(lost.get_absolute_url())
-        self.assertEqual(page.context['leaving_day'], max(max(m.appeal for m in exhausted(lost)) + timedelta(days=1), Term.current().start))
+        self.assertEqual(page.context['leaving_day'], max(max(m.appeal for m in exhausted(lost)) + timedelta(days=1), Term.current().start - timedelta(days=1)))
         self.assertNotIn('überweisen', ' '.join(t['text'] for t in self.client_for(lost.person).get('/').context['tasks']))  # no Rückmeldung once the claim is lost
 
     def client_for(self, person):

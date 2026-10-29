@@ -35,10 +35,10 @@ class DecisionTest(Seeded):
         self.assertEqual(study.person.insurer, 'BARMER')
         self.assertTrue(StudyTerm.objects.filter(study=study).exists())
         asa.post(f'/studierende/{study.pk}/versicherung/')
-        asa.post(f'/studierende/{study.pk}/immatrikulieren/')
+        asa.post(f'/studierende/{study.pk}/immatrikulieren/', {'bestaetigt': '1'})
         self.assertEqual(Study.objects.get(pk=study.pk).status, Study.Status.ADMITTED)  # not before the fee is in
         asa.post(f'/studierende/{study.pk}/beitrag/')
-        asa.post(f'/studierende/{study.pk}/immatrikulieren/')
+        asa.post(f'/studierende/{study.pk}/immatrikulieren/', {'bestaetigt': '1'})
         study.refresh_from_db()
         self.assertEqual(study.status, Study.Status.ENROLLED)
 
@@ -79,7 +79,8 @@ class MoveUpTest(Seeded):
         applicant.force_login(late.person)
         applicant.post(f'/aufnahme/meine/{late.pk}/annahme/', {'decision': 'yes', 'insurer': 'BARMER', 'insurance': 'gesetzlich', 'home': '16055', 'external_terms': 0})
         self.assertFalse(late.terms.exists())
-        self.login('asa').post(f'/aufnahme/pruefung/{intake.pk}/nachruecken/')
+        self.assertContains(self.login('asa').post(f'/aufnahme/pruefung/{intake.pk}/nachruecken/'), 'Annahme bis')  # first the preview
+        self.login('asa').post(f'/aufnahme/pruefung/{intake.pk}/nachruecken/', {'bestaetigt': '1'})
         self.assertEqual(Study.objects.get(pk=late.pk).status, Study.Status.LEFT)
         self.assertEqual(Study.objects.get(pk=behind.pk).status, Study.Status.ADMITTED)
         self.assertTrue(Message.objects.filter(person=behind.person, subject='Bescheid über die Eignungsprüfung: Studienplatzangebot').exists())

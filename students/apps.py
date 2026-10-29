@@ -39,7 +39,7 @@ class StudentsConfig(Tile, AppConfig):
             from .views import own
 
             study = own(person)
-            return f'{study.get_status_display()} am {date_format(study.since, "j.n.Y")}'
+            return f'{study.state} am {date_format(study.since, "j.n.Y")}'
         if not term:
             return ''
         if not term.reregistration_open:

@@ -108,6 +108,7 @@ def offered(person):
     )
 
 
+@require('manage_exams', 'decide_results', 'correct_scores', 'teacher', 'student')
 def index(request):
     person = request.user
     term = Term.pick(request.GET.get('semester'))
@@ -118,12 +119,12 @@ def index(request):
         .annotate(graded=Count('participations', filter=Q(participations__passed__isnull=False), distinct=True))
         .order_by(Coalesce('date', Cast('deadline', DateTimeField())).asc(nulls_last=True), 'title')  # a thesis by when it is due
     )
-    office = bool(person.roles & {'manage_exams', 'decide_results'})
+    office = bool(person.roles & {'manage_exams', 'decide_results', 'correct_scores'})
     if office or 'teacher' in person.roles:
         program, stand, q = (request.GET.get(key, '').strip() for key in ('studiengang', 'stand', 'q'))
         if stand == 'kommission':
             exams = exams.filter(pk__in=Course.short_panels(Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], term=term)))
-        exams = exams.filter(pk__in=person.within(Course.objects.all(), 'manage_exams', 'decide_results').values('pk')) if office else exams.filter(staff=person)
+        exams = exams.filter(pk__in=person.within(Course.objects.all(), 'manage_exams', 'decide_results', 'correct_scores').values('pk')) if office else exams.filter(staff=person)
         if program.isdigit():
             exams = exams.filter(pk__in=Course.objects.filter(modules__program=program).values('pk'))
         candidate = [f'participations__study__person__{name}' for name in ('first_name', 'last_name', 'matriculation')]

@@ -18,6 +18,7 @@ EXITS = [  # grounds of Exmatrikulation as Immatrikulationsordnungen word them, 
     ('7', 'Keine Rückmeldung, Krankenversicherung oder Beiträge nicht nachgewiesen'), ('8', 'Prüfung endgültig nicht bestanden'),
     ('0', 'Von Amts wegen: anderer Grund'),
 ]
+OFFICIAL = {'0', '7', '8'}  # grounds the Hochschule acts on by itself: its Bescheid can be challenged
 LEAVES = [  # grounds of Beurlaubung, likewise (destatis.LEAVES)
     ('1', 'Erkrankung'), ('7', 'Mutterschutz, Elternzeit oder Pflege von Angehörigen'), ('4', 'Studienbedingter Auslandsaufenthalt'),
     ('3', 'Praktische Tätigkeit'), ('2', 'Vorbereitung auf eine Abschlussprüfung'), ('5', 'Freiwilligendienst'),
@@ -116,16 +117,21 @@ class Study(Tracked, models.Model):
         self.status, self.since, self.exit_reason = status, since or timezone.localdate(), reason
         self.save(update_fields=['status', 'since', 'exit_reason'])
 
-    def wording(self, key, **values):
-        """(subject, body) of a text about this study, its placeholders filled in (core.texts)."""
-        return texts.render(
-            key, vorname=self.person.first_name, nachname=self.person.last_name, studiengang=self.program.title,
-            hauptfach=self.subject, semester=self.start_term, matrikelnummer=self.person.matriculation or '', **values,
-        )
+    @property
+    def state(self):
+        """The status as one reads it: a study ended by an Exmatrikulation says so, one left for another subject does not."""
+        return 'Exmatrikuliert' if self.status == self.Status.LEFT and self.exit_reason else self.get_status_display()
 
-    def notify(self, key, link='', **values):
+    def wording(self, key, *after, **values):
+        """(subject, body) of a text about this study, its placeholders filled in, the text blocks `after` following (core.texts)."""
+        return texts.render(key, *after, **{
+            'vorname': self.person.first_name, 'nachname': self.person.last_name, 'studiengang': self.program.title,
+            'hauptfach': self.subject, 'semester': self.start_term, 'matrikelnummer': self.person.matriculation or '', **values,
+        })
+
+    def notify(self, key, link='', after=(), **values):
         """Issue a Bescheid: it goes to the Postfach and stays in the student file as a printable letter."""
-        subject, body = self.wording(key, **values)
+        subject, body = self.wording(key, *after, **values)
         message = Message.send(self.person, subject, body, link, sender=texts.block('absender_bescheide'))
         Document.objects.create(person=self.person, study=self, kind=DocumentType.system('notice'), title=subject, message=message)
 

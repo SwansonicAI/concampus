@@ -279,6 +279,8 @@ def register(request, pk):
         messages.error(request, 'Der Anmeldeschluss ist vorbei.')
     elif module is None:
         messages.error(request, 'Diese Veranstaltung ist in Ihrem Studiengang nicht anrechenbar.')
+    elif lost(study):
+        messages.error(request, 'Der Prüfungsanspruch ist erloschen; neue Anmeldungen sind nicht möglich.')
     elif course.allocation == Course.Allocation.CHOICE or late:
         Signup.objects.get_or_create(course=course, study=study, defaults={'module': module, 'note': request.POST.get('note', '').strip()})
         messages.success(request, f'{"Nachmeldung angefragt" if late else "Angefragt"}. Die Lehrenden entscheiden; die Antwort kommt in Ihr Postfach.{besides}')
@@ -290,6 +292,13 @@ def register(request, pk):
         else:
             messages.success(request, f'Sie sind angemeldet.{besides}')
     return redirect(course)
+
+
+def lost(study):
+    """Whether the study's Prüfungsanspruch is lost: nothing new to take then."""
+    from exams.views import exhausted  # which imports from here
+
+    return bool(exhausted(study))
 
 
 def besides_focus(course, study):

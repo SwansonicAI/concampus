@@ -18,7 +18,7 @@ class ExamsConfig(Tile, AppConfig):
     url = 'exams:index'
 
     def title(self, roles):
-        if roles & {'manage_exams', 'decide_results', 'recognise', 'teacher', 'student'}:
+        if roles & {'manage_exams', 'decide_results', 'correct_scores', 'teacher', 'student'}:
             return 'Prüfungen'
 
     def figure(self, person):

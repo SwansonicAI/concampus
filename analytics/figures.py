@@ -124,7 +124,7 @@ def studies(rows):
 
 
 def study(s):
-    return s.person.name, f'{s.program.title} · {s.subject} · {s.get_status_display()}', s.get_absolute_url()
+    return s.person.name, f'{s.program.title} · {s.subject} · {s.state}', s.get_absolute_url()
 
 
 def participations(rows):

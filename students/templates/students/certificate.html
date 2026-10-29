@@ -11,7 +11,7 @@
     <dt>Geboren</dt><dd>{{ study.person.birth_date|date:"j. F Y" }}{% if study.person.birth_place %} in {{ study.person.birth_place }}{% endif %}</dd>
     <dt>Matrikelnummer</dt><dd>{{ study.person.matriculation }}</dd>
   </dl>
-  <p style="margin-top: 24px">im {{ term }} ({{ term.start|date:"j.n.Y" }} bis {{ term.end|date:"j.n.Y" }}) an der {{ institution.name }} immatrikuliert ist{% if registration.leave %} und für dieses Semester beurlaubt ist{% endif %}:</p>
+  <p style="margin-top: 24px">im {{ term }} ({% if study.start_term_id == term.pk and study.since > term.start %}immatrikuliert seit {{ study.since|date:"j.n.Y" }}{% else %}{{ term.start|date:"j.n.Y" }}{% endif %} bis {{ term.end|date:"j.n.Y" }}) an der {{ institution.name }} immatrikuliert ist{% if registration.leave %} und für dieses Semester beurlaubt ist{% endif %}:</p>
   <dl class="facts">
     <dt>Studiengang</dt><dd>{{ study.program.title }}</dd>
     <dt>Hauptfach</dt><dd>{{ study.subject }}</dd>

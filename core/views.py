@@ -165,6 +165,13 @@ def letter(request, pk):
 SHOWN = 300  # rows a long list shows; filters narrow it, exports have all
 
 
+def preview(request, title, groups, send, back, notes=()):
+    """Bescheide before they go out: who gets which, one of each in full. Sending posts the same form again, confirmed
+    (`bestaetigt`). `groups`: (heading, the people, (subject, body) of one Bescheid)."""
+    fields = [(name, value) for name in request.POST if name not in ('csrfmiddlewaretoken', 'bestaetigt') for value in request.POST.getlist(name)]
+    return render(request, 'core/preview.html', {'title': title, 'groups': groups, 'send': send, 'back': back, 'notes': notes, 'fields': fields})
+
+
 def without_term(request, what):
     """Where work needs a semester nobody has created yet."""
     return render(request, 'core/no_term.html', {'what': what})
@@ -268,7 +275,7 @@ def people(studies, limit, person):
     return [
         hit(s.person.name, s.get_absolute_url(), ' · '.join(filter(None, [
             dated and s.person.birth_date and f'geb. {date_format(s.person.birth_date, "j.n.Y")}', s.person.matriculation, f'{s.subject} {s.program.degree}',
-            s.get_status_display(), more and plural(more, 'weiteres Studium', 'weitere Studien'),
+            s.state, more and plural(more, 'weiteres Studium', 'weitere Studien'),
         ])))
         for s, more in shown.values()
     ]

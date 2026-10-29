@@ -23,6 +23,7 @@ from core.apps import plural
 from core.history import tables
 from core.models import Institution, Message, Term
 from core.text import matching, untimed
+from core.views import preview
 from courses import panel
 from courses.forms import SlotForm, substitutes
 from courses.models import Course, Participation
@@ -237,6 +238,7 @@ def board(request):
     )
     for s in accepted:
         s.waiting = s.missing()
+    ready = any(not s.waiting for s in accepted)
     shown, columns = request.GET.get('alle', ''), []
     for status in BOARD:  # long columns end in a link, so the page stays readable
         found = [s for s in studies if s.status == status]
@@ -254,7 +256,7 @@ def board(request):
         'running': any(not c.released for c in auditions),
         'vacancies': vacancies(term, request.user),
         'decidable': decidable, 'verbs': VERBS,
-        'accepted': accepted,
+        'accepted': accepted, 'ready': ready,
     })
 
 
@@ -564,12 +566,20 @@ def move_up(request, pk):
     """Nachrücken: offers not accepted in time lapse, and the free places go to the best on the Nachrückliste."""
     intake = get_object_or_404(request.user.within(Course.objects.all(), 'decide_applications'), pk=pk, kind=Course.Kind.AUDITION, program__isnull=False)
     gone, waiting = next(((l, w) for c, l, w in vacancies(intake.term, request.user) if c == intake), ([], []))
+    back, today = f"{reverse('admissions:board')}?semester={intake.term_id}", timezone.localdate()
+    until = date_format(today + timedelta(days=Institution.get().accept_days), 'j.n.Y')
+    if waiting and not request.POST.get('bestaetigt'):
+        notes = [f'Das {intake.term} hat am {date_format(intake.term.start, "j.n.Y")} begonnen: wer jetzt nachrückt, beginnt verspätet.'] * (intake.term.start <= today)
+        notes += [f'Ohne Annahme verfallen: {", ".join(s.person.name for s in gone)}.'] * bool(gone)
+        people = [f'{s.person.name} · {s.subject} · {s.program.degree}' for s in waiting]
+        wording = waiting[0].wording(DECISIONS[Study.Status.ADMITTED], frist=until)
+        return preview(request, f'Nachrücken: {intake.title}', [(f'Studienplatzangebot, Annahme bis {until}', people, wording)], 'Nachrücken und Bescheide versenden', back, notes)
     for study in gone:
         study.set_status(Study.Status.LEFT)
     for study in waiting:
         offer(study, Study.Status.ADMITTED)
-    messages.success(request, f'{plural(len(waiting), "Person", "Personen")} von der Nachrückliste zugelassen. Bescheide versandt.' if waiting else 'Abgelaufene Zulassungen geschlossen.')
-    return redirect(f"{reverse('admissions:board')}?semester={intake.term_id}")
+    messages.success(request, f'Von der Nachrückliste zugelassen, Annahme bis {until}: {", ".join(s.person.name for s in waiting)}. Bescheide versandt.' if waiting else 'Abgelaufene Zulassungen geschlossen.')
+    return redirect(back)
 
 
 @login_not_required

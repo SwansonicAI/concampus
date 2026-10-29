@@ -2,7 +2,7 @@
 {% block title %}Exmatrikulationsbescheinigung{% endblock %}
 {% block content %}
 <div class="document">
-  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button>{% if study.exit_reason and study.exit_reason != '1' %}<a class="btn ghost" href="?{% if not reason %}grund=1{% endif %}">{% if reason %}Ohne Grund{% else %}Mit Grund{% endif %}</a>{% endif %}<a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
   {% include "core/_letterhead.html" with office=sender %}
   <h1>Exmatrikulations&shy;bescheinigung</h1>
   <p>Hiermit wird bescheinigt, dass</p>
@@ -15,7 +15,7 @@
   <dl class="facts">
     <dt>Studiengang</dt><dd>{{ study.program.title }}</dd>
     <dt>Hauptfach</dt><dd>{{ study.subject }}</dd>
-    {% if study.exit_reason %}<dt>Grund</dt><dd>{{ study.get_exit_reason_display }}</dd>{% endif %}
+    {% if study.exit_reason and reason %}<dt>Grund</dt><dd>{{ study.get_exit_reason_display }}</dd>{% endif %}
   </dl>
   <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ today|date:"j. F Y" }}</span><span>{{ sender }}</span></div>
   <p class="muted" style="margin-top: 48px"><small>Diese Bescheinigung wurde maschinell erstellt und ist ohne Unterschrift gültig.</small></p>

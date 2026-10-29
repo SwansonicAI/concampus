@@ -9,6 +9,7 @@ from django.db import transaction
 from django.db.models import Count, F, Prefetch, Q
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format, number_format
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -20,7 +21,7 @@ from core.history import tables
 from core.apps import plural
 from core.models import Institution, Message, Office, Person, Term
 from core.text import fold, matching
-from core.views import SHOWN, without_term
+from core.views import SHOWN, preview, without_term
 from courses.models import Participation
 from courses.views import untimed
 from curriculum.models import Module, Program, Subject
@@ -28,7 +29,7 @@ from curriculum.views import plan
 from exams.views import exhausted
 from instruments.models import Loan
 from . import payments
-from .models import EXITS, FIRST_TERM_LEAVES, LEAVE_TERMS, LEAVES, Document, Study, StudyTerm
+from .models import EXITS, FIRST_TERM_LEAVES, LEAVE_TERMS, LEAVES, OFFICIAL, Document, Study, StudyTerm
 
 class ChangeForm(forms.Form):
     program = forms.ModelChoiceField(label='Neuer Studiengang', queryset=Program.objects.all(), empty_label='Bitte wählen')
@@ -157,7 +158,7 @@ def roster(request):
         for s in studies:
             writer.writerow([
                 s.person.matriculation, s.person.last_name, s.person.first_name, *([s.person.get_gender_display(), s.person.get_nationality_display()] if personal else []),
-                s.person.email, s.program, s.subject, s.fs, s.get_status_display(),
+                s.person.email, s.program, s.subject, s.fs, s.state,
             ])
         return response
     shown = list(studies[:SHOWN])
@@ -232,6 +233,8 @@ def study(request, pk):
     reachable = Study.reachable(person, study.person.studies.exclude(pk=study.pk))
     options = study.options() if study.status == Study.Status.ENROLLED else []
     lost = exhausted(study) if study.status == Study.Status.ENROLLED else []  # the Prüfungsanspruch: no Rückmeldung then
+    for t in terms:
+        t.after = study.status in Study.FORMER and t.term.start > study.since  # paid for, then left before it began
     return render(request, 'students/study.html', {
         'study': study, 'today': today,
         'office': office,
@@ -257,7 +260,7 @@ def study(request, pk):
         'reachable': reachable,
         'change': ChangeForm(study=study) if office else None,
         'exits': EXITS, 'leaves': LEAVES,
-        'exhausted': lost,
+        'exhausted': lost, 'final': lost and max(m.appeal for m in lost) < today,
         'leaving': leaving(study) if office and study.status == Study.Status.ENROLLED else [],
         'leaving_day': leaving_day(study, lost) if office and study.status == Study.Status.ENROLLED else None,
         'options': options if own else [], 'fs': fs,
@@ -331,6 +334,9 @@ def enrol(request, pk):
     if missing := study.missing():
         messages.error(request, f'Noch nicht immatrikuliert: {", ".join(missing)}.')
         return redirect(study.get_absolute_url())
+    if not request.POST.get('bestaetigt'):
+        wording = study.wording('immatrikulation', matrikelnummer=study.person.matriculation or next_matriculation())
+        return preview(request, 'Immatrikulation', [('Immatrikulation', [study.person], wording)], 'Immatrikulieren und Bescheid versenden', study.get_absolute_url())
     matriculate(study)
     messages.success(request, f'{study.person} immatrikuliert, Matrikelnummer {study.person.matriculation}. Bescheid versandt.')
     return redirect(study.get_absolute_url())
@@ -341,12 +347,20 @@ def enrol(request, pk):
 def enrol_many(request):
     """Immatrikulation of the ticked applicants whose places are taken up and complete."""
     studies = request.user.within(Study.objects.filter(pk__in=request.POST.getlist('study'), status=Study.Status.ADMITTED), 'manage_students')
-    ready = [s for s in studies.select_related('person', 'program', 'subject', 'start_term') if not s.missing()]
-    for study in ready:
-        matriculate(study)
-    messages.success(request, f'{plural(len(ready), "Person", "Personen")} immatrikuliert. Bescheide versandt.')
+    ready = [s for s in studies.select_related('person', 'program', 'subject', 'start_term').order_by('person__last_name') if not s.missing()]
     back = request.POST.get('next', '')
-    return redirect(back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else 'admissions:board')
+    back = back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else reverse('admissions:board')
+    if not ready:
+        messages.error(request, 'Niemand angekreuzt, für den alles vorliegt.')
+    elif not request.POST.get('bestaetigt'):
+        people = [f'{s.person.name} · {s.subject} · {s.program.degree}' for s in ready]
+        wording = ready[0].wording('immatrikulation', matrikelnummer=ready[0].person.matriculation or next_matriculation())
+        return preview(request, 'Immatrikulation', [('Immatrikulation', people, wording)], 'Immatrikulieren und Bescheide versenden', back)
+    else:
+        for study in ready:
+            matriculate(study)
+        messages.success(request, f'{plural(len(ready), "Person", "Personen")} immatrikuliert. Bescheide versandt.')
+    return redirect(back)
 
 
 @require('manage_students')
@@ -419,35 +433,44 @@ def leaving(study):
 
 
 def leaving_day(study, lost):
-    """The day an Exmatrikulation is for, unless asked otherwise: after a final fail the day the Bescheid became final,
-    not before this semester; after the Abschluss the end of the semester; otherwise today."""
+    """The last day enrolled, unless asked otherwise: after a final fail the day the Bescheid became final, or the day
+    before this semester if that was earlier; after the Abschluss the end of the semester; otherwise today."""
     term = Term.current()
     if lost:
-        return max(max(m.appeal for m in lost) + timedelta(days=1), term.start)
+        return max(max(m.appeal for m in lost) + timedelta(days=1), term.start - timedelta(days=1))
     return term.end if study.issued else timezone.localdate()
 
 
 @require('manage_students')
 @require_POST
 def exmatriculate(request, pk):
-    """Exmatrikulation as of a day in the semester under way: on request the day asked for, up to the end of the semester;
-    after the Abschluss the end of the semester; after a final fail once that is final; otherwise today. What is still
-    open (the Laufzettel) is named."""
-    study = get_object_or_404(request.user.within(Study.objects.select_related('person'), 'manage_students'), pk=pk, status=Study.Status.ENROLLED)
+    """Exmatrikulation with the last day enrolled: on request the day asked for, up to the end of the semester; after the
+    Abschluss the end of the semester; after a final fail once that is final; otherwise today; the day before this
+    semester for someone who should not be in it. Semesters after that day are dropped, a fee paid for them is refunded
+    by the Studierendenwerk. The Bescheid first as a preview, with what is still open (the Laufzettel)."""
+    study = get_object_or_404(request.user.within(Study.objects.select_related('person', 'program', 'subject', 'start_term'), 'manage_students'), pk=pk, status=Study.Status.ENROLLED)
     reason, term, asked = request.POST.get('reason', ''), Term.current(), request.POST.get('zum', '').strip()
-    on = dates.day(asked) if asked else term.end if reason == '1' else timezone.localdate()
+    on, earliest = dates.day(asked) if asked else term.end if reason == '1' else timezone.localdate(), term.start - timedelta(days=1)
     lost = exhausted(study) if reason == '8' else []
     if reason not in dict(EXITS):
         messages.error(request, 'Bitte den Grund der Exmatrikulation wählen.')
     elif reason == '8' and (not lost or max(m.appeal for m in lost) >= timezone.localdate()):  # only on the evidence, and once it is final
         messages.error(request, 'Kein endgültig nicht bestandenes Modul.' if not lost else f'Erst nach der Widerspruchsfrist, ab dem {date_format(max(m.appeal for m in lost) + timedelta(days=1), "j.n.Y")}.')
-    elif not on or not term.start <= on <= term.end:
-        messages.error(request, f'Bitte einen Tag im {term} angeben, spätestens den {date_format(term.end, "j.n.Y")}.')
+    elif not on or not earliest <= on <= term.end:
+        messages.error(request, f'Bitte einen Tag vom {date_format(earliest, "j.n.Y")} bis zum {date_format(term.end, "j.n.Y")} angeben.')
     else:
-        still = leaving(study)
-        study.set_status(Study.Status.GRADUATED if reason == '1' else Study.Status.LEFT, reason, on)
-        study.notify('exmatrikulation', grund=dict(EXITS)[reason], zum=date_format(on, 'j. F Y'))
-        messages.success(request, f'{study.person} zum {date_format(on, "j.n.Y")} exmatrikuliert. Bescheid versandt.' + (f' Noch offen: {"; ".join(f"{what} ({who})" if who else what for what, who in still)}.' if still else ''))
+        still, later = leaving(study), study.terms.filter(term__start__gt=on)
+        paid = [r.term for r in later.select_related('term') if r.paid]
+        after = ['erstattung'] * bool(paid) + ['rechtsbehelf'] * (reason in OFFICIAL)
+        values = {'grund': dict(EXITS)[reason], 'zum': date_format(on, 'j. F Y'), 'rueckmeldesemester': ', '.join(map(str, paid))}
+        if not request.POST.get('bestaetigt'):
+            notes = [f'Noch offen: {what}{f" ({who})" if who else ""}' for what, who in still]
+            return preview(request, f'Exmatrikulation, letzter Tag {date_format(on, "j.n.Y")}', [('Exmatrikulation', [study.person], study.wording('exmatrikulation', *after, **values))], 'Exmatrikulieren und Bescheid versenden', study.get_absolute_url(), notes)
+        with transaction.atomic():
+            later.delete()
+            study.set_status(Study.Status.GRADUATED if reason == '1' else Study.Status.LEFT, reason, on)
+        study.notify('exmatrikulation', after=after, **values)
+        messages.success(request, f'{study.person} mit Ablauf des {date_format(on, "j.n.Y")} exmatrikuliert. Bescheid versandt.' + (f' Noch offen: {"; ".join(f"{what} ({who})" if who else what for what, who in still)}.' if still else ''))
     return redirect(study.get_absolute_url())
 
 
@@ -580,7 +603,10 @@ def exmatriculation(request, pk):
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term'), pk=pk, status__in=Study.FORMER)
     if not (study.person == request.user or request.user.may('manage_students', study)):
         raise PermissionDenied
-    return render(request, 'students/exmatriculation.html', {'study': study, 'today': timezone.localdate(), 'sender': texts.block('absender_bescheinigungen')})
+    return render(request, 'students/exmatriculation.html', {
+        'study': study, 'today': timezone.localdate(), 'sender': texts.block('absender_bescheinigungen'),
+        'reason': study.exit_reason == '1' or request.GET.get('grund'),  # often handed on: the ground only where asked for
+    })
 
 
 def certificate(request, pk):
