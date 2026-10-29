@@ -1,4 +1,5 @@
 import csv
+import re
 from collections import defaultdict
 from datetime import timedelta
 
@@ -12,6 +13,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format, number_format
+from django.contrib.auth.decorators import login_not_required
+from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
@@ -36,7 +39,8 @@ class ChangeForm(forms.Form):
     subject = forms.ModelChoiceField(label='Hauptfach', queryset=Subject.objects.all(), empty_label='Bitte wählen')
 
     def __init__(self, *args, study=None, **kwargs):
-        """Shown for a study: its Hauptfach kept, the Studiengänge one can start with it first."""
+        """Shown for a study: its Hauptfach kept, the Studiengänge one can start with it first; once one is picked, only
+        its Hauptfächer."""
         super().__init__(*args, **kwargs)
         if study:
             self.fields['subject'].initial = study.subject_id
@@ -45,6 +49,14 @@ class ChangeForm(forms.Form):
                 (label, [(p.pk, str(p)) for p in current if (study.subject_id in p.offered) == offered])
                 for label, offered in [(f'Mit Hauptfach {study.subject}', True), ('Weitere', False)]
             ]
+            self.fields['program'].widget.attrs['data-leads'] = 'subject'
+            self.fields['subject'].choices = [('', 'Bitte wählen')] + [(str(p), [(s.pk, str(s)) for s in p.subjects.all()]) for p in current]
+
+    def clean(self):
+        data = super().clean()
+        if data.get('program') and data.get('subject') and not data['program'].subjects.filter(pk=data['subject'].pk).exists():
+            raise forms.ValidationError(f'{data["program"]} bietet das Hauptfach {data["subject"]} nicht an.')
+        return data
 
 
 class PaymentForm(forms.Form):
@@ -105,8 +117,9 @@ COLUMNS = [  # heading, sort key, field; the server sorts, since the list may be
 
 CASES = [
     ('unterricht', 'Ohne Unterrichtszeit'), ('pruefung', 'Prüfung laut Plan überfällig'), ('regelstudienzeit', 'Über der Regelstudienzeit'),
-    ('schwerpunkt', 'Schwerpunkt nicht gewählt'),
+    ('schwerpunkt', 'Schwerpunkt nicht gewählt'), ('beurlaubt', 'Beurlaubt in diesem Semester'),
 ]
+STATES = [('', 'Alle'), *((s.value, s.label) for s in [Study.Status.ENROLLED, Study.Status.GUEST, Study.Status.GRADUATED, Study.Status.LEFT])]  # who studies or studied here
 
 
 def semesters(studies):
@@ -118,6 +131,8 @@ def cases(studies, case):
     """The studies in one of the situations an office keeps an eye on; `studies` carries its Fachsemester as `fs`."""
     if case == 'unterricht':
         return studies.filter(pk__in=untimed(Participation.objects.all()).values('study'))
+    if case == 'beurlaubt':
+        return studies.filter(terms__term=Term.current(), terms__leave=True)
     if case == 'regelstudienzeit':
         return studies.filter(fs__gt=F('program__semesters'))
     if case == 'schwerpunkt':
@@ -146,7 +161,9 @@ def cases(studies, case):
 def roster(request):
     today = timezone.localdate()
     status = request.GET.get('status', Study.Status.ENROLLED)
-    scoped = request.user.within(Study.objects.filter(status=status), 'view_students')
+    status = status if status in dict(STATES) else Study.Status.ENROLLED
+    shown = Study.objects.filter(status=status) if status else Study.objects.exclude(status__in=Study.APPLICATION)
+    scoped = request.user.within(shown, 'view_students')
     studies = semesters(scoped.select_related('person', 'program', 'subject', 'start_term', 'teacher')).order_by('person__last_name', 'person__first_name')
     for key, field in [('studiengang', 'program'), ('fach', 'subject'), ('klasse', 'teacher'), ('fs', 'fs'), ('beginn', 'start_term')]:
         if (value := request.GET.get(key, '')).isdigit():
@@ -172,9 +189,9 @@ def roster(request):
         return response
     shown = list(studies[:SHOWN])
     return render(request, 'students/roster.html', {
-        'studies': shown, 'count': len(shown) if len(shown) < SHOWN else studies.count(), 'q': q, 'status': status, 'statuses': Study.Status.choices,
+        'studies': shown, 'count': len(shown) if len(shown) < SHOWN else studies.count(), 'q': q, 'status': status, 'statuses': STATES,
         'sort': sort, 'columns': [(title, key, 'ascending' if sort == key else 'descending' if sort == f'-{key}' else '') for title, key, _ in COLUMNS],
-        'programs': request.user.within(Program.objects.all(), 'view_students'), 'subjects': request.user.within(Subject.objects.all(), 'view_students'),
+        'programs': request.user.within(Program.objects.ordered(), 'view_students'), 'subjects': request.user.within(Subject.objects.all(), 'view_students'),
         'terms': Term.objects.filter(intake__isnull=False).distinct().order_by('-start'), 'semesters': range(1, 13),
         'classes': Person.objects.filter(class_studies__in=scoped).distinct().order_by('last_name', 'first_name'),
         'cases': CASES,
@@ -526,7 +543,7 @@ def change(request, pk):
     study = get_object_or_404(request.user.within(Study.objects.all(), 'manage_students'), pk=pk, status=Study.Status.ENROLLED)
     form = ChangeForm(request.POST)
     if not form.is_valid():
-        messages.error(request, 'Bitte Studiengang und Hauptfach wählen.')
+        messages.error(request, ' '.join(form.non_field_errors()) or 'Bitte Studiengang und Hauptfach wählen.')
         return redirect(study.get_absolute_url())
     term = Term.current()
     with transaction.atomic():
@@ -668,5 +685,25 @@ def certificate(request, pk):
     term = Term.current()
     return render(request, 'students/certificate.html', {
         'study': study, 'term': term, 'registration': study.terms.filter(term=term).first(), 'today': timezone.localdate(),
-        'sender': texts.block('absender_bescheinigungen'),
+        'sender': texts.block('absender_bescheinigungen'), 'code': f'{study.pk}-{term.pk}-{signature(study.pk, term.pk)}',
+        'check': request.build_absolute_uri(reverse('students:verify')),
+    })
+
+
+def signature(study, term):
+    """The Prüfcode of an Immatrikulationsbescheinigung: nobody makes one up for another study or semester."""
+    return salted_hmac('immatrikulationsbescheinigung', f'{study}-{term}').hexdigest()[:10].upper()
+
+
+@login_not_required
+def verify(request):
+    """Whether an Immatrikulationsbescheinigung is genuine, for whoever it was handed to: its Prüfcode names the study
+    and the semester. It shows what the Bescheinigung says, nothing more."""
+    code, study, term = request.GET.get('code', '').strip().upper(), None, None
+    if found := re.fullmatch(r'(\d+)-(\d+)-([0-9A-F]{10})', code):
+        if constant_time_compare(found[3], signature(found[1], found[2])):
+            study = Study.objects.select_related('person', 'program', 'subject').filter(pk=found[1]).first()
+            term = Term.objects.filter(pk=found[2]).first()
+    return render(request, 'students/verify.html', {
+        'code': code, 'study': study, 'term': term, 'registered': bool(study and term and study.terms.filter(term=term, study__status__in=[Study.Status.ENROLLED, *Study.FORMER]).exists()),
     })

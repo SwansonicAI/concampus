@@ -5,17 +5,20 @@
 <div class="head">
   <h1>{{ study.person.first_name }} {{ study.person.last_name }}</h1>
   <div class="actions">
-    {% if certify and study.status == 'enrolled' %}<a class="btn ghost" href="{% url 'students:certificate' study.pk %}">Immatrikulationsbescheinigung</a>{% endif %}
     {% if files %}<a class="btn ghost" href="{% url 'exams:transcript' study.pk %}">{% if study.status == 'graduated' %}Zeugnis{% else %}Leistungsübersicht{% endif %}</a>{% endif %}
-    {% if certify and terms %}<a class="btn ghost" href="{% url 'students:periods' study.pk %}">Studienzeitbescheinigung</a>{% endif %}
-    {% if certify and study.status == 'graduated' or certify and study.status == 'left' %}<a class="btn ghost" href="{% url 'students:exmatriculation' study.pk %}">Exmatrikulationsbescheinigung</a>{% endif %}
     {% if thesis %}<a class="btn ghost" href="{% url 'exams:thesis' study.pk %}">Abschlussarbeit anmelden</a>{% endif %}
     {% if recognise %}<a class="btn ghost" href="{% url 'exams:recognition' %}?studium={{ study.pk }}">Leistung anerkennen</a>{% endif %}
-    {% if office %}<a class="btn ghost" href="{% url 'setup:edit' 'personen' study.person.pk %}?next={{ request.path|urlencode }}" data-panel>Stammdaten</a>
-    <a class="btn ghost" href="{% url 'setup:edit' 'studien' study.pk %}?next={{ request.path|urlencode }}" data-panel>Studium bearbeiten</a>{% endif %}
-    {% if history %}<a class="btn ghost" href="{% url 'history' 'core.person' study.person.pk %}" data-panel>Verlauf</a>{% endif %}
+    {% if office %}<a class="btn ghost" href="{% url 'setup:edit' 'studien' study.pk %}?next={{ request.path|urlencode }}" data-panel>Studium bearbeiten</a>{% endif %}
   </div>
 </div>
+<p class="actions">
+  {% if certify %}<small class="muted">Bescheinigungen:</small>
+  {% if study.status == 'enrolled' %}<a href="{% url 'students:certificate' study.pk %}">Immatrikulation</a>{% endif %}
+  {% if terms %}<a href="{% url 'students:periods' study.pk %}">Studienzeiten</a>{% endif %}
+  {% if study.status == 'graduated' or study.status == 'left' %}<a href="{% url 'students:exmatriculation' study.pk %}">Exmatrikulation</a>{% endif %}{% endif %}
+  {% if office %}<a href="{% url 'setup:edit' 'personen' study.person.pk %}?next={{ request.path|urlencode }}" data-panel>Stammdaten</a>{% endif %}
+  {% if history %}<a href="{% url 'history' 'core.person' study.person.pk %}" data-panel>Verlauf</a>{% endif %}
+</p>
 <p class="lead">{% if study.person.matriculation %}Matrikelnr. {{ study.person.matriculation }} · {% endif %}{{ study.program }} · {{ study.subject }}{% if study.focus %} · Schwerpunkt {{ study.focus.title }}{% endif %} · <span class="badge {{ study.status }}">{{ study.state }}</span>{% if study.person.hold and personal %} <span class="badge hold">Sperre: {{ study.person.hold }}</span>{% endif %}</p>
 {% for m in exhausted %}<div class="flash error">Prüfungsanspruch erloschen: {{ m.code }} {{ m.title }} endgültig nicht bestanden{% if grades %}, {% for p in m.failures %}{{ p.course.term }} {{ p.grade|floatformat:1|default:"nicht bestanden" }}{% if p.remark %} ({{ p.remark|upper }}){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}{% else %} im {{ m.failures|length }}. Versuch{% endif %}.<br><small>Widerspruch bis {{ m.appeal|date:"j.n.Y" }}{% if m.appeal < today %}, abgelaufen{% else %}; erst danach exmatrikulieren{% endif %}.</small></div>{% endfor %}
 
@@ -113,8 +116,9 @@
       {% endif %}
       <form method="post" action="{% url 'students:hold' study.pk %}" class="inline" style="margin-top: 16px">
         {% csrf_token %}
-        <label>Sperre (Grund, leer = keine)<input name="hold" value="{{ study.person.hold }}"></label>
-        <button class="btn ghost">Speichern</button>
+        <label>Sperre<input name="hold" value="{{ study.person.hold }}" placeholder="Grund, z. B. Bibliotheksmahnung"></label>
+        <button class="btn ghost">{% if study.person.hold %}Ändern{% else %}Sperren{% endif %}</button>
+        {% if study.person.hold %}<button class="btn ghost" name="hold" value="">Sperre aufheben</button>{% endif %}
       </form>
     </div>
     {% endif %}

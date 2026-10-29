@@ -47,9 +47,21 @@ class Subject(Tracked, models.Model):
         return self.name
 
 
+class Programs(models.QuerySet):
+    def ordered(self):
+        """As lists show Studiengänge: Bachelor, other first degrees, Master, Konzertexamen and certificates, Promotion,
+        Gasthörerschaft."""
+        rank = models.Case(
+            models.When(level='bachelor', then=0), models.When(kind='1', then=1), models.When(kind='7', then=2), models.When(kind='3', then=3),
+            models.When(kind='5', then=4), default=5,
+        )
+        return self.annotate(rank=rank).order_by('rank', 'degree', 'name', '-version')
+
+
 class Program(Tracked, models.Model):
     """A degree programme under one version of its regulations (Studiengang + Prüfungsordnung)."""
 
+    objects = Programs.as_manager()
     capabilities = ('edit_curriculum',)
     scope = (['subjects__institute'], ['pk'])
 
@@ -147,7 +159,7 @@ class Program(Tracked, models.Model):
     @classmethod
     def planned(cls):
         """Programmes with a Studienplan, which courses, exams and auditions belong to; not a Gasthörerschaft."""
-        return cls.objects.filter(modules__isnull=False).distinct()
+        return cls.objects.filter(modules__isnull=False).distinct().ordered()
 
     @classmethod
     def current(cls):

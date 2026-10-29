@@ -6,3 +6,4 @@
 {% empty %}
 {% if q %}<p class="empty">Nichts gefunden für „{{ q }}“.</p>{% endif %}
 {% endfor %}
+{% if fragment and groups %}<div class="found"><a href="{% url 'search' %}?q={{ q|urlencode }}"><b>Alle Treffer für „{{ q }}“</b></a></div>{% endif %}

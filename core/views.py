@@ -247,7 +247,7 @@ def search(request):
     q = request.GET.get('q', '').strip()
     fragment = request.headers.get('X-Fragment')  # the list that opens under the search box
     groups = [(label, hits) for label, hits in found(request.user, q, 6 if fragment else 30) if hits]
-    return render(request, 'core/_found.html' if fragment else 'core/search.html', {'q': q, 'groups': groups})
+    return render(request, 'core/_found.html' if fragment else 'core/search.html', {'q': q, 'groups': groups, 'fragment': fragment})
 
 
 def hit(title, url, meta=''):

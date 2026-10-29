@@ -121,7 +121,7 @@
     </form>
   </div>
   <div class="actions">
-    <p class="lead" style="margin: 0">Sortiert nach Punkten im Hauptfach.{% if incomplete %} {{ incomplete }} Bewerbungen sind unvollständig.{% endif %}</p>
+    <p class="lead" style="margin: 0">Sortiert nach Punkten im Hauptfach; die Nachrückliste je Studiengang und Hauptfach.{% if incomplete %} {{ incomplete }} Bewerbungen sind unvollständig.{% endif %}</p>
     {% if incomplete %}<form method="post" action="{% url 'admissions:remind' %}">{% csrf_token %}<input type="hidden" name="semester" value="{{ term.pk }}"><input type="hidden" name="fach" value="{{ subject }}"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn ghost small">Unvollständige erinnern</button></form>{% endif %}
   </div>
   <div class="board" data-panel>
@@ -132,7 +132,7 @@
         {% for s in studies %}
         <a class="ticket" href="{% url 'admissions:application' s.pk %}">
           <b>{{ s.person.name }}</b>
-          {{ s.subject }} · {{ s.program.degree }}<br>
+          {{ s.subject }} · {{ s.program.degree }}{% if s.place %} · Platz {{ s.place }}{% endif %}<br>
           {% if s.slot %}<small class="muted">Nächster Termin {{ s.slot|date:"j.n. H:i" }}</small>{% endif %}
           {% if s.accepted and s.status == 'admitted' %}<small class="muted">Platz angenommen</small>{% elif s.lapsed %}<small class="fail">Annahmefrist verstrichen</small>{% endif %}
           <span class="chips">{% include "admissions/_stages.html" %}{% if s.incomplete %}<span class="chip no" title="Fehlt: {{ s.incomplete|join:', ' }}">unvollständig</span>{% endif %}</span>

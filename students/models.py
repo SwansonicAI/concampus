@@ -7,7 +7,7 @@ from django.utils.formats import number_format
 from django.urls import reverse
 from django.utils import timezone
 
-from core import texts
+from core import destatis, texts
 from core.models import Keyed, Message, Person, Term, Tracked
 from core.text import matching
 from curriculum.models import Program, Subject, weighted
@@ -117,6 +117,13 @@ class Study(Tracked, models.Model):
         """A new status from `since`, else today; `reason` says why a study ended, as the official statistics count it."""
         self.status, self.since, self.exit_reason = status, since or timezone.localdate(), reason
         self.save(update_fields=['status', 'since', 'exit_reason'])
+
+    @property
+    def studienart(self):
+        """Erststudium, Zweitstudium, Master and so on, as the official statistics count them: an Erststudium after a degree
+        is a Zweitstudium."""
+        degree = self.person.degree_exam or self.person.studies.filter(status=self.Status.GRADUATED, since__lt=self.start_term.start).exists()
+        return dict(destatis.KINDS)['2' if self.program.kind == '1' and degree else self.program.kind]
 
     @property
     def state(self):
@@ -229,7 +236,7 @@ class DocumentType(Tracked, Keyed):
 
     class Condition(models.TextChoices):
         ALWAYS = 'always', 'immer'
-        VIDEO = 'video', 'wenn es eine Videostufe gibt; die Kommission sichtet es'
+        VIDEO = 'video', 'wenn es eine Videostufe gibt (für die Kommission)'
         DEGREE = 'degree', 'wenn der Studiengang einen Abschluss voraussetzt'
         MINOR = 'minor', 'bei Minderjährigen'
         SUBJECTS = 'subjects', 'bei den gewählten Hauptfächern'

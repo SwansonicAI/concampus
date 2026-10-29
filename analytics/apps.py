@@ -26,8 +26,8 @@ class AnalyticsConfig(Tile, AppConfig):
         found = f'{number_format(tally(MEASURES["studierende"], (), [now]), 0, force_grouping=True)} Studierende'
         rounds = [t for t in semesters(MEASURES['bewerbungen']) if t.start <= now.start]
         if len(rounds) > 2 and (before := tally(MEASURES['bewerbungen'], (), [rounds[-3]])):
-            change = round(100 * (tally(MEASURES['bewerbungen'], (), [rounds[-1]]) - before) / before)
-            found += f' · Bewerbungen {change:+d} % zum Vorjahr'
+            change = 100 * (tally(MEASURES['bewerbungen'], (), [rounds[-1]]) - before) / before
+            found += f' · Bewerbungen {"+" if change >= 0 else "-"}{number_format(abs(change), 1 if abs(change) < 10 else 0)} % zum Vorjahr'
         return found
 
     def features(self, person):

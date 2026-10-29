@@ -447,7 +447,7 @@ UNIVERSITIES = [  # Hochschulen, 2.3
     ('5990', 'Rheinische Hochschule Köln in Köln (Priv. FH)'),
     ('1210', 'Rheinland-Pfälzische Technische Universität Kaiserslautern-Landau in Kaiserslautern'),
     ('1211', 'Rheinland-Pfälzische Technische Universität Kaiserslautern-Landau in Landau'), ('2870', 'Robert-Schumann-H Düsseldorf'),
-    ('9000', 'Sonstige deutsche Hochschule'), ('9000', 'Sonstige deutsche Hochschule'), ('7180', 'SRH Fernhochschule Riedlingen (Priv. FH)'),
+    ('9000', 'Sonstige deutsche Hochschule'), ('7180', 'SRH Fernhochschule Riedlingen (Priv. FH)'),
     ('7971', 'SRH University of Applied Sciences Heidelberg in Berlin (Priv. FH)'),
     ('7975', 'SRH University of Applied Sciences Heidelberg in Bremen (Priv. FH)'),
     ('7972', 'SRH University of Applied Sciences Heidelberg in Dresden (Priv. FH)'),

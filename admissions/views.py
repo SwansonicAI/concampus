@@ -259,6 +259,10 @@ def board(request):
     shown, columns = request.GET.get('alle', ''), []
     for status in BOARD:  # long columns end in a link, so the page stays readable
         found = [s for s in studies if s.status == status]
+        if status == Study.Status.WAITLISTED:  # a list per Studiengang and Hauptfach, each in the order of its ranking
+            found.sort(key=lambda s: (str(s.program), str(s.subject)))
+            for n, s in enumerate(found):
+                s.place = 1 if n == 0 or (s.program_id, s.subject_id) != (found[n - 1].program_id, found[n - 1].subject_id) else found[n - 1].place + 1
         columns.append((Study.Status(status), found if status == shown else found[:CARDS], len(found)))
     today = timezone.localdate()
     return render(request, 'admissions/board.html', {

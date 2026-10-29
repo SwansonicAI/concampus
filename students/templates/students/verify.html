@@ -1,0 +1,23 @@
+{% extends base %}
+{% block title %}Bescheinigung prüfen{% endblock %}
+{% block content %}
+<h1>Bescheinigung prüfen</h1>
+<p class="lead">Ob eine Immatrikulationsbescheinigung echt ist: den Prüfcode unten auf der Bescheinigung eingeben.</p>
+<form class="inline" style="margin-bottom: 24px">
+  <label>Prüfcode<input name="code" value="{{ code }}" placeholder="z. B. 18689-41-3F9A0C12DE" required></label>
+  <button class="btn">Prüfen</button>
+</form>
+{% if code %}
+{% if study and term %}
+<div class="flash">Echt. Diese Bescheinigung hat die {{ institution.name }} ausgestellt.</div>
+<dl class="facts">
+  <dt>Name</dt><dd>{{ study.person.legal_name }}</dd>
+  <dt>Studiengang</dt><dd>{{ study.program.title }} · {{ study.subject }}</dd>
+  <dt>Semester</dt><dd>{{ term }} ({{ term.start|date:"j.n.Y" }} bis {{ term.end|date:"j.n.Y" }}){% if not registered %}: <span class="fail">nicht mehr immatrikuliert</span>{% endif %}</dd>
+  {% if study.status != 'enrolled' %}<dt>Stand heute</dt><dd>{{ study.state }}{% if study.status != 'guest' %} zum {{ study.since|date:"j.n.Y" }}{% endif %}</dd>{% endif %}
+</dl>
+{% else %}
+<div class="flash error">Diesen Prüfcode hat die Hochschule nicht vergeben. Die Bescheinigung ist nicht echt, oder der Code ist falsch abgeschrieben.</div>
+{% endif %}
+{% endif %}
+{% endblock %}

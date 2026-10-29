@@ -40,7 +40,7 @@ def plan(tree, semesters):
 
 def index(request):
     sizes = dict(Module.counted().values('program').annotate(n=Count('pk')).values_list('program', 'n'))
-    programs = list(Program.objects.prefetch_related('subjects'))
+    programs = list(Program.objects.ordered().prefetch_related('subjects'))
     for p in programs:
         p.size = sizes.get(p.pk, 0)
     figures = bool(request.user.roles & OVERSIGHT)

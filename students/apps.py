@@ -1,3 +1,4 @@
+from collections import Counter, defaultdict
 from datetime import timedelta
 
 from django.apps import AppConfig
@@ -7,6 +8,11 @@ from django.urls import reverse
 from django.utils.formats import date_format, number_format
 
 from core.apps import Tile, feature, plural, task
+
+WAITS = {  # the first word of what an accepted place still lacks: what it waits for, as the office's to-do says it
+    'Versicherungsmeldung': 'die Krankenkasse', 'Semesterbeitrag': 'den Semesterbeitrag', 'Hochschulzugangsberechtigung': 'den Hochschulzugang',
+    'Sperre:': 'die Aufhebung einer Sperre', 'Leihinstrument': 'ein Leihinstrument',
+}
 
 
 class StudentsConfig(Tile, AppConfig):
@@ -78,15 +84,20 @@ class StudentsConfig(Tile, AppConfig):
         enrolled = Study.objects.filter(status=Study.Status.ENROLLED)
         found = []
         if 'manage_students' in person.roles:
-            accepted = (
-                person.within(Study.objects.filter(status=Study.Status.ADMITTED, terms__term=F('start_term')), 'manage_students')
-                .values('start_term', 'start_term__name', 'start_term__start').annotate(n=Count('pk', distinct=True)).order_by('start_term__start')
-            )
-            for row in accepted:
-                found.append(task(
-                    f'{plural(row["n"], "angenommenen Studienplatz", "angenommene Studienplätze")} zum {row["start_term__name"]} immatrikulieren',
-                    f"{reverse('admissions:board')}?semester={row['start_term']}#immatrikulieren", row['start_term__start'],
-                ))
+            accepted = person.within(Study.objects.filter(status=Study.Status.ADMITTED, terms__term=F('start_term')), 'manage_students').select_related('start_term', 'person', 'program')
+            terms = defaultdict(lambda: ([], Counter()))  # ready to enrol; what the others wait for
+            for s in accepted.order_by('start_term__start'):
+                ready, waiting = terms[s.start_term]
+                if missing := s.missing():
+                    waiting.update({WAITS.get(reason.split()[0], 'Unterlagen') for reason in missing})
+                else:
+                    ready.append(s)
+            for term, (ready, waiting) in terms.items():
+                url = f"{reverse('admissions:board')}?semester={term.pk}#immatrikulieren"
+                if ready:
+                    found.append(task(f'{plural(len(ready), "angenommenen Studienplatz", "angenommene Studienplätze")} zum {term} immatrikulieren', url, term.start))
+                if waiting:  # not overdue: it is up to others
+                    found.append(task(f'Immatrikulation zum {term}: ' + ', '.join(f'{n} {"wartet" if n == 1 else "warten"} auf {what}' for what, n in waiting.items()), url))
             from courses.models import Participation
 
             fails = (  # a module failed as often as the Prüfungsordnung allows
