@@ -83,15 +83,18 @@
     {% if own or office %}
     {% if next.leave %}
     <form method="post" action="{% url 'students:leave' study.pk %}">{% csrf_token %}<button class="btn ghost small">Urlaubssemester zurücknehmen</button></form>
+    {% elif own and not window %}
+    <p class="muted"><small>Ein Urlaubssemester für das {{ upcoming }} beantragen Sie mit der Rückmeldung, vom {{ upcoming.reregistration_start|date:"j. F" }} bis zum {{ upcoming.closes|date:"j. F Y" }}.</small></p>
     {% else %}
     <details>
       <summary>Urlaubssemester {% if own %}beantragen{% else %}eintragen{% endif %}</summary>
-      <form method="post" action="{% url 'students:leave' study.pk %}" class="inline" style="margin-top: 8px">
+      <form method="post" enctype="multipart/form-data" action="{% url 'students:leave' study.pk %}" class="inline" style="margin-top: 8px">
         {% csrf_token %}
         <label>Grund<select name="reason" required><option value="">–</option>{% for code, name in leaves %}<option value="{{ code }}">{{ name }}</option>{% endfor %}</select></label>
+        <label>Nachweis, etwa ein Attest<input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png"></label>
         <button class="btn ghost small">{% if own %}Beantragen{% else %}Eintragen{% endif %}</button>
       </form>
-      {% if own %}<p class="muted"><small>Bis zum {{ upcoming.closes|date:"j. F Y" }}, nicht rückwirkend; in der Regel höchstens {{ leave_terms }} Urlaubssemester. Sie zählen nicht als Fachsemester, Prüfungen sind trotzdem möglich. Nachweise wie ein ärztliches Attest reichen Sie ein bei: {{ changes|default:"der Hochschule" }}.</small></p>{% endif %}
+      {% if own %}<p class="muted"><small>Bis zum {{ upcoming.closes|date:"j. F Y" }}, nicht rückwirkend; in der Regel höchstens {{ leave_terms }} Urlaubssemester. Sie zählen nicht als Fachsemester; ob Prüfungen möglich sind, regelt die Immatrikulationsordnung. Den Nachweis sieht nur {{ leaves_to|default:"die Studierendenverwaltung" }}; auf Papier reichen Sie ihn dort ein.</small></p>{% endif %}
     </details>
     {% endif %}
     {% endif %}

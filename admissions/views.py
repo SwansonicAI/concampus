@@ -715,7 +715,7 @@ def document(request, pk):
     applications = Study.objects.filter(status__in=Study.APPLICATION)
     applications = applications.filter(person=d.person_id) if d.kind.shared else applications.filter(pk=d.study_id)
     examining = Course.objects.filter(staff=person)
-    examined = d.kind_id == 'attest' and any(person.may(c, d) for c in ('decide_results', 'grant_compensation'))  # a Rücktritt or Nachteilsausgleich depends on it
+    examined = d.kind_id == 'attest' and any(person.may(c, d) for c in ('decide_results', 'grant_compensation', 'manage_students'))  # a Rücktritt, Nachteilsausgleich or Urlaubssemester depends on it
     if d.kind.health and not (d.person_id == person.pk or person.within(applications, 'decide_applications').exists() or examined):
         raise PermissionDenied('Gesundheitsdaten öffnen nur die Person und das Amt, dessen Entscheidung von ihnen abhängt.')
     if not (
@@ -759,6 +759,7 @@ def review(request, pk):
     panel.blind(rows, person)
     mine = {p.pk: dict((e.pk, v) for e, v in p.marks).get(person.pk) for p in rows}
     todo = {p.pk for p in rows if mine[p.pk] is None and person.pk not in p.recused}
+    done = len(rows) - len(todo) - sum(1 for p in rows if person.pk in p.recused)  # saved, not what a refused form typed
     picked = request.GET.get('bewerbung', '')
     current = next((p for p in rows if str(p.pk) == picked), None) or next((p for p in rows if p.pk in todo), rows[0])
     at, error = rows.index(current), ''
@@ -782,7 +783,7 @@ def review(request, pk):
         'videos': current.study.documents.filter(kind__condition=Condition.VIDEO),
         'position': everyone.index(current) + 1,  # numbered as on the list of all applications
         'count': len(everyone),
-        'done': sum(1 for value in mine.values() if value is not None),
+        'done': done, 'scored': current.pk not in todo,  # the wished-for teacher only after one's own score, not to sway it
         'prev': rows[at - 1] if at else None,
         'next': rows[at + 1] if at + 1 < len(rows) else None,
     })

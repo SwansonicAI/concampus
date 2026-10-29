@@ -32,7 +32,7 @@ from curriculum.views import plan
 from exams.views import exhausted
 from instruments.models import Loan
 from . import payments
-from .models import EXITS, FIRST_TERM_LEAVES, LEAVE_TERMS, LEAVES, OFFICIAL, Document, Study, StudyTerm
+from .models import EXITS, FIRST_TERM_LEAVES, LEAVE_TERMS, LEAVES, OFFICIAL, Document, DocumentType, Study, StudyTerm
 
 class ChangeForm(forms.Form):
     program = forms.ModelChoiceField(label='Neuer Studiengang', queryset=Program.objects.all(), empty_label='Bitte wählen')
@@ -294,6 +294,8 @@ def study(request, pk):
         'advising': options if study.teacher_id == person.pk and not study.focus_id else [],
         'recording': study.program.choices() if not own and study.status == Study.Status.ENROLLED and decides(person, study) else [],
         'changes': Office.holding('decide_results', study.program),
+        'leaves_to': Office.holding('manage_students'),
+        'window': upcoming and upcoming.reregistration_start <= today <= upcoming.closes,  # when students ask for an Urlaubssemester
         'recognise': study.status == Study.Status.ENROLLED and person.may('recognise', study),
         'compensate': study.status == Study.Status.ENROLLED and person.may('grant_compensation', study),
         'thesis': study.status == Study.Status.ENROLLED and person.may('manage_exams', study),
@@ -465,7 +467,7 @@ def leave(request, pk):
     leave = not (registration and registration.leave)
     reason = request.POST.get('reason', '') if leave else ''
     rule = leave and (  # what a student may ask for by themselves; the office decides beyond it, reminded
-        f'Urlaubssemester für das {term} lassen sich nur bis zum {date_format(term.closes, "j.n.Y")} beantragen.' if not office and not term.reregistration_start <= timezone.localdate() <= term.closes
+        f'Urlaubssemester für das {term} lassen sich vom {date_format(term.reregistration_start, "j.n.")} bis zum {date_format(term.closes, "j.n.Y")} beantragen.' if not office and not term.reregistration_start <= timezone.localdate() <= term.closes
         else f'In der Regel sind höchstens {LEAVE_TERMS} Urlaubssemester möglich; ein weiteres nur auf schriftlichen Antrag.' if study.terms.filter(leave=True).count() >= LEAVE_TERMS
         else 'Im ersten Fachsemester ist eine Beurlaubung nur bei Erkrankung oder Mutterschutz und Elternzeit möglich.' if not study.semester and reason not in FIRST_TERM_LEAVES
         else None
@@ -473,6 +475,11 @@ def leave(request, pk):
     if leave and reason not in dict(LEAVES) or rule and not office:
         messages.error(request, rule if reason in dict(LEAVES) else 'Bitte den Grund der Beurlaubung wählen.')
         return redirect(study.get_absolute_url())
+    if leave and (file := request.FILES.get('file')):  # an attest, say: for the student office only
+        if refusal := DocumentType.system('attest').refuses(file):
+            messages.error(request, refusal)
+            return redirect(study.get_absolute_url())
+        Document.hand_in(study, DocumentType.system('attest'), file)
     registration, _ = StudyTerm.objects.get_or_create(study=study, term=term)
     registration.leave, registration.leave_reason = leave, reason
     registration.save(update_fields=['leave', 'leave_reason'])

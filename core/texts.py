@@ -65,7 +65,7 @@ TEXTS = {
     'beurlaubung': Spec(
         BESCHEID, 'Beurlaubung', 'Bescheid über die Beurlaubung',
         'Sie sind für das {rueckmeldesemester} im Studiengang {studiengang}, Hauptfach {hauptfach}, beurlaubt. Grund: {grund}.\n\n'
-        'Das Urlaubssemester zählt nicht als Fachsemester; Prüfungen können Sie trotzdem ablegen.',
+        'Das Urlaubssemester zählt nicht als Fachsemester.',
         STUDY + ('rueckmeldesemester', 'grund'),
     ),
     'exmatrikulation_rueckmeldung': Spec(

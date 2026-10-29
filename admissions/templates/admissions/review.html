@@ -3,9 +3,9 @@
 {% block title %}Sichtung {{ course.title }}{% endblock %}
 {% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
 {% block content %}
-<p class="eyebrow">{{ course.title }} · Bewerbung {{ position }} von {{ count }}{% if juror %} · {{ done }} von Ihnen gewertet{% endif %}</p>
+<p class="eyebrow">{{ course.title }} · Bewerbung {{ position }} von {{ count }}{% if juror %} · {{ done }} von Ihnen gewertet{% if course.marks_by %}, Wertung bis {{ course.marks_by|date:"j.n.Y" }}{% endif %}{% endif %}</p>
 <h1>{{ p.study.person.first_name }} {{ p.study.person.last_name }}</h1>
-<p class="lead">{{ p.study.program.title }} · {{ p.study.subject }}{% if p.study.teacher %} · Wunsch: {{ p.study.teacher }}{% endif %}</p>
+<p class="lead">{{ p.study.program.title }} · {{ p.study.subject }}{% if p.study.teacher and scored %} · Wunsch: {{ p.study.teacher }}{% endif %}</p>
 
 <div class="review">
   <div>{% for d in videos %}{% include "admissions/_document.html" %}{% empty %}<p class="fail">Kein Video eingereicht.</p>{% endfor %}</div>

@@ -1953,6 +1953,7 @@ class Command(BaseCommand):
                           'accompaniment': None if subject in ('Klavier', 'Orgel') else accompanist}  # pianists and organists play alone
                 video = Course.objects.create(
                     term=term, kind=Course.Kind.AUDITION, title=f'Videostufe {subject}{level}', subject=study.subject, video=True, pass_mark=Decimal('19.1' if master else '16.1'), max_points=25,
+                    marks_by=intake['deadline'] + timedelta(days=14),  # the commission rates after the Bewerbungsschluss
                     released=at(video_deadline + timedelta(days=30) if finished else date(2026, 10, 20), hour=12) if decided else None, **intake,
                 ) if subject in VIDEO_SUBJECTS else None
                 hall = Course.objects.create(

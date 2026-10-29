@@ -67,7 +67,7 @@ class AdmissionsConfig(Tile, AppConfig):
                 started = course.video or course.participations.filter(slot__lte=timezone.now()).exists()
                 if missing and started:
                     url = reverse('admissions:review', args=[course.pk]) if course.video else course.get_absolute_url()
-                    found.append(task(f'{course.title}: Ihre Wertung fehlt für {plural(missing, "Bewerbung", "Bewerbungen")}', url, course.deadline))
+                    found.append(task(f'{course.title}: Ihre Wertung fehlt für {plural(missing, "Bewerbung", "Bewerbungen")}', url, course.marks_by or course.deadline))
         if 'run_auditions' in person.roles:
             juries = person.within(Course.objects.filter(kind=Course.Kind.AUDITION, released=None).exclude(participations=None), 'run_auditions')
             if short := len(Course.short_panels(juries)):

@@ -269,12 +269,19 @@ class AuditionForm(CourseForm):
     deadline = DayField(label='Bewerbungsschluss', required=False, help_text='Bis dahin laden Bewerbende Video und Unterlagen hoch.')
 
     class Meta(CourseForm.Meta):
-        fields = ['title', 'term', 'program', 'subject', 'video', 'after', 'staff', 'deadline', 'capacity', 'pass_mark', 'max_points', 'accompaniment', 'description']
+        fields = ['title', 'term', 'program', 'subject', 'video', 'after', 'staff', 'deadline', 'marks_by', 'capacity', 'pass_mark', 'max_points', 'accompaniment', 'description']
         labels = {'staff': 'Kommission', 'capacity': 'Studienplätze'}
         help_texts = {
             'program': 'Nur bei der ersten Stufe: der Studiengang, für den man sich hier bewirbt.',
             'video': 'Bewerbende reichen ein Video ein, die Kommission wertet online.',
         }
+
+
+    def clean(self):
+        data = super().clean()
+        if data.get('marks_by') and data.get('deadline') and data['marks_by'] <= data['deadline']:
+            self.add_error('marks_by', 'Die Kommission wertet nach dem Bewerbungsschluss, sonst bleibt wer zuletzt einreicht ungewertet.')
+        return data
 
 
 class EnsembleForm(forms.Form):

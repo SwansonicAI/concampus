@@ -78,8 +78,8 @@ class CoursesConfig(Tile, AppConfig):
                     due, url = Study.choose_by(s.fs, first), f'{s.get_absolute_url()}#studienverlauf'
                     if s.advised_id is None:
                         found.append(task(f'Studienfachberatung: {s.person} ({options[0].choice.title})', url, due))
-                    elif due < today:
-                        found.append(task(f'{options[0].choice.title} nicht gewählt: {s.person}, empfohlen {s.advised.title}', url, due))
+                    elif due < today:  # advised: the choice is the student's, who has the to-do
+                        found.append(task(f'{options[0].choice.title}: empfohlen {s.advised.title}, wartet auf {s.person}', url))
             for course in person.teaching.filter(term=term, kind=TEACHING[0], bookings=None):
                 found.append(task(f'Termine planen: {course.title}', course.get_absolute_url()))
             for course in person.teaching.filter(term=term, signups__isnull=False).annotate(n=Count('signups')):

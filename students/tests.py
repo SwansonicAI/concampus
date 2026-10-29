@@ -93,14 +93,14 @@ class LeaveTest(Seeded):
 
     def test_students_within_the_rules_the_office_beyond(self):
         term, today = Term.upcoming(), timezone.localdate()
-        Term.objects.filter(pk=term.pk).update(deadline=today - timedelta(days=1), late_deadline=None)
+        Term.objects.filter(pk=term.pk).update(reregistration_start=today - timedelta(days=14), deadline=today - timedelta(days=1), late_deadline=None)
         new, old = (next(s for s in Study.objects.filter(status='enrolled', prior_terms=0).select_related('person') if s.semester == n) for n in (1, 3))
 
         def ask(study, reason, client=None):
             r = (client or self.login(study.person.username)).post(f'/studierende/{study.pk}/urlaub/', {'reason': reason}, follow=True)
             return flashes(r)[0]
 
-        self.assertIn('nur bis zum', ask(new, '1'))
+        self.assertIn('lassen sich vom', ask(new, '1'))  # the window is over
         Term.objects.filter(pk=term.pk).update(reregistration_start=today, deadline=today)
         new.terms.filter(term__start__lte=today).update(leave=True, leave_reason='1')  # ill all their first term: the coming one is their first Fachsemester
         self.assertIn('nur bei Erkrankung', ask(new, '4'))
