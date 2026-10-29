@@ -99,8 +99,10 @@ def saved(objs):
     for obj in objs:
         loaded = getattr(obj, '_loaded', None)
         now = {f: plain(f, getattr(obj, f.attname)) for f in fields(type(obj)) if loaded is None or f.attname in loaded}
-        if loaded is None:
-            entries.append(entry(obj, Change.Action.CREATED, {}))
+        if loaded is None:  # what it began with, so the first value of a mark is on record too
+            entries.append(entry(obj, Change.Action.CREATED, {
+                f.attname: [None, value] for f, value in now.items() if f.attname not in SECRET and value is not None and value != '' and value is not False
+            }))
         else:
             pairs = {f.attname: [plain(f, loaded[f.attname]), value] for f, value in now.items()}
             if diff := {name: [None, None] if name in SECRET else pair for name, pair in pairs.items() if pair[0] != pair[1]}:
@@ -174,8 +176,9 @@ def restore(change):
             getattr(obj, field.name).set(field.related_model.objects.filter(pk__in=pks))
 
 
-def describe(changes):
-    """Changes ready to show, each with `record` (what was changed), `lines` [(label, before, after)] and `restorable`."""
+def describe(changes, person):
+    """Changes ready to show, each with `record` (what was changed), `lines` [(label, before, after)] and `restorable`:
+    by the person, as the office that looks after the record changed."""
     changes, rows, linked = list(changes), defaultdict(set), defaultdict(set)
     for c in changes:
         c.model = apps.get_model(c.table)
@@ -190,16 +193,25 @@ def describe(changes):
         for (model, to), pks in linked.items()
     }
     labels = {(c.model, c.row): gone(c) for c in changes if c.action == Change.Action.DELETED and c.row not in records[c.model]}
+    allowed = {}  # whether the person looks after each record changed, asked once a record
     for c in changes:
         exists = c.row in records[c.model]
         record = records[c.model][c.row] if exists else labels.get((c.model, c.row))
         c.record = f'{capfirst(c.model._meta.verbose_name)} {record or f"Nr. {c.row}"}'
         c.lines = [] if c.action == Change.Action.DELETED else [line(c.model._meta.get_field(name), pair, names) for name, pair in c.fields.items()]
+        if (c.model, c.row) not in allowed and (exists or c.action == Change.Action.DELETED):
+            allowed[c.model, c.row] = bool(c.model.held(person, record) if exists else c.model.held(person, former(c), deleted=True))
         if c.action == Change.Action.DELETED:
-            c.restorable = not exists
+            c.restorable = not exists and allowed[c.model, c.row]
         else:
-            c.restorable = exists and c.action != Change.Action.CREATED and bool(c.fields.keys() - SECRET)
+            c.restorable = exists and c.action != Change.Action.CREATED and bool(c.fields.keys() - SECRET) and allowed[c.model, c.row]
     return changes
+
+
+def former(change):
+    """An unsaved copy of a deleted record, from what was kept of it, to tell whose it was."""
+    model = apps.get_model(change.table)
+    return model(**{f.attname: f.to_python(change.fields[f.attname]) for f in fields(model) if f.attname in change.fields})
 
 
 def target(field):
@@ -210,7 +222,7 @@ def target(field):
 def gone(change):
     """A deleted record's name, from what was kept of it."""
     try:
-        return str(change.model(**{f.attname: f.to_python(change.fields[f.attname]) for f in fields(change.model) if f.attname in change.fields}))
+        return str(former(change))
     except ObjectDoesNotExist:  # it named records deleted with it
         return None
 

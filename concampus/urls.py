@@ -17,3 +17,4 @@ urlpatterns = [
     path('einstellungen/', include('setup.urls')),
     path('', include('core.urls')),
 ]  # uploads are not served as files: admissions:document checks who may see each
+handler403 = 'core.views.denied'

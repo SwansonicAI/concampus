@@ -101,6 +101,10 @@ never in the address: a note may say why someone was ill, and addresses end up i
 - `core/views.py`, `people()`: birth dates in search results only for `manage_students`, `decide_results`,
   `view_applications`. `letter()`: filed Bescheide for `manage_students` and `decide_results`.
 - `students/views.py`, `roster()`: gender and nationality in the export only for `manage_students`.
+- `core/models.py`, `Tracked.keepers()`, `seen_by()`: a record's Verlauf and undoing its changes belong to the offices
+  that look after it, a course's by its kind (an audition's to the office that runs auditions, an exam's to those that
+  manage or decide exams), results through their course (`courses.models.Judged`); a person's Verlauf opens to each
+  office for its own part. Whoever is refused hears which offices keep it, never the record's name.
 - `core/access.py`: the capabilities and their wording; `Person.within`, `Person.may`, `Study.reachable` scope them to
   Institute and Studiengänge.
 - Test: `students/tests.py`, `FileTest.test_each_sees_what_their_task_needs`.

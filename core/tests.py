@@ -10,7 +10,7 @@ from django.test import Client, SimpleTestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from courses.models import Course
+from courses.models import Course, Score
 from curriculum.models import Program
 from rooms.models import Booking, Room
 from students.models import Document, Study
@@ -309,7 +309,20 @@ class HistoryFlowTest(Seeded):
         juror.post(url, {f'score-{p.pk}-{wendt.pk}': '18'})
         marks = Change.objects.filter(table='courses.score', by=wendt, person=p.study.person)
         self.assertEqual([m.action for m in marks], ['changed', 'created'])
-        self.assertEqual(marks[0].fields, {'value': ['17.50', '18']})
+        self.assertEqual((marks[0].fields, marks[1].fields['value']), ({'value': ['17.50', '18']}, [None, '17.5']))  # the first mark is on record too
+
+    def test_an_audition_s_history_is_for_the_office_that_runs_it(self):
+        score = Score.objects.filter(participation__course__kind='audition', participation__course__released=None).select_related('participation__course').first()
+        score.value -= 1
+        score.save()
+        audition, change = score.participation.course, Change.objects.get(table='courses.score', row=score.pk)
+        for office in ('pruefungsamt', 'veranstaltungsbuero'):  # each sees and undoes changes elsewhere, never here
+            client = self.login(office)
+            refused = client.get(f'/verlauf/courses.course/{audition.pk}/')
+            self.assertEqual(refused.status_code, 403)
+            self.assertIn('Eignungsprüfung', refused.content.decode())  # says what it is and who keeps it
+            self.assertEqual(client.post(f'/verlauf/{change.pk}/zuruecksetzen/').status_code, 403)
+        self.assertIn(change, self.login('asa').get(f'/verlauf/courses.course/{audition.pk}/', headers=PANEL).context['changes'])
 
     def test_restore_conflict_and_undo(self):
         asa = self.login('asa')

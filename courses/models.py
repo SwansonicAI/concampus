@@ -1,6 +1,7 @@
 from datetime import timedelta
+from operator import attrgetter
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
@@ -135,6 +136,14 @@ class Course(Tracked, models.Model):
         )
         return set(found.values_list('pk', flat=True))
 
+    @classmethod
+    def keepers(cls, record):
+        """By its kind: teaching is for the office that manages courses, exams for those that manage or decide them,
+        auditions for the one that runs them."""
+        if record is None:
+            return cls.capabilities
+        return {cls.Kind.COURSE: ('manage_courses',), cls.Kind.LESSON: ('manage_courses',), cls.Kind.AUDITION: ('run_auditions',)}.get(record.kind, ('manage_exams', 'decide_results'))
+
     def get_absolute_url(self):
         app = {self.Kind.EXAM: 'exams:exam', self.Kind.RECOGNITION: 'exams:exam', self.Kind.THESIS: 'exams:exam', self.Kind.AUDITION: 'admissions:audition'}
         return reverse(app.get(self.kind, 'courses:course'), args=[self.pk])
@@ -204,12 +213,30 @@ class Course(Tracked, models.Model):
         return grade >= self.pass_mark if self.points else grade <= 4
 
 
-class Participation(Tracked, models.Model):
+class Judged:
+    """Mixin for the records of results (participations, scores, recusals): looked after by the office that runs
+    auditions for an audition's, else by the one that decides results. `course_path` leads to their course."""
+
+    course_path = 'participation.course'
+
+    @classmethod
+    def keepers(cls, record):
+        try:
+            course = attrgetter(cls.course_path)(record) if record else None
+        except ObjectDoesNotExist:  # what it belonged to is gone too
+            course = None
+        if course is None:
+            return cls.capabilities
+        return ('run_auditions',) if course.kind == Course.Kind.AUDITION else ('decide_results',)
+
+
+class Participation(Judged, Tracked, models.Model):
     """A study taking part in a course. Passed, it credits `module`, one of the course's modules."""
 
     owner = 'study.person_id'
     capabilities = ('decide_results', 'run_auditions')
     scope = (['study__subject__institute', 'course__subject__institute'], ['study__program'])
+    course_path = 'course'
 
     class Remark(models.TextChoices):  # as Prüfungsämter note them
         EXCUSED = 'rt', 'RT · Rücktritt mit triftigem Grund'
@@ -293,7 +320,7 @@ class Ensemble(Tracked, models.Model):
         return f'{self.name} · {self.course}'
 
 
-class Score(Tracked, models.Model):
+class Score(Judged, Tracked, models.Model):
     """One examiner's mark. The participation's grade is the panel's decision, usually the mean."""
 
     owner = 'participation.study.person_id'
@@ -314,7 +341,7 @@ class Score(Tracked, models.Model):
         return f'{self.participation} · {self.examiner}'
 
 
-class Recusal(Tracked, models.Model):
+class Recusal(Judged, Tracked, models.Model):
     """An examiner standing back from one candidate for fear of bias (Besorgnis der Befangenheit, § 21 VwVfG), say as
     their former private teacher: they give no mark, and the result is the others' mean."""
 

@@ -360,7 +360,7 @@ def audition(request, pk):
         'columns': [e.pk for e in columns],
         'office': office, 'rule': panel.rule(rows),
         'recusable': [] if course.released else panel.recusable(rows, person),
-        'history': Course.visible_to(person.roles),
+        'history': bool(Course.seen_by(person, course.pk)),
         'slots': SlotForm(person=person, course=course) if office else None,
         'stages': next_stages(course) if office else [],
         'ready': sum(1 for p in rows if p.passed and p.study.status == Study.Status.APPLIED),

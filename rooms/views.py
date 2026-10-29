@@ -289,7 +289,7 @@ def booking(request, pk=None):
         if not editable(booking, person) and private(booking, person):
             raise PermissionDenied
         return render(request, 'rooms/details.html', {
-            'booking': booking, 'participants': booking.participants.all(), 'past': past, 'history': Booking.visible_to(person.roles),
+            'booking': booking, 'participants': booking.participants.all(), 'past': past, 'history': bool(Booking.seen_by(person, booking.pk)),
         })
     initial, data = {}, request.POST.copy() or None
     if start := parse_datetime(request.GET.get('start', '')):
@@ -334,7 +334,7 @@ def booking(request, pk=None):
         'form': form, 'booking': booking, 'series': series, 'central': Office.holding('book_any_room'),
         'told': told, 'cancel': CancelForm(sent(request, 'absagen'), person=person), 'instead': form.instead(),
         'rules': Institution.get(), 'special': BookingCategory.objects.filter(students=True).exclude(ahead_hours=None, participants=0),
-        'history': booking.pk and Booking.visible_to(person.roles), 'now': timezone.now(), 'asking': bool(form.fields['room'].asked),
+        'history': booking.pk and bool(Booking.seen_by(person, booking.pk)), 'now': timezone.now(), 'asking': bool(form.fields['room'].asked),
         'services': booking.services.select_related('category') if booking.pk else [],
         'serving': ServiceForm(initial={'begin': (timezone.localtime(booking.start) - timedelta(hours=2)).time(), 'until': (timezone.localtime(booking.start) - timedelta(hours=1)).time()})
         if booking.pk and booking.category.public else None,

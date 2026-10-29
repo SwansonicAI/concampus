@@ -65,14 +65,28 @@ def kept(form, person, capability):
     return None
 
 
+ROLES = {'student': 'Studierende', 'applicant': 'Bewerbende', 'teacher': 'Lehrende', 'juror': 'Kommissionen von Eignungsprüfungen', 'alumni': 'Ehemalige'}
+
+
+def needs(roles):
+    """Whom a page is for, in a sentence: the roles, and the rights with the offices that hold them."""
+    from .models import Office
+
+    labels = dict(c for _, group in CAPABILITIES for c in group)
+    rights = [f'dem Recht „{labels[r]}“ ({Office.holding(r) or "noch kein Amt"})' for r in roles if r in labels]
+    whom = ', '.join(ROLES[r] for r in roles if r in ROLES)
+    return f'Diese Seite ist für {" und ".join(filter(None, [whom, rights and "Ämter mit " + " oder ".join(rights)]))}.'
+
+
 def require(*roles):
-    """View decorator: the user needs one of these roles (capabilities, 'student', 'applicant', 'teacher')."""
+    """View decorator: the user needs one of these roles (capabilities, 'student', 'applicant', 'teacher'); else they
+    hear whom the page is for."""
 
     def decorator(view):
         @wraps(view)
         def guarded(request, *args, **kwargs):
             if not request.user.roles & set(roles):
-                raise PermissionDenied
+                raise PermissionDenied(needs(roles))
             return view(request, *args, **kwargs)
 
         return guarded

@@ -45,13 +45,23 @@ class Tracked:
         return bool(roles & set(cls.capabilities))
 
     @classmethod
-    def open_to(cls, person, pk):
-        """Whether the record is within the person's reach for its history: by any of their capabilities that sees a history,
-        as its history spans what several offices look after (a person's); a deleted record only for offices of the whole
-        Hochschule."""
+    def keepers(cls, record):
+        """The capabilities that look after a record, see its history and undo its changes: the model's own; models whose
+        records belong to different offices by their kind narrow them (courses.Course). `record` may be None, or an
+        unsaved copy of a deleted one."""
+        return cls.capabilities
+
+    @classmethod
+    def held(cls, person, record, deleted=False):
+        """Of the capabilities that look after `record`, those the person holds for it; for a record no longer there,
+        only those of offices for the whole Hochschule."""
+        return {c for c in cls.keepers(record) if (person.everywhere(c) if deleted else c in person.reach and person.may(c, record))}
+
+    @classmethod
+    def seen_by(cls, person, pk):
+        """The person's capabilities by which they see a record's history; empty: it is closed to them."""
         record = cls.objects.filter(pk=pk).first()
-        seeing = {c for model in apps.get_models() if issubclass(model, Tracked) for c in model.capabilities}
-        return any(person.may(c, record) if record else person.everywhere(c) for c in person.reach if c in seeing)
+        return cls.held(person, record, deleted=record is None)
 
 
 class Keyed(models.Model):
@@ -262,6 +272,14 @@ class Person(Tracked, AbstractUser):
         return models.Q(person=pk)
 
     @classmethod
+    def seen_by(cls, person, pk):
+        """A person's history spans what several offices look after: it opens to every capability that sees a history and
+        holds for them, each for its own tables. Undoing a change stays with the office of the changed record."""
+        record = cls.objects.filter(pk=pk).first()
+        seeing = {c for model in apps.get_models() if issubclass(model, Tracked) for c in model.capabilities}
+        return {c for c in seeing & set(person.reach) if (person.may(c, record) if record else person.everywhere(c))}
+
+    @classmethod
     def teachers(cls):
         """Who can teach or examine: whoever belongs to an Institut or already teaches."""
         return cls.objects.filter(models.Q(institute__isnull=False) | models.Q(teaching__isnull=False)).distinct()
@@ -366,8 +384,9 @@ class Office(Tracked, Group):
 
     @classmethod
     def holding(cls, capability, program=None):
-        """The offices that hold a capability, for sentences like 'Zentral vergeben: …'; with a programme, those for it."""
-        offices = cls.objects.filter(permissions__codename=capability)
+        """The offices that hold a capability (or any of several), for sentences like 'Zentral vergeben: …'; with a
+        programme, those for it."""
+        offices = cls.objects.filter(permissions__codename__in=[capability] if isinstance(capability, str) else capability).distinct()
         if program:
             offices = offices.filter(models.Q(programs=None) | models.Q(programs=program), institutes=None)
         *rest, last = offices.values_list('name', flat=True) or ['']

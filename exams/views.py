@@ -188,7 +188,7 @@ def exam(request, pk):
         'office': office,
         'decide': decide, 'rule': panel.rule(rows),
         'recusable': [] if course.released else panel.recusable(rows, person),
-        'history': Course.visible_to(person.roles),
+        'history': bool(Course.seen_by(person, course.pk)),
         'slots': SlotForm(request.GET or None, person=person, course=course) if office and not held else None,
         'modules': credited(course),
         'bookings': course.bookings.select_related('room'),

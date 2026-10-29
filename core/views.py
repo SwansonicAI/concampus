@@ -27,7 +27,7 @@ from . import dates
 from .apps import feature, plural, tile_apps, tiles
 from .days import busy, strip
 from .forms import ContactForm
-from .history import describe, restore, tables
+from .history import describe, former, restore, tables
 from .models import Change, Message, Office, Person, Term, Tracked
 from .text import fold, matching, words
 
@@ -173,27 +173,37 @@ def without_term(request, what):
 def history(request, table, row):
     """A record's history, for the panel; a person's is everything about them. Each office sees the changes to the
     records it looks after, and may undo them."""
-    visible = tables(request.user.roles)
-    if not visible:
-        raise PermissionDenied
     try:
         model = apps.get_model(table)
     except (LookupError, ValueError):
         raise Http404
     if not issubclass(model, Tracked):
         raise Http404
-    if not model.open_to(request.user, row):
-        raise PermissionDenied
-    changes = Change.objects.filter(model.history(row), table__in=visible).select_related('by')[:200]
-    return render(request, 'core/history.html', {'record': model.objects.filter(pk=row).first(), 'changes': describe(changes)})
+    record = model.objects.filter(pk=row).first()
+    if not (seen := model.seen_by(request.user, row)):
+        raise PermissionDenied(f'Diesen Verlauf {keepers(model, record)}.')
+    shown = tables(seen)
+    changes = Change.objects.filter(model.history(row), table__in=shown).select_related('by')[:200]
+    return render(request, 'core/history.html', {
+        'record': record, 'changes': describe(changes, request.user), 'others': Change.objects.filter(model.history(row)).exclude(table__in=shown).exists(),
+    })
+
+
+def keepers(model, record):
+    """The end of a sentence on who may see or change a record: what it is and the offices that look after it; never
+    its own name, which the refused may not know."""
+    label = record.get_kind_display() if isinstance(record, Course) else model._meta.verbose_name
+    offices = Office.holding(model.keepers(record))
+    return f'({label}) sehen und ändern nur die dafür zuständigen Ämter{": " + offices if offices else ""}'
 
 
 @require_POST
 def undo(request, pk):
     change = get_object_or_404(Change, pk=pk)
     model = apps.get_model(change.table)
-    if not (model.visible_to(request.user.roles) and model.open_to(request.user, change.row)):
-        raise PermissionDenied
+    record = model.objects.filter(pk=change.row).first()
+    if not model.held(request.user, record or former(change), deleted=record is None):
+        raise PermissionDenied(f'Diese Änderung {keepers(model, record)}.')
     try:
         restore(change)
     except ValidationError as error:
@@ -202,6 +212,15 @@ def undo(request, pk):
         messages.success(request, 'Wiederhergestellt.' if change.action == Change.Action.DELETED else 'Zurückgesetzt.')
     back = request.POST.get('next', '')
     return redirect(back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else 'home')
+
+
+def denied(request, exception):
+    """Kein Zugriff: why, where the code says it, whom to ask for a right, and the way back."""
+    back = request.headers.get('Referer', '')
+    return render(request, '403.html', {
+        'reason': str(exception), 'accounts': Office.holding('manage_accounts'),
+        'back': back if back != request.build_absolute_uri() and url_has_allowed_host_and_scheme(back, {request.get_host()}) else '',
+    }, status=403)
 
 
 def when(request):

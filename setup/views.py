@@ -11,7 +11,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_encode
 from django.views.decorators.http import require_POST
 
-from core.access import kept, require
+from core.access import kept, needs, require
 from core.models import Person, Text
 from core.text import matching
 from core.texts import TEXTS, Values, basics, mail, wording
@@ -37,7 +37,7 @@ def editor(request, key):
     if found is None:
         raise Http404
     if not found.usable(request.user):
-        raise PermissionDenied
+        raise PermissionDenied(needs([found.capability]))
     return found
 
 
@@ -93,7 +93,7 @@ def edit(request, key, pk=None):
     return render(request, 'setup/form.html', {
         'editor': e, 'form': form, 'object': obj, 'back': back(request, e),
         'sections': [(heading, [form[name] for name in names]) for heading, names in e.sections or []],
-        'history': pk and e.model.visible_to(request.user.roles), 'table': e.model._meta.label_lower,
+        'history': pk and bool(e.model.seen_by(request.user, pk)), 'table': e.model._meta.label_lower,
     })
 
 
