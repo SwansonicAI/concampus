@@ -27,7 +27,7 @@ not mean seeing every field on it.
 |---|---|
 | 1 Study facts | Name, Matrikelnummer, Studiengang, Hauptfach, Schwerpunkt, status, Fachsemester, Studienbeginn, Hauptfachlehrer:in, Hochschul-E-Mail, that an Urlaubssemester was taken |
 | 2 Academic record | Studienverlauf, grades and ECTS, Leistungsübersicht, attempts, a lost Prüfungsanspruch, the teachers' recommended Schwerpunkt |
-| 3 Identity and contact | All first names, birth name, gender, birth date and place, address, phone; documents and Bescheide in the file |
+| 3 Identity and contact | All first names, birth name, gender, birth date and place, address, phone, private e-mail; documents and Bescheide in the file |
 | 4 Personal administration | Nationality, Hochschulzugang, health insurance and its Meldung, fees and payments, grounds of leave (Art. 9: Erkrankung, Mutterschutz), Sperre and its reason, what blocks the Rückmeldung, loans, other studies not otherwise open to the viewer |
 
 ## Who sees which tier

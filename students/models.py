@@ -117,6 +117,10 @@ class Study(Tracked, models.Model):
         """A new status from `since`, else today; `reason` says why a study ended, as the official statistics count it."""
         self.status, self.since, self.exit_reason = status, since or timezone.localdate(), reason
         self.save(update_fields=['status', 'since', 'exit_reason'])
+        person = self.person
+        if status in self.FORMER and person.private_email and not person.studies.filter(status__in=[self.Status.ENROLLED, self.Status.GUEST]).exists():
+            person.email = person.private_email  # the Hochschul address ends with the study
+            person.save(update_fields=['email'])
 
     @property
     def studienart(self):

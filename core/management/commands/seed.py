@@ -8,7 +8,6 @@ rules. Every person is invented.
 import math
 import random
 import re
-import unicodedata
 import uuid
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
@@ -28,7 +27,7 @@ from django.utils.crypto import get_random_string
 
 from admissions.retention import forget
 from core.dates import months_before
-from core.text import untimed
+from core.text import handle, untimed
 from admissions.views import DECISIONS, grounds, invite
 from core import destatis, history, texts
 from core.models import Change, Holiday, Institute, Institution, Membership, Message, Office, Person, Term, Text
@@ -791,14 +790,6 @@ NOTES = [Decimal(n) for n in ('1.0', '1.3', '1.7', '2.0', '2.3', '2.7', '3.0', '
 ARTISTIC = ('Künstlerisch-praktische', 'Rezital', 'Künstlerische Präsentation')
 
 
-def handle(first, last):
-    """Mail-safe login name: 'Nicolás', 'Ferreira' → 'nicolas.ferreira'."""
-    name = f'{first}.{last}'.lower().replace(' ', '-')
-    for a, b in [('ä', 'ae'), ('ö', 'oe'), ('ü', 'ue'), ('ß', 'ss'), ('ł', 'l'), ('’', '')]:
-        name = name.replace(a, b)
-    return unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode()
-
-
 def phone(dial, rng):
     """A mobile number as written in that country, German ones with their 15x, 16x and 17x prefixes."""
     if dial == '+49':
@@ -899,6 +890,7 @@ class Command(BaseCommand):
             self.letters()
             Study.objects.filter(status=Study.Status.GRADUATED).update(issued=models.F('since'))  # their Zeugnisse issued
             Person.objects.filter(studies__isnull=False).update(electronic=models.F('date_joined'))  # Bescheide by Postfach, as they agreed when signing up
+            self.mailboxes()
             forget(months_before(timezone.localdate(), Institution.get().retention_months))  # as the nightly prune would have
         self.changes()
         self.stdout.write(self.style.SUCCESS(
@@ -935,7 +927,7 @@ class Command(BaseCommand):
     def structure(self):
         Institution.objects.create(
             name='Hochschule für Musik FRANZ LISZT Weimar', short_name='HfM Weimar', address='Platz der Demokratie 2/3\n99423 Weimar', place='Weimar',
-            email='campus@hfm-weimar.de', website='https://www.hfm-weimar.de', imprint='https://www.hfm-weimar.de/footer/impressum',
+            email='campus@hfm-weimar.de', student_mail='stud.hfm-weimar.de', website='https://www.hfm-weimar.de', imprint='https://www.hfm-weimar.de/footer/impressum',
             privacy='https://www.hfm-weimar.de/footer/datenschutz', accessibility='https://www.hfm-weimar.de/footer/barrierefreiheit',
             insurers='\n'.join(INSURERS), university='2850', region='16055', report_id='28500000',
             iban='DE02120300000000202051', bic='BYLADEM1001',  # a published sample account, not the Hochschule's
@@ -1746,6 +1738,18 @@ class Command(BaseCommand):
                 Document.objects.create(person=lost.study.person, study=lost.study, kind_id='notice', title=subject, message=notice, created=when)
                 lost.study.participations.filter(course__term=now).delete()  # with the Prüfungsanspruch lost, nothing new this semester
                 lost.study.ensembles.clear()
+
+    def mailboxes(self):
+        """Everyone who studies here has a Hochschul address and keeps the private one from the application; whoever has
+        left or not yet enrolled is reached at the private one."""
+        providers = ['web.de', 'gmx.de', 'gmail.com', 't-online.de', 'posteo.de']
+        people = Person.objects.filter(email__endswith='@stud.hfm-weimar.de').annotate(
+            studying=models.Exists(Study.objects.filter(person=models.OuterRef('pk'), status__in=[Study.Status.ENROLLED, Study.Status.GUEST])),
+        )
+        for p in people:
+            private = f'{p.email.split("@")[0]}@{providers[p.pk % len(providers)]}'
+            p.private_email, p.email = (private, p.email) if p.studying else (private, private)
+        Person.objects.bulk_update(people, ['email', 'private_email'])
 
     def abroad(self):
         """HZBs from abroad are assessed and the Sprachnachweis and APS certificate in for everyone who studies here or has a

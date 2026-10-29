@@ -99,6 +99,10 @@ class Institution(Tracked, models.Model):
     address = models.TextField('Anschrift', blank=True)
     place = models.CharField('Ort', max_length=60, blank=True, help_text='Für Datumszeilen in Briefen.')
     email = models.EmailField('E-Mail', blank=True)
+    student_mail = models.CharField(
+        'Domain der Studierendenadressen', max_length=80, blank=True,
+        help_text='Wer immatrikuliert wird, erhält hier eine Adresse, z. B. „stud.hochschule.de“; leer: keine.',
+    )
     website = models.URLField('Website', blank=True)
     imprint = models.URLField('Impressum', blank=True)
     privacy = models.URLField('Datenschutz', blank=True)
@@ -193,6 +197,7 @@ class Person(Tracked, AbstractUser):
     phone = models.CharField(
         'Telefon', max_length=40, blank=True, validators=[RegexValidator(r'^\+?[\d ()/.-]{5,}$', 'Bitte nur Ziffern, Leerzeichen und + ( ) / - eingeben.')],
     )
+    private_email = models.EmailField('E-Mail, privat', blank=True, help_text='Aus der Bewerbung; nach dem Studium gehen Nachrichten hierhin.')
     home =models.CharField('Heimatwohnsitz', max_length=5, choices=destatis.places, blank=True, help_text='Kreis, im Ausland der Staat.')
     residence = models.CharField('Semesterwohnsitz', max_length=5, choices=destatis.places, blank=True, help_text='Während der Unterrichtszeit; leer: wie der Heimatwohnsitz.')
     entrance = models.CharField(

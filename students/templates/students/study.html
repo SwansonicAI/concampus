@@ -44,7 +44,7 @@
       <dt>Geboren</dt><dd>{{ p.birth_date|date:"j. F Y"|default:"–" }}{% if p.birth_place %} in {{ p.birth_place }}{% endif %}</dd>
       {% endif %}
       {% if personal %}<dt>Staatsangehörigkeit</dt><dd>{{ p.get_nationality_display|default:"–" }}{% if p.second_nationality %}, {{ p.get_second_nationality_display }}{% endif %}</dd>{% endif %}
-      <dt>E-Mail</dt><dd>{{ p.email }}</dd>
+      <dt>E-Mail</dt><dd>{{ p.email }}{% if identity and p.private_email and p.private_email != p.email %}<br><small class="muted">privat: {{ p.private_email }}</small>{% endif %}</dd>
       {% if identity %}
       <dt>Anschrift</dt><dd>{{ p.address|linebreaksbr|default:"–" }}{% if p == user %} <a href="{% url 'account' %}"><small>ändern</small></a>{% endif %}</dd>
       {% if p.phone %}<dt>Telefon</dt><dd>{{ p.phone }}</dd>{% endif %}

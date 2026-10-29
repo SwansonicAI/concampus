@@ -14,6 +14,14 @@ SPELLED = (('ae', 'a'), ('oe', 'o'), ('ue', 'u'))
 ENDINGS = ('ern', 'en', 'er', 'es', 'e', 'n', 's')  # German plural and case endings, longest first
 
 
+def handle(first, last):
+    """Mail-safe name: 'Nicolás', 'Ferreira' → 'nicolas.ferreira'."""
+    name = f'{first}.{last}'.lower().replace(' ', '-')
+    for a, b in [('ä', 'ae'), ('ö', 'oe'), ('ü', 'ue'), ('ß', 'ss'), ('ł', 'l'), ('’', '')]:
+        name = name.replace(a, b)
+    return unicodedata.normalize('NFKD', name).encode('ascii', 'ignore').decode()
+
+
 def fold(text):
     text = unicodedata.normalize('NFKD', (text or '').casefold())
     text = ''.join(c for c in text if not unicodedata.combining(c))

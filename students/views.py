@@ -23,7 +23,7 @@ from core.access import CODENAMES, require
 from core.history import tables
 from core.apps import plural
 from core.models import Export, Institution, Message, Office, Person, Term
-from core.text import fold, matching
+from core.text import fold, handle, matching
 from core.views import SHOWN, preview, without_term
 from courses.models import Participation
 from courses.views import untimed
@@ -344,11 +344,16 @@ def next_matriculation():
 def matriculate(study):
     """Immatrikulation of an admitted applicant with nothing missing, the fee paid among it: Matrikelnummer, first
     registered term, Bescheid."""
-    person = study.person
+    person, domain = study.person, Institution.get().student_mail
     with transaction.atomic():
         if not person.matriculation:
             person.matriculation = str(next_matriculation())
-            person.save(update_fields=['matriculation'])
+        if domain and not person.email.endswith(f'@{domain}'):  # a Hochschul address; the private one is kept for later
+            person.private_email, name, n = person.private_email or person.email, handle(person.first_name, person.last_name), 1
+            while Person.objects.filter(email=f'{name}{n if n > 1 else ""}@{domain}').exists():
+                n += 1
+            person.email = f'{name}{n if n > 1 else ""}@{domain}'
+        person.save(update_fields=['matriculation', 'email', 'private_email'])
         StudyTerm.objects.get_or_create(study=study, term=study.start_term)
         study.set_status(Study.Status.ENROLLED)
     study.notify('immatrikulation', study.get_absolute_url())

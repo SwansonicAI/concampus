@@ -37,7 +37,7 @@ def forget(cutoff):
     Participation.objects.filter(study__person__in=ids).update(note='')
     Person.objects.filter(pk__in=ids).update(  # gender and nationality stay for the statistics
         username=Concat(Value('anonym-'), Cast('pk', CharField())), first_name='', last_name='Anonym', title='', given_names='', birth_name='',
-        email='', birth_date=None, birth_place='', second_nationality='', address='', home='', residence='', entrance_date=None, entrance_region='',
+        email='', private_email='', birth_date=None, birth_place='', second_nationality='', address='', home='', residence='', entrance_date=None, entrance_region='',
         first_university='', first_term='', degree_university='', degree_exam='', degree_field='', degree_date=None, degree_grade='', insurer='', insurance='',
         insurance_confirmed=None, hold='', password='!', is_active=False,
     )

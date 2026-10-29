@@ -44,10 +44,10 @@ class ContactForm(forms.ModelForm):
 
     class Meta:
         model = Person
-        fields = ['address', 'phone', 'email']
+        fields = ['address', 'phone', 'email', 'private_email']
         widgets = {'address': forms.Textarea(attrs={'rows': 3})}
         labels = {'email': 'E-Mail, privat'}
-        help_texts = {'email': 'Nach dem Studium gilt die Hochschuladresse nicht mehr; Nachrichten gehen dann hierhin.'}
+        help_texts = {'email': 'Nach dem Studium gilt die Hochschuladresse nicht mehr; Nachrichten gehen hierhin.'}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -56,3 +56,5 @@ class ContactForm(forms.ModelForm):
             del self.fields['email']
         else:
             self.fields['email'].required = True
+        if 'student' not in roles:  # while studying: kept for after
+            del self.fields['private_email']
