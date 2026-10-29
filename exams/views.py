@@ -8,7 +8,7 @@ from django import forms
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Count, DateTimeField, Max, Min, Q
+from django.db.models import Count, DateTimeField, Max, Min, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Cast, Coalesce
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -553,6 +553,16 @@ def achievements(study):
         'thesis': thesis and thesis.course.title,
         'honours': None not in (average, honours) and average <= honours, 'today': timezone.localdate(), 'signature': texts.block('unterschrift_zeugnisse'),
     }
+
+
+def finished(studies):
+    """The studies among these that have earned every credit, each with its `achievements`: (study, achievements)."""
+    totals = dict(Module.objects.filter(parent=None).values_list('program').annotate(n=Sum('credits')))  # only who has as many is checked exactly
+    credited = Participation.objects.filter(study=OuterRef('pk'), passed=True).exclude(course__kind__in=['exam', 'thesis'], course__released=None)
+    near = studies.annotate(credited=Subquery(credited.values('study').annotate(n=Sum('module__credits')).values('n')[:1])).select_related('person', 'program')
+    for study in near:
+        if study.credited and study.credited >= totals.get(study.program_id, 0) and (done := achievements(study))['finished']:
+            yield study, done
 
 
 def transcript(request, pk):

@@ -115,7 +115,9 @@ class StudentsConfig(Tile, AppConfig):
             if (options := own.options()) and own.semester >= (first := min(o.first or 99 for o in options)) - 1:
                 found.append(task(f'{options[0].choice.title} wählen', f'{own.get_absolute_url()}#studienverlauf', Study.choose_by(own.semester, first)))
         study = enrolled.filter(person=person).first()
-        if study and term and term.reregistration_open and not paid.filter(study__person=person).exists():
+        from exams.views import exhausted
+
+        if study and term and term.reregistration_open and not paid.filter(study__person=person).exists() and not exhausted(study):  # no Rückmeldung once the claim is lost
             fee = term.due(today, Institution.get().late_fee)
             found.append(task(f'Rückmeldung {term}: {number_format(fee, 2)} € überweisen' + (' (Nachfrist, mit Säumnisgebühr)' if fee > term.fee else ''), study.get_absolute_url(), due))
         return found

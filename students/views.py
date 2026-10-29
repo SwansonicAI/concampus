@@ -231,6 +231,7 @@ def study(request, pk):
         t.due = t.term.fee if t.term_id == study.start_term_id else t.term.due(t.paid or today, late_fee)
     reachable = Study.reachable(person, study.person.studies.exclude(pk=study.pk))
     options = study.options() if study.status == Study.Status.ENROLLED else []
+    lost = exhausted(study) if study.status == Study.Status.ENROLLED else []  # the Prüfungsanspruch: no Rückmeldung then
     return render(request, 'students/study.html', {
         'study': study, 'today': today,
         'office': office,
@@ -256,7 +257,9 @@ def study(request, pk):
         'reachable': reachable,
         'change': ChangeForm(study=study) if office else None,
         'exits': EXITS, 'leaves': LEAVES,
-        'exhausted': exhausted(study) if study.status == Study.Status.ENROLLED else [],
+        'exhausted': lost,
+        'leaving': leaving(study) if office and study.status == Study.Status.ENROLLED else [],
+        'leaving_day': leaving_day(study, lost) if office and study.status == Study.Status.ENROLLED else None,
         'options': options if own else [], 'fs': fs,
         'advising': options if study.teacher_id == person.pk and not study.focus_id else [],
         'recording': study.program.choices() if not own and study.status == Study.Status.ENROLLED and decides(person, study) else [],
@@ -399,11 +402,37 @@ def leave(request, pk):
     return redirect(study.get_absolute_url())
 
 
+def leaving(study):
+    """The Laufzettel: what is still open before someone leaves, each with the offices it is for."""
+    from exams.views import achievements
+
+    found = []
+    if study.issued is None and achievements(study)['finished']:
+        found.append(('Zeugnis noch nicht ausgestellt', Office.holding('decide_results', study.program)))
+    for loan in study.person.loans.filter(returned=None).select_related('instrument'):
+        found.append((f'Leihinstrument zurückgeben: {loan.instrument.name}', Office.holding('manage_instruments')))
+    if unpaid := study.terms.filter(paid=None, term__start__lte=timezone.localdate()).exclude(leave=True).select_related('term').first():
+        found.append((f'Semesterbeitrag {unpaid.term} offen', Office.holding('manage_reregistration')))
+    if study.person.hold:
+        found.append((f'Sperre: {study.person.hold}', Office.holding('manage_students')))
+    return found
+
+
+def leaving_day(study, lost):
+    """The day an Exmatrikulation is for, unless asked otherwise: after a final fail the day the Bescheid became final,
+    not before this semester; after the Abschluss the end of the semester; otherwise today."""
+    term = Term.current()
+    if lost:
+        return max(max(m.appeal for m in lost) + timedelta(days=1), term.start)
+    return term.end if study.issued else timezone.localdate()
+
+
 @require('manage_students')
 @require_POST
 def exmatriculate(request, pk):
     """Exmatrikulation as of a day in the semester under way: on request the day asked for, up to the end of the semester;
-    after the Abschluss the end of the semester; otherwise today."""
+    after the Abschluss the end of the semester; after a final fail once that is final; otherwise today. What is still
+    open (the Laufzettel) is named."""
     study = get_object_or_404(request.user.within(Study.objects.select_related('person'), 'manage_students'), pk=pk, status=Study.Status.ENROLLED)
     reason, term, asked = request.POST.get('reason', ''), Term.current(), request.POST.get('zum', '').strip()
     on = dates.day(asked) if asked else term.end if reason == '1' else timezone.localdate()
@@ -415,9 +444,10 @@ def exmatriculate(request, pk):
     elif not on or not term.start <= on <= term.end:
         messages.error(request, f'Bitte einen Tag im {term} angeben, spätestens den {date_format(term.end, "j.n.Y")}.')
     else:
+        still = leaving(study)
         study.set_status(Study.Status.GRADUATED if reason == '1' else Study.Status.LEFT, reason, on)
         study.notify('exmatrikulation', grund=dict(EXITS)[reason], zum=date_format(on, 'j. F Y'))
-        messages.success(request, f'{study.person} zum {date_format(on, "j.n.Y")} exmatrikuliert. Bescheid versandt.')
+        messages.success(request, f'{study.person} zum {date_format(on, "j.n.Y")} exmatrikuliert. Bescheid versandt.' + (f' Noch offen: {"; ".join(f"{what} ({who})" if who else what for what, who in still)}.' if still else ''))
     return redirect(study.get_absolute_url())
 
 

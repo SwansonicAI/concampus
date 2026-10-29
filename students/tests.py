@@ -1,11 +1,13 @@
 from datetime import timedelta
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import Client
 from django.utils import timezone
 
 from core.apps import tiles
 from core.models import Message, Person, Term
 from core.testing import Seeded, flashes
+from exams.views import exhausted
 from .models import Document, Study, StudyTerm
 
 
@@ -119,6 +121,20 @@ class ExmatriculationTest(Seeded):
         study.refresh_from_db()
         self.assertEqual((study.status, study.exit_reason, study.since), (Study.Status.LEFT, '6', term.end))
         self.assertTrue(study.documents.filter(kind='notice', title='Exmatrikulationsbescheid').exists())
+
+    def test_the_laufzettel_names_what_is_open_and_a_final_fail_leaves_when_final(self):
+        asa = self.login('asa')
+        borrowing = Study.objects.filter(status='enrolled', person__loans__isnull=False, person__loans__returned=None).first()
+        self.assertTrue(any(what.startswith('Leihinstrument') for what, _ in asa.get(borrowing.get_absolute_url()).context['leaving']))
+        lost = next(s for s in Study.objects.filter(status='enrolled') if exhausted(s))
+        page = asa.get(lost.get_absolute_url())
+        self.assertEqual(page.context['leaving_day'], max(max(m.appeal for m in exhausted(lost)) + timedelta(days=1), Term.current().start))
+        self.assertNotIn('überweisen', ' '.join(t['text'] for t in self.client_for(lost.person).get('/').context['tasks']))  # no Rückmeldung once the claim is lost
+
+    def client_for(self, person):
+        client = Client()
+        client.force_login(person)
+        return client
 
 
 class FocusTest(Seeded):
