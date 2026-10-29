@@ -192,6 +192,7 @@ def course(request, pk):
     ensembles.sort(key=lambda e: (e.coach_id != person.pk, e.coach_id is not None, e.wish_id != person.pk))  # one's own, then those still open
     return render(request, 'courses/course.html', {
         'course': course, 'playing': playing,
+        'lengths': sorted(Counter(minutes(p.module) or course.hours for p in course.participations.select_related('module')).items(), reverse=True) if course.kind == Course.Kind.LESSON else [],
         'staff': staff,
         'rows': rows if staffed else [],
         'own': own,

@@ -112,7 +112,7 @@
         <label>Letzter Tag<input name="zum" data-day autocomplete="off" placeholder="TT.MM.JJJJ" size="11" required value="{{ leaving_day|date:'d.m.Y' }}"></label>
         <button class="btn danger">Exmatrikulieren</button>
       </form>
-      <p class="muted"><small>Der letzte Tag der Immatrikulation: auf Antrag der gewünschte, spätestens das Ende des Semesters; nach dem Abschluss in der Regel das Ende des Semesters; nach endgültigem Nichtbestehen der Tag, an dem der Bescheid bestandskräftig ist, oder der Tag vor diesem Semester, wenn das früher war. Erst die Vorschau, dann versenden.</small></p>
+      <p class="muted"><small>Der letzte Tag der Immatrikulation: auf Antrag der gewünschte, spätestens das Ende des Semesters; nach dem Abschluss in der Regel das Ende des Semesters; nach endgültigem Nichtbestehen der Tag, an dem der Bescheid bestandskräftig ist, frühestens der Tag vor diesem Semester. Erst die Vorschau, dann versenden.</small></p>
       <form method="post" action="{% url 'students:change' study.pk %}" class="inline" style="margin-top: 16px">
         {% csrf_token %}
         {% for field in change %}<label>{{ field.label }}{{ field }}</label>{% endfor %}
@@ -138,12 +138,12 @@
       {% for t in terms %}
       <tr>
         <td data-value="{{ t.term.start|date:'c' }}">{{ t.term }}</td>
-        <td>{% if t.after %}exmatrikuliert{% elif t.leave %}Urlaubssemester{% if t.leave_reason and personal %} <small class="muted">· {{ t.get_leave_reason_display }}</small>{% endif %}{% else %}immatrikuliert{% endif %}</td>
+        <td>{% if t.withdrawn %}exmatrikuliert vor Beginn{% elif t.leave %}Urlaubssemester{% if t.leave_reason and personal %} <small class="muted">· {{ t.get_leave_reason_display }}</small>{% endif %}{% else %}immatrikuliert{% endif %}</td>
         {% if own or office %}
         <td class="num">{{ t.due }} €</td>
         <td>{% if t.term_id == study.start_term_id %}zur Immatrikulation{% else %}{{ t.term.deadline|date:"j.n.Y" }}{% endif %}</td>
         <td>{{ t.paid|date:"j.n.Y"|default:"–" }}{% if t.reference %}<br><small class="muted">{{ t.reference }}</small>{% endif %}</td>
-        <td class="num">{% if t.paid %}0,00 €{% else %}<b class="fail">{{ t.due }} €</b>{% endif %}</td>
+        <td class="num">{% if t.withdrawn %}<small class="muted">Erstattung über das Studierendenwerk</small>{% elif t.paid %}0,00 €{% else %}<b class="fail">{{ t.due }} €</b>{% endif %}</td>
         {% endif %}
       </tr>
       {% empty %}<tr><td colspan="6" class="empty">Keine Rückmeldungen.</td></tr>{% endfor %}

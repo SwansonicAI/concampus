@@ -92,12 +92,12 @@ class StudentsConfig(Tile, AppConfig):
                     waiting.update({WAITS.get(reason.split()[0], 'Unterlagen') for reason in missing})
                 else:
                     ready.append(s)
-            for term, (ready, waiting) in terms.items():
-                url = f"{reverse('admissions:board')}?semester={term.pk}#immatrikulieren"
+            for start, (ready, waiting) in terms.items():
+                url = f"{reverse('admissions:board')}?semester={start.pk}#immatrikulieren"
                 if ready:
-                    found.append(task(f'{plural(len(ready), "angenommenen Studienplatz", "angenommene Studienplätze")} zum {term} immatrikulieren', url, term.start))
+                    found.append(task(f'{plural(len(ready), "angenommenen Studienplatz", "angenommene Studienplätze")} zum {start} immatrikulieren', url, start.start))
                 if waiting:  # not overdue: it is up to others
-                    found.append(task(f'Immatrikulation zum {term}: ' + ', '.join(f'{n} {"wartet" if n == 1 else "warten"} auf {what}' for what, n in waiting.items()), url))
+                    found.append(task(f'Immatrikulation zum {start}: ' + ', '.join(f'{n} {"wartet" if n == 1 else "warten"} auf {what}' for what, n in waiting.items()), url))
             from courses.models import Participation
 
             fails = (  # a module failed as often as the Prüfungsordnung allows

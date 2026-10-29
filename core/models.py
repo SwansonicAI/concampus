@@ -430,9 +430,17 @@ class Office(Tracked, Group):
         offices = cls.objects.filter(permissions__codename__in=[capability] if isinstance(capability, str) else capability).distinct()
         if program:
             offices = offices.filter(models.Q(programs=None) | models.Q(programs=program), institutes=None)
-        names = [f'{o.name}, nur für {o.remit}' if remit and o.remit != 'ganze Hochschule' else o.name for o in offices.prefetch_related('institutes', 'programs')]
+        names = [o.name + (limited(o) if remit else '') for o in offices.prefetch_related('institutes', 'programs')]
         *rest, last = names or ['']
         return f'{", ".join(rest)} oder {last}' if rest else last
+
+
+def limited(office):
+    """', nur für …' after an office limited to some Institute or Studiengänge; long lists counted."""
+    reach = [*office.institutes.all(), *office.programs.all()]
+    if not reach:
+        return ''
+    return f' (nur für {", ".join(map(str, reach))})' if len(reach) <= 2 else f' (nur für {len(reach)} Institute und Studiengänge)'
 
 
 class Term(Tracked, models.Model):

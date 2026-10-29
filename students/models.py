@@ -173,12 +173,12 @@ class Study(Tracked, models.Model):
     @property
     def semester(self):
         """Fachsemester: credited prior terms plus registered terms so far, leave excluded."""
-        return self.prior_terms + self.terms.filter(leave=False, term__start__lte=timezone.localdate()).count()
+        return self.prior_terms + self.terms.filter(leave=False, withdrawn=False, term__start__lte=timezone.localdate()).count()
 
     @property
     def university_semester(self):
         """Hochschulsemester: every term the person has been registered here, leave included, plus semesters elsewhere."""
-        here = StudyTerm.objects.filter(study__person=self.person_id, term__start__lte=timezone.localdate()).values('term').distinct().count()
+        here = StudyTerm.objects.filter(study__person=self.person_id, withdrawn=False, term__start__lte=timezone.localdate()).values('term').distinct().count()
         return self.person.external_terms + here
 
     def record(self):
@@ -245,6 +245,9 @@ class StudyTerm(Tracked, models.Model):
     leave_reason = models.CharField('Grund der Beurlaubung', max_length=1, choices=LEAVES, blank=True)
     paid = models.DateField('Beitrag bezahlt am', null=True, blank=True)
     amount = models.DecimalField('Betrag', max_digits=7, decimal_places=2, null=True, blank=True)
+    withdrawn = models.BooleanField(
+        'Vor Beginn exmatrikuliert', default=False, help_text='Bezahlt, dann vor Beginn des Semesters exmatrikuliert: es zählt nicht, der Beitrag wird erstattet.',
+    )
     reference = models.CharField('Beleg oder Verwendungszweck', max_length=140, blank=True)
 
     class Meta:

@@ -259,8 +259,6 @@ def study(request, pk):
     reachable = Study.reachable(person, study.person.studies.exclude(pk=study.pk))
     options = study.options() if study.status == Study.Status.ENROLLED else []
     lost = exhausted(study) if study.status == Study.Status.ENROLLED else []  # the Prüfungsanspruch: no Rückmeldung then
-    for t in terms:
-        t.after = study.status in Study.FORMER and t.term.start > study.since  # paid for, then left before it began
     return render(request, 'students/study.html', {
         'study': study, 'today': today,
         'office': office,
@@ -543,7 +541,8 @@ def exmatriculate(request, pk):
             notes = [f'Noch offen: {what}{f" ({who})" if who else ""}' for what, who in still] + [insurer] * bool(insurer)
             return preview(request, f'Exmatrikulation, letzter Tag {date_format(on, "j.n.Y")}', [('Exmatrikulation', [study.person], study.wording('exmatrikulation', *after, **values))], 'Exmatrikulieren und Bescheid versenden', study.get_absolute_url(), notes)
         with transaction.atomic():
-            later.delete()
+            later.filter(paid=None).delete()
+            later.update(withdrawn=True)  # what was paid stays on record, for its refund
             study.set_status(Study.Status.GRADUATED if reason == '1' else Study.Status.LEFT, reason, on)
         study.notify('exmatrikulation', after=after, **values)
         messages.success(request, f'{study.person} mit Ablauf des {date_format(on, "j.n.Y")} exmatrikuliert. Bescheid versandt.' + (f' {insurer}' if insurer else '') + (f' Noch offen: {"; ".join(f"{what} ({who})" if who else what for what, who in still)}.' if still else ''))
@@ -685,7 +684,7 @@ def periods(request, pk):
     rows = []
     for s in studies:
         semester = s.prior_terms
-        for registration in s.terms.filter(term__start__lte=today).select_related('term'):
+        for registration in s.terms.filter(term__start__lte=today, withdrawn=False).select_related('term'):
             semester += not registration.leave
             rows.append((registration.term, s, registration.leave, semester))
     rows.sort(key=lambda row: row[0].start)

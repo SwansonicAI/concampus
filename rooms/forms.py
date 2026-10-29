@@ -223,8 +223,12 @@ class BookingForm(forms.ModelForm):
             raise forms.ValidationError(f'„{category}“ buchen Studierende höchstens {span(ahead)} im Voraus.')
         if len(participants) < category.participants:
             raise forms.ValidationError(f'Für „{category}“ bitte mindestens {plural(category.participants, "weitere Person", "weitere Personen")} eintragen.')
-        if not category.quota or start - now <= timedelta(hours=rules.last_minute_hours):
-            return  # last-minute: free of the quota
+        if not category.quota:
+            return
+        if start - now <= timedelta(hours=rules.last_minute_hours):  # last-minute: free of the quota, but not a whole day
+            if end - start > timedelta(hours=rules.last_minute_hours):
+                raise forms.ValidationError(f'Kurzfristig, ohne Kontingent, höchstens {plural(rules.last_minute_hours, "Stunde", "Stunden")} am Stück.')
+            return
         used = quota(self.person, timezone.localtime(start).date(), exclude=self.instance.pk)
         if used + (end - start).total_seconds() / 3600 > rules.student_daily_hours:
             raise forms.ValidationError(

@@ -2,7 +2,7 @@
 {% block title %}Kein Zugriff{% endblock %}
 {% block content %}
 <h1>Kein Zugriff</h1>
-<p class="lead">{{ reason|default:"Diese Seite gehört zu Aufgaben, die Ihr Konto nicht hat." }}</p>
+<p class="lead">{{ reason|default:"Diese Seite gehört zu Aufgaben, die Ihr Konto nicht hat."|linebreaksbr }}</p>
 {% if user.is_authenticated %}<p>Brauchen Sie das für Ihre Arbeit, wenden Sie sich an die Stelle, die Ämter und Rechte vergibt{% if accounts %}: {{ accounts }}{% endif %}.</p>{% endif %}
 <p class="actions">{% if back %}<a class="more" href="{{ back }}">Zurück</a>{% endif %}<a class="more" href="{% url 'home' %}">Zur Startseite</a></p>
 {% endblock %}

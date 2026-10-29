@@ -105,8 +105,8 @@ class ExamTest(Seeded):
         for p in office.get(f'/pruefungen/{resit.pk}/').context['rows']:
             data |= {f'score-{p.pk}-{e.pk}': str(value if value is not None else '2,0') for e, value in p.marks}
             data[f'grade-{p.pk}'] = ''
-        refused = office.post(f'/pruefungen/{resit.pk}/', data)  # the examiners' marks are copied from the signed Protokoll
-        self.assertIn('Protokoll', next(r.error for r in refused.context['rows'] if getattr(r, 'error', None)))
+        office.post(f'/pruefungen/{resit.pk}/', data)  # the examiners' marks are copied from the signed Protokoll, once it is in
+        self.assertFalse(resit.participations.filter(scores__entered_by__username='pruefungsamt').exists())
         office.post(f'/pruefungen/{resit.pk}/protokoll/', {'file': SimpleUploadedFile('protokoll.pdf', b'%PDF-1.4')})
         office.post(f'/pruefungen/{resit.pk}/', data)
         self.assertTrue(all(passed for _, passed in resit.participations.values_list('grade', 'passed')))

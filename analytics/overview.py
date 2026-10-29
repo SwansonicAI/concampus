@@ -112,7 +112,7 @@ def funnel(term):
     found = (
         Study.objects.filter(start_term=term)
         .filter(Exists(Participation.objects.filter(study=OuterRef('pk'), course__kind=Course.Kind.AUDITION, course__subject__isnull=False)))
-        .annotate(sat=Exists(hall), passed=Exists(hall.filter(passed=True)), took=Exists(StudyTerm.objects.filter(study=OuterRef('pk'))))
+        .annotate(sat=Exists(hall), passed=Exists(hall.filter(passed=True)), took=Exists(StudyTerm.objects.filter(study=OuterRef('pk'), withdrawn=False)))
         .aggregate(  # named apart from the annotations they count
             all=Count('pk'), n_sat=Count('pk', filter=Q(sat=True)), n_passed=Count('pk', filter=Q(passed=True)),
             n_offered=Count('pk', filter=admitted()), n_took=Count('pk', filter=Q(took=True)),

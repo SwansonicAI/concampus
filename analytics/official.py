@@ -70,9 +70,9 @@ class Report:
     def __init__(self, term):
         self.term, self.institution = term, Institution.get()
         self.before = Term.objects.filter(start__lt=term.start).order_by('-start').first()
-        here = set(StudyTerm.objects.filter(term=term, study__status__in=COUNTED).values_list('study__person', flat=True))
+        here = set(StudyTerm.objects.filter(term=term, withdrawn=False, study__status__in=COUNTED).values_list('study__person', flat=True))
         gone = set(  # exmatriculated after the term before: counted once more, now
-            Study.objects.filter(terms__term=self.before, status__in=Study.FORMER).exclude(person__in=here).values_list('person', flat=True)
+            Study.objects.filter(terms__term=self.before, terms__withdrawn=False, status__in=Study.FORMER).exclude(person__in=here).values_list('person', flat=True)
         ) if self.before else set()
         finished = Study.objects.filter(Q(status=Study.Status.GRADUATED) | Q(status=Study.Status.LEFT, exit_reason='8'), since__range=(term.start, term.end))
         self.finished = set(finished.values_list('pk', flat=True))
@@ -87,7 +87,7 @@ class Report:
             Person.objects.filter(Q(pk__in=counted | examined) | Q(studies__in=doctoral)).distinct().order_by('matriculation', 'last_name')
             .prefetch_related(Prefetch(
                 'studies', Study.objects.filter(status__in=COUNTED).select_related('program', 'subject', 'start_term')
-                .prefetch_related(Prefetch('terms', StudyTerm.objects.select_related('term'))),
+                .prefetch_related(Prefetch('terms', StudyTerm.objects.filter(withdrawn=False).select_related('term'))),
             ))
         )
         self.students = [p for p in people if p.pk in counted]

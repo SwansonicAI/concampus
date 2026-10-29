@@ -180,6 +180,9 @@ def exam(request, pk):
 
     staff, rows = sheet()
     columns, refused = panel.scorers(staff, rows) if decide or correct else [person], None
+    waiting = decide and not correct and course.kind == Course.Kind.EXAM and not course.protocol_received
+    if waiting:  # the examiners' marks come from the signed Protokoll: none to enter before it is in
+        columns = [e for e in columns if e.pk == person.pk]
     if request.method == 'POST':
         if course.released:
             raise PermissionDenied('Freigegebene Ergebnisse öffnet nur der Prüfungsausschuss wieder.')

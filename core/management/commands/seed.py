@@ -87,7 +87,7 @@ HOLIDAYS = [  # the Unterrichtsfreie Tage of the Studienjahresrahmenplan 2026/27
     ('Dies Academicus', date(2027, 6, 24), None), ('Weltkindertag', date(2027, 9, 20), None),
 ]
 FINALS = [Decimal(g) for g in '1.0 1.3 1.3 1.5 1.7 1.7 1.8 2.0 2.0 2.1 2.3 2.4 2.7 3.0 1.2 1.4 1.6 1.9 2.2 1.1'.split()]  # Gesamtnoten of graduates without a record
-PUBLIC = {  # Thüringen's public holidays among them; the Christmas break and the Dies Academicus are lecture-free only
+PUBLIC_HOLIDAYS = {  # Thüringen's public holidays among them; the Christmas break and the Dies Academicus are lecture-free only
     'Tag der Deutschen Einheit', 'Reformationstag', '1. Weihnachtstag', '2. Weihnachtstag', 'Neujahr', 'Karfreitag', 'Ostermontag', 'Tag der Arbeit',
     'Christi Himmelfahrt', 'Pfingstmontag', 'Weltkindertag',
 }
@@ -458,8 +458,8 @@ TEXTS = {  # where the HfM words things its own way (core.texts has the defaults
     'absender_bescheide': 'Akademische und Studentische Angelegenheiten',
     'absender_bescheinigungen': 'Akademische und Studentische Angelegenheiten',
     'absender_leistungen': 'Prüfungsamt',
-    'unterschrift_zeugnisse': 'Der Präsident\nDie Dekanin der Fakultät',  # RPSO 2026 § 23, as the demo's office holders are
-    'unterschrift_urkunden': 'Der Präsident\nDie Dekanin der Fakultät',
+    'unterschrift_zeugnisse': 'Die Präsidentin\nDie Dekanin der Fakultät',  # RPSO 2026 § 23 Abs. 1: the head of the Hochschule and the dean
+    'unterschrift_urkunden': 'Die Präsidentin\nDie Dekanin der Fakultät',
     'einladung': (
         'Ihr Termin: {termin} Uhr, {raum}.\n\nBitte erscheinen Sie 30 Minuten vorher; Einspielräume stehen bereit. Bringen Sie einen '
         'Lichtbildausweis mit, und wenn Sie mit Korrepetition spielen, die Noten für die Begleitung.'
@@ -900,7 +900,11 @@ class Command(BaseCommand):
             for s in recent:  # the Gesamtnote kept with the Zeugnis, for the Diploma Supplement's grade distribution; most have no record here
                 s.grade = s.progress()[1] or FINALS[s.pk % len(FINALS)]
             Study.objects.bulk_update(recent, ['grade'])
-            Person.objects.filter(studies__isnull=False).update(electronic=models.F('date_joined'))  # Bescheide by Postfach, as they agreed when signing up
+            first = dict(Study.objects.values('person').annotate(start=models.Min('start_term__start')).values_list('person', 'start'))
+            agreed = list(Person.objects.filter(pk__in=first).only('pk'))
+            for p in agreed:  # Bescheide by Postfach, as they agreed when signing up, half a year before they began
+                p.electronic = at(first[p.pk] - timedelta(days=180), hour=12)
+            Person.objects.bulk_update(agreed, ['electronic'], batch_size=2000)
             self.mailboxes()
             forget(months_before(timezone.localdate(), Institution.get().retention_months))  # as the nightly prune would have
         self.changes()
@@ -949,7 +953,7 @@ class Command(BaseCommand):
             BookingCategory(key=key, name=name, tone=tone, order=n, **settings) for n, (key, name, tone, settings) in enumerate(CATEGORIES)
         )
         self.institutes = {key: Institute.objects.create(name=name) for key, name in INSTITUTES.items()}
-        Holiday.objects.bulk_create(Holiday(name=name, first=first, last=last, public=name in PUBLIC) for name, first, last in HOLIDAYS)
+        Holiday.objects.bulk_create(Holiday(name=name, first=first, last=last, public=name in PUBLIC_HOLIDAYS) for name, first, last in HOLIDAYS)
         self.areas = {name: Area.objects.create(name=name, order=n) for n, name in enumerate(AREAS)}
         self.formats = {code: Format.objects.create(name=name, short=code, per_head=code == 'E', order=n) for n, (name, code) in enumerate(FORMATS)}
         self.instruments = [

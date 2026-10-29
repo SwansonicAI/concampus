@@ -77,9 +77,8 @@ def needs(roles):
     from .models import Office
 
     labels = dict(c for _, group in CAPABILITIES for c in group)
-    rights = [f'dem Recht „{labels[r]}“ ({Office.holding(r, remit=True) or "noch kein Amt"})' for r in roles if r in labels]
-    whom = ', '.join(ROLES[r] for r in roles if r in ROLES)
-    return f'Diese Seite ist für {" und ".join(filter(None, [whom, rights and "Ämter mit " + " oder ".join(rights)]))}.'
+    lines = [ROLES[r] for r in roles if r in ROLES] + [f'Recht „{labels[r]}“: {Office.holding(r, remit=True) or "noch kein Amt"}' for r in roles if r in labels]
+    return 'Diese Seite ist für:\n' + '\n'.join(f'– {line}' for line in lines)
 
 
 def require(*roles):

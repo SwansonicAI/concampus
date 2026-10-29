@@ -1,4 +1,5 @@
 {% extends base %}
+{% load marks %}
 {% block title %}{{ course.title }}{% endblock %}
 {% block subnav %}{% include "courses/_nav.html" %}{% endblock %}
 {% block content %}
@@ -12,7 +13,7 @@
   <div>
     <dl class="facts">
       <dt>Lehrende</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
-      <dt>Umfang</dt><dd>{{ course.hours|default_if_none:"–" }} SWS{% if course.kind == 'lesson' %} je Teilnahme{% endif %}</dd>
+      <dt>Umfang</dt><dd>{% if lengths %}{% for sws, n in lengths %}{{ sws|mark }} SWS × {{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}<br><small class="muted">je Teilnahme nach ihrem Studienplan</small>{% else %}{{ course.hours|default_if_none:"–" }} SWS{% endif %}</dd>
       <dt>Teilnahmen</dt><dd>{{ count }}{% if course.capacity %} von {{ course.capacity }} Plätzen{% endif %}</dd>
       <dt>Platzvergabe</dt><dd>{{ course.get_allocation_display|capfirst }}</dd>
       {% if course.allocation != 'staff' %}<dt>Anmeldung</dt><dd>{% if course.opens %}vom {{ course.opens|date:"j. F" }} {% endif %}{% if course.deadline %}bis {{ course.deadline|date:"j. F Y" }}{% elif not course.opens %}–{% endif %}</dd>{% endif %}

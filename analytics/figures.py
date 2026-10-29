@@ -99,7 +99,7 @@ def of_study(to=''):
 TERM = named(Term, order='start')
 FS = ExpressionWrapper(  # Fachsemester in that term: credited terms plus the registered ones so far, leave excluded
     Subquery(
-        StudyTerm.objects.filter(study=OuterRef('study'), leave=False, term__start__lte=OuterRef('term__start'))
+        StudyTerm.objects.filter(study=OuterRef('study'), leave=False, withdrawn=False, term__start__lte=OuterRef('term__start'))
         .order_by().values('study').annotate(n=Count('pk')).values('n')
     ) + F('study__prior_terms'),
     output_field=IntegerField(),
@@ -138,7 +138,7 @@ def participation(p):
 MEASURES = {m.key: m for m in [
     Measure(
         'studierende', 'Studierende',
-        rows=lambda: StudyTerm.objects.exclude(study__status__in=[Study.Status.ADMITTED, Study.Status.GUEST]).filter(term__start__lte=timezone.localdate()),
+        rows=lambda: StudyTerm.objects.exclude(study__status__in=[Study.Status.ADMITTED, Study.Status.GUEST]).filter(term__start__lte=timezone.localdate(), withdrawn=False),
         value=Count('study__person', distinct=True), term='term', default='studiengang', drill='semester', capability='view_students',
         objects=lambda rows: studies(Study.objects.filter(pk__in=rows.values('study'))), describe=study,
         dimensions={
@@ -170,7 +170,7 @@ MEASURES = {m.key: m for m in [
                 When(status=Study.Status.WAITLISTED, then=Value(OUTCOMES[1])),
                 When(status=Study.Status.REJECTED, then=Value(OUTCOMES[2])),
                 When(status=Study.Status.ADMITTED, then=Value(OUTCOMES[3])),
-                When(Q(status=Study.Status.LEFT) & ~Exists(StudyTerm.objects.filter(study=OuterRef('pk'))), then=Value(OUTCOMES[4])),
+                When(Q(status=Study.Status.LEFT) & ~Exists(StudyTerm.objects.filter(study=OuterRef('pk'), withdrawn=False)), then=Value(OUTCOMES[4])),
                 default=Value(OUTCOMES[5]), output_field=CharField(),
             ), labels=listed((v, v) for v in OUTCOMES), ordered=True),
         },
