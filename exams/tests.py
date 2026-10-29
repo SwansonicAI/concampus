@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from core.models import Message, Person, Term
 from core.testing import Seeded, flashes
-from courses.models import Course, Participation
+from courses.models import Appointment, Course, Participation
 from courses.panel import mean
 from curriculum.models import Program, Rounding, rounded
 from exams.views import EXAMS, attempts, exhausted, handed_in, offered
@@ -68,10 +68,14 @@ class ExamTest(Seeded):
     def test_panels_meet_the_regulations(self):
         final = Course.objects.filter(kind='exam', subject=None, modules__parent__final=True).distinct().first()  # a written part
         final.staff.set([final.staff.first()])
-        self.assertIn('RPSO § 17 Abs. 5', Course.panels(Course.objects.filter(pk=final.pk)).get().shortfall)  # two for the final exam
+        self.assertIn('RPSO § 17 Abs. 5', final.panel().shortfall)  # two for the final exam
         hall = Course.objects.filter(kind='audition', subject__isnull=False).first()
         hall.staff.set(hall.staff.all()[:2])
-        self.assertIn('EPO § 3 Abs. 4', Course.panels(Course.objects.filter(pk=hall.pk)).get().shortfall)  # three for the Hauptfach
+        self.assertIn('EPO § 3 Abs. 4', hall.panel().shortfall)  # three for the Hauptfach
+        exam = Course.objects.filter(kind='exam', released=None, term__name='WiSe 2026/27').exclude(pk=final.pk).first()
+        self.assertFalse(exam.panel().shortfall)
+        Appointment.objects.filter(person=exam.staff.first(), year=exam.year).delete()  # the Prüfungsausschuss did not appoint them
+        self.assertIn('Nicht als Prüfende bestellt', exam.panel().shortfall)
 
     def test_who_stands_back_for_bias_is_replaced_so_all_are_marked_by_as_many(self):
         resit = Course.objects.get(title__contains='Wiederholung')

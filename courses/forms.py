@@ -11,7 +11,7 @@ from curriculum.models import Module, Program
 from rooms.forms import RoomField, bookable
 from rooms.models import Room
 from students.models import Study
-from .models import Course
+from .models import Appointment, Course
 
 
 class PlanForm(forms.Form):
@@ -107,23 +107,33 @@ class SlotForm(forms.Form):
             self.fields['minutes'].initial = max(int(n) for n in length)
 
 
-def teachers(subject=None, institutes=(), module=()):
+def teachers(subject=None, institutes=(), module=(), appointed=None):
     """Teachers as choices, the likely ones first: those teaching the Hauptfach, then those teaching the courses of the
-    modules in question, then those of the Institute in question, then every other Institut's."""
+    modules in question, then those of the Institute in question, then every other Institut's. For a panel, those
+    `appointed` as examiners come first and the others say they are not."""
     hauptfach = set(Course.objects.filter(kind=Course.Kind.LESSON, subject=subject).values_list('staff', flat=True)) if subject else set()
     teaching = set(Course.objects.filter(kind=Course.Kind.COURSE, modules__parent__in=module).values_list('staff', flat=True)) if module else set()
     groups = defaultdict(list)
     for t in Person.teachers().select_related('institute'):
         rank = 0 if t.pk in hauptfach else 1 if t.pk in teaching else 2 if t.institute_id in institutes else 3
         label = f'Hauptfach {subject}' if rank == 0 else 'Lehrende des Moduls' if rank == 1 else str(t.institute or 'Ohne Institut')
+        if appointed is not None:
+            rank, label = (-1, 'Als Prüfende bestellt') if t.pk in appointed else (rank, f'{label}, nicht bestellt')
         groups[rank, label].append((t.pk, str(t)))
     return [(label, people) for (_, label), people in sorted(groups.items())]
 
 
+def appointed(course):
+    """The pks of those appointed to examine on the course's panel, or None where it has no panel or no term yet."""
+    if course.kind not in Course.PANEL or not course.term_id:
+        return None
+    return {pk for pk, subject in Appointment.examiners({course.year})[course.year] if subject == course.subject_id}
+
+
 def substitutes(course):
-    """Who may mark in place of an examiner who stands back: teachers off the panel, those of the subject first."""
+    """Who may mark in place of an examiner who stands back: teachers off the panel, the appointed first."""
     staff = set(course.staff.values_list('pk', flat=True))
-    return [(label, [(pk, name) for pk, name in people if pk not in staff]) for label, people in teachers(course.subject)]
+    return [(label, [(pk, name) for pk, name in people if pk not in staff]) for label, people in teachers(course.subject, appointed=appointed(course))]
 
 
 def leaf_modules(exams=False):
@@ -166,7 +176,9 @@ class CourseForm(forms.ModelForm):
             self.fields['kind'].label = 'Organisation'
         if 'staff' in self.fields:
             self.fields['staff'].queryset = Person.teachers()
-            self.fields['staff'].choices = teachers(self.instance.subject, person.ours('manage_courses') | person.ours('manage_exams') if person else ())
+            self.fields['staff'].choices = teachers(
+                self.instance.subject, person.ours('manage_courses') | person.ours('manage_exams') if person else (), appointed=appointed(self.instance),
+            )
         if person and not self.instance.pk and 'teacher' in person.roles and not self.initial.get('staff'):  # who creates a course mostly teaches it
             self.initial['staff'] = [person.pk]
         if 'accompaniment' in self.fields:
@@ -206,7 +218,7 @@ class ExamForm(CourseForm):
         super().__init__(*args, person=person, **kwargs)
         self.fields['deadline'].help_text = f'Letzter Tag der Anmeldung. Abmelden geht bis {Institution.get().withdraw_weeks} Wochen vor dem Prüfungszeitraum.'
         modules = self.instance.modules.values('parent') if self.instance.pk else ()
-        self.fields['staff'].choices = teachers(self.instance.subject, person.ours('manage_exams') if person else (), modules)
+        self.fields['staff'].choices = teachers(self.instance.subject, person.ours('manage_exams') if person else (), modules, appointed(self.instance))
         self.fields['assessor'].queryset = Person.teachers()
         self.fields['assessor'].choices = [('', 'Keiner'), *teachers(self.instance.subject, person.ours('manage_exams') if person else (), modules)]
         self.fields['modules'].choices = leaf_modules(exams=True)

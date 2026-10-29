@@ -189,19 +189,34 @@ class Course(Tracked, models.Model):
             return f'Alle {study.program.attempts} Versuche für {module.code} sind ausgeschöpft.'
         return ''
 
+    @property
+    def year(self):
+        """The Studienjahr the course falls in, by the year its October begins."""
+        start = self.term.start
+        return start.year if start.month >= 10 else start.year - 1
+
     @classmethod
     def panels(cls, courses):
-        """The courses with what their panel is checked against (`shortfall`): `examiners`, `professors`, `final` (part
-        of the Abschlussprüfung) and `repeat` (someone in a further attempt)."""
+        """The courses, with what their panel is checked against (`shortfall`): `examiners`, `professors`, `final` (part
+        of the Abschlussprüfung), `repeat` (someone in a further attempt) and `unappointed`, the examiners the
+        Prüfungsausschuss has not appointed for the subject and year."""
         earlier = Participation.objects.filter(
             study=models.OuterRef('study'), module=models.OuterRef('module'), passed=False, course__released__isnull=False,
         ).exclude(course=models.OuterRef('course'))
-        return courses.annotate(
+        found = list(courses.select_related('term').prefetch_related('staff').annotate(
             examiners=models.Count('staff', distinct=True),
             professors=models.Count('staff', filter=models.Q(staff__employment=Person.Employment.PROFESSUR), distinct=True),
             final=models.Exists(Module.objects.filter(models.Q(final=True) | models.Q(parent__final=True), courses=models.OuterRef('pk'))),
             repeat=models.Exists(Participation.objects.filter(models.Exists(earlier), course=models.OuterRef('pk'))),
-        )
+        ))
+        appointed = Appointment.examiners({c.year for c in found})
+        for c in found:
+            c.unappointed = [e for e in c.staff.all() if (e.pk, c.subject_id) not in appointed[c.year]] if c.kind in cls.PANEL else []
+        return found
+
+    def panel(self):
+        """The course as `panels()` checks it."""
+        return type(self).panels(type(self).objects.filter(pk=self.pk))[0]
 
     @property
     def shortfall(self):
@@ -217,6 +232,8 @@ class Course(Tracked, models.Model):
             return f'{which} bewerten mindestens zwei Prüfende, darunter eine Professur (RPSO § 17 Abs. 5).'
         if self.kind == self.Kind.EXAM and self.oral and not self.assessor_id and n < 2:
             return 'Mündliche und praktische Prüfungen nehmen zwei Prüfende ab, oder eine Person mit Beisitz (RPSO § 17 Abs. 3).'
+        if self.unappointed:
+            return f'Nicht als Prüfende bestellt{" für " + str(self.subject) if self.subject_id else ""}: {", ".join(e.last_name for e in self.unappointed)} (EPO § 3 Abs. 2, RPSO § 17).'
         return ''
 
     @classmethod
@@ -446,3 +463,38 @@ class Reduction(Tracked, models.Model):
     @property
     def short(self):
         return self.get_reason_display().split(' (')[0]
+
+
+class Appointment(Tracked, models.Model):
+    """A teacher appointed by the Prüfungsausschuss to examine in a Studienjahr (EPO § 3 Abs. 2, RPSO § 17): in the
+    Hauptfächer ticked, and in exams of no Hauptfach. Panels are made up of the appointed."""
+
+    owner = 'person_id'
+    capabilities = ('appoint_examiners',)
+    scope = (['person__institute'], [])
+
+    person = models.ForeignKey(Person, models.CASCADE, related_name='appointments', verbose_name='Prüfer:in')
+    year = models.PositiveSmallIntegerField('Studienjahr', help_text='Das Jahr, in dem es am 1. Oktober beginnt, z. B. 2026 für 2026/27.')
+    subjects = models.ManyToManyField(Subject, blank=True, related_name='+', verbose_name='Hauptfächer', help_text='Eignungsprüfungen und Prüfungen in diesen Fächern.')
+    general = models.BooleanField('Prüfungen ohne Hauptfach', default=True, help_text='Etwa Musikgeschichte, Musiktheorie, Abschlussarbeiten.')
+
+    class Meta:
+        ordering = ['-year', 'person__last_name']
+        verbose_name = 'Bestellung als Prüfer:in'
+        verbose_name_plural = 'Bestellte Prüfende'
+        constraints = [models.UniqueConstraint(fields=['person', 'year'], name='unique_appointment')]
+
+    def __str__(self):
+        return f'{self.person} · {self.season}'
+
+    @property
+    def season(self):
+        return f'{self.year}/{(self.year + 1) % 100:02d}'
+
+    @classmethod
+    def examiners(cls, years):
+        """{year: {(person pk, subject pk or None for exams of no Hauptfach)}} of those appointed in these Studienjahre."""
+        found = {year: set() for year in years}
+        for a in cls.objects.filter(year__in=years).prefetch_related('subjects'):
+            found[a.year] |= {(a.person_id, s.pk) for s in a.subjects.all()} | ({(a.person_id, None)} if a.general else set())
+        return found

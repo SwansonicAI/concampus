@@ -11,7 +11,7 @@ from core.access import CAPABILITIES, EVERYWHERE
 from core.dates import DayField
 from core.models import Holiday, Institute, Institution, Office, Person, Term
 from courses.forms import AuditionForm
-from courses.models import Area, Course, Format, Reduction
+from courses.models import Appointment, Area, Course, Format, Reduction
 from curriculum.forms import ModuleForm
 from curriculum.models import Module, Program, Subject
 from instruments.models import Instrument
@@ -142,6 +142,17 @@ class AccountForm(forms.ModelForm):
         return person
 
 
+class AppointmentForm(forms.ModelForm):
+    class Meta:
+        model = Appointment
+        fields = ['person', 'year', 'subjects', 'general']
+        widgets = {'subjects': forms.CheckboxSelectMultiple}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['person'].queryset = Person.teachers().order_by('last_name', 'first_name')
+
+
 class ReductionForm(forms.ModelForm):
     class Meta:
         model = Reduction
@@ -240,6 +251,13 @@ EDITORS = {e.key: e for e in [
         search=['degree', 'name'], words='prüfungsordnung po fpso diploma supplement abschlussarbeit bearbeitungszeit statistik abschlussprüfung studienfach',
     ),
     Editor('module', Module, 'Module', 'edit_curriculum', form=ModuleForm, new=new_module),
+    Editor(
+        'pruefende', Appointment, 'Bestellte Prüfende', 'appoint_examiners', 'Studium und Lehre', form=AppointmentForm,
+        columns=[('Prüfer:in', 'person'), ('Studienjahr', 'season'), ('Hauptfächer', 'subjects'), ('Ohne Hauptfach', 'general')],
+        search=['person__last_name', 'person__first_name'], words='prüfer prüferliste prüfungsausschuss bestellung kommission eignungsprüfung',
+        queryset=lambda: Appointment.objects.select_related('person').prefetch_related('subjects').order_by('-year', 'person__last_name'),
+        new=lambda request: Appointment(year=Course(term=Term.current()).year if Term.current() else None),
+    ),
     Editor(
         'ermaessigungen', Reduction, 'Ermäßigungen der Lehrverpflichtung', 'manage_teaching_load', 'Studium und Lehre', form=ReductionForm,
         columns=[('Lehrperson', 'person'), ('Semester', 'term'), ('Grund', 'reason'), ('LVS', 'hours'), ('Notiz', 'note')],

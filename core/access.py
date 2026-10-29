@@ -19,6 +19,7 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
     ('Prüfungen', [
         ('manage_exams', 'Alle Prüfungen sehen, anlegen, bearbeiten und Termine planen'),
         ('decide_results', 'Ergebnisse aus den Protokollen eintragen und freigeben; Zeugnisse, mit Geburtsdaten, Anschrift und Unterlagen der Studierenden'),
+        ('appoint_examiners', 'Prüfende für ein Studienjahr bestellen'),
         ('correct_scores', 'Wertungen berichtigen, abweichende Noten mit Begründung festsetzen, freigegebene Ergebnisse wieder öffnen und zurücksetzen'),
         ('recognise', 'Leistungen anerkennen'),
     ]),

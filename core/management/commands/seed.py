@@ -32,7 +32,7 @@ from admissions.views import DECISIONS, invite
 from core import destatis, history, texts
 from core.models import Change, Holiday, Institute, Institution, Message, Office, Person, Term, Text
 from courses import panel as sheets
-from courses.models import Area, Course, Ensemble, Format, Participation, Recusal, Reduction, Score, Signup
+from courses.models import Appointment, Area, Course, Ensemble, Format, Participation, Recusal, Reduction, Score, Signup
 from courses.panel import mean, rounding
 from curriculum.models import Module, Program, Rounding, Subject
 from instruments.models import Instrument, Loan
@@ -510,7 +510,7 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
         'view_students', 'view_files', 'message_students', 'view_applications', 'run_auditions', 'manage_courses', 'view_teaching_load',
         'view_curriculum', 'book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms', 'manage_instruments', 'roll_over',
     ],
-    'Prüfungsausschuss': ['view_files', 'correct_scores', 'view_curriculum'],
+    'Prüfungsausschuss': ['view_files', 'correct_scores', 'appoint_examiners', 'view_curriculum'],
     'Prüfungsausschuss Lehramt': ['view_files', 'manage_exams', 'decide_results', 'correct_scores', 'recognise', 'view_curriculum'],
 }
 LIMITS = {  # offices for some Institute or Studiengänge only
@@ -888,6 +888,7 @@ class Command(BaseCommand):
             self.exams()
             self.assessors()
             self.admissions()
+            self.appointments()
             self.events()
             self.practice()
             self.letters()
@@ -1770,6 +1771,19 @@ class Command(BaseCommand):
             examiner = course.staff.all()[0]
             course.assessor = next((t for t in colleagues[examiner.institute_id] if t != examiner), None)
         Course.objects.bulk_update(alone, ['assessor'])
+
+    def appointments(self):
+        """The Prüferliste of this Studienjahr as the Prüfungsausschuss appointed it: everyone on a panel, for its subject."""
+        found = defaultdict(lambda: [set(), False])
+        for course in Course.objects.filter(kind__in=Course.PANEL, term__in=[self.current, self.next]).select_related('term').prefetch_related('staff'):
+            for e in course.staff.all():
+                appointed = found[e, course.year]
+                if course.subject_id:
+                    appointed[0].add(course.subject_id)
+                else:
+                    appointed[1] = True
+        for (person, year), (subjects, general) in found.items():
+            Appointment.objects.create(person=person, year=year, general=general).subjects.set(subjects)
 
     def reductions(self):
         """Ermäßigungen the Präsidium granted for this term (ThürLVVO § 8), and the Deputatskonto kept from this term on."""

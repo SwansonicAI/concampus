@@ -200,7 +200,7 @@ def exam(request, pk):
         'modules': credited(course),
         'bookings': course.bookings.select_related('room'),
         'missing': sum(1 for p in rows if panel.due(p)),
-        'short': Course.panels(Course.objects.filter(pk=course.pk)).get().shortfall,
+        'short': course.panel().shortfall,
         'dropping': office and not course.released and course.kind == Course.Kind.EXAM,
         'waiting': panel.waiting(rows) if (office or decide) and held and not course.released else [],
         'remarks': Participation.Remark.choices if (decide or correct) and course.kind in (Course.Kind.EXAM, Course.Kind.THESIS) else [],
