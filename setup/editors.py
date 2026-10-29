@@ -218,7 +218,7 @@ EDITORS = {e.key: e for e in [
         'hochschule', Institution, 'Hochschule', 'manage_institution', 'Verwaltung', single=True, deletable=False,
         sections=[
             ('Briefkopf und Website', ['name', 'short_name', 'address', 'place', 'email', 'website', 'imprint', 'privacy', 'accessibility']),
-            ('Aufnahme und Immatrikulation', ['matriculation_start', 'accept_days', 'retention_months', 'signup', 'insurers']),
+            ('Aufnahme und Immatrikulation', ['matriculation_start', 'student_mail', 'accept_days', 'retention_months', 'signup', 'insurers']),
             ('Rückmeldung und Prüfungen', ['late_fee', 'payee', 'iban', 'bic', 'withdraw_weeks']),
             ('Raumbuchung', ['student_daily_hours', 'student_ahead_hours', 'last_minute_hours', 'teacher_ahead_days']),
             ('Deputat', ['load_since']),
@@ -263,8 +263,8 @@ EDITORS = {e.key: e for e in [
         adding=False, deletable=False,
     ),
     Editor(
-        'unterrichtsfrei', Holiday, 'Unterrichtsfreie Tage', 'manage_terms', 'Verwaltung', fields=['name', 'first', 'last'],
-        columns=[('Bezeichnung', 'name'), ('Von', 'first'), ('Bis', 'last')], search=['name'], words='feiertage ferien vorlesungsfrei weihnachten semesterplanung',
+        'unterrichtsfrei', Holiday, 'Unterrichtsfreie Tage', 'manage_terms', 'Verwaltung', fields=['name', 'first', 'last', 'public'],
+        columns=[('Bezeichnung', 'name'), ('Von', 'first'), ('Bis', 'last'), ('Feiertag', 'public')], search=['name'], words='feiertage ferien vorlesungsfrei weihnachten semesterplanung',
         queryset=lambda: Holiday.objects.order_by('-first'),
     ),
     Editor('institute', Institute, 'Institute', 'manage_institution', 'Verwaltung', fields=['name'], columns=[('Institut', 'name')], search=['name']),
@@ -337,7 +337,7 @@ EDITORS = {e.key: e for e in [
     ),
     Editor(
         'unterlagen', DocumentType, 'Unterlagenarten', 'run_auditions', 'Aufnahme',
-        fields=['name', 'condition', 'subjects', 'required', 'shared', 'jury', 'note', 'template', 'amount', 'file_types', 'max_mb', 'single', 'order'],
+        fields=['name', 'condition', 'subjects', 'required', 'shared', 'jury', 'health', 'note', 'template', 'amount', 'file_types', 'max_mb', 'single', 'order'],
         columns=[('Unterlagen', 'name'), ('In der Checkliste', 'condition'), ('Pflicht', 'required')],
         search=['name'], words='checkliste bewerbung video zeugnis nachweis hochladen',
         queryset=lambda: DocumentType.objects.exclude(key__in=DocumentType.SYSTEM),  # Bescheide and theses are filed by the system
