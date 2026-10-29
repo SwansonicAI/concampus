@@ -28,7 +28,8 @@ from .apps import feature, plural, tile_apps, tiles
 from .days import busy, strip
 from .forms import ContactForm
 from .history import describe, former, restore, tables
-from .models import Change, Message, Office, Person, Term, Tracked
+from .dates import months_before
+from .models import Change, Institution, Message, Office, Person, Term, Tracked
 from .text import fold, matching, words
 
 
@@ -305,10 +306,11 @@ def found(person, q, limit):
     ][:limit if q else None]))  # an empty box lists everything the person can do
     if len(q) < 2:
         return groups
-    if roles & {'view_files', 'view_applications', 'teacher'}:  # only the files and applications the person may open
+    if roles & {'view_files', 'manage_students', 'view_applications', 'teacher'}:  # only the files and applications the person may open
         seen = Q(teacher=person) & ~Q(status__in=Study.APPLICATION) if 'teacher' in roles else Q(pk=None)
-        seen |= Q(pk__in=person.within(Study.objects.exclude(status__in=Study.APPLICATION), 'view_files').values('pk'))
-        seen |= Q(pk__in=person.within(Study.objects.filter(status__in=Study.APPLICATION), 'view_applications').values('pk'))
+        seen |= Q(pk__in=person.within(Study.objects.exclude(status__in=Study.APPLICATION), 'view_files', 'manage_students').values('pk'))
+        lapsed = Q(status=Study.Status.REJECTED, since__lt=months_before(timezone.localdate(), Institution.get().retention_months))  # an old rejection is nobody's business
+        seen |= Q(pk__in=person.within(Study.objects.filter(status__in=Study.APPLICATION).exclude(lapsed), 'view_applications').values('pk'))
         studies = matching(Study.objects.filter(seen).select_related('person', 'program', 'subject'), q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__matriculation', 'person__email', starts=True)
         groups.append(('Studierende und Bewerbungen', people(studies, limit, person)))
     teaching = [Course.Kind.COURSE, Course.Kind.LESSON]

@@ -256,6 +256,10 @@ class DocumentType(Tracked, Keyed):
     jury = models.BooleanField(
         'Für die Kommission', default=False, help_text='Die Prüfungskommission sieht es, etwa Video oder Lebenslauf; alles andere nur die Verwaltung.',
     )
+    health = models.BooleanField(
+        'Gesundheitsdaten', default=False,
+        help_text='Art. 9 DSGVO, etwa ein phoniatrisches Gutachten: öffnen nur die Person und wer über die Bewerbung entscheidet; gelöscht, sobald entschieden ist.',
+    )
     note = models.TextField('Hinweis für Bewerbende', blank=True)
     amount = models.DecimalField(
         'Zu überweisen', max_digits=7, decimal_places=2, null=True, blank=True,

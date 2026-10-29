@@ -1,0 +1,15 @@
+{% extends base %}
+{% block title %}Exporte{% endblock %}
+{% block content %}
+<h1>Exporte</h1>
+<p class="lead">Listen mit personenbezogenen Daten, die als Datei hinausgegangen sind: wer, wann, was und wie viele Zeilen.</p>
+<table>
+  <thead><tr><th>Am</th><th>Von</th><th>Was</th><th class="num">Zeilen</th></tr></thead>
+  <tbody>
+    {% for e in exports %}
+    <tr><td class="nowrap">{{ e.created|date:"j.n.Y, H:i" }}</td><td>{{ e.person|default:"–" }}</td><td>{{ e.what }}</td><td class="num">{{ e.rows }}</td></tr>
+    {% empty %}<tr><td colspan="4" class="empty">Noch keine Exporte.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

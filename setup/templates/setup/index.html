@@ -2,7 +2,7 @@
 {% block title %}Einstellungen{% endblock %}
 {% block content %}
 <h1>Einstellungen</h1>
-<p class="lead">Was die Hochschule selbst pflegt. Jede Änderung steht im Verlauf und lässt sich zurücksetzen.{% if 'manage_accounts' in user.roles %} Neue Rechte und Mitgliedschaften in Ämtern gelten, sobald eine zweite Person sie unter <a href="{% url 'setup:approvals' %}">Freigaben</a> bestätigt.{% endif %}</p>
+<p class="lead">Was die Hochschule selbst pflegt. Jede Änderung steht im Verlauf und lässt sich zurücksetzen.{% if 'manage_accounts' in user.roles %} Neue Rechte und Mitgliedschaften in Ämtern gelten, sobald eine zweite Person sie unter <a href="{% url 'setup:approvals' %}">Freigaben</a> bestätigt. Listen mit personenbezogenen Daten, die als Datei hinausgehen, stehen unter <a href="{% url 'setup:exports' %}">Exporte</a>.{% endif %}</p>
 {% for section, editors in sections.items %}
 <section>
   <h2>{{ section }}</h2>

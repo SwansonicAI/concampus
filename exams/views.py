@@ -21,7 +21,7 @@ from core import destatis, texts
 from core.access import kept, require
 from core.apps import plural
 from core.dates import months_before
-from core.models import Message, Office, Term
+from core.models import Export, Message, Office, Term
 from core.text import matching
 from core.views import without_term
 from courses import panel
@@ -313,6 +313,7 @@ def roster(request, pk):
         response.write('\ufeff')
         writer = csv.writer(response, delimiter=';')
         writer.writerow(['Matrikelnummer', 'Nachname', 'Vorname', 'Studiengang', 'Hauptfach', 'Termin', *(e.last_name for e in staff), 'Note', 'Ergebnis', 'Vermerk'])
+        Export.log(person, f'Notenliste {course.title}, {course.term}', len(rows))
         for p in rows:
             writer.writerow([
                 p.study.person.matriculation, p.study.person.last_name, p.study.person.first_name, p.study.program.title,

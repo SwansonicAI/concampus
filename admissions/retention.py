@@ -19,11 +19,12 @@ def ended(cutoff):
 
 
 def forget(cutoff):
-    """Delete the documents of applications that ended before `cutoff`, and make anonymous everyone who has nothing else
-    here: no other study, no teaching, no office. Returns (documents deleted, people made anonymous)."""
+    """Delete health data once its application is decided, the documents of applications that ended before `cutoff`, and
+    make anonymous everyone who has nothing else here: no other study, no teaching, no office. Returns (documents deleted,
+    people made anonymous)."""
     gone = ended(cutoff)
-    documents = Document.objects.filter(study__in=gone)
-    for d in documents.exclude(file='').exclude(file__in=Document.objects.exclude(study__in=gone).values('file')):  # a file another keeps stays
+    documents = Document.objects.filter(Q(study__in=gone) | Q(kind__health=True) & ~Q(study__status=Study.Status.APPLIED))
+    for d in documents.exclude(file='').exclude(file__in=Document.objects.exclude(pk__in=documents).values('file')):  # a file another keeps stays
         d.file.delete(save=False)
     deleted = documents.delete()[0]
     people = (

@@ -440,7 +440,7 @@ DOCUMENTS = [  # key, name, condition, settings: what a complete application hol
         'Wir sind die Erziehungsberechtigten von {name}, geboren am {geburtsdatum}. Wir sind damit einverstanden, dass sich unser Kind an der '
         '{hochschule} für {studiengang}, Hauptfach {hauptfach}, bewirbt, an der Eignungsprüfung teilnimmt und im Fall der Zulassung das '
         'Studium aufnimmt.\n\nName der Erziehungsberechtigten: ________________________________')}),
-    ('voice', 'Phoniatrisches Gutachten', 'subjects', {'required': False, 'shared': True}),
+    ('voice', 'Phoniatrisches Gutachten', 'subjects', {'required': False, 'shared': True, 'health': True}),
     ('language', 'Sprachnachweis Deutsch', 'foreign', {'required': False, 'note': 'Niveau B2; spätestens zur Immatrikulation.', 'shared': True}),
     ('aps', 'APS-Zertifikat', 'aps', {'required': False, 'shared': True, 'note': (
         'Von der Akademischen Prüfstelle (APS) der Deutschen Botschaft; in China für Musik im Verfahren für künstlerische '
@@ -504,7 +504,7 @@ CATEGORIES = [  # key, name, colour, settings: the HfM's booking categories as i
 ]
 OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
     'Akademische und Studentische Angelegenheiten (ASA)': [
-        'view_students', 'view_files', 'manage_students', 'manage_reregistration', 'message_students',
+        'view_students', 'manage_students', 'manage_reregistration', 'message_students',  # outcomes of exams, not grades: those are the Prüfungsamt's
         'view_applications', 'decide_applications', 'run_auditions',  # halls for the auditions too
         'view_curriculum', 'book_any_room', 'view_bookings', 'manage_terms', 'view_statistics', 'report_statistics',
     ],

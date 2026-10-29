@@ -10,7 +10,7 @@ from django.utils.formats import number_format
 from django.utils.text import slugify
 
 from core.access import require
-from core.models import Term
+from core.models import Export, Term
 from core.views import SHOWN, without_term
 from .charts import SPANS, Query, chart, label, lines
 from .figures import MEASURES, narrowed, semesters, table
@@ -68,7 +68,9 @@ def official(request):
     term = next((t for t in terms if str(t.pk) == request.GET.get('semester')), terms[0])
     report = Report(term)
     if (kind := request.GET.get('datei')) in report.files:
-        response = HttpResponse(report.csv(kind), content_type='text/csv; charset=utf-8')
+        content = report.csv(kind)
+        Export.log(request.user, f'Amtliche Statistik {term}: {kind}', max(content.count('\n') - 1, 0))
+        response = HttpResponse(content, content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename="{kind}-{report.year if kind == "promovierende" else slugify(term.name)}.csv"'
         return response
     missing = sorted(report.missing.items(), key=lambda item: item[0].name)

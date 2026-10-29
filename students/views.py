@@ -19,7 +19,7 @@ from core import dates, texts
 from core.access import CODENAMES, require
 from core.history import tables
 from core.apps import plural
-from core.models import Institution, Message, Office, Person, Term
+from core.models import Export, Institution, Message, Office, Person, Term
 from core.text import fold, matching
 from core.views import SHOWN, preview, without_term
 from courses.models import Participation
@@ -163,6 +163,7 @@ def roster(request):
         writer = csv.writer(response, delimiter=';')
         personal = 'manage_students' in request.user.roles  # gender and nationality for the student office only (docs/privacy.md)
         writer.writerow(['Matrikelnummer', 'Nachname', 'Vorname', *(['Geschlecht', 'Staatsangehörigkeit'] if personal else []), 'E-Mail', 'Studiengang', 'Hauptfach', 'Fachsemester', 'Status'])
+        Export.log(request.user, f'Studierende ({request.GET.urlencode()})', studies.count())
         for s in studies:
             writer.writerow([
                 s.person.matriculation, s.person.last_name, s.person.first_name, *([s.person.get_gender_display(), s.person.get_nationality_display()] if personal else []),
@@ -249,6 +250,7 @@ def study(request, pk):
         'own': own,
         'personal': personal, 'identity': identity,
         'files': own or files,  # Leistungsübersicht
+        'grades': own or files or study.teacher_id == person.pk,  # the student office sees outcomes: Prüfungsanspruch, Abschluss
         'certify': own or office,  # Bescheinigungen
         'rows': plan(tree, study.program.semesters),
         'semesters': range(1, study.program.semesters + 1),
@@ -283,8 +285,8 @@ def study(request, pk):
 
 
 def decides(person, study):
-    """Whether the person's office records a study's Schwerpunkt: the student office, or the office deciding results."""
-    return person.may('manage_students', study) or person.may('decide_results', study)
+    """Whether the person's office records a study's Schwerpunkt: the office deciding results, which keeps the grades it counts for."""
+    return person.may('decide_results', study)
 
 
 @require_POST

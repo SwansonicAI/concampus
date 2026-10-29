@@ -9,6 +9,7 @@ urlpatterns = [
     path('texte/<str:key>/', views.text, name='text'),
     path('konten/<int:pk>/einladung/', views.invite, name='invite'),
     path('freigaben/', views.approvals, name='approvals'),
+    path('exporte/', views.exports, name='exports'),
     path('<str:key>/', views.listing, name='list'),
     path('<str:key>/neu/', views.edit, name='new'),
     path('<str:key>/<int:pk>/', views.edit, name='edit'),

@@ -12,7 +12,7 @@ from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_en
 from django.views.decorators.http import require_POST
 
 from core.access import kept, needs, require
-from core.models import Grant, Membership, Person, Text
+from core.models import Export, Grant, Membership, Person, Text
 from core.text import matching
 from core.texts import TEXTS, Values, basics, mail, wording
 from core.views import SHOWN
@@ -38,6 +38,12 @@ def approvals(request):
     return render(request, 'setup/approvals.html', {
         'grants': Grant.objects.select_related('office', 'by'), 'members': Membership.objects.filter(confirmed_by=None).select_related('person', 'office', 'by'),
     })
+
+
+@require('manage_accounts')
+def exports(request):
+    """Lists with personal data taken out as files, newest first: for whoever answers for access, the last thousand."""
+    return render(request, 'setup/exports.html', {'exports': Export.objects.select_related('person')[:1000]})
 
 
 def usable(person):

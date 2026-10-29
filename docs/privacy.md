@@ -41,7 +41,7 @@ not mean seeing every field on it.
 | Institut office | `view_students`, `view_files`, `view_applications`, `run_auditions` | 1, 2 | all |
 | Prüfungsamt | `decide_results`, `view_students` for the list | 1, 2, 3 | – |
 | Prüfungsausschuss | `correct_scores`: corrects marks, sets an abweichende Note with its reason, reopens released results, undoes changes to them | 1, 2 | marks of auditions |
-| Student office | `manage_students` | 1 to 4 | all with `view_applications` |
+| Student office | `manage_students` | 1, 3, 4; of 2 only outcomes: a lost Prüfungsanspruch, the Abschluss | all with `view_applications` |
 
 Grounded in practice: teachers see their own students' Leistungsdaten (KH Berlin-Weißensee, Dienstvereinbarung CMS 2017);
 exam offices process identity and contact data for Zeugnisse and Bescheide (Bamberg, Göttingen, Ulm, FU Berlin); the
@@ -52,7 +52,8 @@ with the administration (HfM Hanns Eisler Berlin, HMTM München, HfM Würzburg).
 
 - Document types say whether the jury sees them (`DocumentType.jury`, "Für die Kommission"; in the demo: video and CV).
   Everything else, such as school certificates, the parents' consent, the fee receipt, language certificates or a
-  phoniatric report (health data), is for the administration only.
+  phoniatric report (health data), is for the administration only. Health data (`DocumentType.health`) opens only to
+  the person and the office deciding the application, and is deleted once it is decided (`admissions/retention.py`).
 - Document types marked "Für alle Bewerbungen" (`DocumentType.shared`: CV, certificates, consent) count for every
   application of the person; access to them extends to the juries of those applications, still only where marked for the jury.
 
@@ -102,7 +103,12 @@ never in the address: a note may say why someone was ill, and addresses end up i
   document types marked for it. `document()`: who may open a file.
 - `core/views.py`, `people()`: birth dates in search results only for `manage_students`, `decide_results`,
   `view_applications`. `letter()`: filed Bescheide for `manage_students` and `decide_results`.
-- `students/views.py`, `roster()`: gender and nationality in the export only for `manage_students`.
+- `students/views.py`, `roster()`: gender and nationality in the export only for `manage_students`. Every file with
+  personal data that leaves (student list, Notenliste, amtliche Statistik) is logged with who, when, what and how many
+  rows (`core.models.Export`), shown to `manage_accounts` under Einstellungen › Exporte.
+- `students/views.py`, `study()`: grades, Gesamtnote and Leistungsübersicht for the person, `view_files` and the
+  Hauptfachlehrer:in; the student office sees outcomes only. The Schwerpunkt is recorded by `decide_results`.
+- `core/views.py`, `found()`: a rejection older than the retention period is no longer found.
 - `core/models.py`, `Tracked.keepers()`, `seen_by()`: a record's Verlauf and undoing its changes belong to the offices
   that look after it, a course's by its kind (an audition's to the office that runs auditions, an exam's to those that
   manage or decide exams), results through their course (`courses.models.Judged`); a person's Verlauf opens to each

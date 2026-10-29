@@ -674,6 +674,24 @@ class Membership(Tracked, models.Model):
             self.save(update_fields=['confirmed_by'])
 
 
+class Export(models.Model):
+    """A list with personal data taken out as a file: who, when, what and how many rows (docs/privacy.md)."""
+
+    person = models.ForeignKey(Person, models.SET_NULL, null=True, related_name='+', verbose_name='Von')
+    what = models.CharField('Was', max_length=300)
+    rows = models.PositiveIntegerField('Zeilen')
+    created = models.DateTimeField('Am', default=timezone.now)
+
+    class Meta:
+        ordering = ['-created']
+        verbose_name = 'Export'
+        verbose_name_plural = 'Exporte'
+
+    @classmethod
+    def log(cls, person, what, rows):
+        cls.objects.create(person=person, what=what[:300], rows=rows)
+
+
 class Grant(Tracked, models.Model):
     """Rights given to an office, waiting until a second person who keeps accounts confirms them."""
 

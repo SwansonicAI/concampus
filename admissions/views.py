@@ -711,6 +711,8 @@ def document(request, pk):
     applications = Study.objects.filter(status__in=Study.APPLICATION)
     applications = applications.filter(person=d.person_id) if d.kind.shared else applications.filter(pk=d.study_id)
     examining = Course.objects.filter(staff=person)
+    if d.kind.health and not (d.person_id == person.pk or person.within(applications, 'decide_applications').exists()):
+        raise PermissionDenied('Gesundheitsdaten öffnen nur die Person und wer über die Bewerbung entscheidet.')
     if not (
         d.person_id == person.pk or person.may('decide_results', d) or person.may('manage_students', d) or person.within(applications, 'view_applications').exists()
         or d.kind.jury and examining.filter(kind=Course.Kind.AUDITION, participations__study__in=applications).exists()

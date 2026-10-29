@@ -159,6 +159,7 @@ class FileTest(Seeded):
         r = self.login('asa').get(f'/studierende/{study.pk}/')
         for text in ['Geschlecht', 'Hochschulzugang', 'Krankenversicherung', 'Hochschulsemester', f'Schwerpunkt {study.focus.title}']:
             self.assertIn(text, r.text)
+        self.assertNotIn('Gesamtnote bisher', r.text)  # outcomes, not grades
 
     def test_each_sees_what_their_task_needs(self):
         """docs/privacy.md: the Hauptfachlehrer:in the record, the office deciding results also identity, the jury only the

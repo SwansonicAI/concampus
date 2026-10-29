@@ -17,10 +17,10 @@
   </div>
 </div>
 <p class="lead">{% if study.person.matriculation %}Matrikelnr. {{ study.person.matriculation }} · {% endif %}{{ study.program }} · {{ study.subject }}{% if study.focus %} · Schwerpunkt {{ study.focus.title }}{% endif %} · <span class="badge {{ study.status }}">{{ study.state }}</span>{% if study.person.hold and personal %} <span class="badge hold">Sperre: {{ study.person.hold }}</span>{% endif %}</p>
-{% for m in exhausted %}<div class="flash error">Prüfungsanspruch erloschen: {{ m.code }} {{ m.title }} endgültig nicht bestanden, {% for p in m.failures %}{{ p.course.term }} {{ p.grade|floatformat:1|default:"nicht bestanden" }}{% if p.remark %} ({{ p.remark|upper }}){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}.<br><small>Widerspruch bis {{ m.appeal|date:"j.n.Y" }}{% if m.appeal < today %}, abgelaufen{% else %}; erst danach exmatrikulieren{% endif %}.</small></div>{% endfor %}
+{% for m in exhausted %}<div class="flash error">Prüfungsanspruch erloschen: {{ m.code }} {{ m.title }} endgültig nicht bestanden{% if grades %}, {% for p in m.failures %}{{ p.course.term }} {{ p.grade|floatformat:1|default:"nicht bestanden" }}{% if p.remark %} ({{ p.remark|upper }}){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}{% else %} im {{ m.failures|length }}. Versuch{% endif %}.<br><small>Widerspruch bis {{ m.appeal|date:"j.n.Y" }}{% if m.appeal < today %}, abgelaufen{% else %}; erst danach exmatrikulieren{% endif %}.</small></div>{% endfor %}
 
 <div class="stats">
-  {% if total %}
+  {% if total and grades %}
   <div class="stat"><b>{{ earned }} / {{ total }}</b><span>ECTS erworben</span><div class="bar"><i style="width: {% widthratio earned total 100 %}%"></i></div></div>
   <div class="stat"><b>{{ average|floatformat:1|default:"–" }}</b><span>Gesamtnote{% if study.status != 'graduated' %} bisher{% endif %}</span></div>
   {% endif %}
@@ -168,7 +168,7 @@
     <div class="inline"><label>Empfehlung<select name="advised"><option value="">keine</option>{% for o in advising %}<option value="{{ o.pk }}"{% if o.pk == study.advised_id %} selected{% endif %}>{{ o.title }}</option>{% endfor %}</select></label><button class="btn ghost">Speichern</button></div>
   </form>
   {% endwith %}{% endif %}
-  <p class="lead">Der Studienverlaufs- und Prüfungsplan mit allem, was bisher erbracht ist. Grün: bestanden. Grün umrandet: in diesem Semester belegt. Orange umrandet: Prüfung, die der Plan für ein früheres Semester empfiehlt. Gewicht: Anteil an der Note des Moduls, bei Modulen an der Gesamtnote.</p>
-  {% include "curriculum/_plan.html" with progress=True %}
+  {% if not grades %}<p class="lead">Der Studienverlaufs- und Prüfungsplan; was erbracht ist und mit welchen Noten, sieht die Prüfungsverwaltung.</p>{% else %}<p class="lead">Der Studienverlaufs- und Prüfungsplan mit allem, was bisher erbracht ist. Grün: bestanden. Grün umrandet: in diesem Semester belegt. Orange umrandet: Prüfung, die der Plan für ein früheres Semester empfiehlt. Gewicht: Anteil an der Note des Moduls, bei Modulen an der Gesamtnote.</p>{% endif %}
+  {% include "curriculum/_plan.html" with progress=grades %}
 </section>
 {% endblock %}
