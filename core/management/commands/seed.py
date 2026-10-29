@@ -1899,6 +1899,10 @@ class Command(BaseCommand):
                 hall.staff.set(panel)
                 if video:
                     video.staff.set(panel)
+                    hall.after.set([video])
+                if not master:  # the parts every Bachelor applicant plays follow the Hauptfach
+                    for course in shared:
+                        course.after.add(hall)
                 hall.plan = (self.rooms['Festsaal' if n % 2 == 0 else 'Saal Am Palais'], 25)
                 rounds[key] = video, hall, panel
             video, hall, panel = rounds[key]

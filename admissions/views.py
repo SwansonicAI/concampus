@@ -268,11 +268,9 @@ def juries(request):
 
 
 def next_stages(course):
-    """The stage after this one: the video round leads to the Hauptfach exam of its subject, that to the shared parts."""
-    later = Course.objects.filter(term=course.term, kind=Course.Kind.AUDITION, program=None).exclude(pk=course.pk)
-    if course.video:
-        return later.filter(subject=course.subject_id)
-    return later.filter(subject=None) if course.subject_id else later.none()
+    """The stages after this one, as the stages say they follow it: the video round leads to the Hauptfach exam of its
+    programme, that to the parts every Bachelor applicant plays."""
+    return course.following.filter(kind=Course.Kind.AUDITION)
 
 
 def held(p):
@@ -358,6 +356,7 @@ def audition(request, pk):
         panel.blind(rows, person)
     if refused:
         panel.retype(rows, request.POST, refused)
+    invited = set(Participation.objects.filter(course__in=next_stages(course)).values_list('study', flat=True)) if office else set()
     if request.GET.get('sortierung') == 'punkte' and not any(getattr(p, 'blind', False) for p in rows):  # a ranking would tell the others' marks
         rows.sort(key=lambda p: p.grade if p.grade is not None else (p.mean or 0), reverse=True)
     return render(request, 'admissions/audition.html', {
@@ -371,7 +370,7 @@ def audition(request, pk):
         'history': bool(Course.seen_by(person, course.pk)),
         'slots': SlotForm(person=person, course=course) if office else None,
         'stages': next_stages(course) if office else [],
-        'ready': sum(1 for p in rows if p.passed and p.study.status == Study.Status.APPLIED),
+        'ready': sum(1 for p in rows if p.passed and p.study.status == Study.Status.APPLIED and p.study_id not in invited),  # not yet at the next stage
         'missing': sum(1 for p in rows if panel.due(p)),
         'bookings': course.bookings.select_related('room'),
         'reachable': Study.reachable(person, Study.objects.filter(participations__course=course)),
@@ -401,8 +400,11 @@ def plan(request, pk):
 @require('run_auditions')
 @require_POST
 def advance(request, pk):
-    """Invite everyone who passed this stage to the next one."""
+    """Invite everyone who passed this stage to the next one, once it is closed and nobody's result can change."""
     course = get_object_or_404(request.user.within(Course.objects.all(), 'run_auditions'), pk=pk, kind=Course.Kind.AUDITION)
+    if not course.released:
+        messages.error(request, 'Erst wenn die Stufe abgeschlossen ist: bis dahin kann sich jedes Ergebnis noch ändern.')
+        return redirect(course)
     targets = list(next_stages(course))
     names = ' und '.join(f'„{t.title}“' for t in targets)
     moved = set()
@@ -485,15 +487,29 @@ def decide(request, pk):
 @require('decide_applications')
 @require_POST
 def decide_many(request):
-    """Decide the ticked applications at once, each as its results advise or all alike; each gets its Bescheid."""
+    """Decide the ticked applications at once, each as its results advise or all alike; each gets its Bescheid. First a
+    preview: who gets which, one of each in full; the Bescheide go out once it is confirmed."""
     term = get_object_or_404(Term, pk=request.POST.get('semester'))
     chosen = request.POST.get('status', '')
     if chosen and chosen not in DECISIONS:
         raise PermissionDenied
     advice = {s.pk: s.advice for s in recommendations(term, request.user)}
     ticked = set(map(int, request.POST.getlist('study')))
+    studies = request.user.within(Study.objects.filter(pk__in=ticked & advice.keys()), 'decide_applications').select_related('person', 'program', 'subject', 'start_term')
+    if not request.POST.get('bestaetigt'):
+        days, plan = Institution.get().accept_days, defaultdict(list)
+        for study in studies.order_by('person__last_name'):
+            plan[chosen or advice[study.pk]].append(study)
+        return render(request, 'admissions/decide.html', {
+            'term': term, 'chosen': chosen, 'ticked': [s.pk for group in plan.values() for s in group],
+            'groups': [
+                (VERBS[status], BESCHEIDE[status], group, group[0].wording(DECISIONS[status], frist=f'{accept_by(group[0], days):%d.%m.%Y}'))
+                for status, group in plan.items() if status
+            ],
+            'waiting': plan.get(None, []),
+        })
     decided, skipped = Counter(), 0
-    for study in request.user.within(Study.objects.filter(pk__in=ticked & advice.keys()), 'decide_applications').select_related('person', 'program', 'subject', 'start_term'):
+    for study in studies:
         if status := chosen or advice[study.pk]:
             offer(study, status)
             decided[status] += 1

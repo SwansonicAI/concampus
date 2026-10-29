@@ -183,6 +183,8 @@ class CourseForm(forms.ModelForm):
             self.initial['staff'] = [person.pk]
         if 'accompaniment' in self.fields:
             self.fields['accompaniment'].queryset = Course.objects.filter(kind=Course.Kind.LESSON, term=self.instance.term_id).order_by('title')
+        if 'after' in self.fields:  # the stages of the same intake
+            self.fields['after'].queryset = Course.objects.filter(kind=Course.Kind.AUDITION, term=self.instance.term_id).exclude(pk=self.instance.pk).order_by('title')
         if 'modules' in self.fields:
             self.fields['modules'].choices = leaf_modules()
             self.fields['programme'].initial = self.instance.pk and self.instance.modules.values_list('program', flat=True).first()
@@ -253,7 +255,7 @@ class AuditionForm(CourseForm):
     deadline = DayField(label='Bewerbungsschluss', required=False, help_text='Bis dahin laden Bewerbende Video und Unterlagen hoch.')
 
     class Meta(CourseForm.Meta):
-        fields = ['title', 'term', 'program', 'subject', 'video', 'staff', 'deadline', 'capacity', 'pass_mark', 'max_points', 'accompaniment', 'description']
+        fields = ['title', 'term', 'program', 'subject', 'video', 'after', 'staff', 'deadline', 'capacity', 'pass_mark', 'max_points', 'accompaniment', 'description']
         labels = {'staff': 'Kommission', 'capacity': 'Studienplätze'}
         help_texts = {
             'program': 'Nur bei der ersten Stufe: der Studiengang, für den man sich hier bewirbt.',

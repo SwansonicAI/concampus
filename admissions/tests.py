@@ -54,8 +54,21 @@ class DecisionTest(Seeded):
         free = min(intake.capacity, len(passed))
         self.assertEqual(passed, [Study.Status.ADMITTED] * free + [Study.Status.WAITLISTED] * (len(passed) - free))
         failed = [s.pk for s in advised if s.advice == Study.Status.REJECTED]
-        self.login('asa').post('/aufnahme/bewerbungen/entscheiden/', {'semester': term.pk, 'study': failed})
+        preview = self.login('asa').post('/aufnahme/bewerbungen/entscheiden/', {'semester': term.pk, 'study': failed})
+        self.assertIn('Rechtsbehelfsbelehrung', preview.content.decode())  # a Bescheid to read before any goes out
+        self.assertEqual(set(Study.objects.filter(pk__in=failed).values_list('status', flat=True)), {Study.Status.APPLIED})
+        self.login('asa').post('/aufnahme/bewerbungen/entscheiden/', {'semester': term.pk, 'study': failed, 'bestaetigt': '1'})
         self.assertEqual(set(Study.objects.filter(pk__in=failed).values_list('status', flat=True)), {Study.Status.REJECTED})
+
+    def test_a_bachelor_round_leads_to_bachelor_stages_once_it_is_closed(self):
+        video = Course.objects.get(title='Videostufe Violine', released=None)
+        institut = self.login('institut')
+        self.assertIn('abgeschlossen', flashes(institut.post(f'/aufnahme/pruefung/{video.pk}/weiter/', follow=True))[0])
+        video.released = timezone.now()
+        video.save()
+        institut.post(f'/aufnahme/pruefung/{video.pk}/weiter/')
+        invited = Course.objects.filter(participations__study__participations__course=video, kind='audition').exclude(pk=video.pk).distinct()
+        self.assertEqual({c.title for c in invited}, {'Eignungsprüfung Hauptfach Violine'})  # not the Master's
 
 
 class MoveUpTest(Seeded):

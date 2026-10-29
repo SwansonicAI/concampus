@@ -1,0 +1,22 @@
+{% extends base %}
+{% block title %}Bescheide prüfen{% endblock %}
+{% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Bescheide prüfen</h1>
+<p class="lead">{{ term }} · Noch ist nichts entschieden oder versandt. Erst „Bescheide versenden“ entscheidet und legt jeden Bescheid ins Postfach.</p>
+{% for verb, forms, group, wording in groups %}
+<section>
+  <h2>{{ verb }} · {{ group|length }}</h2>
+  <p>{% for s in group %}{{ s.person.name }} <small class="muted">{{ s.subject }} · {{ s.program.degree }}</small>{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>
+  <details><summary>Bescheid an {{ group.0.person }} lesen</summary><div class="panel"><h3>{{ wording.0 }}</h3>{{ wording.1|linebreaks }}</div></details>
+</section>
+{% endfor %}
+{% if waiting %}<p class="muted">Ohne Bescheid, weil die übrigen Ergebnisse im Hauptfach fehlen: {% for s in waiting %}{{ s.person.name }}{% if not forloop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+<form method="post" action="{% url 'admissions:decide_many' %}" class="actions" style="margin-top: 24px">
+  {% csrf_token %}
+  <input type="hidden" name="semester" value="{{ term.pk }}"><input type="hidden" name="status" value="{{ chosen }}"><input type="hidden" name="bestaetigt" value="1">
+  {% for pk in ticked %}<input type="hidden" name="study" value="{{ pk }}">{% endfor %}
+  {% if groups %}<button class="btn">Bescheide versenden</button>{% endif %}
+  <a class="btn ghost" href="{% url 'admissions:board' %}?semester={{ term.pk }}#entscheiden">Zurück</a>
+</form>
+{% endblock %}

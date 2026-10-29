@@ -22,20 +22,23 @@
     {% if course.capacity %}<dt>Studienplätze</dt><dd>{{ course.capacity }}</dd>{% endif %}
     <dt>{% if course.video %}Sichtung{% else %}Räume{% endif %}</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, {{ b.room }}<br>{% empty %}{% if course.video %}online, bis {{ course.deadline|date:"j. F Y"|default:"zum Abschluss" }}{% else %}noch kein Raum gebucht{% endif %}{% endfor %}</dd>
   </dl>
-  {% if office and not course.released %}
+  {% if office %}
   <div>
+    {% if not course.released %}
     <form method="post" action="{% url 'admissions:plan' course.pk %}" class="panel">
       {% csrf_token %}
       <h3>Termine vergeben</h3>
       <div class="inline">{% for field in slots %}<label>{{ field.label }}{{ field }}</label>{% endfor %}</div>
       <p style="margin: 12px 0"><button class="btn">Termine vergeben und einladen</button></p>
     </form>
+    {% endif %}
     {% if stages %}
-    <form method="post" action="{% url 'admissions:advance' course.pk %}" class="panel" style="margin-top: 16px">
+    <form method="post" action="{% url 'admissions:advance' course.pk %}" class="panel"{% if not course.released %} style="margin-top: 16px"{% endif %}>
       {% csrf_token %}
       <h3>Nächste Stufe</h3>
       <p>{% for s in stages %}<a href="{% url 'admissions:audition' s.pk %}">{{ s.title }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</p>
-      <button class="btn"{% if not ready %} disabled{% endif %}>{{ ready }} mit „bestanden“ einladen</button>
+      {% if course.released %}<button class="btn"{% if not ready %} disabled{% endif %}>{% if ready %}{{ ready }} mit „bestanden“ einladen{% else %}Alle mit „bestanden“ eingeladen{% endif %}</button>
+      {% else %}<p class="muted"><small>Eingeladen wird, sobald die Stufe abgeschlossen ist: bis dahin kann sich jedes Ergebnis noch ändern.{% if ready %} Bisher {{ ready }} mit „bestanden“.{% endif %}</small></p>{% endif %}
     </form>
     {% endif %}
   </div>

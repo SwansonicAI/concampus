@@ -104,6 +104,10 @@ class Course(Tracked, models.Model):
     )
     released = models.DateTimeField('Ergebnisse freigegeben', null=True, blank=True)
     video = models.BooleanField('Videostufe', default=False, help_text='Nur bei Eignungsprüfungen: Bewerbende reichen ein Video ein, die Kommission wertet online.')
+    after = models.ManyToManyField(
+        'self', symmetrical=False, blank=True, related_name='following', verbose_name='Folgt auf',
+        help_text='Nur bei Eignungsprüfungen: die Stufen davor; wer dort besteht, wird hierher eingeladen.',
+    )
     description = models.TextField('Beschreibung', blank=True)
 
     class Meta:

@@ -56,7 +56,7 @@
     </table>
     <div class="actions" style="margin-top: 16px">
       <select name="status" aria-label="Entscheidung"><option value="">Wie empfohlen</option>{% for status, verb in verbs.items %}<option value="{{ status }}">{{ verb }}</option>{% endfor %}</select>
-      <button class="btn" data-confirm="Entscheiden und Bescheide versenden?">Für die Angekreuzten entscheiden</button>
+      <button class="btn">Bescheide ansehen</button><small class="muted">Erst die Vorschau, dann versenden.</small>
       <small class="muted">Die Bescheide gehen sofort ins Postfach.</small>
     </div>
   </form>
