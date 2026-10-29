@@ -179,6 +179,11 @@ TEXTS = {
         NACHRICHT, 'Termin abgesagt', 'Abgesagt: {veranstaltung}', '{von} hat „{veranstaltung}“ am {termin} in {raum} abgesagt.',
         ('veranstaltung', 'termin', 'raum', 'von'),
     ),
+    'ersatz': Spec(
+        NACHRICHT, 'Ersatz in einer Kommission', 'Ersatz: {pruefung}',
+        '{von} hat Sie bestellt, in „{pruefung}“ {kandidat} an Stelle von {fuer} zu werten, die oder der befangen ist. Sie sehen und werten nur diese Person.',
+        ('pruefung', 'kandidat', 'fuer', 'von'),
+    ),
     'tag_abgesagt': Spec(
         NACHRICHT, 'Termine eines Tages abgesagt', 'Abgesagt: Ihre Termine am {tag}', '{von} hat die Termine am {tag} abgesagt:\n{termine}',
         ('tag', 'termine', 'von'),

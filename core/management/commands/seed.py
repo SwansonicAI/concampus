@@ -1946,8 +1946,9 @@ class Command(BaseCommand):
             colleague = next((e for e in jury if e != self.teachers['wendt']), None)
             marked = {(p.pk, e.pk) for p, e, _ in scores}
             if p := colleague and next((p for p in rows if p.course == video and (p.pk, colleague.pk) not in marked), None):
-                Recusal.objects.create(participation=p, examiner=colleague, reason='Privatunterricht bis Juli 2026', created=at(date(2026, 10, 20), hour=9))
-                sheets.save({}, [r for r in sheets.sheet(video)[1] if r.pk == p.pk], [], decide=False)
+                substitute = Person.objects.filter(teaching__kind=Course.Kind.LESSON, teaching__subject=video.subject).exclude(pk__in=[e.pk for e in jury]).first()
+                Recusal.objects.create(participation=p, examiner=colleague, reason='Privatunterricht bis Juli 2026', substitute=substitute, created=at(date(2026, 10, 20), hour=9))
+                sheets.save({}, [r for r in sheets.sheet(video)[1] if r.pk == p.pk], [], decide=False)  # waits for the substitute
         if not finished:  # those with a time have their invitation
             for p in Participation.objects.filter(course__term=term, course__kind=Course.Kind.AUDITION, course__released=None, slot__isnull=False).select_related('course', 'study__person', 'study__program', 'study__subject', 'study__start_term'):
                 invite(p)

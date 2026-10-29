@@ -25,7 +25,7 @@ from core.models import Message, Office, Term
 from core.text import matching
 from core.views import without_term
 from courses import panel
-from courses.forms import AddForm, ExamForm, SlotForm, ThesisForm
+from courses.forms import AddForm, ExamForm, SlotForm, ThesisForm, substitutes
 from courses.views import credited
 from courses.models import Course, Participation, attempts
 from curriculum.models import Module, Program
@@ -157,18 +157,23 @@ def index(request):
 def exam(request, pk):
     person = request.user
     course = get_object_or_404(Course.objects.select_related('term', 'subject'), pk=pk, kind__in=EXAMS)
-    office, decide = person.may('manage_exams', course), person.may('decide_results', course)
-    if not (office or decide or course.staff.filter(pk=person.pk).exists()):
-        raise PermissionDenied
-    staff, rows = panel.sheet(course)
-    columns, refused = staff if decide else [person], None
+    office, decide, member = person.may('manage_exams', course), person.may('decide_results', course), course.staff.filter(pk=person.pk).exists()
+    if not (office or decide or member or course.participations.filter(recusals__substitute=person).exists()):
+        raise PermissionDenied('Eine Prüfung sehen ihre Prüfenden und die Ämter, die Prüfungen planen oder Ergebnisse festsetzen.')
+
+    def sheet():  # a substitute sees only whom they mark
+        staff, rows = panel.sheet(course)
+        return staff, rows if office or decide or member else panel.substituting(rows, person)
+
+    staff, rows = sheet()
+    columns, refused = panel.scorers(staff, rows) if decide else [person], None
     if request.method == 'POST':
         if course.released:
             raise PermissionDenied
         try:
             panel.save(request.POST, rows, columns, decide=decide)
         except panel.Refused as error:  # shown with what was typed, by its row
-            refused, (staff, rows) = error, panel.sheet(course)
+            refused, (staff, rows) = error, sheet()
             messages.error(request, 'Nichts gespeichert. Bitte die markierte Zeile berichtigen.')
         else:
             messages.success(request, 'Gutachten gespeichert.' if course.kind == Course.Kind.THESIS else 'Ergebnisse gespeichert.')
@@ -186,8 +191,9 @@ def exam(request, pk):
         'columns': [e.pk for e in columns],
         'panel': course.kind in Course.PANEL,
         'office': office,
-        'decide': decide, 'rule': panel.rule(rows),
+        'decide': decide, 'rule': panel.rule(rows), 'composer': office,
         'recusable': [] if course.released else panel.recusable(rows, person),
+        'candidates': substitutes(course) if office and any(p.vacant for p in rows) else [],
         'history': bool(Course.seen_by(person, course.pk)),
         'slots': SlotForm(request.GET or None, person=person, course=course) if office and not held else None,
         'modules': credited(course),

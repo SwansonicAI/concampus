@@ -116,9 +116,18 @@ class ExamsConfig(Tile, AppConfig):
             for thesis in person.within(late, 'manage_exams').prefetch_related('participations__study__person'):
                 who = ', '.join(p.study.person.last_name for p in thesis.participations.all())
                 found.append(task(f'Abschlussarbeit nicht abgegeben: {who}, {thesis.title}', thesis.get_absolute_url(), thesis.deadline))
+        if 'manage_exams' in person.roles:
+            vacant = person.within(Course.objects.filter(
+                kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], released=None, participations__recusals__isnull=False, participations__recusals__substitute=None,
+            ), 'manage_exams')
+            for exam in vacant.distinct():
+                found.append(task(f'{exam.title}: Ersatz für eine befangene Person bestellen', exam.get_absolute_url()))
         if 'teacher' in person.roles:
+            standing_in = Participation.objects.filter(recusals__substitute=person, course__released=None).exclude(scores__examiner=person).exclude(course__kind=Course.Kind.AUDITION)
+            for row in standing_in.values('course', 'course__title').annotate(n=Count('pk')):
+                found.append(task(f'{row["course__title"]}: Ihre Wertung als Ersatz fehlt für {plural(row["n"], "Teilnahme", "Teilnahmen")}', reverse('exams:exam', args=[row['course']])))
             for exam in exams.filter(staff=person, held__lte=now):
-                missing = exam.participations.exclude(scores__examiner=person).count()
+                missing = exam.participations.exclude(scores__examiner=person).exclude(recusals__examiner=person).count()
                 if missing:
                     found.append(task(f'{exam.title}: Ihre Wertung fehlt für {plural(missing, "Teilnahme", "Teilnahmen")}', exam.get_absolute_url()))
             handed = Q(participations__study__documents__kind='abschlussarbeit', participations__study__documents__created__gte=F('participations__created'))

@@ -1,7 +1,7 @@
 from collections import Counter
 
 from django.apps import AppConfig
-from django.db.models import Prefetch
+from django.db.models import Count, Prefetch, Q
 from django.urls import reverse
 from django.utils import timezone
 
@@ -55,9 +55,11 @@ class AdmissionsConfig(Tile, AppConfig):
 
         found = []
         if 'juror' in person.roles:
-            open_ = person.teaching.filter(kind=Course.Kind.AUDITION, released=None)
+            open_ = Course.objects.filter(Q(staff=person) | Q(participations__recusals__substitute=person), kind=Course.Kind.AUDITION, released=None)
             for course in open_.exclude(participations=None).distinct():
-                missing = course.participations.exclude(scores__examiner=person)
+                missing = course.participations.exclude(scores__examiner=person).exclude(recusals__examiner=person)
+                if not course.staff.filter(pk=person.pk).exists():  # a substitute marks whom they stand in for
+                    missing = missing.filter(recusals__substitute=person)
                 if course.video:  # only what has a video to watch
                     missing = missing.filter(study__documents__kind__condition='video').distinct()
                 missing = missing.count()
@@ -65,6 +67,11 @@ class AdmissionsConfig(Tile, AppConfig):
                 if missing and started:
                     url = reverse('admissions:review', args=[course.pk]) if course.video else course.get_absolute_url()
                     found.append(task(f'{course.title}: Ihre Wertung fehlt für {plural(missing, "Bewerbung", "Bewerbungen")}', url, course.deadline))
+        if 'run_auditions' in person.roles:
+            vacant = Q(participations__recusals__isnull=False, participations__recusals__substitute=None)
+            courses = person.within(Course.objects.filter(vacant, kind=Course.Kind.AUDITION, released=None), 'run_auditions')
+            for course in courses.annotate(n=Count('participations__recusals', filter=vacant, distinct=True)):
+                found.append(task(f'{course.title}: Ersatz bestellen für {plural(course.n, "Befangenheit", "Befangenheiten")}', course.get_absolute_url()))
         from .views import accept_by, checklist, document_types, incomplete, owed, stages, uploads_open, vacancies, verdict
 
         if 'decide_applications' in person.roles:

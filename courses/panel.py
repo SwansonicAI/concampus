@@ -75,28 +75,34 @@ def result(p, values):
 
 
 def sheet(course):
-    """(staff, participations). Each participation gets `marks` [(examiner, value)], `recused` {examiner pk: reason} of
-    those standing back for fear of bias, `missing` (the others still to mark), `reports` {examiner pk: Gutachten},
-    `mean` of the marks so far, `auto` (the result once all have marked), `third` (a thesis waiting for a third
-    Gutachten) and `override` (a grade set by hand instead); in an exam also `attempt`, which try this is, and `last`,
-    whether the Prüfungsordnung allows no further one."""
+    """(staff, participations). Each participation gets `marks` [(who marks in each examiner's place, value)]: the
+    examiner, or the substitute of one standing back for fear of bias; `recused` {examiner pk: reason}, `substitutes`
+    {examiner pk: substitute}, `vacant` (who stands back with no substitute yet), `missing` (who still has to mark),
+    `reports` {examiner pk: Gutachten}, `mean` of the marks so far, `auto` (the result once every place has marked),
+    `third` (a thesis waiting for a third Gutachten) and `override` (a grade set by hand instead); in an exam also
+    `attempt`, which try this is, and `last`, whether the Prüfungsordnung allows no further one."""
     staff = list(course.staff.all())
     rows = list(
         course.participations.select_related('study__person', 'study__program', 'study__subject', 'module')
-        .prefetch_related('scores', 'recusals')
+        .prefetch_related('scores', 'recusals__substitute')
     )
     panel = course.kind in Course.PANEL
     for p in rows:
         p.course = course
         values = {s.examiner_id: s.value for s in p.scores.all()}
         p.reports = {s.examiner_id: s.report for s in p.scores.all()}
-        p.recused = {r.examiner_id: r.reason for r in p.recusals.all()}
-        p.marks = [(e, values.get(e.pk)) for e in staff]
+        recusals = {r.examiner_id: r for r in p.recusals.all()}
+        p.recused = {pk: r.reason for pk, r in recusals.items()}
+        p.substitutes = {pk: r.substitute for pk, r in recusals.items() if r.substitute}
+        p.recusal_pks = {pk: r.pk for pk, r in recusals.items()}
+        p.marks = [(e, values.get(e.pk)) for e in (p.substitutes.get(e.pk, e) for e in staff)]
+        p.vacant = [e for e in staff if e.pk in p.recused and e.pk not in p.substitutes]
         p.missing = [e for e, v in p.marks if v is None and e.pk not in p.recused]
         given = [v for e, v in p.marks if v is not None and e.pk not in p.recused]
+        complete = panel and given and not p.missing and not p.vacant
         p.mean = mean(given, rounding(p))
-        p.third = panel and given and not p.missing and disputed(p, given)
-        p.auto = result(p, given) if panel and given and not p.missing else None
+        p.third = complete and disputed(p, given)
+        p.auto = result(p, given) if complete else None
         p.override = p.grade if p.grade is not None and p.grade != p.auto and not p.remark else None
     if course.kind in (Course.Kind.EXAM, Course.Kind.THESIS):
         tried = Counter(
@@ -129,7 +135,10 @@ def due(p):
 def gaps(rows):
     """Why a sheet cannot be closed yet: whose results are missing, and whose marks for them; '' once all are in."""
     names = [
-        p.study.person.last_name + (f' (fehlt: {", ".join(e.last_name for e in p.missing)})' if p.missing else ' (drittes Gutachten nötig)' if p.third else '')
+        p.study.person.last_name + (
+            f' (fehlt: {", ".join([e.last_name for e in p.missing] + [f"Ersatz für {e.last_name}" for e in p.vacant])})' if p.missing or p.vacant
+            else ' (drittes Gutachten nötig)' if p.third else ''
+        )
         for p in rows if due(p)
     ]
     return f'Noch ohne Ergebnis: {", ".join(names[:8])}{f" und {len(names) - 8} weitere" if len(names) > 8 else ""}.' if names else ''
@@ -150,8 +159,18 @@ def blind(rows, examiner):
     judges on their own; once all have, the row is `locked` to them and only the office that decides changes it."""
     for p in rows:
         on = any(e == examiner for e, _ in p.marks)
-        p.blind = on and bool(p.missing)
-        p.locked = on and not p.missing
+        p.blind = on and bool(p.missing or p.vacant)
+        p.locked = on and not p.blind
+
+
+def scorers(staff, rows):
+    """Everyone who marks on the sheet: the panel and the substitutes in it, for the office entering marks for them."""
+    return list(dict.fromkeys([*staff, *(s for p in rows for s in p.substitutes.values())]))
+
+
+def substituting(rows, person):
+    """The rows a substitute marks in, the only ones they see."""
+    return [p for p in rows if person in p.substitutes.values()]
 
 
 def recusable(rows, examiner):
@@ -191,10 +210,10 @@ def marks(post, p, columns, decide):
     values = {e.pk: v for e, v in p.marks}
     for e in columns:  # only what changed, so the history shows who changed which mark
         key = f'score-{p.pk}-{e.pk}'
-        if key not in post or e.pk in p.recused:
+        if key not in post or e.pk not in values or e.pk in p.recused:  # whoever stands back, or marks elsewhere, sends nothing here
             continue
         score, value, report = scores.get(e.pk), grade(post[key], p.course), post.get(f'report-{p.pk}-{e.pk}')
-        if not decide and not p.missing and value != values[e.pk]:
+        if not decide and not p.missing and not p.vacant and value != values[e.pk]:
             raise Refused('Alle haben gewertet, die Wertungen sind gesperrt. Ändern kann sie jetzt nur das zuständige Amt.')
         if p.course.kind == Course.Kind.THESIS and value is not None and not (report if report is not None else score.report if score else '').strip():
             raise Refused('Zur Note gehört das schriftliche Gutachten.')
@@ -211,7 +230,7 @@ def marks(post, p, columns, decide):
     given = [v for pk, v in values.items() if pk not in p.recused]
     if p.course.max_points is not None and any(v > p.course.max_points for v in given if v is not None):
         raise InvalidOperation
-    auto = result(p, given) if given and None not in given else None
+    auto = result(p, given) if given and None not in given and not p.vacant else None
     override = number(post.get(f'grade-{p.pk}')) if decide else p.override
     p.grade = override if override is not None else auto
     p.passed = p.course.passes(p.grade) if p.grade is not None else None

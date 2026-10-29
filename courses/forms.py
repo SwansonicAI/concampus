@@ -120,6 +120,12 @@ def teachers(subject=None, institutes=(), module=()):
     return [(label, people) for (_, label), people in sorted(groups.items())]
 
 
+def substitutes(course):
+    """Who may mark in place of an examiner who stands back: teachers off the panel, those of the subject first."""
+    staff = set(course.staff.values_list('pk', flat=True))
+    return [(label, [(pk, name) for pk, name in people if pk not in staff]) for label, people in teachers(course.subject)]
+
+
 def leaf_modules(exams=False):
     """Modules a course can count for, or only the exams of the plans, as choices grouped by programme in study-plan order."""
     groups = defaultdict(list)

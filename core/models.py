@@ -356,7 +356,7 @@ class Person(Tracked, AbstractUser):
         kinds = set(self.teaching.values_list('kind', flat=True).distinct())
         if kinds:
             roles.add('teacher')
-        if 'audition' in kinds:
+        if 'audition' in kinds or self.substituting.filter(participation__course__kind='audition').exists():  # a substitute too
             roles.add('juror')
         return roles
 

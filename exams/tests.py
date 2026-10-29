@@ -65,7 +65,7 @@ class ExamTest(Seeded):
             examiner.post(f'/pruefungen/{resit.pk}/', {f'score-{first}-{hallmann.pk}': changed})
             self.assertEqual(resit.participations.get(pk=first).scores.get(examiner=hallmann).value, Decimal('1.7'))
 
-    def test_who_stands_back_for_bias_gives_no_mark_and_the_others_decide(self):
+    def test_who_stands_back_for_bias_is_replaced_so_all_are_marked_by_as_many(self):
         resit = Course.objects.get(title__contains='Wiederholung')
         hallmann = resit.staff.get(last_name='Hallmann')
         examiner = Client()
@@ -73,11 +73,18 @@ class ExamTest(Seeded):
         first = resit.participations.first()
         examiner.post(f'/lehre/{resit.pk}/befangen/', {'participation': first.pk, 'reason': 'Privatunterricht'})
         first.refresh_from_db()
-        others = list(first.scores.values_list('value', flat=True))
-        self.assertEqual(first.grade, mean(others, first.study.program.mean_rounding))
-        self.login('pruefungsamt').post(f'/lehre/{resit.pk}/befangen/', {'aufheben': f'{first.pk}-{hallmann.pk}'})
+        self.assertIsNone(first.grade)  # the others alone would be one fewer than for everyone else (EPO § 3 Abs. 5)
+        recusal, office = first.recusals.get(), self.login('pruefungsamt')
+        substitute = Person.teachers().exclude(pk__in=resit.staff.values('pk')).first()
+        office.post(f'/lehre/{resit.pk}/befangen/', {'ersetzen': recusal.pk, f'ersatz-{recusal.pk}': substitute.pk})
+        standing_in = Client()
+        standing_in.force_login(substitute)
+        sheet = standing_in.get(f'/pruefungen/{resit.pk}/')
+        self.assertEqual([p.pk for p in sheet.context['rows']], [first.pk])  # whom they mark, nobody else
+        standing_in.post(f'/pruefungen/{resit.pk}/', {f'score-{first.pk}-{substitute.pk}': '2,0'})
         first.refresh_from_db()
-        self.assertIsNone(first.grade)
+        marks = list(first.scores.values_list('value', flat=True))
+        self.assertEqual((len(marks), first.grade), (resit.staff.count(), mean(marks, first.study.program.mean_rounding)))
 
     def test_results_follow_the_panel_then_lock_on_release(self):
         resit = Course.objects.get(title__contains='Wiederholung')

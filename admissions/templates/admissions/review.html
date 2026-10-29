@@ -11,7 +11,7 @@
   <div>{% for d in videos %}{% include "admissions/_document.html" %}{% empty %}<p class="fail">Kein Video eingereicht.</p>{% endfor %}</div>
   <div>
     {% if juror and user.pk in p.recused %}
-    <p class="panel">Sie haben Befangenheit angezeigt ({{ p.recused|of:user.pk }}) und werten diese Bewerbung nicht.</p>
+    <p class="panel">Sie haben Befangenheit angezeigt ({{ p.recused|of:user.pk }}) und werten diese Bewerbung nicht; an Ihrer Stelle wertet ein Ersatz, den das Amt bestellt.</p>
     {% elif juror and not course.released and not p.locked %}
     <form method="post" class="panel">
       {% csrf_token %}

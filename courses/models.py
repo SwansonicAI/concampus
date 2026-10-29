@@ -136,6 +136,11 @@ class Course(Tracked, models.Model):
         )
         return set(found.values_list('pk', flat=True))
 
+    def composes(self, person):
+        """Whether the person makes up the course's panel, and appoints a substitute for whoever stands back: the office
+        that runs auditions, or the one that manages exams."""
+        return person.may('run_auditions' if self.kind == self.Kind.AUDITION else 'manage_exams', self)
+
     @classmethod
     def keepers(cls, record):
         """By its kind: teaching is for the office that manages courses, exams for those that manage or decide them,
@@ -343,7 +348,8 @@ class Score(Judged, Tracked, models.Model):
 
 class Recusal(Judged, Tracked, models.Model):
     """An examiner standing back from one candidate for fear of bias (Besorgnis der Befangenheit, § 21 VwVfG), say as
-    their former private teacher: they give no mark, and the result is the others' mean."""
+    their former private teacher: they give no mark, and a substitute the office appoints marks in their place, so
+    everyone is marked by as many (EPO § 3 Abs. 5)."""
 
     owner = 'participation.study.person_id'
     capabilities = ('decide_results', 'run_auditions')
@@ -352,6 +358,10 @@ class Recusal(Judged, Tracked, models.Model):
     participation = models.ForeignKey(Participation, models.CASCADE, related_name='recusals', verbose_name='Teilnahme')
     examiner = models.ForeignKey(Person, models.CASCADE, related_name='recusals', verbose_name='Prüfer:in')
     reason = models.CharField('Grund', max_length=200, help_text='Z. B. „Privatunterricht bis 2025“.')
+    substitute = models.ForeignKey(
+        Person, models.SET_NULL, null=True, blank=True, related_name='substituting', verbose_name='Ersatz',
+        help_text='Wertet an der Stelle, so werten alle Kandidat:innen gleich viele (EPO § 3 Abs. 5).',
+    )
     created = models.DateTimeField('Angezeigt am', default=timezone.now)
 
     class Meta:

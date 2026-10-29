@@ -24,7 +24,7 @@ from core.history import tables
 from core.models import Institution, Message, Term
 from core.text import matching
 from courses import panel
-from courses.forms import SlotForm
+from courses.forms import SlotForm, substitutes
 from courses.models import Course, Participation
 from rooms.views import ics
 from curriculum.models import Subject
@@ -259,7 +259,8 @@ def board(request):
 @require('teacher')
 def juries(request):
     auditions = (
-        request.user.teaching.filter(kind=Course.Kind.AUDITION).select_related('term', 'subject')
+        Course.objects.filter(Q(staff=request.user) | Q(participations__recusals__substitute=request.user), kind=Course.Kind.AUDITION).distinct()
+        .select_related('term', 'subject')
         .annotate(date=Min('bookings__start'), size=Count('participations', distinct=True))
         .order_by('-term__start', F('deadline').asc(nulls_last=True), F('date').asc(nulls_last=True), 'title')
     )
@@ -331,18 +332,23 @@ def blank(request, pk, kind):
 def audition(request, pk):
     person = request.user
     course = get_object_or_404(Course.objects.select_related('term', 'program', 'subject'), pk=pk, kind=Course.Kind.AUDITION)
-    office = person.may('run_auditions', course)
-    if not (office or course.staff.filter(pk=person.pk).exists()):
-        raise PermissionDenied
-    staff, rows = panel.sheet(course)
-    columns, refused = staff if office else [person], None
+    office, member = person.may('run_auditions', course), course.staff.filter(pk=person.pk).exists()
+    if not (office or member or course.participations.filter(recusals__substitute=person).exists()):
+        raise PermissionDenied('Eine Eignungsprüfung sehen ihre Kommission und das Amt, das sie durchführt.')
+
+    def sheet():  # a substitute sees only whom they mark
+        staff, rows = panel.sheet(course)
+        return staff, rows if office or member else panel.substituting(rows, person)
+
+    staff, rows = sheet()
+    columns, refused = panel.scorers(staff, rows) if office else [person], None
     if request.method == 'POST':
         if course.released:
             raise PermissionDenied
         try:
             panel.save(request.POST, rows, columns, decide=office)
         except panel.Refused as error:  # shown with what was typed, by its row
-            refused, (staff, rows) = error, panel.sheet(course)
+            refused, (staff, rows) = error, sheet()
             messages.error(request, 'Nichts gespeichert. Bitte die markierte Zeile berichtigen.')
         else:
             messages.success(request, 'Wertungen gespeichert.')
@@ -358,8 +364,9 @@ def audition(request, pk):
         'staff': staff,
         'rows': rows, 'timed': any(p.slot for p in rows), 'noted': any(p.note for p in rows),
         'columns': [e.pk for e in columns],
-        'office': office, 'rule': panel.rule(rows),
+        'office': office, 'rule': panel.rule(rows), 'composer': office,
         'recusable': [] if course.released else panel.recusable(rows, person),
+        'candidates': substitutes(course) if office and any(p.vacant for p in rows) else [],
         'history': bool(Course.seen_by(person, course.pk)),
         'slots': SlotForm(person=person, course=course) if office else None,
         'stages': next_stages(course) if office else [],
@@ -683,10 +690,13 @@ def review(request, pk):
     """Sichtung: the video round one application at a time. Watch, score, on to the next without a score of one's own."""
     person = request.user
     course = get_object_or_404(Course.objects.select_related('term', 'subject', 'program'), pk=pk, kind=Course.Kind.AUDITION, video=True)
-    juror = course.staff.filter(pk=person.pk).exists()
+    member = course.staff.filter(pk=person.pk).exists()
+    juror = member or course.participations.filter(recusals__substitute=person).exists()
     if not (juror or person.may('run_auditions', course)):
-        raise PermissionDenied
+        raise PermissionDenied('Die Videos sichten die Kommission und das Amt, das die Eignungsprüfung durchführt.')
     _, everyone = panel.sheet(course)
+    if juror and not member:  # a substitute watches only whom they mark
+        everyone = panel.substituting(everyone, person)
     filmed = set(Document.objects.filter(study__in=[p.study_id for p in everyone], kind__condition=Condition.VIDEO).values_list('study', flat=True))
     rows = [p for p in everyone if p.study_id in filmed]  # nothing to watch yet: not in the jury's way
     if not rows:

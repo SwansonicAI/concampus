@@ -336,18 +336,33 @@ def coach(request, pk):
 
 @require_POST
 def recuse(request, pk):
-    """An examiner stands back from a candidate before marking them, giving the reason; the office that decides the
-    results (for auditions, the one that runs them) lifts it again. The result follows from the others' marks."""
+    """An examiner stands back from a candidate before marking them, giving the reason. The office that makes up the
+    panel appoints a substitute in their place, or lifts it again. The result waits for every place to be marked."""
     course = get_object_or_404(Course, pk=pk, kind__in=Course.PANEL, released=None)
     person = request.user
-    office = person.may('run_auditions' if course.kind == Course.Kind.AUDITION else 'decide_results', course)
+    office = course.composes(person)
     overrides = {p.pk: p.override for p in panel.sheet(course)[1]}  # a grade set by hand stays; one that was the mean follows the marks
     if lifted := request.POST.get('aufheben', ''):
         participation, _, examiner = lifted.partition('-')
         if not office:
-            raise PermissionDenied
+            raise PermissionDenied('Eine Befangenheit hebt nur das Amt auf, das die Kommission zusammenstellt.')
         Recusal.objects.filter(participation__course=course, participation=participation, examiner=examiner).delete()
         participation, done = int(participation), 'Befangenheit aufgehoben.'
+    elif replaced := request.POST.get('ersetzen', ''):
+        if not office:
+            raise PermissionDenied('Einen Ersatz bestellt nur das Amt, das die Kommission zusammenstellt.')
+        recusal = get_object_or_404(Recusal.objects.select_related('participation__study__person', 'examiner'), pk=replaced, participation__course=course)
+        substitute = Person.teachers().exclude(pk__in=course.staff.values('pk')).filter(pk=request.POST.get(f'ersatz-{recusal.pk}') or None).first()
+        if substitute is None:
+            messages.error(request, 'Bitte einen Ersatz wählen.')
+            return redirect(course)
+        recusal.substitute = substitute
+        recusal.save(update_fields=['substitute'])
+        texts.send(
+            'ersatz', substitute, course.get_absolute_url(), pruefung=course.title, kandidat=recusal.participation.study.person,
+            fuer=recusal.examiner, von=person,
+        )
+        participation, done = recusal.participation_id, f'{substitute} wertet {recusal.participation.study.person} an Stelle von {recusal.examiner}.'
     else:
         participation = get_object_or_404(course.participations.exclude(scores__examiner=person), pk=request.POST.get('participation'))
         reason = request.POST.get('reason', '').strip()[:200]

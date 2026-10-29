@@ -65,8 +65,9 @@ step of the scale (1,0 to 4,0 by 0,3, or 5,0); with several examiners the grade 
 between the steps (HfM Weimar RPSO 2026, § 15).
 
 An examiner who fears bias towards a candidate (Besorgnis der Befangenheit, § 21 VwVfG), say as their former private
-teacher, says so with a reason before marking them (`courses.Recusal`); the others' mean decides. The reason shows to
-the panel and the office on the sheet; only the office lifts it.
+teacher, says so with a reason before marking them (`courses.Recusal`). The office that makes up the panel appoints a
+substitute, so everyone is marked by as many (EPO § 3 Abs. 5); the substitute sees and marks only that candidate. The
+reason shows to the panel and the office on the sheet; only the office lifts it.
 
 Gutachten on a thesis (`Score.report`) belong to tier 2. Each Gutachter:in sees their own until all are in, then all;
 the office that decides results sees them throughout. Candidates see them on request (Einsicht, RPSO 2026 § 22), not

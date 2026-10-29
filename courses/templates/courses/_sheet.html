@@ -32,12 +32,14 @@
         {% if noted %}<td class="mid"><small title="{{ p.note }}">{{ p.note|truncatechars:42 }}</small></td>{% endif %}
         {% for e, value in p.marks %}
         <td class="num mid">
-          {% if e.pk in p.recused %}<small class="muted" title="Befangen: {{ p.recused|of:e.pk }}">befangen</small>{% if decide and not course.released %} <button class="link" form="befangen" formaction="{% url 'courses:recuse' course.pk %}" formnovalidate name="aufheben" value="{{ p.pk }}-{{ e.pk }}" data-confirm="Aufheben?" title="Befangenheit aufheben"><small>×</small></button>{% endif %}
+          {% if e.pk in p.recused %}<small class="muted" title="Befangen: {{ p.recused|of:e.pk }}">befangen, Ersatz fehlt</small>{% if composer and not course.released %} <button class="link" form="befangen" formaction="{% url 'courses:recuse' course.pk %}" formnovalidate name="aufheben" value="{{ p.pk }}-{{ e.pk }}" data-confirm="Aufheben?" title="Befangenheit aufheben"><small>×</small></button>
+          <br><select class="cell" form="befangen" name="ersatz-{{ p.recusal_pks|of:e.pk }}" aria-label="Ersatz für {{ e.last_name }}"><option value="">Ersatz …</option>{% for label, people in candidates %}<optgroup label="{{ label }}">{% for pk, name in people %}<option value="{{ pk }}">{{ name }}</option>{% endfor %}</optgroup>{% endfor %}</select> <button class="link" form="befangen" formaction="{% url 'courses:recuse' course.pk %}" formnovalidate name="ersetzen" value="{{ p.recusal_pks|of:e.pk }}"><small>bestellen</small></button>{% endif %}
           {% elif e.pk in columns and not course.released and not p.locked and course.kind != 'thesis' %}
           {% if course.points or course.kind == 'recognition' %}<input class="cell{% if p.error %} bad{% endif %}" type="text" inputmode="decimal" name="score-{{ p.pk }}-{{ e.pk }}" value="{{ value|mark }}" aria-label="Wertung {{ e.last_name }}">
           {% else %}<select class="cell{% if p.error %} bad{% endif %}" name="score-{{ p.pk }}-{{ e.pk }}" aria-label="Note {{ e.last_name }}"><option value="">–</option>{% for s in steps %}<option{% if value|mark == s %} selected{% endif %}>{{ s }}</option>{% endfor %}{% if value is not None and value|mark not in steps %}<option selected>{{ value|mark }}</option>{% endif %}</select>{% endif %}
           {% elif p.blind %}<span class="muted" title="Zu sehen, sobald alle gewertet haben">·</span>
           {% else %}{{ value|mark }}{% endif %}
+          {% if e not in staff %}<br><small class="muted" title="Ersatz für eine befangene Person">Ersatz: {{ e.last_name }}</small>{% endif %}
         </td>
         {% endfor %}
         <td class="num mid">{% if p.blind %}<span class="muted">·</span>{% else %}<b>{% if p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</b>{% if p.grade is None and p.mean is not None and not p.third %}<span class="muted" title="Noch nicht alle Wertungen">{{ p.mean }}…</span>{% endif %}{% if p.override is not None %} <small class="muted" title="Von Hand festgelegt">✎</small>{% endif %}{% endif %}</td>
