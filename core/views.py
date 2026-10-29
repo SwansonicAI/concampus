@@ -167,8 +167,9 @@ SHOWN = 300  # rows a long list shows; filters narrow it, exports have all
 
 
 def preview(request, title, groups, send, back, notes=()):
-    """Bescheide before they go out: who gets which, one of each in full. Sending posts the same form again, confirmed
-    (`bestaetigt`). `groups`: (heading, the people, (subject, body) of one Bescheid)."""
+    """Bescheide before they go out, or a choice before it holds: who gets which Bescheid, one of each in full, and what
+    to know first. Sending posts the same form again, confirmed (`bestaetigt`). `groups`: (heading, the people, (subject,
+    body) of one Bescheid)."""
     fields = [(name, value) for name in request.POST if name not in ('csrfmiddlewaretoken', 'bestaetigt') for value in request.POST.getlist(name)]
     return render(request, 'core/preview.html', {'title': title, 'groups': groups, 'send': send, 'back': back, 'notes': notes, 'fields': fields})
 

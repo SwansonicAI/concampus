@@ -182,7 +182,7 @@ def rule(rows):
         return 'Das Mittel wird je nach Prüfungsordnung auf eine Nachkommastelle gerundet oder nach ihr abgeschnitten.'
     if rows and rows[0].course.kind == Course.Kind.AUDITION:
         return 'Das Mittel wird nach der ersten Nachkommastelle abgeschnitten, ohne Rundung (Eignungsprüfungsordnung § 6 Abs. 4).'
-    return 'Das Mittel wird nach der ersten Nachkommastelle abgeschnitten, ohne Rundung.' if Rounding.CUT in found else 'Das Mittel wird auf eine Nachkommastelle kaufmännisch gerundet.'
+    return 'Das Mittel wird nach der ersten Nachkommastelle abgeschnitten, ohne Rundung.' if Rounding.CUT in found else 'Das Mittel wird auf eine Nachkommastelle kaufmännisch gerundet (RPSO § 15 Abs. 2).'
 
 
 def retype(rows, post, error):
@@ -214,8 +214,8 @@ def marks(post, p, columns, decide, correct, by=None):
         if value is None and (report or '').strip():
             raise Refused('Bitte zum Gutachten die Note wählen.')
         copied = by if by and by.pk != e.pk and value != values[e.pk] else None
-        if copied and not correct and p.course.kind == Course.Kind.EXAM and not p.course.protocol:
-            raise Refused('Erst das unterschriebene Protokoll hochladen; danach lassen sich die Wertungen der Prüfenden übertragen.')
+        if copied and not correct and p.course.kind == Course.Kind.EXAM and not p.course.protocol_received:
+            raise Refused('Erst den Eingang des unterschriebenen Protokolls verbuchen; danach lassen sich die Wertungen der Prüfenden übertragen.')
         values[e.pk] = value
         if score is None and value is not None:
             new.append(Score(participation=p, examiner=e, value=value, report=report or '', entered_by=copied))

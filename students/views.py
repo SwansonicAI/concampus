@@ -309,18 +309,34 @@ def decides(person, study):
 
 @require_POST
 def focus(request, pk):
-    """The Schwerpunkt: the student's choice, theirs to change until it begins; the office records or changes it any time."""
-    study = get_object_or_404(Study, pk=pk, status=Study.Status.ENROLLED)
+    """The Schwerpunkt: the student's choice, theirs to change until it begins; the office records or changes it any time,
+    with its ground, by Bescheid. First a confirmation naming it and the courses under way that count for another."""
+    study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term'), pk=pk, status=Study.Status.ENROLLED)
     office = decides(request.user, study)
     if not (office or study.person == request.user):
         raise PermissionDenied
     chosen = next((o for o in (study.program.choices() if office else study.options()) if str(o.pk) == request.POST.get('focus')), None)
+    reason = request.POST.get('reason', '').strip()[:200]
     if chosen is None:
         messages.error(request, 'Die Wahl lässt sich hier nicht mehr ändern.' if study.focus_id else 'Bitte eine der Möglichkeiten wählen.')
+    elif office and not reason:
+        messages.error(request, 'Bitte den Grund angeben, etwa die Erklärung oder den Antrag, nach dem eingetragen wird.')
+    elif not request.POST.get('bestaetigt'):
+        chosen_by = study.program.chosen_by()
+        aside = [  # course work under way that counts for another Schwerpunkt
+            f'{p.course.title} zählt für {chosen_by[p.module_id].title}, nicht für {chosen.title}.'
+            for p in study.participations.filter(course__term=Term.current()).select_related('course') if p.module_id in chosen_by and chosen_by[p.module_id].pk != chosen.pk
+        ]
+        later = 'Ändern lässt sie sich danach nur über ' + (Office.holding('decide_results', study.program) or 'die Hochschule') + '.'
+        return preview(request, f'{chosen.choice.title}: {chosen.title}', [], 'Eintragen' if office else 'Verbindlich wählen', study.get_absolute_url(), aside + [later] * (not office))
     else:
         study.focus = chosen
         study.save(update_fields=['focus'])
-        messages.success(request, f'Gewählt: {chosen.title}.')
+        if office:
+            study.notify('schwerpunkt_eingetragen', study.get_absolute_url(), schwerpunkt=chosen.title, grund=reason)
+        else:
+            texts.send('schwerpunkt', study.person, study.get_absolute_url(), studiengang=study.program.title, schwerpunkt=chosen.title)
+        messages.success(request, f'Eingetragen: {chosen.title}. Bescheid versandt.' if office else f'Gewählt: {chosen.title}. Die Bestätigung liegt in Ihrem Postfach.')
     return redirect(study)
 
 

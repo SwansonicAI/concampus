@@ -134,6 +134,9 @@ class BookingRulesTest(Seeded):
         self.refused(self.book(**times(start + timedelta(hours=1), 240)), 'höchstens 4 Stunden am Tag')
         self.assertEqual(flashes(self.book(**times(slot(1, 45), 45), follow=True)), ['Buchung gespeichert. Sie beginnt in weniger als 3 Stunden und zählt deshalb nicht zu Ihren 4 Stunden am Tag.'])
 
+    def test_free_rooms_for_an_hour(self):
+        self.assertTrue(self.login('student').get('/raeume/finden/', {'day': 'morgen', 'start': '10:00', 'end': '11:00'}).context['rooms'])
+
     def test_rooms_and_categories_students_may_not_book(self):
         self.refused(self.book(room=Room.objects.get(name='Festsaal').pk, **times(slot(5))), 'gültige Auswahl')
         self.refused(self.book(room=Room.objects.get(name='HzH 003').pk, **times(slot(5))), 'gültige Auswahl')

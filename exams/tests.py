@@ -219,7 +219,7 @@ class ThesisTest(Seeded):
         p = Participation.objects.get(study=study, course__kind='thesis')
         student = Client()
         student.force_login(study.person)
-        student.post(f'/pruefungen/teilnahme/{p.pk}/abgabe/', {'file': SimpleUploadedFile('arbeit.pdf', b'%PDF-1.4', content_type='application/pdf')})
+        student.post(f'/pruefungen/teilnahme/{p.pk}/abgabe/', {'file': SimpleUploadedFile('arbeit.pdf', b'%PDF-1.4', content_type='application/pdf'), 'declared': '1'})
         self.assertEqual(handed_in(p).title, 'arbeit.pdf')
 
         def mark(examiner, grade):

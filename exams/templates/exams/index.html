@@ -51,6 +51,7 @@
   <form method="post" enctype="multipart/form-data" action="{% url 'exams:submit' p.pk %}" class="inline handed" data-upload>
     {% csrf_token %}
     <input type="file" name="file" accept=".pdf" aria-label="Abschlussarbeit als PDF">
+    <div class="choices"><label><input type="checkbox" name="declared" value="1" required> Ich versichere, dass ich die Arbeit selbstständig verfasst und keine anderen als die angegebenen Quellen und Hilfsmittel benutzt habe, auch keine KI ohne Angabe.</label></div>
     <button class="btn small">{% if p.handed %}Neue Fassung abgeben{% else %}Abgeben{% endif %}</button>
   </form>
   {% endif %}
@@ -60,13 +61,15 @@
 <h2>Zur Anmeldung</h2>
 <p class="muted" style="margin-top: -8px">{{ term }}{% include "exams/_periods.html" %}</p>
 <table>
-  <thead><tr><th>Datum</th><th>Prüfung</th><th>Anmeldung</th><th></th></tr></thead>
+  <thead><tr><th>Datum</th><th>Prüfung</th><th>Anmeldung</th><th>Abmelden bis</th><th>Versuch</th><th></th></tr></thead>
   <tbody>
     {% for c in offered %}
     <tr>
       <td>{{ c.date|date:"D j.n.Y"|default:"–" }}</td>
       <td><b>{{ c.title }}</b></td>
       <td>{% if c.opens %}{{ c.opens|date:"j.n." }}–{% else %}bis {% endif %}{{ c.deadline|date:"j.n.Y"|default:"–" }}</td>
+      <td>{{ c.withdraw_by|date:"j.n.Y"|default:"–" }}</td>
+      <td>{% if c.attempt == allowed %}<b class="fail">{{ c.attempt }}. von {{ allowed }}, letzter</b>{% else %}{{ c.attempt }}. von {{ allowed }}{% endif %}</td>
       <td class="num">
         {% if c.is_open %}
         <form method="post" action="{% url 'exams:register' c.pk %}">{% csrf_token %}<input type="hidden" name="study" value="{{ studies.0.pk }}"><button class="btn small">Anmelden</button></form>
@@ -74,7 +77,7 @@
         {% else %}<span class="muted">Frist abgelaufen</span>{% endif %}
       </td>
     </tr>
-    {% empty %}<tr><td colspan="4" class="empty">Zurzeit keine Prüfungen zur Anmeldung.</td></tr>
+    {% empty %}<tr><td colspan="6" class="empty">Zurzeit keine Prüfungen zur Anmeldung.</td></tr>
     {% endfor %}
   </tbody>
 </table>

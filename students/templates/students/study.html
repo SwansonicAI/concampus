@@ -61,7 +61,7 @@
       {% endif %}
       <dt>{% if study.program.kind == '5' %}Betreuung{% else %}Hauptfachlehrer:in{% endif %}</dt><dd>{{ study.teacher|default:"–" }}</dd>
       {% if study.compensation and identity or compensate %}<dt>Nachteilsausgleich</dt><dd>{{ study.compensation|default:"–" }}
-        {% if compensate %}<details><summary><small>{% if study.compensation %}ändern oder beenden{% else %}gewähren{% endif %}</small></summary><form method="post" enctype="multipart/form-data" action="{% url 'exams:compensate' study.pk %}" class="inline" style="margin-top: 8px">{% csrf_token %}<label>Maßnahme<input name="compensation" value="{{ study.compensation }}" size="40" placeholder="z. B. 50 % mehr Bearbeitungszeit bei Klausuren"></label><label>Attest<input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png"></label><button class="btn ghost small">Speichern</button></form><small class="muted">Leer gespeichert, endet er. Die Prüfenden sehen nur die Maßnahme.</small></details>{% endif %}</dd>{% endif %}
+        {% if compensate %}<details><summary><small>{% if study.compensation %}ändern oder beenden{% else %}gewähren{% endif %}</small></summary><form method="post" enctype="multipart/form-data" action="{% url 'exams:compensate' study.pk %}" class="inline" style="margin-top: 8px">{% csrf_token %}<label>Maßnahme<input name="compensation" value="{{ study.compensation }}" size="40" placeholder="z. B. 50 % mehr Bearbeitungszeit bei Klausuren"></label><label>Attest auf Papier am<input name="received" data-day autocomplete="off" size="11"></label><label>oder als Scan<input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png"></label><button class="btn ghost small">Speichern</button></form><small class="muted">Leer gespeichert, endet er. Die Prüfenden sehen nur die Maßnahme.</small></details>{% endif %}</dd>{% endif %}
       {% if study.focus %}<dt>Schwerpunkt</dt><dd>{{ study.focus.title }}</dd>{% elif study.advised %}<dt>Schwerpunkt</dt><dd>noch nicht gewählt · <small class="muted">empfohlen: {{ study.advised.title }}</small></dd>{% endif %}
       <dt>Studienbeginn</dt><dd>{{ study.start_term }}{% if study.prior_terms %} · {{ study.prior_terms }} Semester angerechnet{% endif %}</dd>
       <dt>{% if study.status == 'graduated' or study.status == 'left' %}Beendet zum{% else %}Status seit{% endif %}</dt><dd>{{ study.since|date:"j. F Y" }}</dd>
@@ -156,7 +156,7 @@
     {% csrf_token %}
     <h3>{{ first.choice.title }} {% if study.focus %}ändern{% else %}wählen{% endif %}</h3>
     <p class="muted"><small>{{ first.choice.description }} Vorher ist eine Studienfachberatung vorgesehen{% if study.teacher %}, etwa bei {{ study.teacher }}{% endif %}. {% if fs < first.first %}Bis zum Beginn des {{ first.first }}. Semesters können Sie die Wahl hier ändern, danach nur über: {% else %}Ändern lässt sie sich danach nur über: {% endif %}{{ changes|default:"die Hochschule" }}.</small></p>
-    <div class="inline">{% for o in options %}<label class="check"><input type="radio" name="focus" value="{{ o.pk }}" required{% if o.pk == study.focus_id %} checked{% endif %}> {{ o.title }}{% if o.pk == study.advised_id %} <span class="badge">von den Lehrenden empfohlen</span>{% endif %}</label>{% endfor %}</div>
+    <div class="choices">{% for o in options %}<label><input type="radio" name="focus" value="{{ o.pk }}" required{% if o.pk == study.focus_id %} checked{% endif %}> {{ o.title }}{% if o.pk == study.advised_id %} <span class="badge">von den Lehrenden empfohlen</span>{% endif %}</label>{% endfor %}</div>
     <p style="margin: 12px 0 0"><button class="btn">{% if study.focus %}Ändern{% else %}Wählen{% endif %}</button></p>
   </form>
   {% endwith %}{% elif recording %}
@@ -164,7 +164,7 @@
     {% csrf_token %}
     <h3>{{ recording.0.choice.title }}</h3>
     <p class="muted"><small>{% if study.focus %}Gewählt: {{ study.focus.title }}.{% else %}Noch nicht gewählt{% if study.advised %}; die Lehrenden empfehlen {{ study.advised.title }}{% endif %}.{% endif %} Hier eingetragen gilt die Wahl, etwa nach einer Erklärung oder einem Antrag.</small></p>
-    <div class="inline"><label>{{ recording.0.choice.title }}<select name="focus" required><option value="">Bitte wählen</option>{% for o in recording %}<option value="{{ o.pk }}"{% if o.pk == study.focus_id %} selected{% endif %}>{{ o.title }}</option>{% endfor %}</select></label><button class="btn ghost">Eintragen</button></div>
+    <div class="inline"><label>{{ recording.0.choice.title }}<select name="focus" required><option value="">Bitte wählen</option>{% for o in recording %}<option value="{{ o.pk }}"{% if o.pk == study.focus_id %} selected{% endif %}>{{ o.title }}</option>{% endfor %}</select></label><label>Grund<input name="reason" required placeholder="z. B. Erklärung vom 12.10."></label><button class="btn ghost">Eintragen</button></div>
   </form>
   {% elif advising %}{% with first=advising.0 %}
   <form method="post" action="{% url 'students:advise' study.pk %}" class="panel" style="margin-bottom: 16px">

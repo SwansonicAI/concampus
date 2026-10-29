@@ -21,7 +21,7 @@
         <button class="btn">Speichern und weiter</button>
       </div>
       {% if error %}<p class="fail" style="margin: 8px 0 0"><small>{{ error }}</small></p>{% endif %}
-      <p class="muted" style="margin: 12px 0 0"><small>Bestanden ab {{ course.pass_mark }} Punkten im Mittel der Kommission, nach der ersten Nachkommastelle abgeschnitten. Die Wertungen der anderen sehen Sie, sobald alle gewertet haben; dann ist Ihre gesperrt. Weiter geht es zur nächsten Bewerbung ohne Ihre Wertung.</small></p>
+      <p class="muted" style="margin: 12px 0 0"><small>Bestanden ab {{ course.pass_mark }} Punkten im Mittel der Kommission, nach der ersten Nachkommastelle abgeschnitten (Eignungsprüfungsordnung § 6 Abs. 4). Die Wertungen der anderen sehen Sie, sobald alle gewertet haben; dann ist Ihre gesperrt. Weiter geht es zur nächsten Bewerbung ohne Ihre Wertung.</small></p>
     </form>
     {% if mine is None %}
     <form method="post" action="{% url 'courses:recuse' course.pk %}" class="inline" style="margin-top: 12px">

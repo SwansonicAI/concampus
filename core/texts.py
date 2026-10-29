@@ -57,6 +57,11 @@ TEXTS = {
         'Sie sind mit Ablauf des {zum} aus dem Studiengang {studiengang}, Hauptfach {hauptfach}, exmatrikuliert. Grund: {grund}.',
         STUDY + ('grund', 'zum'),
     ),
+    'schwerpunkt_eingetragen': Spec(
+        BESCHEID, 'Schwerpunkt eingetragen', 'Bescheid über den Schwerpunkt',
+        'Für Ihr Studium im Studiengang {studiengang}, Hauptfach {hauptfach}, ist als Schwerpunkt {schwerpunkt} eingetragen. Grund: {grund}.',
+        STUDY + ('schwerpunkt', 'grund'),
+    ),
     'beurlaubung': Spec(
         BESCHEID, 'Beurlaubung', 'Bescheid über die Beurlaubung',
         'Sie sind für das {rueckmeldesemester} im Studiengang {studiengang}, Hauptfach {hauptfach}, beurlaubt. Grund: {grund}.\n\n'
@@ -131,6 +136,10 @@ TEXTS = {
         'Sie Ihre Krankenkasse, Ihren Versicherungsstatus elektronisch an die Hochschule zu melden. Sobald beides da ist, werden Sie '
         'immatrikuliert und erhalten Ihre Matrikelnummer.',
         ('beitrag', 'frist'),
+    ),
+    'schwerpunkt': Spec(
+        NACHRICHT, 'Schwerpunkt gewählt', 'Schwerpunkt: {schwerpunkt}', 'Sie haben im Studiengang {studiengang} den Schwerpunkt {schwerpunkt} gewählt.',
+        ('studiengang', 'schwerpunkt'),
     ),
     'eingetragen': Spec(NACHRICHT, 'In eine Veranstaltung eingetragen', 'Eingetragen: {veranstaltung}', 'Sie wurden für „{veranstaltung}“ im {semester} eingetragen.', ('veranstaltung', 'semester')),
     'ensemble': Spec(

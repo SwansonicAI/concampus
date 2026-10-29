@@ -147,10 +147,12 @@ class FocusTest(Seeded):
         student = self.login('student')
         self.assertIn(f'{options[0].choice.title} wählen', student.get('/').text)
         self.assertEqual(self.login('institut').post(f'/studierende/{study.pk}/empfehlung/', {'advised': other.pk}).status_code, 403)
-        student.post(f'/studierende/{study.pk}/schwerpunkt/', {'focus': study.advised_id})
-        student.post(f'/studierende/{study.pk}/schwerpunkt/', {'focus': other.pk})  # under way: only the office changes it
+        self.assertContains(student.post(f'/studierende/{study.pk}/schwerpunkt/', {'focus': study.advised_id}), 'Verbindlich wählen')  # first named once more
+        student.post(f'/studierende/{study.pk}/schwerpunkt/', {'focus': study.advised_id, 'bestaetigt': '1'})
+        student.post(f'/studierende/{study.pk}/schwerpunkt/', {'focus': other.pk, 'bestaetigt': '1'})  # under way: only the office changes it
         study.refresh_from_db()
         self.assertEqual(study.focus_id, study.advised_id)
+        self.assertTrue(study.person.messages.filter(subject__startswith='Schwerpunkt').exists())
 
 
 class FileTest(Seeded):

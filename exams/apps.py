@@ -10,6 +10,11 @@ from django.utils.formats import date_format
 from core.apps import Tile, feature, plural, task
 
 
+def graded_by(exam):
+    """When an exam's results are due: an oral or practical one a week after, a Klausur six weeks (RPSO § 13 Abs. 7)."""
+    return timezone.localdate(exam.held) + (timedelta(days=7) if exam.oral else timedelta(weeks=6))
+
+
 class ExamsConfig(Tile, AppConfig):
     name = 'exams'
     verbose_name = 'Prüfungen'
@@ -75,11 +80,13 @@ class ExamsConfig(Tile, AppConfig):
                 if any(p.third for p in panel.sheet(thesis)[1]):  # Gutachten too far apart, or one failing it (RPSO § 15 Abs. 2)
                     who = ', '.join(p.study.person.last_name for p in thesis.participations.select_related('study__person'))
                     found.append(task(f'Drittes Gutachten bestellen: {who}, {thesis.title}', reverse('exams:edit', args=[thesis.pk])))
-            for exam in decided.filter(open__gt=0, held__lte=now - timedelta(days=7)):  # a week after the exam, results are overdue
+            for exam in decided.filter(open__gt=0, held__lte=now - timedelta(days=7)):
                 late = ', '.join(e.last_name for e, _ in panel.waiting(panel.sheet(exam)[1]))
+                due = graded_by(exam)
                 found.append(task(
-                    f'Ergebnisse überfällig: {exam.title}, ' + (f'Wertung fehlt: {late}' if late else f'{plural(exam.open, "Teilnahme", "Teilnahmen")} offen'),
-                    exam.get_absolute_url(), timezone.localdate(exam.held) + timedelta(days=7),
+                    f'Ergebnisse {"überfällig" if due < timezone.localdate() else "ausstehend"}: {exam.title}, '
+                    + (f'Wertung fehlt: {late}' if late else f'{plural(exam.open, "Teilnahme", "Teilnahmen")} offen'),
+                    exam.get_absolute_url(), due,
                 ))
         if 'correct_scores' in person.roles and 'decide_results' not in person.roles:  # the Prüfungsausschuss hears of a Zeugnis long overdue
             from students.models import Study
@@ -127,15 +134,18 @@ class ExamsConfig(Tile, AppConfig):
             for exam in exams.filter(staff=person, held__lte=now):
                 missing = exam.participations.exclude(scores__examiner=person).exclude(recusals__examiner=person).count()
                 if missing:
-                    found.append(task(f'{exam.title}: Ihre Wertung fehlt für {plural(missing, "Teilnahme", "Teilnahmen")}', exam.get_absolute_url()))
+                    found.append(task(f'{exam.title}: Ihre Wertung fehlt für {plural(missing, "Teilnahme", "Teilnahmen")}', exam.get_absolute_url(), graded_by(exam)))
             handed = Q(participations__study__documents__kind='abschlussarbeit', participations__study__documents__created__gte=F('participations__created'))
             theses = (
                 Course.objects.filter(handed, kind=Course.Kind.THESIS, staff=person, released=None)
                 .exclude(participations__scores__examiner=person).exclude(participations__recusals__examiner=person)
             )
+            from .views import handed_in
+
             for thesis in theses.distinct().prefetch_related('participations__study__person'):
                 who = ', '.join(str(p.study.person) for p in thesis.participations.all())
-                found.append(task(f'Gutachten: {who}, {thesis.title}', thesis.get_absolute_url()))
+                handed = handed_in(thesis.participations.all()[0])
+                found.append(task(f'Gutachten: {who}, {thesis.title}', thesis.get_absolute_url(), handed and timezone.localdate(handed.created) + timedelta(weeks=8)))  # RPSO § 13 Abs. 11
         if 'student' in person.roles:
             from courses.models import Participation
             from .views import handed_in, offered

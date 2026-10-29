@@ -85,8 +85,9 @@ class Course(Tracked, models.Model):
     modules = models.ManyToManyField(Module, blank=True, related_name='courses', verbose_name='Anrechenbar für')
     staff = models.ManyToManyField(Person, blank=True, related_name='teaching', verbose_name='Lehrende / Kommission')
     oral = models.BooleanField('Mündlich oder praktisch', default=False, help_text='Abgenommen von zwei Prüfenden, oder von einer Person mit Beisitz.')
-    protocol = models.FileField(
-        'Protokoll', upload_to=stored, blank=True, help_text='Das unterschriebene Prüfungsprotokoll; erst damit überträgt das Amt die Wertungen der Prüfenden.',
+    protocol = models.FileField('Protokoll', upload_to=stored, blank=True, help_text='Das unterschriebene Prüfungsprotokoll, eingescannt.')
+    protocol_received = models.DateField(
+        'Protokoll eingegangen am', null=True, blank=True, help_text='Auf Papier oder als Scan; erst dann überträgt das Amt die Wertungen der Prüfenden.',
     )
     assessor = models.ForeignKey(
         Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Beisitz', help_text='Führt das Protokoll, wo nur eine Person prüft.',

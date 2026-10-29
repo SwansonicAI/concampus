@@ -1,8 +1,8 @@
 {% extends base %}
-{% block title %}Bescheide prüfen{% endblock %}
+{% block title %}{{ title }}{% endblock %}
 {% block content %}
 <h1>{{ title }}</h1>
-<p class="lead">Noch ist nichts versandt. Erst „{{ send }}“ legt die Bescheide ins Postfach.</p>
+{% if groups %}<p class="lead">Noch ist nichts versandt. Erst „{{ send }}“ legt die Bescheide ins Postfach.</p>{% endif %}
 {% for note in notes %}<div class="flash">{{ note }}</div>{% endfor %}
 {% for heading, people, wording in groups %}
 <section>

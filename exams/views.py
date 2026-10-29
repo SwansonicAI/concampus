@@ -18,7 +18,7 @@ from django.utils import timezone
 from django.utils.formats import date_format, number_format
 from django.views.decorators.http import require_POST
 
-from core import destatis, texts
+from core import dates, destatis, texts
 from core.access import kept, require
 from core.apps import plural
 from core.dates import months_before, working
@@ -155,7 +155,14 @@ def index(request):
         )
         for p in theses:
             p.handed = handed_in(p)
-        context.update(mine=[p for p in mine if p.course.released], ahead=ahead, offered=offered(person), studies=studies, theses=theses)
+        offers = list(offered(person))
+        for c in offers:  # which try this would be
+            module = c.modules.filter(program__studies__in=studies).first()
+            c.attempt = attempts(person, module) + 1 if module else 1
+        context.update(
+            mine=[p for p in mine if p.course.released], ahead=ahead, offered=offers, studies=studies, theses=theses,
+            allowed=studies[0].program.attempts if studies else None,
+        )
     return render(request, 'exams/index.html', context)
 
 
@@ -209,7 +216,7 @@ def exam(request, pk):
         'dropping': office and not course.released and course.kind == Course.Kind.EXAM,
         'waiting': panel.waiting(rows) if (office or decide) and held and not course.released else [],
         'remarks': Participation.Remark.choices if (decide or correct) and course.kind in (Course.Kind.EXAM, Course.Kind.THESIS) else [],
-        'handed': handed,
+        'handed': handed, 'grading': handed and timezone.localdate(handed.created) + timedelta(weeks=8),  # RPSO § 13 Abs. 11
         'adding': AddForm(),
         'importing': not course.released and course.kind == Course.Kind.EXAM and (decide or member),
         'reachable': Study.reachable(person, Study.objects.filter(participations__course=course)),
@@ -267,17 +274,18 @@ def thesis(request, pk):
 
 
 def protocol(request, pk):
-    """The signed Protokoll of an exam: the office uploads it, whoever sees the exam's results reads it."""
+    """The signed Protokoll of an exam: the office books its arrival, on paper or as a scan; whoever sees the exam's
+    results reads the scan."""
     course = get_object_or_404(Course, pk=pk, kind=Course.Kind.EXAM)
     person = request.user
     office = person.may('decide_results', course) or person.may('manage_exams', course)
     if request.method == 'POST':
         if not office or course.released:
             raise PermissionDenied('Das Protokoll lädt das Amt hoch, das die Ergebnisse einträgt, bis sie freigegeben sind.')
-        if file := request.FILES.get('file'):
-            course.protocol = file
-            course.save(update_fields=['protocol'])
-            messages.success(request, 'Protokoll hochgeladen. Die Wertungen lassen sich jetzt übertragen.')
+        course.protocol_received = dates.day(request.POST.get('received', '')) or timezone.localdate()
+        course.protocol = request.FILES.get('file') or course.protocol
+        course.save(update_fields=['protocol', 'protocol_received'])
+        messages.success(request, f'Protokoll vom {date_format(course.protocol_received, "j.n.Y")} verbucht. Die Wertungen lassen sich jetzt übertragen.')
         return redirect(course)
     if not (office or person.may('correct_scores', course) or course.staff.filter(pk=person.pk).exists()) or not course.protocol:
         raise PermissionDenied('Das Protokoll lesen die Prüfenden, das Amt und der Prüfungsausschuss.')
@@ -311,6 +319,16 @@ def unmet(study, module):
     return found
 
 
+def filed(study, request, what):
+    """The attest an office files for `what`: the scan, or the day the paper arrived; (document, '') or (None, why not)."""
+    kind, file = DocumentType.system('attest'), request.FILES.get('file')
+    if file:
+        return (None, refusal) if (refusal := kind.refuses(file)) else (Document.hand_in(study, kind, file), '')
+    if received := dates.day(request.POST.get('received', '')):
+        return Document.objects.create(person=study.person, study=study, kind=kind, title=f'Attest {what}, auf Papier eingegangen am {date_format(received, "j.n.Y")}'), ''
+    return None, 'Bitte das Attest hochladen oder angeben, wann es auf Papier eingegangen ist.'
+
+
 @require_POST
 def attest(request, pk):
     """Rücktritt mit triftigem Grund: the office files the attest and marks RT, which is no attempt (RPSO § 20)."""
@@ -318,13 +336,10 @@ def attest(request, pk):
     if not request.user.may('decide_results', course):
         raise PermissionDenied('Einen Rücktritt verbucht das Amt, das die Ergebnisse einträgt.')
     p = get_object_or_404(course.participations.select_related('study__person'), pk=request.POST.get('participation'), passed=None)
-    kind, file = DocumentType.system('attest'), request.FILES.get('file')
-    if not file:
-        messages.error(request, 'Bitte das Attest oder den Nachweis wählen.')
-    elif refusal := kind.refuses(file):
+    attest, refusal = filed(p.study, request, f'zum Rücktritt von {course.title}')
+    if refusal:
         messages.error(request, refusal)
     else:
-        Document.hand_in(p.study, kind, file)
         p.remark, p.grade, p.passed = Participation.Remark.EXCUSED, None, None
         p.save(update_fields=['remark', 'grade', 'passed'])
         messages.success(request, f'Rücktritt von {p.study.person.first_name} {p.study.person.last_name} verbucht; das Attest liegt in der Akte.')
@@ -337,15 +352,11 @@ def compensate(request, pk):
     """Nachteilsausgleich (RPSO § 8): the Prüfungsausschuss grants a measure on an Antrag with an attest, by Bescheid;
     examiners see the measure, never the attest. Empty, it ends."""
     study = get_object_or_404(request.user.within(Study.objects.select_related('person'), 'grant_compensation'), pk=pk, status=Study.Status.ENROLLED)
-    measure, file = request.POST.get('compensation', '').strip()[:200], request.FILES.get('file')
-    kind = DocumentType.system('attest')
-    if measure and not (file or study.compensation):
-        messages.error(request, 'Zum Nachteilsausgleich gehört das Attest.')
-    elif file and (refusal := kind.refuses(file)):
+    measure = request.POST.get('compensation', '').strip()[:200]
+    attest, refusal = filed(study, request, 'zum Nachteilsausgleich') if measure and measure != study.compensation else (None, '')
+    if refusal:
         messages.error(request, refusal)
     else:
-        if file:
-            Document.hand_in(study, kind, file)
         study.compensation = measure
         study.save(update_fields=['compensation'])
         if measure:
@@ -366,10 +377,14 @@ def submit(request, pk):
         messages.error(request, 'Die Abgabefrist ist abgelaufen.')
     elif not file:
         messages.error(request, 'Bitte eine Datei wählen.')
+    elif not request.POST.get('declared'):  # RPSO § 14 Abs. 8
+        messages.error(request, 'Zur Abgabe gehört die Selbstständigkeitserklärung.')
     elif refusal := kind.refuses(file):
         messages.error(request, refusal)
     else:
-        Document.hand_in(p.study, kind, file)
+        handed = Document.hand_in(p.study, kind, file)
+        handed.declared = timezone.now()
+        handed.save(update_fields=['declared'])
         messages.success(request, 'Abschlussarbeit abgegeben. Die Gutachter:innen können sie jetzt öffnen.')
     return redirect(p.course if office else 'exams:index')
 

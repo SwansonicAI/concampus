@@ -366,6 +366,7 @@ class Document(Tracked, models.Model):
     file = models.FileField('Datei', upload_to=stored, blank=True)
     url = models.URLField('Link', max_length=2000, blank=True)  # shared video links run long
     message = models.ForeignKey(Message, models.CASCADE, null=True, blank=True, related_name='+', verbose_name='Bescheid')
+    declared = models.DateTimeField('Selbstständigkeitserklärung', null=True, blank=True, help_text='Bei einer Abschlussarbeit: wann sie mit ihr abgegeben wurde.')
     created = models.DateTimeField('Eingegangen', default=timezone.now)
 
     class Meta:

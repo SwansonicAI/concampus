@@ -5,7 +5,7 @@ from django.contrib.auth.decorators import login_not_required
 from django.core import signing
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Prefetch, Q
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, QueryDict
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -193,10 +193,12 @@ def tried(person, room, day, begin, until):
     if room is None:
         return None
     category = BookingForm(person=person).fields['category']
-    return BookingForm({
+    data = QueryDict(mutable=True)  # as a form sends it
+    data.update({
         'room': room.pk, 'category': category.prepare_value(category.queryset.first()),
         'day': f'{day:%d.%m.%Y}', 'begin': f'{begin:%H:%M}', 'until': f'{until:%H:%M}',
-    }, person=person)
+    })
+    return BookingForm(data, person=person)
 
 
 @require(*ROOMS)
