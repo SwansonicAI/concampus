@@ -122,7 +122,7 @@ def index(request):
     if office or 'teacher' in person.roles:
         program, stand, q = (request.GET.get(key, '').strip() for key in ('studiengang', 'stand', 'q'))
         if stand == 'kommission':
-            exams = exams.filter(pk__in=Course.short_panels().values('pk'))
+            exams = exams.filter(pk__in=Course.short_panels(Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], term=term)))
         exams = exams.filter(pk__in=person.within(Course.objects.all(), 'manage_exams', 'decide_results').values('pk')) if office else exams.filter(staff=person)
         if program.isdigit():
             exams = exams.filter(pk__in=Course.objects.filter(modules__program=program).values('pk'))
@@ -199,7 +199,7 @@ def exam(request, pk):
         'modules': credited(course),
         'bookings': course.bookings.select_related('room'),
         'missing': sum(1 for p in rows if panel.due(p)),
-        'short': panel.short(course, staff, rows),
+        'short': Course.panels(Course.objects.filter(pk=course.pk)).get().shortfall,
         'dropping': office and not course.released and course.kind == Course.Kind.EXAM,
         'waiting': panel.waiting(rows) if (office or decide) and held and not course.released else [],
         'remarks': Participation.Remark.choices if decide and course.kind in (Course.Kind.EXAM, Course.Kind.THESIS) else [],

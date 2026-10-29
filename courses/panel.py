@@ -115,18 +115,6 @@ def sheet(course):
     return staff, rows
 
 
-def short(course, staff, rows):
-    """Why the panel is too small for the exam, or '': an oral or practical one needs two examiners or one with an
-    assessor, a repeat attempt two examiners."""
-    if course.kind != Course.Kind.EXAM or len(staff) > 1:
-        return ''
-    if any(getattr(p, 'attempt', 1) > 1 for p in rows):
-        return 'Wiederholungsprüfungen bewerten mindestens zwei Prüfende.'
-    if course.oral and not course.assessor_id:
-        return 'Mündliche und praktische Prüfungen nehmen zwei Prüfende ab, oder eine Person mit Beisitz.'
-    return ''
-
-
 def due(p):
     """Whether a result is still to be entered: a withdrawal for good reason needs none."""
     return p.passed is None and p.remark != Participation.Remark.EXCUSED

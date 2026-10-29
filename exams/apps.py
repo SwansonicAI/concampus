@@ -94,7 +94,7 @@ class ExamsConfig(Tile, AppConfig):
             from core.models import Term
             from students.models import Document
 
-            if short := person.within(Course.short_panels(), 'manage_exams').filter(released=None).count():
+            if short := len(Course.short_panels(person.within(Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], released=None), 'manage_exams'))):
                 found.append(task(f'{plural(short, "Prüfung", "Prüfungen")}: Kommission zu klein', f"{reverse('exams:index')}?stand=kommission"))
             failed = Participation.objects.filter(study__person=OuterRef('study__person'), module=OuterRef('module'), passed=False, course__released__isnull=False)
             last = (

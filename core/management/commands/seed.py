@@ -987,7 +987,7 @@ class Command(BaseCommand):
                 continue
             module = Module.objects.create(
                 program=program, parent=parent, code=node['code'], title=node['title'], credits=node['credits'],
-                weight=Decimal(str(node['weight'])), description=node['note'],
+                weight=Decimal(str(node['weight'])), description=node['note'], final=node.get('final', False),
             )
             first, n = [], 0
             for part in node['parts']:
@@ -998,7 +998,7 @@ class Command(BaseCommand):
                     n += 1
                     exam = Module.objects.create(
                         program=program, parent=module, code=f"{node['code']}.{n:02d}", title=part['title'], credits=0,
-                        semester=part['semester'], exam=True, weight=Decimal(str(part['weight'])), description=part['form'],
+                        semester=part['semester'], exam=True, weight=Decimal(str(part['weight'])), description=part['form'], final=part['final'],
                     )
                     exam.waived.set(self.subjects[s] for s in part['waived'])
                     self.waived |= {(exam.pk, s) for s in part['waived']}

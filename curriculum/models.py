@@ -201,6 +201,10 @@ class Module(Tracked, models.Model):
     credits = models.PositiveSmallIntegerField('ECTS')
     semester = models.PositiveSmallIntegerField('Fachsemester', null=True, blank=True)
     exam = models.BooleanField('Prüfungsleistung', default=False, help_text='Eine Prüfung statt Teilnahme oder Studienleistung.')
+    final = models.BooleanField(
+        'Teil der Abschlussprüfung', default=False,
+        help_text='Abschlussprojekt oder -arbeit: ihre Prüfungen bewerten mindestens zwei Prüfende, darunter eine Professur (RPSO § 17 Abs. 5).',
+    )
     weight = models.DecimalField(
         'Gewichtung', max_digits=5, decimal_places=2, default=0,
         help_text='Anteil an der Note des übergeordneten Moduls, bei Modulen der obersten Ebene an der Gesamtnote. 0 zählt nicht.',

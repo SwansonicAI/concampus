@@ -65,6 +65,14 @@ class ExamTest(Seeded):
             examiner.post(f'/pruefungen/{resit.pk}/', {f'score-{first}-{hallmann.pk}': changed})
             self.assertEqual(resit.participations.get(pk=first).scores.get(examiner=hallmann).value, Decimal('1.7'))
 
+    def test_panels_meet_the_regulations(self):
+        final = Course.objects.filter(kind='exam', subject=None, modules__parent__final=True).distinct().first()  # a written part
+        final.staff.set([final.staff.first()])
+        self.assertIn('RPSO § 17 Abs. 5', Course.panels(Course.objects.filter(pk=final.pk)).get().shortfall)  # two for the final exam
+        hall = Course.objects.filter(kind='audition', subject__isnull=False).first()
+        hall.staff.set(hall.staff.all()[:2])
+        self.assertIn('EPO § 3 Abs. 4', Course.panels(Course.objects.filter(pk=hall.pk)).get().shortfall)  # three for the Hauptfach
+
     def test_who_stands_back_for_bias_is_replaced_so_all_are_marked_by_as_many(self):
         resit = Course.objects.get(title__contains='Wiederholung')
         hallmann = resit.staff.get(last_name='Hallmann')

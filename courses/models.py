@@ -187,9 +187,39 @@ class Course(Tracked, models.Model):
         return ''
 
     @classmethod
-    def short_panels(cls):
-        """Oral or practical exams with one examiner and nobody sitting in."""
-        return cls.objects.filter(kind=cls.Kind.EXAM, oral=True, assessor=None).annotate(examiners=models.Count('staff')).filter(examiners__lt=2)
+    def panels(cls, courses):
+        """The courses with what their panel is checked against (`shortfall`): `examiners`, `professors`, `final` (part
+        of the Abschlussprüfung) and `repeat` (someone in a further attempt)."""
+        earlier = Participation.objects.filter(
+            study=models.OuterRef('study'), module=models.OuterRef('module'), passed=False, course__released__isnull=False,
+        ).exclude(course=models.OuterRef('course'))
+        return courses.annotate(
+            examiners=models.Count('staff', distinct=True),
+            professors=models.Count('staff', filter=models.Q(staff__employment=Person.Employment.PROFESSUR), distinct=True),
+            final=models.Exists(Module.objects.filter(models.Q(final=True) | models.Q(parent__final=True), courses=models.OuterRef('pk'))),
+            repeat=models.Exists(Participation.objects.filter(models.Exists(earlier), course=models.OuterRef('pk'))),
+        )
+
+    @property
+    def shortfall(self):
+        """Why the panel falls short of the regulations, or ''. Needs `panels()`."""
+        n = self.examiners
+        if self.kind == self.Kind.AUDITION:  # the Hauptfach, its video round included, three; other parts two
+            need = 3 if self.subject_id else 2
+            return f'Die Kommission braucht mindestens {need} Mitglieder (EPO § 3 Abs. 4).' if n < need else ''
+        if self.kind == self.Kind.EXAM and self.subject_id and not 3 <= n <= 8:  # played in the Hauptfach
+            return 'Künstlerisch-praktische Prüfungen im Haupt- oder Schwerpunktfach bewertet eine Kommission aus drei bis acht Prüfenden (RPSO § 17 Abs. 3).'
+        if self.kind in (self.Kind.EXAM, self.Kind.THESIS) and (self.final or self.repeat) and (n < 2 or not self.professors):
+            which = 'Prüfungen der Abschlussprüfung' if self.final else 'Wiederholungsprüfungen'
+            return f'{which} bewerten mindestens zwei Prüfende, darunter eine Professur (RPSO § 17 Abs. 5).'
+        if self.kind == self.Kind.EXAM and self.oral and not self.assessor_id and n < 2:
+            return 'Mündliche und praktische Prüfungen nehmen zwei Prüfende ab, oder eine Person mit Beisitz (RPSO § 17 Abs. 3).'
+        return ''
+
+    @classmethod
+    def short_panels(cls, courses):
+        """The pks of `courses` whose panel falls short."""
+        return [c.pk for c in cls.panels(courses) if c.shortfall]
 
     @property
     def withdrawable(self):

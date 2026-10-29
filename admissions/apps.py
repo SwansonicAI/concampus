@@ -68,6 +68,9 @@ class AdmissionsConfig(Tile, AppConfig):
                     url = reverse('admissions:review', args=[course.pk]) if course.video else course.get_absolute_url()
                     found.append(task(f'{course.title}: Ihre Wertung fehlt für {plural(missing, "Bewerbung", "Bewerbungen")}', url, course.deadline))
         if 'run_auditions' in person.roles:
+            juries = person.within(Course.objects.filter(kind=Course.Kind.AUDITION, released=None).exclude(participations=None), 'run_auditions')
+            if short := len(Course.short_panels(juries)):
+                found.append(task(f'{plural(short, "Eignungsprüfung", "Eignungsprüfungen")}: Kommission zu klein', reverse('admissions:board')))
             vacant = Q(participations__recusals__isnull=False, participations__recusals__substitute=None)
             courses = person.within(Course.objects.filter(vacant, kind=Course.Kind.AUDITION, released=None), 'run_auditions')
             for course in courses.annotate(n=Count('participations__recusals', filter=vacant, distinct=True)):

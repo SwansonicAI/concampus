@@ -6,7 +6,7 @@ from .models import Module
 class ModuleForm(forms.ModelForm):
     class Meta:
         model = Module
-        fields = ['parent', 'code', 'title', 'credits', 'semester', 'exam', 'weight', 'description', 'waived']
+        fields = ['parent', 'code', 'title', 'credits', 'semester', 'exam', 'final', 'weight', 'description', 'waived']
         widgets = {'description': forms.Textarea(attrs={'rows': 3})}
 
     def __init__(self, *args, **kwargs):

@@ -364,7 +364,7 @@ def audition(request, pk):
         'staff': staff,
         'rows': rows, 'timed': any(p.slot for p in rows), 'noted': any(p.note for p in rows),
         'columns': [e.pk for e in columns],
-        'office': office, 'rule': panel.rule(rows), 'composer': office,
+        'office': office, 'rule': panel.rule(rows), 'composer': office, 'short': Course.panels(Course.objects.filter(pk=course.pk)).get().shortfall,
         'recusable': [] if course.released else panel.recusable(rows, person),
         'candidates': substitutes(course) if office and any(p.vacant for p in rows) else [],
         'history': bool(Course.seen_by(person, course.pk)),

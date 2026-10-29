@@ -13,8 +13,9 @@ HF, WS, PIANO, SPEECH = 'hf', 'ws', 'piano', 'speech'  # one-to-one lessons: mai
 SECTION, VOCAL, EARLY = 'section', 'vocal', 'early'  # and Orchesterstudien with a teacher of one's instrument, Stimmbildung, historical instruments
 
 
-def M(code, title, credits, *parts, weight=0, note=''):
-    return {'shape': 'M', 'code': code, 'title': title, 'credits': credits, 'parts': parts, 'weight': weight, 'note': note}
+def M(code, title, credits, *parts, weight=0, note='', final=False):
+    """A module; `final`: part of the Abschlussprüfung."""
+    return {'shape': 'M', 'code': code, 'title': title, 'credits': credits, 'parts': parts, 'weight': weight, 'note': note, 'final': final}
 
 
 def G(code, title, credits, *parts, weight=0, note=''):
@@ -26,9 +27,9 @@ def C(title, credits, course=None, form='', taught=None, start=1):
     return {'shape': 'C', 'title': title, 'credits': credits, 'course': course or title, 'form': form, 'taught': taught, 'start': start}
 
 
-def X(title, semester, weight=1, form='', waived=()):
-    """An exam; `waived`: the Hauptfächer the plan lets off it."""
-    return {'shape': 'X', 'title': title, 'semester': semester, 'weight': weight, 'form': form, 'waived': waived}
+def X(title, semester, weight=1, form='', waived=(), final=False):
+    """An exam; `waived`: the Hauptfächer the plan lets off it; `final`: part of the Abschlussprüfung."""
+    return {'shape': 'X', 'title': title, 'semester': semester, 'weight': weight, 'form': form, 'waived': waived, 'final': final}
 
 
 def L(code, title, credits, course=None, form='', taught=None):
@@ -154,7 +155,7 @@ def orchestral(x):
             M('BM-OI-BP-KV', 'Bachelorprojekt bei KV', 12,
               C('Bachelorprojekt', {7: 6, 8: 6}, 'Bachelorprojekt: Kolloquium', 'S'),
               X('Rezital (50 Min.)' if strings else 'Rezital (50 Min., Schlagwerk 60 Min.)', 8, 48 if strings else 53),
-              X('Programmheft oder Dokumentation (8–10 Seiten)', 8, 2), weight=50 if strings else 55),
+              X('Programmheft oder Dokumentation (8–10 Seiten)', 8, 2), weight=50 if strings else 55, final=True),
             weight=1),
           G('IV', 'Instrumentalpädagogische Vertiefung', 43,
             *pedagogy_deepening(
@@ -172,7 +173,7 @@ def orchestral(x):
             M('BM-XX-CH-02', 'Chor', 4, C('Hochschulchor/Kammerchor', {5: 2, 6: 2}, 'Hochschulchor', 'G 120')),
             M('BM-OI-BP-IV', 'Bachelorprojekt bei IV', 12,
               C('Bachelorprojekt', {7: 6, 8: 6}, 'Bachelorprojekt: Kolloquium', 'S'),
-              X('Rezital (50 Min.)', 8, 40), X('Wissenschaftliche Arbeit (20 Seiten)', 8, 5), weight=45),
+              X('Rezital (50 Min.)', 8, 40), X('Wissenschaftliche Arbeit (20 Seiten)', 8, 5), weight=45, final=True),
             weight=1),
           weight=65 if strings else 70, note='Wahl zu Beginn des 5. Semesters.'),
         M('BM-OI-WK', 'Wahlkatalog', 10,
@@ -338,7 +339,7 @@ MASTER = [
       note='Wahlpflichtmodule im Umfang von 30 CP, empfohlen 10/10/5/5 je Semester. Ab 20 CP passender Module steht ein Schwerpunkt im Zeugnis.'),
     M('MM-XX-MPRO', 'Masterprojekt', 20,
       C('Masterprojekt', {3: 10, 4: 10}, 'Masterprojekt: Kolloquium', 'S'),
-      X('Künstlerische Präsentation (ca. 50 Min.)', 4, 85), X('Schriftlicher Teil (15–20 Seiten)', 4, 15), weight=100,
+      X('Künstlerische Präsentation (ca. 50 Min.)', 4, 85), X('Schriftlicher Teil (15–20 Seiten)', 4, 15), weight=100, final=True,
       note='Voraussetzung: Kernbereich I und II bestanden. Die Note des Masterprojekts ist die Gesamtnote.'),
 ]
 
@@ -495,7 +496,7 @@ CHURCH = [
     M('KM-VI', 'Musikgeschichte und Repertoire', 32,
       C('Musikgeschichte', {s: 2 for s in range(1, 9)}, {'WiSe': 'Musikgeschichte im Überblick II', 'SoSe': 'Musikgeschichte im Überblick I'}, 'V 90'),
       C('Orgelkunde', {5: 3, 6: 3}, 'Instrumentenkunde/Akustik', 'Ü 90'), C('Diplomarbeit', {10: 10}, 'Bachelorprojekt: Kolloquium', 'S'),
-      X('Diplomarbeit', 10, 2), weight=3),
+      X('Diplomarbeit', 10, 2, final=True), weight=3),
     M('KM-VII', 'Wahlobligatorischer Bereich', 16, *[L(f'KM-VII-0{n}', title, cp, course, form, VOCAL if course == 'Stimmbildung' else None) for n, (title, cp, course, form) in enumerate([
         ('Ergänzungsfach Cembalo', 4, 'Historische Tasteninstrumente', 'G 30'), ('Ergänzungsfach Klavier-Improvisation', 4, 'Improvisation', 'E 60'),
         ('Ergänzungsfach Jazz-Pop-Gesang', 4, 'Stimmbildung', 'E 30'), ('Ergänzungsfach Jazzchor-/Ensembleleitung', 4, 'Chorleitung Pop/Jazz', 'G 90'),
@@ -505,15 +506,15 @@ CHURCH = [
 
 CONCERT = [  # Künstlerisches Aufbaustudium Konzertexamen (Studien- und Prüfungsordnung 2007): no credits; bestanden or mit Auszeichnung
     M('KE-HF', 'Hauptfach', 0, C('Hauptfach', {1: 0, 2: 0, 3: 0, 4: 0}, form='E 90', taught=HF), X('Öffentliches Konzert', 2), X('Öffentliches Konzert', 3)),
-    M('KE-KD', 'Konzertdiplom-Prüfung', 0, X('Rezital (ca. 70 Min.)', 4), X('Solokonzert mit Orchester', 4),
+    M('KE-KD', 'Konzertdiplom-Prüfung', 0, X('Rezital (ca. 70 Min.)', 4), X('Solokonzert mit Orchester', 4), final=True,
       note='Öffentlich. Bestanden mit zwei Dritteln, mit Auszeichnung mit drei Vierteln der Kommission.'),
 ]
 
 DOCTORATE = [  # Promotionsordnung 2017; Dr. phil., summa cum laude bis rite
     M('PR-KOL', 'Doktorandenkolloquium', 0, C('Doktorandenkolloquium', {1: 0, 2: 0, 3: 0, 4: 0}, 'Doktorandenkolloquium', 'S'),
       X('Vortrag im Kolloquium', 2), X('Vortrag im Kolloquium', 4)),
-    M('PR-DIS', 'Dissertation', 0, X('Dissertation', 6)),
-    M('PR-MP', 'Mündliche Prüfung', 0, X('Kolloquium oder Disputation (60–90 Min.)', 6)),
+    M('PR-DIS', 'Dissertation', 0, X('Dissertation', 6), final=True),
+    M('PR-MP', 'Mündliche Prüfung', 0, X('Kolloquium oder Disputation (60–90 Min.)', 6), final=True),
 ]
 
 OPERA = [  # Zertifikatsstudiengang Thüringer Opernstudio (FSO 2025), with DNT Weimar, Theater Erfurt, Altenburg-Gera and Nordhausen
