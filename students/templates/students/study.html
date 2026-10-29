@@ -72,7 +72,7 @@
     <p>Keine Rückmeldung: der Prüfungsanspruch ist erloschen ({% for m in exhausted %}{{ m.code }}{% if not forloop.last %}, {% endif %}{% endfor %}). {% if final %}Der Bescheid ist bestandskräftig; die Exmatrikulation steht aus.{% else %}Die Exmatrikulation folgt, sobald der Bescheid bestandskräftig ist.{% endif %}</p>
     {% elif study.status == 'enrolled' and personal %}
     <h2>Rückmeldung {{ upcoming }}</h2>
-    <p>{% if paid and not missing %}<span class="badge green">zurückgemeldet</span>{% elif paid %}<span class="badge wait">bezahlt</span>{% elif upcoming.reregistration_open %}<span class="badge wait">offen</span> Semesterbeitrag {{ upcoming.fee }} € bis {{ upcoming.deadline|date:"j. F Y" }}{% else %}Semesterbeitrag {{ upcoming.fee }} € vom {{ upcoming.reregistration_start|date:"j. F" }} bis {{ upcoming.deadline|date:"j. F Y" }}{% endif %}{% if not paid and upcoming.late_deadline %}<br><small class="muted">Nachfrist bis {{ upcoming.late_deadline|date:"j. F" }} mit {{ late_fee }} € Säumnisgebühr; danach folgt die Exmatrikulation.</small>{% endif %}{% if next.leave %} · <span class="badge">Urlaubssemester · {{ next.get_leave_reason_display }}</span>{% endif %}</p>
+    <p>{% if paid and not missing %}<span class="badge green">zurückgemeldet</span>{% elif paid %}<span class="badge wait">bezahlt</span>{% elif upcoming.reregistration_open %}<span class="badge wait">offen</span> Semesterbeitrag {{ upcoming.fee }} €{% if upcoming.parts %} <small class="muted">({% for name, amount in upcoming.parts %}{{ name }} {{ amount }}{% if not forloop.last %} · {% endif %}{% endfor %})</small>{% endif %} bis {{ upcoming.deadline|date:"j. F Y" }}{% else %}Semesterbeitrag {{ upcoming.fee }} € vom {{ upcoming.reregistration_start|date:"j. F" }} bis {{ upcoming.deadline|date:"j. F Y" }}{% endif %}{% if not paid and upcoming.late_deadline %}<br><small class="muted">Nachfrist bis {{ upcoming.late_deadline|date:"j. F" }} mit {{ late_fee }} € Säumnisgebühr; danach folgt die Exmatrikulation.</small>{% endif %}{% if next.leave %} · <span class="badge">Urlaubssemester · {{ next.get_leave_reason_display }}</span>{% endif %}</p>
     {% if missing %}<p class="fail">Für die Rückmeldung fehlt noch: {{ missing|join:" · " }}</p>{% endif %}
     {% if own and not paid %}{% include "students/_transfer.html" with amount=owed reference=study.person.matriculation|add:" "|add:study.person.last_name %}{% endif %}
     {% if own or office %}
@@ -133,7 +133,7 @@
         {% if own or office %}
         <td class="num">{{ t.due }} €</td>
         <td>{% if t.term_id == study.start_term_id %}zur Immatrikulation{% else %}{{ t.term.deadline|date:"j.n.Y" }}{% endif %}</td>
-        <td>{{ t.paid|date:"j.n.Y"|default:"–" }}</td>
+        <td>{{ t.paid|date:"j.n.Y"|default:"–" }}{% if t.reference %}<br><small class="muted">{{ t.reference }}</small>{% endif %}</td>
         <td class="num">{% if t.paid %}0,00 €{% else %}<b class="fail">{{ t.due }} €</b>{% endif %}</td>
         {% endif %}
       </tr>

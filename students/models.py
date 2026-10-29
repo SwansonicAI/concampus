@@ -210,6 +210,8 @@ class StudyTerm(Tracked, models.Model):
     leave = models.BooleanField('Urlaubssemester', default=False)
     leave_reason = models.CharField('Grund der Beurlaubung', max_length=1, choices=LEAVES, blank=True)
     paid = models.DateField('Beitrag bezahlt am', null=True, blank=True)
+    amount = models.DecimalField('Betrag', max_digits=7, decimal_places=2, null=True, blank=True)
+    reference = models.CharField('Beleg oder Verwendungszweck', max_length=140, blank=True)
 
     class Meta:
         ordering = ['term__start']

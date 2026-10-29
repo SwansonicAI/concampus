@@ -5,7 +5,7 @@
 <div class="head">
   <h1>Rückmeldung {{ term }}</h1>
 </div>
-<p class="lead">Semesterbeitrag {{ term.fee }} € · Rückmeldung {{ term.reregistration_start|date:"j.n." }}–{{ term.deadline|date:"j.n.Y" }}{% if term.late_deadline %} · Nachfrist bis {{ term.late_deadline|date:"j.n." }} mit {{ late_fee }} € Säumnisgebühr{% endif %} · {{ open }} von {{ total }} Studierenden offen{% if blocked %} · {{ blocked }} gesperrt{% endif %}</p>
+<p class="lead">Semesterbeitrag {{ term.fee }} €{% if term.parts %} ({% for name, amount in term.parts %}{{ name }} {{ amount }}{% if not forloop.last %} · {% endif %}{% endfor %}){% endif %} · Rückmeldung {{ term.reregistration_start|date:"j.n." }}–{{ term.deadline|date:"j.n.Y" }}{% if term.late_deadline %} · Nachfrist bis {{ term.late_deadline|date:"j.n." }} mit {{ late_fee }} € Säumnisgebühr{% endif %} · {{ open }} von {{ total }} Studierenden offen{% if blocked %} · {{ blocked }} gesperrt{% endif %}</p>
 <form class="toolbar">
   <div class="inline">
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name oder Matrikelnummer"></label>
@@ -22,6 +22,8 @@
   {% csrf_token %}
   <div class="toolbar">
     <div class="actions">
+      <label>Eingegangen am<input name="paid" data-day autocomplete="off" size="11" value="{% now 'd.m.Y' %}"></label>
+      <label>Beleg oder Verwendungszweck<input name="reference" placeholder="z. B. Barzahlung, Quittung 112"></label>
       <button class="btn" name="pay" value="1">Zahlungseingang verbuchen</button>
       {% if overdue and open %}<button class="btn danger" name="exmatriculate" value="1">{{ open }} ohne Rückmeldung exmatrikulieren</button>{% endif %}
     </div>

@@ -47,6 +47,14 @@ class ChangeForm(forms.Form):
             ]
 
 
+class PaymentForm(forms.Form):
+    """A payment booked by hand: when it arrived, how much, and the Beleg to find it again."""
+
+    paid = dates.DayField(label='Eingegangen am')
+    amount = forms.DecimalField(label='Betrag', min_value=0, decimal_places=2, localize=True)
+    reference = forms.CharField(label='Beleg oder Verwendungszweck', max_length=140)
+
+
 class ComposeForm(forms.Form):
     subject = forms.CharField(label='Betreff', max_length=200)
     body = forms.CharField(label='Text', widget=forms.Textarea, help_text='{vorname} und {nachname} werden für jede Person eingesetzt.')
@@ -366,11 +374,17 @@ def enrol_many(request):
 @require('manage_students')
 @require_POST
 def fee_paid(request, pk):
-    """The Semesterbeitrag of an admitted applicant has arrived: booked by hand, as they have no Matrikelnummer yet to find it
-    by in the bank statement."""
-    study = get_object_or_404(request.user.within(Study.objects.all(), 'manage_students'), pk=pk, status=Study.Status.ADMITTED)
-    StudyTerm.objects.filter(study=study, term=study.start_term, paid=None).update(paid=timezone.localdate())
-    messages.success(request, 'Semesterbeitrag verbucht.')
+    """The Semesterbeitrag of an admitted applicant has arrived: booked by hand with day, amount and Beleg, as they have no
+    Matrikelnummer yet to find it by in the bank statement."""
+    study = get_object_or_404(request.user.within(Study.objects.select_related('start_term'), 'manage_students'), pk=pk, status=Study.Status.ADMITTED)
+    form, fee = PaymentForm(request.POST), study.start_term.fee
+    if not form.is_valid():
+        messages.error(request, 'Bitte Eingangstag, Betrag und Beleg angeben.')
+    elif form.cleaned_data['amount'] < fee:
+        messages.error(request, f'Zu wenig: der Semesterbeitrag beträgt {number_format(fee, 2)} €.')
+    else:
+        StudyTerm.objects.filter(study=study, term=study.start_term, paid=None).update(**form.cleaned_data)
+        messages.success(request, f'Semesterbeitrag verbucht: {number_format(form.cleaned_data["amount"], 2)} € am {date_format(form.cleaned_data["paid"], "j.n.Y")}.')
     back = request.POST.get('next', '')
     return redirect(back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else study.get_absolute_url())
 
@@ -535,10 +549,12 @@ def hold(request, pk):
 
 
 def book(term, enrolled, paid):
-    """Book the Semesterbeitrag {person: day paid} for all their studies and tell each where their Rückmeldung stands."""
+    """Book the Semesterbeitrag {person: (day, amount, Beleg)} for all their studies and tell each where their Rückmeldung
+    stands."""
     with transaction.atomic():
         for s in enrolled.filter(person__in=paid):
-            StudyTerm.objects.update_or_create(study=s, term=term, defaults={'paid': paid[s.person]})
+            day, amount, reference = paid[s.person]
+            StudyTerm.objects.update_or_create(study=s, term=term, defaults={'paid': day, 'amount': amount, 'reference': reference[:140]})
     for p in paid:
         if missing := p.missing():
             texts.send('rueckmeldung_offen', p, rueckmeldesemester=term, fehlt=', '.join(missing))
@@ -562,9 +578,13 @@ def reregistration(request):
     late_fee = Institution.get().late_fee
     if request.method == 'POST':
         if 'pay' in request.POST:
-            people = {s.person: today for s in enrolled.filter(person__in=request.POST.getlist('person'))}
+            day, reference = dates.day(request.POST.get('paid', '')) or today, request.POST.get('reference', '').strip()
+            if not reference:
+                messages.error(request, 'Bitte den Beleg oder Verwendungszweck angeben, mit dem die Zahlung einging.')
+                return redirect('students:reregistration')
+            people = {s.person: (day, term.due(day, late_fee), reference) for s in enrolled.filter(person__in=request.POST.getlist('person'))}
             book(term, enrolled, people)
-            messages.success(request, f'Zahlung für {plural(len(people), "Person", "Personen")} verbucht.')
+            messages.success(request, f'Zahlung für {plural(len(people), "Person", "Personen")} verbucht, je {number_format(term.due(day, late_fee), 2)} € am {date_format(day, "j.n.Y")}.')
         elif statement := request.FILES.get('statement'):
             unpaid = {s.person.matriculation: s.person for s in enrolled.exclude(person__in=paid)}
             found, short, unknown = {}, [], 0
@@ -575,7 +595,7 @@ def reregistration(request):
                 elif amount < term.due(day, late_fee):
                     short.append(f'{person.name} ({number_format(amount, 2)} €)')
                 else:
-                    found[person] = day
+                    found[person] = (day, amount, text)
             book(term, enrolled, found)
             messages.success(request, ' '.join(filter(None, [
                 f'{plural(len(found), "Zahlung", "Zahlungen")} verbucht.', short and f'Zu wenig überwiesen: {", ".join(short)}.',

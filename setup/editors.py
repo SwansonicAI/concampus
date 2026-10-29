@@ -250,7 +250,7 @@ EDITORS = {e.key: e for e in [
     ),
     Editor(
         'semester', Term, 'Semester', 'manage_terms', 'Verwaltung',
-        fields=['name', 'start', 'end', 'lectures_start', 'lectures_end', 'reregistration_start', 'deadline', 'late_deadline', 'fee'],
+        fields=['name', 'start', 'end', 'lectures_start', 'lectures_end', 'reregistration_start', 'deadline', 'late_deadline', 'fee', 'fee_union', 'fee_ticket', 'fee_council'],
         columns=[('Semester', 'name'), ('Beginn', 'start'), ('Ende', 'end'), ('Rückmeldefrist', 'deadline'), ('Beitrag', 'fee')],
         search=['name'], words='unterrichtszeit vorlesungszeit rückmeldefrist semesterbeitrag termine',
         queryset=lambda: Term.objects.order_by('-start'),

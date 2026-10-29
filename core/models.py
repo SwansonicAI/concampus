@@ -441,6 +441,12 @@ class Term(Tracked, models.Model):
     deadline = models.DateField('Rückmeldefrist')
     late_deadline = models.DateField('Nachfrist bis', null=True, blank=True, help_text='Rückmeldung mit Säumnisgebühr; leer: keine Nachfrist.')
     fee = models.DecimalField('Semesterbeitrag', max_digits=7, decimal_places=2)
+    fee_union = models.DecimalField('davon Studierendenwerk', max_digits=7, decimal_places=2, null=True, blank=True)
+    fee_ticket = models.DecimalField('davon Semesterticket', max_digits=7, decimal_places=2, null=True, blank=True)
+    fee_council = models.DecimalField(
+        'davon Studierendenschaft', max_digits=7, decimal_places=2, null=True, blank=True,
+        help_text='Die Teile, wie sie Bescheide nennen und wie Erstattungen sie brauchen; zusammen der Semesterbeitrag.',
+    )
     exam_signup_start = models.DateField('Prüfungsanmeldung ab', null=True, blank=True, help_text='Neue Prüfungen des Semesters übernehmen den Zeitraum.')
     exam_signup_end = models.DateField('Prüfungsanmeldung bis', null=True, blank=True)
     exams_start = models.DateField('Beginn des Prüfungszeitraums', null=True, blank=True, help_text='Bis einige Wochen davor melden sich Studierende von Prüfungen ab.')
@@ -462,6 +468,11 @@ class Term(Tracked, models.Model):
     def closes(self):
         """The last day of the Rückmeldung: the end of the Nachfrist, else the Rückmeldefrist."""
         return self.late_deadline or self.deadline
+
+    @property
+    def parts(self):
+        """What the Semesterbeitrag is made of: [(whom it goes to, amount)]."""
+        return [(name, amount) for name, amount in [('Studierendenwerk', self.fee_union), ('Semesterticket', self.fee_ticket), ('Studierendenschaft', self.fee_council)] if amount]
 
     def due(self, day, late_fee):
         """The Semesterbeitrag paid on `day`: with the Säumnisgebühr in the Nachfrist."""
@@ -489,6 +500,8 @@ class Term(Tracked, models.Model):
             raise ValidationError({'exam_signup_end': 'Die Anmeldung endet nach ihrem Beginn.'})
         if self.exams_start and self.exams_end and self.exams_start > self.exams_end:
             raise ValidationError({'exams_end': 'Der Prüfungszeitraum endet nach seinem Beginn.'})
+        if self.parts and self.fee is not None and sum(amount for _, amount in self.parts) != self.fee:
+            raise ValidationError({'fee_council': 'Die Teile ergeben zusammen nicht den Semesterbeitrag.'})
 
     @classmethod
     def pick(cls, pk):

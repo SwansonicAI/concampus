@@ -57,7 +57,7 @@ class ReregistrationTest(Seeded):
         asa = self.login('asa')
         self.assertTrue(asa.get('/studierende/rueckmeldung/').context['blocked'])
         held = Person.objects.exclude(hold='').first()
-        asa.post('/studierende/rueckmeldung/', {'pay': '1', 'person': [held.pk]})
+        asa.post('/studierende/rueckmeldung/', {'pay': '1', 'person': [held.pk], 'reference': 'Barzahlung'})
         self.assertIn('Sperre', held.messages.first().body)
         self.assertTrue(StudyTerm.objects.filter(study__person=held, term=Term.upcoming(), paid__isnull=False).exists())
 

@@ -48,6 +48,10 @@ FEES = {  # published Semesterbeiträge from WiSe 2023/24; earlier ones approxim
     'SoSe 2024': Decimal('223.80'), 'WiSe 2024/25': Decimal('279.40'), 'SoSe 2025': Decimal('279.40'), 'WiSe 2025/26': Decimal('313.30'),
     'SoSe 2026': Decimal('323.30'), 'WiSe 2026/27': FEE,
 }
+PARTS = {  # Studierendenwerk, Deutschlandsemesterticket, Studierendenschaft (StuRa, DNT-Ticket, Klassik Stiftung), as the HfM publishes them
+    'SoSe 2026': (Decimal('95.00'), Decimal('208.80'), Decimal('19.50')), 'WiSe 2026/27': (Decimal('95.00'), Decimal('226.80'), Decimal('19.50')),
+    'SoSe 2027': (Decimal('95.00'), Decimal('226.80'), Decimal('19.50')),
+}
 MIDDLE = {'w': ['Sophie', 'Marie', 'Charlotte', 'Luise', 'Elisabeth'], 'm': ['Maximilian', 'Alexander', 'Johannes', 'Friedrich', 'Wilhelm']}
 DEMO_VIDEO = (  # stand-in for every audition video: a real performance under CC BY 3.0, via Wikimedia Commons
     'Platzhalter: Schumann, Fantasiestücke op. 73 (N. Hakhnazaryan, R. Rabinovich; CC BY 3.0)',
@@ -917,6 +921,8 @@ class Command(BaseCommand):
                 lectures = LECTURES.get(name, (october + timedelta(days=-october.weekday() % 7), february + timedelta(days=(4 - february.weekday()) % 7)))
                 terms.append(Term(name=name, start=october, end=date(year + 1, 3, 31), lectures_start=lectures[0], lectures_end=lectures[1], deadline=date(year, 6, 15), fee=FEES.get(name, fee)))
         for term in terms:
+            if term.name in PARTS:
+                term.fee_union, term.fee_ticket, term.fee_council = PARTS[term.name]
             term.reregistration_start = term.deadline - timedelta(days=14)  # Rückmeldung SoSe 2027: 04.–18.01.2027
             term.late_deadline = term.deadline + timedelta(days=8)  # Nachfrist with Säumnisgebühr: 19.–26.01.2027
             term.exams_start = EXAMS_START.get(term.name)

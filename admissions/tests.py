@@ -37,7 +37,7 @@ class DecisionTest(Seeded):
         asa.post(f'/studierende/{study.pk}/versicherung/')
         asa.post(f'/studierende/{study.pk}/immatrikulieren/', {'bestaetigt': '1'})
         self.assertEqual(Study.objects.get(pk=study.pk).status, Study.Status.ADMITTED)  # not before the fee is in
-        asa.post(f'/studierende/{study.pk}/beitrag/')
+        asa.post(f'/studierende/{study.pk}/beitrag/', {'paid': 'heute', 'amount': str(study.start_term.fee).replace('.', ','), 'reference': 'Quittung 7'})
         asa.post(f'/studierende/{study.pk}/immatrikulieren/', {'bestaetigt': '1'})
         study.refresh_from_db()
         self.assertEqual(study.status, Study.Status.ENROLLED)
