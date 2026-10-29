@@ -3,7 +3,7 @@
 {% block content %}
 <div class="document">
   <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="more" href="{% url 'exams:transcript' study.pk %}">Zum Zeugnis</a></p>
-  {% include "core/_letterhead.html" with office=sender %}
+  {% include "core/_letterhead.html" with plain=True %}
   <h1>Urkunde</h1>
   {% if copy %}<p class="muted"><small>Abschrift zur Information. Gültig ist die unterschriebene und gesiegelte Urkunde.</small></p>{% endif %}
   <p style="margin-top: 32px">Die {{ institution.name }} verleiht</p>

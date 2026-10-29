@@ -424,13 +424,14 @@ class Office(Tracked, Group):
         return ', '.join(map(str, [*self.institutes.all(), *self.programs.all()])) or 'ganze Hochschule'
 
     @classmethod
-    def holding(cls, capability, program=None):
+    def holding(cls, capability, program=None, remit=False):
         """The offices that hold a capability (or any of several), for sentences like 'Zentral vergeben: …'; with a
-        programme, those for it."""
+        programme, those for it; with `remit`, each limited one says for what."""
         offices = cls.objects.filter(permissions__codename__in=[capability] if isinstance(capability, str) else capability).distinct()
         if program:
             offices = offices.filter(models.Q(programs=None) | models.Q(programs=program), institutes=None)
-        *rest, last = offices.values_list('name', flat=True) or ['']
+        names = [f'{o.name}, nur für {o.remit}' if remit and o.remit != 'ganze Hochschule' else o.name for o in offices.prefetch_related('institutes', 'programs')]
+        *rest, last = names or ['']
         return f'{", ".join(rest)} oder {last}' if rest else last
 
 
@@ -522,6 +523,7 @@ class Holiday(Tracked, models.Model):
     name = models.CharField('Bezeichnung', max_length=80)
     first = models.DateField('Von')
     last = models.DateField('Bis', null=True, blank=True, help_text='Leer: nur ein Tag.')
+    public = models.BooleanField('Gesetzlicher Feiertag', default=False, help_text='Eine Frist, die an ihm endet, endet erst am nächsten Werktag.')
 
     class Meta:
         ordering = ['first']
@@ -536,10 +538,11 @@ class Holiday(Tracked, models.Model):
             raise ValidationError({'last': 'Endet nicht vor dem ersten Tag.'})
 
     @classmethod
-    def days(cls, start, end):
-        """The lecture-free days from `start` to `end`."""
+    def days(cls, start, end, public=False):
+        """The lecture-free days from `start` to `end`; with `public`, only public holidays."""
         found = set()
-        for holiday in cls.objects.filter(first__lte=end).filter(models.Q(last__gte=start) | models.Q(last=None, first__gte=start)):
+        holidays = cls.objects.filter(public=True) if public else cls.objects.all()
+        for holiday in holidays.filter(first__lte=end).filter(models.Q(last__gte=start) | models.Q(last=None, first__gte=start)):
             day = max(holiday.first, start)
             while day <= min(holiday.last or holiday.first, end):
                 found.add(day)

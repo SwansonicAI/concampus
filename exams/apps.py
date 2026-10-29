@@ -79,14 +79,21 @@ class ExamsConfig(Tile, AppConfig):
                 late = ', '.join(e.last_name for e, _ in panel.waiting(panel.sheet(exam)[1]))
                 found.append(task(
                     f'Ergebnisse überfällig: {exam.title}, ' + (f'Wertung fehlt: {late}' if late else f'{plural(exam.open, "Teilnahme", "Teilnahmen")} offen'),
-                    exam.get_absolute_url(), timezone.localdate(exam.held),
+                    exam.get_absolute_url(), timezone.localdate(exam.held) + timedelta(days=7),
                 ))
+        if 'correct_scores' in person.roles and 'decide_results' not in person.roles:  # the Prüfungsausschuss hears of a Zeugnis long overdue
+            from students.models import Study
+            from .views import finished
+
+            for study, done in finished(person.within(Study.objects.filter(status=Study.Status.ENROLLED, issued=None), 'correct_scores')):
+                if done['completed'] and done['completed'] + timedelta(weeks=4) + timedelta(days=90) < timezone.localdate():
+                    found.append(task(f'Zeugnis seit über drei Monaten überfällig: {study.person}, {study.program.title}', reverse('exams:transcript', args=[study.pk]), done['completed'] + timedelta(weeks=4)))
         if 'manage_exams' in person.roles:
             from core.models import Term
             from students.models import Document
 
             if short := len(Course.short_panels(person.within(Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], released=None), 'manage_exams'))):
-                found.append(task(f'{plural(short, "Prüfung", "Prüfungen")}: Kommission zu klein', f"{reverse('exams:index')}?stand=kommission"))
+                found.append(task(f'{plural(short, "Prüfung", "Prüfungen")}: Kommission prüfen', f"{reverse('exams:index')}?stand=kommission"))
             failed = Participation.objects.filter(study__person=OuterRef('study__person'), module=OuterRef('module'), passed=False, course__released__isnull=False)
             last = (
                 person.within(Participation.objects.filter(course__kind=Course.Kind.EXAM, course__released=None), 'manage_exams')

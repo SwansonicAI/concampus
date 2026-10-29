@@ -137,7 +137,9 @@ never in the address: a note may say why someone was ill, and addresses end up i
 - Whether the Hauptfachlehrer:in keeps the whole academic record of the class, or sees only their own courses as at some
   universities (HöMS Hessen).
 - Retention periods (applications: `admissions/retention.py`).
-- Nachteilsausgleich is not modelled yet; when it is, it belongs to tier 4.
+- Nachteilsausgleich (`Study.compensation`, granted with `grant_compensation`): the measure is shown to the examiners of
+  the person's exams; the attest behind it, like the attest to a Rücktritt, is tier 4 and opens only to the person and
+  the offices whose decision depends on it (`admissions/views.py`, `document()`).
 
 ## Sources
 

@@ -12,6 +12,7 @@ from django.utils.formats import date_format
 from core import history, texts
 from curriculum.models import Rounding, rounded
 from rooms.models import Booking, BookingCategory
+from students.models import Document
 from .models import Course, Participation, Score
 
 SCALE = ['1,0', '1,3', '1,7', '2,0', '2,3', '2,7', '3,0', '3,3', '3,7', '4,0', '5,0']  # a single examiner's grade; means fall between
@@ -85,13 +86,14 @@ def sheet(course):
     staff = list(course.staff.all())
     rows = list(
         course.participations.select_related('study__person', 'study__program', 'study__subject', 'module')
-        .prefetch_related('scores', 'recusals__substitute')
+        .prefetch_related('scores__entered_by', 'recusals__substitute')
     )
     panel = course.kind in Course.PANEL
     for p in rows:
         p.course = course
         values = {s.examiner_id: s.value for s in p.scores.all()}
         p.reports = {s.examiner_id: s.report for s in p.scores.all()}
+        p.copied = {s.examiner_id: s.entered_by for s in p.scores.all() if s.entered_by}
         recusals = {r.examiner_id: r for r in p.recusals.all()}
         p.recused = {pk: r.reason for pk, r in recusals.items()}
         p.substitutes = {pk: r.substitute for pk, r in recusals.items() if r.substitute}
@@ -194,8 +196,9 @@ def retype(rows, post, error):
         p.error = str(error) if p.pk == error.row else ''
 
 
-def marks(post, p, columns, decide, correct):
-    """The scores a results form makes of one panel row: (new, changed, cleared pks). Sets the row's grade and result."""
+def marks(post, p, columns, decide, correct, by=None):
+    """The scores a results form makes of one panel row: (new, changed, cleared pks). Sets the row's grade and result.
+    A mark `by` someone else than its examiner is copied from the Protokoll, which an exam needs uploaded first."""
     new, changed, cleared = [], [], []
     scores = {s.examiner_id: s for s in p.scores.all()}
     values = {e.pk: v for e, v in p.marks}
@@ -210,13 +213,16 @@ def marks(post, p, columns, decide, correct):
             raise Refused('Zur Note gehört das schriftliche Gutachten.')
         if value is None and (report or '').strip():
             raise Refused('Bitte zum Gutachten die Note wählen.')
+        copied = by if by and by.pk != e.pk and value != values[e.pk] else None
+        if copied and not correct and p.course.kind == Course.Kind.EXAM and not p.course.protocol:
+            raise Refused('Erst das unterschriebene Protokoll hochladen; danach lassen sich die Wertungen der Prüfenden übertragen.')
         values[e.pk] = value
         if score is None and value is not None:
-            new.append(Score(participation=p, examiner=e, value=value, report=report or ''))
+            new.append(Score(participation=p, examiner=e, value=value, report=report or '', entered_by=copied))
         elif score and value is None:
             cleared.append(score.pk)
         elif score and (score.value != value or report is not None and score.report != report):
-            score.value, score.report = value, score.report if report is None else report
+            score.value, score.report, score.entered_by = value, score.report if report is None else report, copied
             changed.append(score)
     given = [v for pk, v in values.items() if pk not in p.recused]
     if p.course.max_points is not None and any(v > p.course.max_points for v in given if v is not None):
@@ -231,6 +237,8 @@ def marks(post, p, columns, decide, correct):
     p.passed = p.course.passes(p.grade) if p.grade is not None else None
     if decide:
         remark = post.get(f'remark-{p.pk}', '')
+        if remark == Participation.Remark.EXCUSED != p.remark and not Document.objects.filter(study=p.study_id, kind='attest', created__gte=p.created).exists():
+            raise Refused('Ein Rücktritt braucht das Attest: über „Rücktritt mit Attest“ verbuchen.')
         p.remark = remark if remark in Participation.Remark.values else ''
     if p.remark == Participation.Remark.EXCUSED:
         p.grade = p.passed = None
@@ -239,7 +247,7 @@ def marks(post, p, columns, decide, correct):
     return new, changed, cleared
 
 
-def save(post, rows, columns, decide, correct=False):
+def save(post, rows, columns, decide, correct=False, by=None):
     """Apply a results form. Raises Refused, with the row it stopped at, on a malformed number or a change to locked
     marks; nothing is saved then. Fields the form did not send stay as they are.
 
@@ -254,7 +262,7 @@ def save(post, rows, columns, decide, correct=False):
     for p in rows:
         try:
             if p.course.kind in Course.PANEL:
-                found = marks(post, p, columns, decide, correct)
+                found = marks(post, p, columns, decide, correct, by)
                 new, changed, cleared = new + found[0], changed + found[1], cleared + found[2]
             elif decide and f'grade-{p.pk}' in post:
                 p.grade = grade(post[f'grade-{p.pk}'], p.course)
@@ -269,7 +277,7 @@ def save(post, rows, columns, decide, correct=False):
         Participation.objects.bulk_update(rows, ['grade', 'passed', 'remark', 'reason'])
         Score.objects.filter(pk__in=cleared).delete()
         Score.objects.bulk_create(new)
-        Score.objects.bulk_update(changed, ['value', 'report'])
+        Score.objects.bulk_update(changed, ['value', 'report', 'entered_by'])
         history.saved([*rows, *new, *changed])
 
 

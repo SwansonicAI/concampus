@@ -22,6 +22,7 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
         ('appoint_examiners', 'Prüfende für ein Studienjahr bestellen'),
         ('correct_scores', 'Wertungen berichtigen, abweichende Noten mit Begründung festsetzen, freigegebene Ergebnisse wieder öffnen und zurücksetzen'),
         ('recognise', 'Leistungen anerkennen'),
+        ('grant_compensation', 'Nachteilsausgleich gewähren, mit dem Attest dazu (Gesundheitsdaten)'),
     ]),
     ('Lehre', [
         ('manage_courses', 'Veranstaltungen anlegen und bearbeiten: Titel, Lehrende, Termine, Plätze, Ensembles'),
@@ -76,7 +77,7 @@ def needs(roles):
     from .models import Office
 
     labels = dict(c for _, group in CAPABILITIES for c in group)
-    rights = [f'dem Recht „{labels[r]}“ ({Office.holding(r) or "noch kein Amt"})' for r in roles if r in labels]
+    rights = [f'dem Recht „{labels[r]}“ ({Office.holding(r, remit=True) or "noch kein Amt"})' for r in roles if r in labels]
     whom = ', '.join(ROLES[r] for r in roles if r in ROLES)
     return f'Diese Seite ist für {" und ".join(filter(None, [whom, rights and "Ämter mit " + " oder ".join(rights)]))}.'
 

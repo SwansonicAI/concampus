@@ -2,106 +2,113 @@
 {% load i18n %}
 {% block title %}Diploma Supplement {{ study.person.name }}{% endblock %}
 {% block content %}
-{% language 'en' %}
+{% language lang %}
 {% with p=study.person program=study.program %}
 <div class="document">
-  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="more" href="{% url 'exams:transcript' study.pk %}">Zum Zeugnis</a></p>
-  {% if not finished %}<p class="no-print fail">Entwurf: Es sind {{ earned }} von {{ total }} ECTS erworben. Die Gesamtnote folgt mit dem Abschluss.</p>{% endif %}
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button>{% if de %}<a class="btn ghost" href="?">English</a>{% else %}<a class="btn ghost" href="?sprache=de">Deutsch</a>{% endif %}<a class="more" href="{% url 'exams:transcript' study.pk %}">Zum Zeugnis</a></p>
+  {% if not finished %}<p class="fail">{% if de %}Entwurf: {{ earned }} von {{ total }} ECTS-Leistungspunkten erworben; die Gesamtnote folgt mit dem Abschluss.{% else %}Draft: {{ earned }} of {{ total }} ECTS credits earned; the overall grade follows with the degree.{% endif %}</p>{% endif %}
   {% include "core/_letterhead.html" with office=awarding|linebreaksbr %}
   <h1>Diploma Supplement</h1>
-  {% if copy %}<p class="muted"><small>Copy for information. Valid only as the signed and sealed original.</small></p>{% endif %}
-  <p class="muted"><small>This Diploma Supplement follows the model developed by the European Commission, the Council of Europe and UNESCO/CEPES. It provides independent data to improve the international transparency and fair academic and professional recognition of qualifications.</small></p>
+  {% if copy %}<p class="muted"><small>{% if de %}Abschrift zur Information. Gültig ist das unterschriebene und gesiegelte Original.{% else %}Copy for information. Valid only as the signed and sealed original.{% endif %}</small></p>{% endif %}
+  <p class="muted"><small>{% if de %}Diese Diploma-Supplement-Vorlage wurde von der Europäischen Kommission, dem Europarat und UNESCO/CEPES entwickelt. Das Diploma Supplement soll hinreichende Daten zur Verfügung stellen, die die internationale Transparenz und angemessene akademische und berufliche Anerkennung von Qualifikationen verbessern.{% else %}This Diploma Supplement follows the model developed by the European Commission, the Council of Europe and UNESCO/CEPES. It provides independent data to improve the international transparency and fair academic and professional recognition of qualifications.{% endif %}</small></p>
 
   <section>
-    <h2>1. Holder of the qualification</h2>
+    <h2>1. {% if de %}Angaben zum Inhaber oder zur Inhaberin der Qualifikation{% else %}Holder of the qualification{% endif %}</h2>
     <dl class="facts">
-      <dt>1.1 Family name</dt><dd><b>{{ p.last_name }}</b>{% if p.birth_name %}, born {{ p.birth_name }}{% endif %}</dd>
-      <dt>1.2 Given names</dt><dd>{{ p.given_names|default:p.first_name }}</dd>
-      <dt>1.3 Date of birth</dt><dd>{{ p.birth_date|date:"j F Y"|default:"–" }}{% if p.birth_place %}, {{ p.birth_place }}{% endif %}</dd>
-      <dt>1.4 Student ID</dt><dd>{{ p.matriculation|default:"–" }}</dd>
+      <dt>1.1 {% if de %}Familienname{% else %}Family name{% endif %}</dt><dd><b>{{ p.last_name }}</b>{% if p.birth_name %}, {% if de %}geb.{% else %}born{% endif %} {{ p.birth_name }}{% endif %}</dd>
+      <dt>1.2 {% if de %}Vornamen{% else %}Given names{% endif %}</dt><dd>{{ p.given_names|default:p.first_name }}</dd>
+      <dt>1.3 {% if de %}Geburtsdatum{% else %}Date of birth{% endif %}</dt><dd>{{ p.birth_date|date:"j F Y"|default:"–" }}{% if p.birth_place %}, {{ p.birth_place }}{% endif %}</dd>
+      <dt>1.4 {% if de %}Matrikelnummer{% else %}Student ID{% endif %}</dt><dd>{{ p.matriculation|default:"–" }}</dd>
     </dl>
   </section>
 
   <section>
-    <h2>2. Qualification</h2>
+    <h2>2. {% if de %}Angaben zur Qualifikation{% else %}Qualification{% endif %}</h2>
     <dl class="facts">
-      <dt>2.1 Name of qualification</dt><dd>{{ program.qualification|default:program.degree }}</dd>
-      <dt>2.2 Main field of study</dt><dd>{{ program.english|default:program.name }}, main subject {{ study.subject.english|default:study.subject.name }}</dd>
-      <dt>2.3 Awarding institution</dt><dd>{{ awarding|linebreaksbr }}</dd>
-      <dt>2.4 Institution administering studies</dt><dd>Same as 2.3</dd>
-      <dt>2.5 Language of instruction and examination</dt><dd>German</dd>
+      <dt>2.1 {% if de %}Bezeichnung der Qualifikation{% else %}Name of qualification{% endif %}</dt><dd>{{ program.qualification|default:program.degree }}</dd>
+      <dt>2.2 {% if de %}Hauptstudienfach{% else %}Main field of study{% endif %}</dt><dd>{% if de %}{{ program.name }}, Hauptfach {{ study.subject.name }}{% else %}{{ program.english|default:program.name }}, main subject {{ study.subject.english|default:study.subject.name }}{% endif %}</dd>
+      <dt>2.3 {% if de %}Verleihende Hochschule{% else %}Awarding institution{% endif %}</dt><dd>{{ awarding|linebreaksbr }}</dd>
+      <dt>2.4 {% if de %}Durchführende Einrichtung{% else %}Institution administering studies{% endif %}</dt><dd>{% if de %}wie 2.3{% else %}Same as 2.3{% endif %}</dd>
+      <dt>2.5 {% if de %}Unterrichts- und Prüfungssprache{% else %}Language of instruction and examination{% endif %}</dt><dd>{% if de %}Deutsch{% else %}German{% endif %}</dd>
     </dl>
   </section>
 
   <section>
-    <h2>3. Level, length and access</h2>
+    <h2>3. {% if de %}Ebene und Zeitdauer der Qualifikation{% else %}Level, length and access{% endif %}</h2>
     <dl class="facts">
-      <dt>3.1 Level</dt>
-      <dd>{% if program.level == 'bachelor' %}First degree (Bachelor), EQF and DQR level 6{% elif program.level == 'master' %}Second degree (Master), EQF and DQR level 7{% else %}First degree of one integrated cycle (Diplom), equivalent to Master level, EQF and DQR level 7{% endif %}</dd>
-      <dt>3.2 Official length</dt><dd>{{ program.semesters }} semesters full-time, {{ total }} ECTS credits</dd>
-      <dt>3.3 Access requirements</dt>
-      <dd>{% if program.postgraduate %}A first higher education degree in a relevant field and an entrance examination of artistic aptitude{% else %}Higher education entrance qualification (Hochschulreife) or, by way of exception, outstanding artistic talent; in either case an entrance examination of artistic aptitude{% endif %}</dd>
+      <dt>3.1 {% if de %}Ebene der Qualifikation{% else %}Level{% endif %}</dt>
+      <dd>{% if program.level == 'bachelor' %}{% if de %}Erster berufsqualifizierender Abschluss (Bachelor), DQR- und EQR-Niveau 6{% else %}First degree (Bachelor), EQF and DQR level 6{% endif %}{% elif program.level == 'master' %}{% if de %}Zweiter berufsqualifizierender Abschluss (Master), DQR- und EQR-Niveau 7{% else %}Second degree (Master), EQF and DQR level 7{% endif %}{% else %}{% if de %}Abschluss eines integrierten Studiengangs (Diplom), dem Master gleichwertig, DQR- und EQR-Niveau 7{% else %}First degree of one integrated cycle (Diplom), equivalent to Master level, EQF and DQR level 7{% endif %}{% endif %}</dd>
+      <dt>3.2 {% if de %}Regelstudienzeit{% else %}Official length{% endif %}</dt><dd>{{ program.semesters }} {% if de %}Semester in Vollzeit, {{ total }} ECTS-Leistungspunkte{% else %}semesters full-time, {{ total }} ECTS credits{% endif %}</dd>
+      <dt>3.3 {% if de %}Zugangsvoraussetzungen{% else %}Access requirements{% endif %}</dt>
+      <dd>{% if program.postgraduate %}{% if de %}Ein erster einschlägiger Hochschulabschluss und eine Eignungsprüfung{% else %}A first higher education degree in a relevant field and an entrance examination of artistic aptitude{% endif %}{% else %}{% if de %}Hochschulzugangsberechtigung oder ausnahmsweise eine besondere künstlerische Begabung; in jedem Fall eine Eignungsprüfung{% else %}Higher education entrance qualification (Hochschulreife) or, by way of exception, outstanding artistic talent; in either case an entrance examination of artistic aptitude{% endif %}{% endif %}</dd>
     </dl>
   </section>
 
   <section>
-    <h2>4. Contents and results</h2>
+    <h2>4. {% if de %}Angaben zum Inhalt des Studiums und zu den erzielten Ergebnissen{% else %}Contents and results{% endif %}</h2>
     <dl class="facts">
-      <dt>4.1 Mode of study</dt><dd>Full-time</dd>
-      <dt>4.2 Learning outcomes</dt><dd>{{ program.outcomes|linebreaksbr|default:"–" }}</dd>
-      <dt>4.3 Programme details</dt><dd>Modules with credits and grades below, in the original German. Examination regulations of {{ program.version }}; studies commenced {{ study.start_term }}.</dd>
+      <dt>4.1 {% if de %}Studienform{% else %}Mode of study{% endif %}</dt><dd>{% if de %}Vollzeit{% else %}Full-time{% endif %}</dd>
+      <dt>4.2 {% if de %}Lernergebnisse{% else %}Learning outcomes{% endif %}</dt><dd>{% if de %}Siehe die englische Fassung.{% else %}{{ program.outcomes|linebreaksbr|default:"–" }}{% endif %}</dd>
+      <dt>4.3 {% if de %}Einzelheiten zum Studiengang{% else %}Programme details{% endif %}</dt><dd>{% if de %}Module mit Leistungspunkten und Noten unten. Prüfungsordnung {{ program.version }}; Studienbeginn {{ study.start_term }}.{% else %}Modules with credits and grades below, in the original German. Examination regulations of {{ program.version }}; studies commenced {{ study.start_term }}.{% endif %}</dd>
     </dl>
     <table>
-      <thead><tr><th>Module</th><th>Title</th><th class="num">ECTS</th><th class="num">Grade</th></tr></thead>
+      <thead><tr><th>{% if de %}Modul{% else %}Module{% endif %}</th><th>{% if de %}Titel{% else %}Title{% endif %}</th><th class="num">ECTS</th><th class="num">{% if de %}Note{% else %}Grade{% endif %}</th></tr></thead>
       <tbody>
         {% for r in rows %}{% if r.kind != 'part' %}
         <tr>
           <td class="nowrap">{% firstof r.node.code r.choice.code %}</td>
-          <td>{% if r.choice %}{{ r.choice.title }}: {% endif %}{{ r.node.title }}{% if not r.node.done %} <small class="muted">(in progress)</small>{% endif %}</td>
+          <td>{% if r.choice %}{{ r.choice.title }}: {% endif %}{{ r.node.title }}{% if not r.node.done %} <small class="muted">({% if de %}laufend{% else %}in progress{% endif %})</small>{% endif %}</td>
           <td class="num">{{ r.node.earned }}</td>
-          <td class="num">{% if r.node.done %}{{ r.node.grade|default_if_none:"passed" }}{% endif %}</td>
+          <td class="num">{% if r.node.done and r.kind != 'group' %}{% if r.node.grade is None %}{% if de %}bestanden{% else %}passed{% endif %}{% else %}{{ r.node.grade|floatformat:1 }}{% endif %}{% endif %}</td>
         </tr>
         {% endif %}{% empty %}<tr><td colspan="4" class="empty">–</td></tr>{% endfor %}
-        <tr class="total"><td colspan="2">Total</td><td class="num">{{ earned }} / {{ total }}</td><td></td></tr>
+        <tr class="total"><td colspan="2">{% if de %}Summe{% else %}Total{% endif %}</td><td class="num">{{ earned }} / {{ total }}</td><td></td></tr>
       </tbody>
     </table>
     <dl class="facts" style="margin-top: 16px">
-      <dt>4.4 Grading scheme</dt>
+      <dt>4.4 {% if de %}Notensystem und Notenverteilung{% else %}Grading scheme and grade distribution{% endif %}</dt>
       <dd>
-        {% for limit, word, translated in grades %}up to {{ limit|floatformat:1 }} {{ word }} ({{ translated }}){% if not forloop.last %}; {% endif %}{% endfor %}; 4.1 to 5.0 nicht ausreichend (fail). The lowest pass grade is 4.0.
-        The overall grade is the mean of the module grades weighted as the examination regulations set.{% if program.honours %} Up to {{ program.honours|floatformat:1 }} the degree is awarded with distinction (mit Auszeichnung).{% endif %}
+        {% for limit, word, translated in grades %}{% if de %}bis {{ limit|floatformat:1 }} {{ word }}{% else %}up to {{ limit|floatformat:1 }} {{ word }} ({{ translated }}){% endif %}{% if not forloop.last %}; {% endif %}{% endfor %}; {% if de %}4,1 bis 5,0 nicht ausreichend. Bestanden ist bis 4,0.{% else %}4.1 to 5.0 nicht ausreichend (fail). The lowest pass grade is 4.0.{% endif %}
+        {% if de %}Die Gesamtnote ist das nach der Prüfungsordnung gewichtete Mittel der Modulnoten.{% else %}The overall grade is the mean of the module grades weighted as the examination regulations set.{% endif %}{% if program.honours %} {% if de %}Bis {{ program.honours|floatformat:1 }} wird der Abschluss mit Auszeichnung verliehen.{% else %}Up to {{ program.honours|floatformat:1 }} the degree is awarded with distinction (mit Auszeichnung).{% endif %}{% endif %}
+        {% if distribution %}
+        <table style="margin-top: 12px">
+          <thead><tr><th>{% if de %}Gesamtnote{% else %}Overall grade{% endif %}</th>{% for limit, word, translated, share in distribution %}<th class="num">{% if de %}{{ word }}{% else %}{{ translated }}{% endif %}</th>{% endfor %}</tr></thead>
+          <tbody><tr><td>{% if de %}Anteil{% else %}Share{% endif %}</td>{% for limit, word, translated, share in distribution %}<td class="num">{{ share }} %</td>{% endfor %}</tr></tbody>
+        </table>
+        <small class="muted">{% if de %}Einstufungstabelle nach dem ECTS-Leitfaden: die {{ reference }} Absolventinnen und Absolventen des Studiengangs in den drei Jahren davor.{% else %}Grading table as the ECTS Users’ Guide describes it: the {{ reference }} graduates of the programme in the three years before.{% endif %}</small>
+        {% else %}<br><small class="muted">{% if de %}Für eine Notenverteilung ist die Referenzgruppe zu klein ({{ reference }} Abschlüsse in drei Jahren).{% else %}The reference group is too small for a grade distribution ({{ reference }} degrees in three years).{% endif %}</small>{% endif %}
       </dd>
-      <dt>4.5 Overall classification</dt>
-      <dd>{% if finished and average %}<b>{{ average|floatformat:1 }} ({{ verbal }}){% if honours %}, with distinction{% endif %}</b>{% else %}Not yet awarded{% endif %}</dd>
+      <dt>4.5 {% if de %}Gesamtnote{% else %}Overall classification{% endif %}</dt>
+      <dd>{% if finished and average %}<b>{{ average|floatformat:1 }} ({{ verbal }}){% if honours %}, {% if de %}mit Auszeichnung{% else %}with distinction{% endif %}{% endif %}</b>{% else %}{% if de %}Noch nicht vergeben{% else %}Not yet awarded{% endif %}{% endif %}</dd>
     </dl>
   </section>
 
   <section>
-    <h2>5. Function of the qualification</h2>
+    <h2>5. {% if de %}Angaben zur Berechtigung der Qualifikation{% else %}Function of the qualification{% endif %}</h2>
     <dl class="facts">
-      <dt>5.1 Access to further study</dt>
-      <dd>{% if program.level == 'bachelor' %}Qualifies to apply for Master programmes{% else %}Qualifies to apply for doctoral studies and for postgraduate artistic programmes{% endif %}</dd>
-      <dt>5.2 Professional status</dt><dd>Not applicable</dd>
+      <dt>5.1 {% if de %}Zugang zu weiterführenden Studien{% else %}Access to further study{% endif %}</dt>
+      <dd>{% if program.level == 'bachelor' %}{% if de %}Berechtigt zur Bewerbung für Masterstudiengänge{% else %}Qualifies to apply for Master programmes{% endif %}{% else %}{% if de %}Berechtigt zur Bewerbung für die Promotion und für künstlerische Aufbaustudiengänge{% else %}Qualifies to apply for doctoral studies and for postgraduate artistic programmes{% endif %}{% endif %}</dd>
+      <dt>5.2 {% if de %}Zugang zu reglementierten Berufen{% else %}Professional status{% endif %}</dt><dd>{% if de %}Entfällt{% else %}Not applicable{% endif %}</dd>
     </dl>
   </section>
 
   <section>
-    <h2>6. Additional information</h2>
+    <h2>6. {% if de %}Weitere Angaben{% else %}Additional information{% endif %}</h2>
     <dl class="facts">
-      <dt>6.1 Additional information</dt><dd>–</dd>
-      <dt>6.2 Further information</dt><dd>{{ institution.website|default:"–" }}</dd>
+      <dt>6.1 {% if de %}Weitere Angaben{% else %}Additional information{% endif %}</dt><dd>–</dd>
+      <dt>6.2 {% if de %}Weitere Informationsquellen{% else %}Further information{% endif %}</dt><dd>{{ institution.website|default:"–" }}</dd>
     </dl>
   </section>
 
   <section>
-    <h2>7. Certification</h2>
-    <p>This Diploma Supplement refers to the Zeugnis and the degree certificate of the same date.</p>
-    <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ today|date:"j F Y" }}</span><span>{{ signature }}<br><small class="muted">Official stamp</small></span></div>
+    <h2>7. {% if de %}Zertifizierung{% else %}Certification{% endif %}</h2>
+    <p>{% if de %}Dieses Diploma Supplement nimmt Bezug auf das Zeugnis und die Urkunde vom{% else %}This Diploma Supplement refers to the Zeugnis and the degree certificate (Urkunde) dated{% endif %} {{ dated|date:"j F Y" }}.</p>
+    <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ dated|date:"j F Y" }}</span><span>{{ signature }}<br><small class="muted">{% if de %}Siegel{% else %}Official stamp{% endif %}</small></span></div>
   </section>
 
   <section>
-    <h2>8. National higher education system</h2>
-    <p>{{ system|linebreaksbr }}</p>
+    <h2>8. {% if de %}Angaben zum nationalen Hochschulsystem{% else %}National higher education system{% endif %}</h2>
+    {{ system|linebreaks }}
   </section>
 </div>
 {% endwith %}

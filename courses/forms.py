@@ -2,10 +2,10 @@ import re
 from collections import defaultdict
 
 from django import forms
-from django.db.models import Case, F, Q, When
+from django.db.models import F, Q
 from django.utils import timezone
 
-from core.dates import ClockField, DayField, MomentField
+from core.dates import ClockField, DayField, MomentField, working
 from core.models import Institution, Person
 from curriculum.models import Module, Program
 from rooms.forms import RoomField, bookable
@@ -228,26 +228,37 @@ class ExamForm(CourseForm):
         self.fields['modules'].choices = leaf_modules(exams=True)
 
 
+WRITTEN = re.compile(r'arbeit|schriftlich|programmheft|dokumentation|dissertation', re.I)  # what of a final project is written
+
+
 class ThesisForm(CourseForm):
     """An Abschlussarbeit. Registering it, the office picks the module of the candidate's plan it is written for."""
 
     module = forms.ModelChoiceField(label='Modul', queryset=Module.objects.none(), empty_label=None)
-    deadline = DayField(label='Abgabe bis', help_text='Bei einer Verlängerung das neue Datum; die Person erhält einen Bescheid.')
+    deadline = DayField(
+        label='Abgabe bis', help_text='Bei einer Verlängerung das neue Datum; die Person erhält einen Bescheid. Ein Samstag, Sonntag oder Feiertag wird zum nächsten Werktag.',
+    )
     field_order = ['module', 'title', 'staff', 'deadline', 'description']
 
     class Meta(CourseForm.Meta):
         fields = ['title', 'staff', 'deadline', 'description']
         labels = {'title': 'Thema', 'staff': 'Gutachter:innen', 'description': 'Notiz'}
 
+    def clean_deadline(self):
+        return working(self.cleaned_data['deadline'])
+
     def __init__(self, *args, study=None, **kwargs):
         super().__init__(*args, **kwargs)
         if study is None:  # registered already: the module stays
             del self.fields['module']
             return
-        final = Q(final=True) | Q(parent__final=True)  # the final exam's parts first: theses and the written parts of final projects
-        exams = study.program.modules.filter(children=None, exam=True).annotate(part=Case(When(final, then=0), default=1))
-        self.fields['module'].queryset = exams.order_by('part', F('semester').desc(nulls_last=True), 'code')
-        self.fields['module'].initial = exams.filter(final, title__icontains='arbeit').first() or exams.filter(final).first()
+        exams = study.program.modules.filter(children=None, exam=True)
+        finals = exams.filter(Q(final=True) | Q(parent__final=True))  # theses and the written parts of final projects
+        if study.focus_id:  # not under a Schwerpunkt chosen against
+            finals = finals.exclude(pk__in=[pk for pk, option in study.program.chosen_by().items() if option.pk != study.focus_id])
+        exams = (finals if finals.exists() else exams).order_by(F('semester').desc(nulls_last=True), 'code')
+        self.fields['module'].queryset = exams
+        self.fields['module'].initial = next((m for m in exams if WRITTEN.search(m.title)), None) or exams.first()
         if study.teacher_id:  # the Hauptfachlehrer:in mostly reviews it
             self.initial['staff'] = [study.teacher_id]
 

@@ -15,6 +15,8 @@ from django.utils import timezone
 from django.utils.formats import date_format, localize
 from django.utils.text import capfirst
 
+from .templatetags.marks import mark
+
 from .models import Change, Person, Tracked
 
 SKIP = {'last_login'}  # changes nobody needs to retrace
@@ -251,4 +253,6 @@ def show(field, value, names):
         return date_format(timezone.localtime(value), 'j.n.Y, H:i')
     if isinstance(value, date):
         return date_format(value, 'j.n.Y')
+    if isinstance(value, Decimal) and field.name in ('value', 'grade'):  # a mark as Prüfungsämter write it: 2,0, 17,5
+        return mark(value)
     return localize(value.normalize() if isinstance(value, Decimal) else value)  # 1,7 rather than 1,70

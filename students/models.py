@@ -1,5 +1,6 @@
 import re
 import uuid
+from collections import defaultdict
 from pathlib import Path
 
 from django.db import models
@@ -64,6 +65,7 @@ class Study(Tracked, models.Model):
     status = models.CharField('Status', max_length=10, choices=Status, default=Status.APPLIED)
     since = models.DateField('Status seit', default=timezone.localdate)
     issued = models.DateField('Zeugnis ausgestellt am', null=True, blank=True)
+    grade = models.DecimalField('Gesamtnote', max_digits=2, decimal_places=1, null=True, blank=True, help_text='Wie im Zeugnis, beim Ausstellen festgehalten.')
     teacher = models.ForeignKey(
         Person, models.SET_NULL, null=True, blank=True, related_name='class_studies',
         verbose_name='Hauptfachlehrer:in', help_text='Bis zur Zulassung der Wunsch aus der Bewerbung.',
@@ -73,6 +75,10 @@ class Study(Tracked, models.Model):
     structured = models.BooleanField('In einem strukturierten Promotionsprogramm', default=False)  # these three for a Promotion
     employed = models.BooleanField('An der Hochschule beschäftigt', default=False)
     cumulative = models.BooleanField('Kumulative Dissertation', default=False, help_text='Aus Veröffentlichungen statt einer Monografie.')
+    compensation = models.CharField(
+        'Nachteilsausgleich', max_length=200, blank=True,
+        help_text='Was der Prüfungsausschuss gewährt hat, ohne Diagnose, z. B. „50 % mehr Bearbeitungszeit bei Klausuren“ (RPSO § 8).',
+    )
 
     class Meta:
         ordering = ['-start_term__start', 'person__last_name']
@@ -201,8 +207,25 @@ class Study(Tracked, models.Model):
         return found
 
     def progress(self):
-        """(curriculum tree with earned credits and grades, final grade so far)."""
+        """(curriculum tree with earned credits, grades and each exam's failed attempts, final grade so far). Each node
+        has its `failures`, and `last` when the next attempt is the last the Prüfungsordnung allows."""
+        from courses.models import Participation  # which imports from here
+
         tree = self.program.curriculum({p.module_id: p.grade for p in self.record()}, self.subject_id)
+        failed = defaultdict(list)
+        for p in Participation.objects.filter(
+            study__person=self.person_id, module__program=self.program_id, passed=False, course__kind__in=['exam', 'thesis'], course__released__isnull=False,
+        ).select_related('course__term').order_by('course__released'):
+            failed[p.module_id].append(p)
+
+        def mark(node):
+            node.failures = failed[node.pk]
+            node.last = bool(node.failures) and not node.done and len(node.failures) == self.program.attempts - 1
+            for child in node.nodes:
+                mark(child)
+
+        for root in tree:
+            mark(root)
         return tree, weighted(tree, self.program.rounding)
 
 
@@ -254,6 +277,7 @@ class DocumentType(Tracked, Keyed):
         'notice': {'name': 'Bescheid', 'condition': Condition.NEVER},
         'abschlussarbeit': {'name': 'Abschlussarbeit', 'condition': Condition.NEVER, 'file_types': '.pdf'},
         'anerkennung': {'name': 'Nachweis zur Anerkennung', 'condition': Condition.NEVER},
+        'attest': {'name': 'Attest', 'condition': Condition.NEVER, 'health': True},  # to a Rücktritt or a Nachteilsausgleich
     }
     capabilities = ('run_auditions',)
 

@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from core.models import Institution, Person, Term, Tracked
 from curriculum.models import Module, Program, Subject
-from students.models import Study
+from students.models import Study, stored
 
 
 class Area(Tracked, models.Model):
@@ -85,6 +85,9 @@ class Course(Tracked, models.Model):
     modules = models.ManyToManyField(Module, blank=True, related_name='courses', verbose_name='Anrechenbar für')
     staff = models.ManyToManyField(Person, blank=True, related_name='teaching', verbose_name='Lehrende / Kommission')
     oral = models.BooleanField('Mündlich oder praktisch', default=False, help_text='Abgenommen von zwei Prüfenden, oder von einer Person mit Beisitz.')
+    protocol = models.FileField(
+        'Protokoll', upload_to=stored, blank=True, help_text='Das unterschriebene Prüfungsprotokoll; erst damit überträgt das Amt die Wertungen der Prüfenden.',
+    )
     assessor = models.ForeignKey(
         Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Beisitz', help_text='Führt das Protokoll, wo nur eine Person prüft.',
     )
@@ -396,6 +399,10 @@ class Score(Judged, Tracked, models.Model):
     examiner = models.ForeignKey(Person, models.CASCADE, related_name='scores', verbose_name='Prüfer:in')
     value = models.DecimalField('Wertung', max_digits=4, decimal_places=2)
     report = models.TextField('Gutachten', blank=True, help_text='Bei Abschlussarbeiten die schriftliche Begründung der Note.')
+    entered_by = models.ForeignKey(
+        Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Übertragen von',
+        help_text='Wer die Wertung aus dem Protokoll eingetragen hat; leer: die prüfende Person selbst.',
+    )
 
     class Meta:
         verbose_name = 'Wertung'

@@ -105,8 +105,12 @@ class ExamTest(Seeded):
         for p in office.get(f'/pruefungen/{resit.pk}/').context['rows']:
             data |= {f'score-{p.pk}-{e.pk}': str(value if value is not None else '2,0') for e, value in p.marks}
             data[f'grade-{p.pk}'] = ''
+        refused = office.post(f'/pruefungen/{resit.pk}/', data)  # the examiners' marks are copied from the signed Protokoll
+        self.assertIn('Protokoll', next(r.error for r in refused.context['rows'] if getattr(r, 'error', None)))
+        office.post(f'/pruefungen/{resit.pk}/protokoll/', {'file': SimpleUploadedFile('protokoll.pdf', b'%PDF-1.4')})
         office.post(f'/pruefungen/{resit.pk}/', data)
         self.assertTrue(all(passed for _, passed in resit.participations.values_list('grade', 'passed')))
+        self.assertTrue(resit.participations.filter(scores__entered_by__username='pruefungsamt').exists())
         office.post(f'/pruefungen/{resit.pk}/freigabe/')
         self.assertIsNotNone(Course.objects.get(pk=resit.pk).released)
         self.assertEqual(office.post(f'/pruefungen/{resit.pk}/', data).status_code, 403)
@@ -139,6 +143,9 @@ class OfficeTest(Seeded):
         self.assertTrue(last.last)
         data = {f'score-{p.pk}-{e.pk}': str(v if v is not None else '') for p in rows for e, v in p.marks}
         data |= {f'grade-{p.pk}': '' for p in rows} | {f'remark-{first.pk}': 'rt', f'remark-{last.pk}': 'ne'}
+        refused = office.post(f'/pruefungen/{resit.pk}/', data)  # a Rücktritt needs its attest
+        self.assertIn('Attest', next(r.error for r in refused.context['rows'] if getattr(r, 'error', None)))
+        office.post(f'/pruefungen/{resit.pk}/attest/', {'participation': first.pk, 'file': SimpleUploadedFile('attest.pdf', b'%PDF-1.4')})
         office.post(f'/pruefungen/{resit.pk}/', data)
         r = office.post(f'/pruefungen/{resit.pk}/freigabe/', follow=True)
         self.assertIn('1 Bescheid über endgültiges Nichtbestehen versandt.', ' '.join(flashes(r)))

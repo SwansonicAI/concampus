@@ -26,7 +26,7 @@ from django.utils import timezone
 from django.utils.crypto import get_random_string
 
 from admissions.retention import forget
-from core.dates import months_before
+from core.dates import months_before, working
 from core.text import handle, untimed
 from admissions.views import DECISIONS, grounds, invite
 from core import destatis, history, texts
@@ -80,10 +80,16 @@ SUBJECT_FIELDS = {  # Studienfach of each Hauptfach
 EARLIER = ['2740', '2800', '2520', '2500', '2720', '2620', '0580']  # where postgraduates from Germany took their first degree
 HOLIDAYS = [  # the Unterrichtsfreie Tage of the Studienjahresrahmenplan 2026/27: name, first day, last day
     ('Tag der Deutschen Einheit', date(2026, 10, 3), None), ('Reformationstag', date(2026, 10, 31), None),
-    ('Weihnachten und Neujahr', date(2026, 12, 21), date(2027, 1, 3)), ('Karfreitag', date(2027, 3, 26), None), ('Ostermontag', date(2027, 3, 29), None),
+    ('Weihnachten und Neujahr', date(2026, 12, 21), date(2027, 1, 3)), ('1. Weihnachtstag', date(2026, 12, 25), None),
+    ('2. Weihnachtstag', date(2026, 12, 26), None), ('Neujahr', date(2027, 1, 1), None), ('Karfreitag', date(2027, 3, 26), None), ('Ostermontag', date(2027, 3, 29), None),
     ('Tag der Arbeit', date(2027, 5, 1), None), ('Christi Himmelfahrt', date(2027, 5, 6), None), ('Pfingstmontag', date(2027, 5, 17), None),
     ('Dies Academicus', date(2027, 6, 24), None), ('Weltkindertag', date(2027, 9, 20), None),
 ]
+FINALS = [Decimal(g) for g in '1.0 1.3 1.3 1.5 1.7 1.7 1.8 2.0 2.0 2.1 2.3 2.4 2.7 3.0 1.2 1.4 1.6 1.9 2.2 1.1'.split()]  # Gesamtnoten of graduates without a record
+PUBLIC = {  # Thüringen's public holidays among them; the Christmas break and the Dies Academicus are lecture-free only
+    'Tag der Deutschen Einheit', 'Reformationstag', '1. Weihnachtstag', '2. Weihnachtstag', 'Neujahr', 'Karfreitag', 'Ostermontag', 'Tag der Arbeit',
+    'Christi Himmelfahrt', 'Pfingstmontag', 'Weltkindertag',
+}
 EXAM_DAYS = [d for d in (date(2027, 2, 8) + timedelta(days=n) for n in range(19)) if d.weekday() < 5]  # Prüfungszeitraum 08.–26.02.2027
 EXAMS_START = {'WiSe 2026/27': date(2027, 2, 8), 'SoSe 2027': date(2027, 7, 14)}  # published Prüfungszeiträume
 EXAM_SIGNUP = (date(2026, 11, 1), date(2026, 11, 15))  # Prüfungsanmeldung WiSe 2026/27
@@ -517,8 +523,8 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
         'view_students', 'view_files', 'message_students', 'view_applications', 'run_auditions', 'manage_courses', 'view_teaching_load',
         'view_curriculum', 'book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms', 'manage_instruments',  # the Semesterwechsel is the Dekanatsreferat's
     ],
-    'Prüfungsausschuss': ['view_students', 'view_files', 'correct_scores', 'appoint_examiners', 'recognise', 'view_curriculum'],
-    'Prüfungsausschuss Lehramt': ['view_files', 'manage_exams', 'decide_results', 'correct_scores', 'recognise', 'view_curriculum'],
+    'Prüfungsausschuss': ['view_students', 'view_files', 'correct_scores', 'appoint_examiners', 'recognise', 'grant_compensation', 'view_curriculum'],
+    'Prüfungsausschuss Lehramt': ['view_files', 'manage_exams', 'decide_results', 'correct_scores', 'recognise', 'grant_compensation', 'view_curriculum'],
 }
 LIMITS = {  # offices for some Institute or Studiengänge only
     'Institut Streichinstrumente und Harfe': (['SH'], []),
@@ -889,6 +895,10 @@ class Command(BaseCommand):
             self.practice()
             self.letters()
             Study.objects.filter(status=Study.Status.GRADUATED).update(issued=models.F('since'))  # their Zeugnisse issued
+            recent = list(Study.objects.filter(status=Study.Status.GRADUATED, since__gte=months_before(timezone.localdate(), 36)).select_related('program'))
+            for s in recent:  # the Gesamtnote kept with the Zeugnis, for the Diploma Supplement's grade distribution; most have no record here
+                s.grade = s.progress()[1] or FINALS[s.pk % len(FINALS)]
+            Study.objects.bulk_update(recent, ['grade'])
             Person.objects.filter(studies__isnull=False).update(electronic=models.F('date_joined'))  # Bescheide by Postfach, as they agreed when signing up
             self.mailboxes()
             forget(months_before(timezone.localdate(), Institution.get().retention_months))  # as the nightly prune would have
@@ -938,7 +948,7 @@ class Command(BaseCommand):
             BookingCategory(key=key, name=name, tone=tone, order=n, **settings) for n, (key, name, tone, settings) in enumerate(CATEGORIES)
         )
         self.institutes = {key: Institute.objects.create(name=name) for key, name in INSTITUTES.items()}
-        Holiday.objects.bulk_create(Holiday(name=name, first=first, last=last) for name, first, last in HOLIDAYS)
+        Holiday.objects.bulk_create(Holiday(name=name, first=first, last=last, public=name in PUBLIC) for name, first, last in HOLIDAYS)
         self.areas = {name: Area.objects.create(name=name, order=n) for n, name in enumerate(AREAS)}
         self.formats = {code: Format.objects.create(name=name, short=code, per_head=code == 'E', order=n) for n, (name, code) in enumerate(FORMATS)}
         self.instruments = [
@@ -1786,7 +1796,7 @@ class Command(BaseCommand):
             given_out[study.subject_id].add(topic)
             course = Course.objects.create(
                 term=self.current, kind=Course.Kind.THESIS, title=topic.format(i=study.subject.name),
-                deadline=given + timedelta(weeks=study.program.thesis_weeks or 12),
+                deadline=working(given + timedelta(weeks=study.program.thesis_weeks or 12)),
             )
             course.staff.set([first, rng.choice([r for r in readers if r != first])])
             course.modules.set([leaf])

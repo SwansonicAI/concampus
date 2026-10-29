@@ -19,12 +19,13 @@ def rounded(value, rounding):
 
 
 def weighted(nodes, rounding=Rounding.HALF_UP):
-    """Mean of the nodes' grades by their weights, to one decimal; None if nothing counts."""
+    """Mean of the nodes' grades by their weights, to one decimal by `rounding`, exact without; None if nothing counts."""
     graded = [(node.weight, node.grade) for node in nodes if node.weight and node.grade is not None]
     total = sum(weight for weight, _ in graded)
     if not total:
         return None
-    return rounded(sum(weight * grade for weight, grade in graded) / total, rounding)
+    mean = sum(weight * grade for weight, grade in graded) / total
+    return rounded(mean, rounding) if rounding else mean
 
 
 class Subject(Tracked, models.Model):
@@ -193,7 +194,8 @@ class Program(Tracked, models.Model):
                 module.first, module.last = (min(semesters), max(semesters)) if semesters else (None, None)
                 module.earned = min(module.credits, sum(node.earned for node in module.nodes))
                 module.done = module.earned >= module.credits and all(node.done for node in module.nodes if not node.credits)
-                module.grade = weighted(module.nodes, self.rounding)
+                leaves = any(not node.nodes for node in module.nodes)  # a module; else an area of modules, not graded itself
+                module.grade = weighted(module.nodes, self.rounding if leaves else None)  # RPSO § 15 Abs. 4: modules and the Gesamtnote are rounded
             else:
                 module.first = module.last = module.semester
                 module.excused = module.pk in excused

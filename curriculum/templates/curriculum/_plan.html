@@ -18,6 +18,7 @@
           {% if r.exam %}<span class="tag-exam">Prüfung</span> {% endif %}{% if edit %}<a href="{% url 'setup:edit' 'module' r.items.0.pk %}?next={{ request.path|urlencode }}">{{ r.title }}</a>{% else %}{{ r.title }}{% endif %}
           {% if r.offers|length > 3 %}<details class="tail"><summary><small>{{ r.offers|length }} Veranstaltungen</small></summary>{% for c in r.offers %}<small>{% if c.pk in reachable %}<a href="{{ c.get_absolute_url }}">{{ c.title }}</a>{% else %}{{ c.title }}{% endif %}</small><br>{% endfor %}</details>
           {% else %}{% for c in r.offers %}<br><small>{% if c.pk in reachable %}<a href="{{ c.get_absolute_url }}">{{ c.title }}</a>{% else %}{{ c.title }}{% endif %}</small>{% endfor %}{% endif %}
+          {% if progress %}{% for i in r.items %}{% for f in i.failures %}<br><small class="fail">{{ forloop.counter }}. Versuch, {{ f.course.term }}: {% if f.grade is not None %}{{ f.grade|floatformat:1 }}{% else %}nicht bestanden{% endif %}{% if f.remark %} ({{ f.remark|upper }}){% endif %}</small>{% endfor %}{% if i.last %}<br><small class="fail"><b>Der nächste Versuch ist der letzte.</b></small>{% endif %}{% endfor %}{% endif %}
         </td>
         <td class="muted"><small>{{ r.form }}</small></td>
         {% for cell in r.cells %}
@@ -39,7 +40,7 @@
         {% for s in semesters %}<td></td>{% endfor %}
         <td class="num"><b>{% if progress %}{{ r.node.earned }}/{% endif %}{{ r.node.credits }}</b>{% if progress and r.node.credits and r.node.earned >= r.node.credits and not r.node.done %}<br><small class="muted">Prüfung offen</small>{% endif %}</td>
         <td class="num">{% if r.node.weight %}{{ r.node.weight|floatformat:"-2" }}{% endif %}</td>
-        {% if progress %}<td class="num"><b>{% if r.node.done and r.node.grade %}{{ r.node.grade }}{% endif %}</b></td>{% endif %}
+        {% if progress %}<td class="num"><b>{% if r.node.done and r.node.grade and r.kind != 'group' %}{{ r.node.grade }}{% endif %}</b></td>{% endif %}
       </tr>
       {% endif %}
       {% endfor %}

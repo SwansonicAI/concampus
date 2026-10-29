@@ -40,6 +40,11 @@
     {% else %}
     <dt>Kommission</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}{% if short %}<br><small class="fail">{{ short }}</small>{% endif %}</dd>
     {% if course.assessor %}<dt>Beisitz</dt><dd>{{ course.assessor }}</dd>{% endif %}
+    {% if course.kind == 'exam' and decide or course.protocol %}<dt>Protokoll</dt><dd>{% if course.protocol %}<a href="{% url 'exams:protocol' course.pk %}">unterschriebenes Protokoll</a>{% else %}<span class="muted">noch nicht hochgeladen</span>{% endif %}
+      {% if decide and not course.released %}<form method="post" enctype="multipart/form-data" action="{% url 'exams:protocol' course.pk %}" class="inline handed" data-upload>{% csrf_token %}<input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png" aria-label="Protokoll"><button class="btn ghost small">{% if course.protocol %}Ersetzen{% else %}Hochladen{% endif %}</button></form>
+      <small class="muted">Wertungen anderer überträgt das Amt erst danach.</small>{% endif %}</dd>{% endif %}
+    {% if course.kind == 'exam' and decide and not course.released and rows %}<dt>Rücktritt</dt><dd><form method="post" enctype="multipart/form-data" action="{% url 'exams:attest' course.pk %}" class="inline">{% csrf_token %}<select name="participation" required aria-label="Wer tritt zurück"><option value="">Wer?</option>{% for p in rows %}{% if p.passed is None and p.remark != 'rt' %}<option value="{{ p.pk }}">{{ p.study.person.name }}</option>{% endif %}{% endfor %}</select><input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png" required aria-label="Attest"><button class="btn ghost small">Mit Attest verbuchen</button></form>
+      <small class="muted">Der Grund ist unverzüglich nachzuweisen, bei Krankheit mit Attest (RPSO § 20); RT zählt nicht als Versuch.</small></dd>{% endif %}
     <dt>Anmeldeschluss</dt><dd>{{ course.deadline|date:"j. F Y"|default:"–" }}</dd>
     {% endif %}
     <dt>Bewertung</dt><dd>{% if course.points %}Punkte, bestanden ab {{ course.pass_mark }}{% else %}Noten 1,0–5,0, bestanden bis 4,0{% endif %}</dd>

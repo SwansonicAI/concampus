@@ -103,6 +103,17 @@ def moment(text, today=None):
     return (found, None) if found else None
 
 
+def working(day):
+    """The day a Frist ends that would end on `day`: after a Saturday, Sunday or public holiday the next working day
+    (§ 31 Abs. 3 VwVfG)."""
+    from .models import Holiday
+
+    closed = Holiday.days(day, day + timedelta(days=14), public=True)
+    while day.weekday() >= 5 or day in closed:
+        day += timedelta(days=1)
+    return day
+
+
 class DayField(forms.DateField):
     widget = forms.DateInput(format='%d.%m.%Y', attrs={'data-day': '', 'autocomplete': 'off', 'placeholder': 'z. B. morgen, fr, 12.11.'})
 

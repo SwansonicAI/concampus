@@ -1,5 +1,6 @@
 import csv
 import io
+import re
 from collections import Counter, defaultdict
 from datetime import timedelta
 from decimal import ROUND_DOWN, Decimal
@@ -10,7 +11,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Count, DateTimeField, Max, Min, OuterRef, Q, Subquery, Sum
 from django.db.models.functions import Cast, Coalesce
-from django.http import Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -20,7 +21,7 @@ from django.views.decorators.http import require_POST
 from core import destatis, texts
 from core.access import kept, require
 from core.apps import plural
-from core.dates import months_before
+from core.dates import months_before, working
 from core.models import Export, Message, Office, Term
 from core.text import matching
 from core.views import without_term
@@ -66,7 +67,7 @@ def exhausted(study):
         notice = study.documents.filter(kind='notice', created__gte=released).select_related('message').order_by('created').first()
         opened = study.person.electronic and notice and notice.message and notice.message.read
         known = timezone.localtime(opened).date() + timedelta(days=1) if opened else timezone.localtime(notice.created if notice else released).date() + timedelta(days=4)
-        module.appeal = months_before(known, -1)
+        module.appeal = working(months_before(known, -1))  # a Frist ending on a weekend or holiday runs on (§ 31 Abs. 3 VwVfG)
     return lost
 
 
@@ -176,7 +177,7 @@ def exam(request, pk):
         if course.released:
             raise PermissionDenied('Freigegebene Ergebnisse öffnet nur der Prüfungsausschuss wieder.')
         try:
-            panel.save(request.POST, rows, columns, decide=decide or correct, correct=correct)
+            panel.save(request.POST, rows, columns, decide=decide or correct, correct=correct, by=person)
         except panel.Refused as error:  # shown with what was typed, by its row
             refused, (staff, rows) = error, sheet()
             messages.error(request, 'Nichts gespeichert. Bitte die markierte Zeile berichtigen.')
@@ -245,7 +246,10 @@ def thesis(request, pk):
     weeks = study.program.thesis_weeks
     course = Course(term=term, kind=Course.Kind.THESIS, subject=study.subject, deadline=timezone.localdate() + timedelta(weeks=weeks) if weeks else None)
     form = ThesisForm(request.POST or None, instance=course, study=study)
-    if form.is_valid():
+    valid = form.is_valid()
+    if missing := unmet(study, form.cleaned_data['module'] if valid else None if form.is_bound else form.fields['module'].initial):
+        messages.warning(request, f'Laut Plan noch nicht erfüllt: {"; ".join(missing)}.')
+    if valid:
         module = form.cleaned_data['module']
         with transaction.atomic():
             course = form.save()
@@ -260,6 +264,94 @@ def thesis(request, pk):
     return render(request, 'courses/form.html', {
         'form': form, 'course': course, 'menu': 'exams/_nav.html', 'heading': f'Abschlussarbeit {study.person}', 'back': study.get_absolute_url(),
     })
+
+
+def protocol(request, pk):
+    """The signed Protokoll of an exam: the office uploads it, whoever sees the exam's results reads it."""
+    course = get_object_or_404(Course, pk=pk, kind=Course.Kind.EXAM)
+    person = request.user
+    office = person.may('decide_results', course) or person.may('manage_exams', course)
+    if request.method == 'POST':
+        if not office or course.released:
+            raise PermissionDenied('Das Protokoll lädt das Amt hoch, das die Ergebnisse einträgt, bis sie freigegeben sind.')
+        if file := request.FILES.get('file'):
+            course.protocol = file
+            course.save(update_fields=['protocol'])
+            messages.success(request, 'Protokoll hochgeladen. Die Wertungen lassen sich jetzt übertragen.')
+        return redirect(course)
+    if not (office or person.may('correct_scores', course) or course.staff.filter(pk=person.pk).exists()) or not course.protocol:
+        raise PermissionDenied('Das Protokoll lesen die Prüfenden, das Amt und der Prüfungsausschuss.')
+    return FileResponse(course.protocol.open('rb'), filename=f'Protokoll {course.title}.pdf')
+
+
+def unmet(study, module):
+    """What the plan names as coming before `module` and the study has not done: the credits and the modules passed in
+    notes such as 'Voraussetzung: 100 CP und bestandene Künstlerische Präsentation I.' on it or above it."""
+    if module is None:
+        return []
+    notes, node = [], module
+    while node:
+        notes.append(node.description)
+        node = node.parent
+    notes = ' '.join(notes)
+    tree, _ = study.progress()
+    found, done = [], set()
+
+    def walk(node):
+        if node.done:
+            done.add(node.title)
+        for child in node.nodes:
+            walk(child)
+
+    for root in tree:
+        walk(root)
+    if (credits := re.search(r'(\d+) CP', notes)) and (earned := sum(m.earned for m in tree)) < int(credits[1]):
+        found.append(f'{credits[1]} CP, erworben sind {earned}')
+    found += [f'{title.strip()} bestanden' for title in re.findall(r'bestanden(?:e|es)? (?:Modul )?([^.;]+)', notes) if title.strip() not in done]
+    return found
+
+
+@require_POST
+def attest(request, pk):
+    """Rücktritt mit triftigem Grund: the office files the attest and marks RT, which is no attempt (RPSO § 20)."""
+    course = get_object_or_404(Course, pk=pk, kind=Course.Kind.EXAM, released=None)
+    if not request.user.may('decide_results', course):
+        raise PermissionDenied('Einen Rücktritt verbucht das Amt, das die Ergebnisse einträgt.')
+    p = get_object_or_404(course.participations.select_related('study__person'), pk=request.POST.get('participation'), passed=None)
+    kind, file = DocumentType.system('attest'), request.FILES.get('file')
+    if not file:
+        messages.error(request, 'Bitte das Attest oder den Nachweis wählen.')
+    elif refusal := kind.refuses(file):
+        messages.error(request, refusal)
+    else:
+        Document.hand_in(p.study, kind, file)
+        p.remark, p.grade, p.passed = Participation.Remark.EXCUSED, None, None
+        p.save(update_fields=['remark', 'grade', 'passed'])
+        messages.success(request, f'Rücktritt von {p.study.person.first_name} {p.study.person.last_name} verbucht; das Attest liegt in der Akte.')
+    return redirect(course)
+
+
+@require('grant_compensation')
+@require_POST
+def compensate(request, pk):
+    """Nachteilsausgleich (RPSO § 8): the Prüfungsausschuss grants a measure on an Antrag with an attest, by Bescheid;
+    examiners see the measure, never the attest. Empty, it ends."""
+    study = get_object_or_404(request.user.within(Study.objects.select_related('person'), 'grant_compensation'), pk=pk, status=Study.Status.ENROLLED)
+    measure, file = request.POST.get('compensation', '').strip()[:200], request.FILES.get('file')
+    kind = DocumentType.system('attest')
+    if measure and not (file or study.compensation):
+        messages.error(request, 'Zum Nachteilsausgleich gehört das Attest.')
+    elif file and (refusal := kind.refuses(file)):
+        messages.error(request, refusal)
+    else:
+        if file:
+            Document.hand_in(study, kind, file)
+        study.compensation = measure
+        study.save(update_fields=['compensation'])
+        if measure:
+            study.notify('nachteilsausgleich', study.get_absolute_url(), massnahme=measure)
+        messages.success(request, 'Nachteilsausgleich gewährt, Bescheid versandt.' if measure else 'Nachteilsausgleich beendet.')
+    return redirect(study)
 
 
 @require_POST
@@ -350,7 +442,7 @@ def marks(request, pk):
     post = {f'score-{p.pk}-{column.pk}': value for number, value in found.items() if (p := by_number.get(number))}
     unknown = [number for number in found if number not in by_number]
     try:
-        panel.save(post, rows, [column], decide=not own)
+        panel.save(post, rows, [column], decide=not own, by=request.user)
     except panel.Refused as error:
         name = next(p.study.person.name for p in rows if p.pk == error.row)
         messages.error(request, f'Nichts übernommen. {name}: {error}')
@@ -549,7 +641,7 @@ def achievements(study):
     last = study.participations.filter(passed=True, course__released__isnull=False).aggregate(last=Max('course__released'))['last']
     rows = []
     for r in study_plan(tree, study.program.semesters):
-        if r['kind'] != 'part' and r['node'].earned or r['kind'] == 'part' and r['exam'] and any(i.done and not i.excused for i in r['items']):  # an exam waived is no result
+        if r['kind'] != 'part' and r['node'].earned or r['kind'] == 'part' and r['exam'] and any(i.done and not i.excused or i.failures for i in r['items']):  # an exam waived is no result
             above = rows[-1] if rows else None
             if above and above['kind'] == 'group' and r['kind'] != 'part' and r['node'].parent_id == above['node'].pk and above['node'].offered > above['node'].credits:
                 rows[-1] = {**r, 'choice': above['node']}  # a choice and what was chosen, on one line with the choice's weight
@@ -604,8 +696,8 @@ def issue(request, pk):
     if not achievements(study)['finished']:
         messages.error(request, 'Es fehlen noch Leistungen.')
     else:
-        study.issued = timezone.localdate()
-        study.save(update_fields=['issued'])
+        study.issued, study.grade = timezone.localdate(), achievements(study)['average']
+        study.save(update_fields=['issued', 'grade'])
         texts.send('zeugnis', study.person, reverse('exams:transcript', args=[study.pk]), studiengang=study.program.title)
         messages.success(request, f'Zeugnis ausgestellt. Die Exmatrikulation steht an: {Office.holding("manage_students") or "Studierendenverwaltung"}.')
     return redirect('exams:transcript', study.pk)
@@ -632,11 +724,30 @@ def supplement(request, pk):
         raise PermissionDenied
     if not study.program.level:
         raise Http404
-    found = achievements(study)
+    found, de = achievements(study), request.GET.get('sprache') == 'de'  # in English and German (RPSO § 23 Abs. 2)
     if not (office or found['finished']):
         raise Http404
+    bands, reference = distribution(study.program)
     return render(request, 'exams/supplement.html', found | {
-        'copy': not office,
-        'verbal': verbal(found['average'], english=True) if found['average'] else '', 'grades': GRADES,
-        'awarding': texts.block('ds_hochschule'), 'system': texts.block('ds_hochschulsystem'),
+        'copy': not office, 'de': de, 'lang': 'de' if de else 'en',
+        'verbal': verbal(found['average'], english=not de) if found['average'] else '', 'grades': GRADES,
+        'awarding': texts.block('ds_hochschule'), 'system': texts.block('ds_hochschulsystem_de' if de else 'ds_hochschulsystem'),
+        'distribution': bands, 'reference': reference,
+        'dated': found['completed'] if found['finished'] and found['completed'] else found['today'],  # the date of the Zeugnis
     })
+
+
+def distribution(program):
+    """The ECTS grading table of a Studiengang: how the Gesamtnoten of its graduates in the three years before spread over
+    the grades, in percent; ([(limit, word, translated, share)], how many), the table empty when fewer than ten."""
+    since = timezone.localdate() - timedelta(days=3 * 365)
+    grades = list(Study.objects.filter(
+        status=Study.Status.GRADUATED, program__degree=program.degree, program__name=program.name, since__gte=since, grade__isnull=False,
+    ).values_list('grade', flat=True))
+    if len(grades) < 10:
+        return [], len(grades)
+    bands, below = [], 0
+    for limit, word, translated in GRADES:
+        bands.append((limit, word, translated, round(100 * sum(1 for g in grades if below < g <= limit) / len(grades))))
+        below = limit
+    return bands, len(grades)

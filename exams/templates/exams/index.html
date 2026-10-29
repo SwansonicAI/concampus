@@ -12,7 +12,7 @@
   <div class="inline">
     <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
     <label>Studiengang<select name="studiengang" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for p in programs %}<option value="{{ p.pk }}"{% if p.pk|stringformat:'s' == program %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
-    <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for key, label, n in states %}<option value="{{ key }}"{% if key == stand %} selected{% endif %}>{{ label }} ({{ n }})</option>{% endfor %}<option value="kommission"{% if stand == 'kommission' %} selected{% endif %}>Kommission zu klein</option></select></label>
+    <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for key, label, n in states %}<option value="{{ key }}"{% if key == stand %} selected{% endif %}>{{ label }} ({{ n }})</option>{% endfor %}<option value="kommission"{% if stand == 'kommission' %} selected{% endif %}>Kommission prüfen</option></select></label>
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Prüfung, Fach, Prüfende, Kandidat:in"></label>
   </div>
 </form>
@@ -23,7 +23,7 @@
     <tr>
       <td>{% if c.kind == 'thesis' %}Abgabe {{ c.deadline|date:"j.n.Y" }}{% else %}{{ c.date|date:"D j.n.Y"|default:"–" }}{% endif %}</td>
       <td><a href="{% url 'exams:exam' c.pk %}"><b>{{ c.title }}</b></a>{% if c.kind == 'thesis' %}<br><small class="muted">Abschlussarbeit {{ c.candidate }}</small>{% elif c.subject and c.subject.name not in c.title %}<br><small class="muted">{{ c.subject }}</small>{% endif %}</td>
-      <td>{% for s in c.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+      <td>{% for s in c.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if c.assessor %}<br><small class="muted">Beisitz {{ c.assessor.last_name }}</small>{% endif %}</td>
       <td class="num">{{ c.size }}</td>
       <td>{% if c.released %}<span class="badge green">freigegeben</span>{% elif c.graded %}<span class="badge wait">{{ c.graded }} von {{ c.size }} bewertet</span>{% else %}<span class="badge open">offen</span>{% endif %}</td>
     </tr>

@@ -295,6 +295,7 @@ def study(request, pk):
         'recording': study.program.choices() if not own and study.status == Study.Status.ENROLLED and decides(person, study) else [],
         'changes': Office.holding('decide_results', study.program),
         'recognise': study.status == Study.Status.ENROLLED and person.may('recognise', study),
+        'compensate': study.status == Study.Status.ENROLLED and person.may('grant_compensation', study),
         'thesis': study.status == Study.Status.ENROLLED and person.may('manage_exams', study),
         'loans': study.person.loans.filter(returned=None).select_related('instrument') if personal else [],
         'history': bool(tables(person.roles)),
