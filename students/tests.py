@@ -65,7 +65,7 @@ class ReregistrationTest(Seeded):
         self.assertIn('Sperre', held.messages.first().body)
         self.assertTrue(StudyTerm.objects.filter(study__person=held, term=Term.upcoming(), paid__isnull=False).exists())
 
-    def test_the_bank_statement_books_whom_it_names_with_the_full_fee(self):
+    def test_the_bank_statement_books_whom_it_names_with_the_full_fee_once_checked_and_a_mistake_is_taken_back(self):
         term, asa = Term.upcoming(), self.login('asa')
         full, short, camt = Person.objects.filter(studies__status='enrolled').exclude(
             pk__in=StudyTerm.objects.filter(term=term, paid__isnull=False).values('study__person'),
@@ -79,16 +79,22 @@ class ReregistrationTest(Seeded):
             f'{day};{day};Rueckzahlung {camt.matriculation};-{fee};EUR',  # outgoing: no payment
         ])
         r = asa.post('/studierende/rueckmeldung/', {'statement': SimpleUploadedFile('umsaetze.csv', csv.encode())}, follow=True)
-        self.assertEqual(flashes(r), [f'1 Zahlung verbucht. Zu wenig überwiesen: {short.name} ({less} €). 1 Buchung ohne offene Matrikelnummer im Verwendungszweck.'])
+        self.assertEqual([(line['who'], line['short']) for line in r.context['statement']], [(full, False), (short, True), (None, False)])  # outgoing: no payment
+        r = asa.post('/studierende/rueckmeldung/', {'buchen': '1', 'zeile': ['0', '1', '2']}, follow=True)  # too little, or nobody's: never booked
+        self.assertEqual(flashes(r), ['1 Zahlung verbucht.'])
         camt053 = f'''<?xml version="1.0" encoding="UTF-8"?><Document xmlns="urn:iso:std:iso:20022:tech:xsd:camt.053.001.08"><BkToCstmrStmt><Stmt>
             <Ntry><Amt Ccy="EUR">{term.fee}</Amt><CdtDbtInd>CRDT</CdtDbtInd><BookgDt><Dt>{term.deadline:%Y-%m-%d}</Dt></BookgDt>
                 <NtryDtls><TxDtls><RmtInf><Ustrd>Semesterbeitrag</Ustrd><Ustrd>Matr. {camt.matriculation}</Ustrd></RmtInf></TxDtls></NtryDtls></Ntry>
             <Ntry><Amt Ccy="EUR">{term.fee}</Amt><CdtDbtInd>DBIT</CdtDbtInd><BookgDt><Dt>{term.deadline:%Y-%m-%d}</Dt></BookgDt></Ntry>
         </Stmt></BkToCstmrStmt></Document>'''
-        r = asa.post('/studierende/rueckmeldung/', {'statement': SimpleUploadedFile('auszug.xml', camt053.encode())}, follow=True)
-        self.assertEqual(flashes(r), ['1 Zahlung verbucht.'])
+        asa.post('/studierende/rueckmeldung/', {'statement': SimpleUploadedFile('auszug.xml', camt053.encode())})
+        self.assertEqual(flashes(asa.post('/studierende/rueckmeldung/', {'buchen': '1', 'zeile': ['0']}, follow=True)), ['1 Zahlung verbucht.'])
         booked = set(StudyTerm.objects.filter(term=term, paid=term.deadline).values_list('study__person', flat=True))
         self.assertEqual(booked & {full.pk, short.pk, camt.pk}, {full.pk, camt.pk})
+        mistake = StudyTerm.objects.get(study__person=camt, term=term)
+        asa.post(f'/studierende/rueckmeldung/{mistake.pk}/zuruecknehmen/')
+        mistake.refresh_from_db()
+        self.assertEqual((mistake.paid, camt.messages.first().subject), (None, f'Rückmeldung {term}'))
 
 
 class LeaveTest(Seeded):

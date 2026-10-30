@@ -126,6 +126,20 @@ class DayField(forms.DateField):
         raise forms.ValidationError('Datum nicht erkannt, z. B. 12.11.2026, morgen oder fr.')
 
 
+class ReceivedField(DayField):
+    """The day something came in, as offices type it („gestern“, „12.11.2026“): never in the future."""
+
+    def to_python(self, value):
+        if (found := super().to_python(value)) and found > timezone.localdate():
+            raise forms.ValidationError('Der Eingang kann nicht in der Zukunft liegen.')
+        return found
+
+
+def received(text):
+    """A day typed as for ReceivedField; empty, today. Raises ValidationError with the reason."""
+    return ReceivedField(required=False).clean(text) or timezone.localdate()
+
+
 def past(text, today=None):
     """A day that has been, as forms ask for it: digits split by dots, dashes or slashes with the year in full, or as a
     browser sends it. Refused with the reason."""

@@ -381,8 +381,7 @@ def audition(request, pk):
         else:
             messages.success(request, 'Wertungen gespeichert.')
             return redirect(course)
-    if not (office or correct):
-        panel.blind(rows, person)
+    panel.blind(rows, person, office=office or correct)
     if refused:
         panel.retype(rows, request.POST, refused)
     invited = set(Participation.objects.filter(course__in=next_stages(course)).values_list('study', flat=True)) if office else set()
@@ -834,6 +833,6 @@ def accept(request, pk):
         return redirect('admissions:mine')
     person = form.save()
     StudyTerm.objects.get_or_create(study=study, term=study.start_term)
-    texts.send('studienplatz_angenommen', person, beitrag=number_format(study.start_term.fee, 2), frist=f'{study.start_term.deadline:%d.%m.%Y}')
+    texts.send('studienplatz_angenommen', person, beitrag=number_format(study.start_term.fee, 2), frist=f'{study.fee_due:%d.%m.%Y}')
     messages.success(request, 'Studienplatz angenommen.')
     return redirect('admissions:mine')

@@ -20,6 +20,7 @@ urlpatterns = [
     path('<int:pk>/versicherung/', views.insured, name='insured'),
     path('<int:pk>/hochschulzugang/', views.checked, name='checked'),
     path('<int:pk>/beitrag/', views.fee_paid, name='fee_paid'),
+    path('rueckmeldung/<int:pk>/zuruecknehmen/', views.unpay, name='unpay'),
     path('<int:pk>/urlaub/', views.leave, name='leave'),
     path('<int:pk>/schwerpunkt/', views.focus, name='focus'),
     path('<int:pk>/empfehlung/', views.advise, name='advise'),

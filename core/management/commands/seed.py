@@ -903,6 +903,10 @@ class Command(BaseCommand):
             self.practice()
             self.letters()
             Study.objects.filter(status=Study.Status.GRADUATED).update(issued=models.F('since'))  # their Zeugnisse issued
+            told = list(Participation.objects.filter(course__kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], course__released__isnull=False).select_related('course'))
+            for p in told:  # results told when released
+                p.told, p.told_result = p.course.released, p.result
+            Participation.objects.bulk_update(told, ['told', 'told_result'], batch_size=2000)
             recent = list(Study.objects.filter(status=Study.Status.GRADUATED, since__gte=months_before(timezone.localdate(), 36)).select_related('program'))
             for s in recent:  # the Gesamtnote kept with the Zeugnis, for the Diploma Supplement's grade distribution; most have no record here
                 s.grade = s.progress()[1] or FINALS[s.pk % len(FINALS)]

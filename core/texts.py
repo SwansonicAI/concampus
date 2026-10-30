@@ -62,11 +62,24 @@ TEXTS = {
         'Für Ihr Studium im Studiengang {studiengang}, Hauptfach {hauptfach}, ist als Schwerpunkt {schwerpunkt} eingetragen. Grund: {grund}.',
         STUDY + ('schwerpunkt', 'grund'),
     ),
+    'fachwechsel': Spec(
+        BESCHEID, 'Fachwechsel', 'Bescheid über den Fachwechsel',
+        'Auf Ihren Antrag studieren Sie ab dem {semester} im Studiengang {studiengang}, Hauptfach {hauptfach}, im {fachsemester}. '
+        'Fachsemester. Ihr Studium im Studiengang {bisher} ist damit beendet.\n\nBereits erbrachte Leistungen rechnet der '
+        'Prüfungsausschuss auf Antrag an.',
+        STUDY + ('fachsemester', 'bisher'),
+    ),
     'beurlaubung': Spec(
         BESCHEID, 'Beurlaubung', 'Bescheid über die Beurlaubung',
         'Sie sind für das {rueckmeldesemester} im Studiengang {studiengang}, Hauptfach {hauptfach}, beurlaubt. Grund: {grund}.\n\n'
         'Das Urlaubssemester zählt nicht als Fachsemester.',
         STUDY + ('rueckmeldesemester', 'grund'),
+    ),
+    'beurlaubung_aufgehoben': Spec(
+        BESCHEID, 'Beurlaubung aufgehoben', 'Bescheid über die Aufhebung der Beurlaubung',
+        'Ihre Beurlaubung für das {rueckmeldesemester} im Studiengang {studiengang}, Hauptfach {hauptfach}, ist aufgehoben. '
+        'Das Semester zählt als Fachsemester.',
+        STUDY + ('rueckmeldesemester',),
     ),
     'exmatrikulation_rueckmeldung': Spec(
         BESCHEID, 'Exmatrikulation ohne Rückmeldung', 'Exmatrikulationsbescheid',
@@ -241,6 +254,11 @@ TEXTS = {
         ('veranstaltung', 'termin', 'neuer_termin', 'raum', 'von'),
     ),
     'rueckmeldung': Spec(NACHRICHT, 'Rückmeldung erledigt', 'Rückmeldung {rueckmeldesemester}', 'Ihr Semesterbeitrag ist eingegangen. Sie sind für das {rueckmeldesemester} zurückgemeldet.', ('rueckmeldesemester',)),
+    'zahlung_zurueckgenommen': Spec(
+        NACHRICHT, 'Zahlung zurückgenommen', 'Rückmeldung {rueckmeldesemester}',
+        'Die Buchung eines Semesterbeitrags für Sie am {datum} war ein Irrtum und ist zurückgenommen. Ihre Rückmeldung zum '
+        '{rueckmeldesemester} steht damit noch aus.', ('rueckmeldesemester', 'datum'),
+    ),
     'rueckmeldung_offen': Spec(
         NACHRICHT, 'Rückmeldung unvollständig', 'Rückmeldung {rueckmeldesemester}',
         'Ihr Semesterbeitrag ist eingegangen. Für die Rückmeldung fehlt noch: {fehlt}.', ('rueckmeldesemester', 'fehlt'),

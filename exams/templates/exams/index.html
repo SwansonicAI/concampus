@@ -93,7 +93,7 @@
         <td><b>{{ p.course.title }}</b><br><small class="muted">{{ p.module.code }} · {{ p.course.term }}</small></td>
         <td>{{ p.where|default:"–" }}</td>
         <td><small>{% for s in p.course.staff.all %}{{ s }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</small></td>
-        <td class="num">{% if p.course.withdrawable %}<form method="post" action="{% url 'exams:withdraw' p.pk %}" title="Bis {{ p.course.withdraw_by|date:'j.n.Y' }}">{% csrf_token %}<button class="btn ghost small" data-confirm="Wirklich abmelden?">Abmelden</button></form>{% else %}<span class="badge open">angemeldet</span>{% endif %}</td>
+        <td class="num">{% if p.withdrawable %}<form method="post" action="{% url 'exams:withdraw' p.pk %}" title="Bis {{ p.course.withdraw_by|date:'j.n.Y' }}">{% csrf_token %}<button class="btn ghost small" data-confirm="Wirklich abmelden?">Abmelden</button></form>{% else %}<span class="badge open">angemeldet</span>{% endif %}</td>
       </tr>
       {% empty %}<tr><td colspan="5" class="empty">Zurzeit keine Prüfung angemeldet.</td></tr>
       {% endfor %}

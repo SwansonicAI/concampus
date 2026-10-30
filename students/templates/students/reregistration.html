@@ -12,10 +12,32 @@
     <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for key, label, n in states %}<option value="{{ key }}"{% if key == stand %} selected{% endif %}>{{ label }} ({{ n }})</option>{% endfor %}</select></label>
   </div>
 </form>
+{% if statement %}
+<form method="post" class="panel" style="margin-bottom: 24px">
+  {% csrf_token %}
+  <h2>Kontoauszug prüfen</h2>
+  <p class="muted"><small>Zugeordnet über eine offene Matrikelnummer im Verwendungszweck. Gebucht wird, was angekreuzt ist; wer zu wenig überwiesen hat oder keiner Person zugeordnet ist, bleibt offen und lässt sich unten von Hand verbuchen.</small></p>
+  <table>
+    <thead><tr><th></th><th>Eingang</th><th class="num">Betrag</th><th>Verwendungszweck</th><th>Zugeordnet</th></tr></thead>
+    <tbody>
+      {% for line in statement %}
+      <tr>
+        <td class="mid">{% if line.who and not line.short %}<input type="checkbox" name="zeile" value="{{ forloop.counter0 }}" checked aria-label="{{ line.who }} buchen">{% endif %}</td>
+        <td class="mid nowrap">{{ line.day|date:"j.n.Y" }}</td>
+        <td class="mid num">{{ line.amount }} €</td>
+        <td class="mid"><small>{{ line.text }}</small></td>
+        <td class="mid">{% if line.who %}{{ line.who }} · {{ line.who.matriculation }}{% if line.short %} <span class="badge no">zu wenig</span>{% endif %}{% else %}<span class="badge wait">nicht zugeordnet</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <div class="actions"><button class="btn" name="buchen" value="1">Angekreuzte verbuchen</button><a href="{% url 'students:reregistration' %}">Verwerfen</a></div>
+</form>
+{% endif %}
 <form method="post" enctype="multipart/form-data" class="inline" style="margin-bottom: 16px">
   {% csrf_token %}
   <label>Kontoauszug<input type="file" name="statement" accept=".csv,.txt,.xml" required></label>
-  <button class="btn ghost small">Zahlungen einlesen</button>
+  <button class="btn ghost small">Kontoauszug prüfen</button>
   <small class="muted">CSV oder CAMT.053 der Bank; zugeordnet über die Matrikelnummer im Verwendungszweck, in der Nachfrist mit Säumnisgebühr.</small>
 </form>
 <form method="post">

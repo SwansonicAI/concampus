@@ -83,7 +83,7 @@
     {% if own and not paid %}{% include "students/_transfer.html" with amount=owed reference=study.person.matriculation|add:" "|add:study.person.last_name %}{% endif %}
     {% if own or office %}
     {% if next.leave %}
-    <form method="post" action="{% url 'students:leave' study.pk %}">{% csrf_token %}<button class="btn ghost small">Urlaubssemester zurücknehmen</button></form>
+    <form method="post" action="{% url 'students:leave' study.pk %}">{% csrf_token %}<button class="btn ghost small" data-confirm="Urlaubssemester für das {{ upcoming }} zurücknehmen? Das Semester zählt dann als Fachsemester{% if not own %}; {{ study.person }} erhält einen Bescheid{% endif %}.">Urlaubssemester zurücknehmen</button></form>
     {% elif own and not window %}
     <p class="muted"><small>Ein Urlaubssemester für das {{ upcoming }} beantragen Sie mit der Rückmeldung, vom {{ upcoming.reregistration_start|date:"j. F" }} bis zum {{ upcoming.closes|date:"j. F Y" }}.</small></p>
     {% else %}
@@ -94,8 +94,9 @@
         <label>Grund<select name="reason" required><option value="">–</option>{% for code, name in leaves %}<option value="{{ code }}">{{ name }}</option>{% endfor %}</select></label>
         <label>Nachweis, etwa ein Attest<input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png"></label>
         <div class="choices"><label><input type="checkbox" name="consent" value="1"> {% if own %}Mit Nachweis: {% text 'einwilligung_gesundheit' zweck='zum Urlaubssemester' %}{% else %}Einwilligung zum Nachweis liegt unterschrieben vor{% endif %}</label></div>
-        <button class="btn ghost small">{% if own %}Beantragen{% else %}Eintragen{% endif %}</button>
+        <button class="btn ghost small"{% if not own %} data-confirm="Urlaubssemester eintragen und den Bescheid versenden?{% for rule in leave_rules %} Ausnahme: {{ rule }}{% endfor %}"{% endif %}>{% if own %}Beantragen{% else %}Eintragen{% endif %}</button>
       </form>
+      {% if not own %}{% for rule in leave_rules %}<p class="fail"><small>Ausnahme: {{ rule }}</small></p>{% endfor %}{% endif %}
       {% if own %}<p class="muted"><small>Bis zum {{ upcoming.closes|date:"j. F Y" }}, nicht rückwirkend; in der Regel höchstens {{ leave_terms }} Urlaubssemester. Sie zählen nicht als Fachsemester; ob Prüfungen möglich sind, regelt die Immatrikulationsordnung. Den Nachweis sieht nur {{ leaves_to|default:"die Studierendenverwaltung" }}; auf Papier reichen Sie ihn dort ein.</small></p>{% endif %}
     </details>
     {% endif %}
@@ -144,7 +145,8 @@
         {% if own or office %}
         <td class="num">{{ t.due }} €</td>
         <td>{% if t.term_id == study.start_term_id %}zur Immatrikulation{% else %}{{ t.term.deadline|date:"j.n.Y" }}{% endif %}</td>
-        <td>{{ t.paid|date:"j.n.Y"|default:"–" }}{% if t.reference %}<br><small class="muted">{{ t.reference }}</small>{% endif %}</td>
+        <td>{{ t.paid|date:"j.n.Y"|default:"–" }}{% if t.reference %}<br><small class="muted">{{ t.reference }}</small>{% endif %}
+          {% if t.paid and unpaying and t.term.end >= today %}<form method="post" action="{% url 'students:unpay' t.pk %}">{% csrf_token %}<button class="link" data-confirm="Zahlung vom {{ t.paid|date:'j.n.Y' }} zurücknehmen? Die Rückmeldung steht dann wieder aus, {{ study.person }} wird benachrichtigt."><small>zurücknehmen</small></button></form>{% endif %}</td>
         <td class="num">{% if t.withdrawn %}<small class="muted">Erstattung über das Studierendenwerk</small>{% elif t.paid %}0,00 €{% else %}<b class="fail">{{ t.due }} €</b>{% endif %}</td>
         {% endif %}
       </tr>

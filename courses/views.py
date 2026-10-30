@@ -30,7 +30,7 @@ from rooms.views import agenda, called_off, legend, week
 from students.models import Study
 from . import panel
 from .forms import AddForm, CourseForm, DateForm, EnsembleForm, Lessons, PlanForm, TeachingForm
-from .models import Area, Course, Ensemble, Format, Participation, Recusal, Reduction, Signup
+from .models import Area, Course, Ensemble, Format, Participation, Recusal, Reduction, Signup, marked
 
 TEACHING = [Course.Kind.COURSE, Course.Kind.LESSON]
 MANAGERS = {Course.Kind.EXAM: 'manage_exams', Course.Kind.RECOGNITION: 'recognise', Course.Kind.AUDITION: 'run_auditions'}
@@ -433,7 +433,7 @@ def recuse(request, pk):
         )
         participation, done = recusal.participation_id, f'{substitute} wertet {recusal.participation.study.person} an Stelle von {recusal.examiner}.'
     else:
-        participation = get_object_or_404(course.participations.exclude(scores__examiner=person), pk=request.POST.get('participation'))
+        participation = get_object_or_404(course.participations.exclude(scores__in=marked(person)), pk=request.POST.get('participation'))
         reason = request.POST.get('reason', '').strip()[:200]
         if not (reason and course.staff.filter(pk=person.pk).exists()):
             raise PermissionDenied

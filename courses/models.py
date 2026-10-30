@@ -208,6 +208,8 @@ class Course(Tracked, models.Model):
             return f'Diese Prüfung gehört nicht zum Studiengang {study.program}.'
         if self.subject_id not in (None, study.subject_id):
             return f'Diese Prüfung ist für das Hauptfach {self.subject}.'
+        if study.focus_id and (option := study.program.chosen_by().get(module.pk)) and option.pk != study.focus_id:
+            return f'{module.code} gehört zum Schwerpunkt {option.title}; Ihr Schwerpunkt ist {study.focus.title}.'
         if attempts(study.person_id, module) >= study.program.attempts:
             return f'Alle {study.program.attempts} Versuche für {module.code} sind ausgeschöpft.'
         return ''
@@ -339,6 +341,8 @@ class Participation(Judged, Tracked, models.Model):
         help_text='Nicht erschienen und Täuschung gelten als nicht bestanden; ein Rücktritt mit triftigem Grund zählt nicht als Versuch.',
     )
     created = models.DateTimeField('Angemeldet', default=timezone.now, help_text='Reihenfolge für die Warteliste.')
+    told = models.DateTimeField('Bekannt gegeben', null=True, blank=True, help_text='Wann das Ergebnis mitgeteilt wurde; von da an läuft die Widerspruchsfrist.')
+    told_result = models.CharField('Mitgeteiltes Ergebnis', max_length=40, blank=True)
 
     class Meta:
         ordering = ['slot', 'created', 'pk']  # registered at the same moment: in the order they were entered, never by chance
@@ -351,6 +355,26 @@ class Participation(Judged, Tracked, models.Model):
 
     def __str__(self):
         return f'{self.study.person} · {self.course}'
+
+    @property
+    def result(self):
+        """The result as told: grade, passed, remark; a release tells only whoever's result differs from what they were told."""
+        return f'{self.grade}|{self.passed}|{self.remark}'
+
+    @property
+    def begins(self):
+        """When the exam begins for this candidate: their own slot, else the course's first date."""
+        return self.slot or min((b.start for b in self.course.bookings.all()), default=None)
+
+    @property
+    def withdrawable(self):
+        """Withdrawal runs until the course's last day for it, and never once the exam has begun: a sat attempt stays."""
+        return self.course.withdrawable and not (self.begins and self.begins <= timezone.now())
+
+
+def marked(person):
+    """The marks `person` has given; a Gutachten still a draft is none."""
+    return Score.objects.filter(examiner=person, value__isnull=False)
 
 
 def attempts(person, module):
@@ -413,7 +437,7 @@ class Score(Judged, Tracked, models.Model):
 
     participation = models.ForeignKey(Participation, models.CASCADE, related_name='scores', verbose_name='Teilnahme')
     examiner = models.ForeignKey(Person, models.CASCADE, related_name='scores', verbose_name='Prüfer:in')
-    value = models.DecimalField('Wertung', max_digits=4, decimal_places=2)
+    value = models.DecimalField('Wertung', max_digits=4, decimal_places=2, null=True, blank=True, help_text='Leer: ein Gutachten im Entwurf.')
     report = models.TextField('Gutachten', blank=True, help_text='Bei Abschlussarbeiten die schriftliche Begründung der Note.')
     entered_by = models.ForeignKey(
         Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Übertragen von',

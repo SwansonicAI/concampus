@@ -60,7 +60,7 @@ class ExamsConfig(Tile, AppConfig):
 
     def tasks(self, person):
         from courses import panel
-        from courses.models import Course, Participation
+        from courses.models import Course, Participation, marked
 
         found, now = [], timezone.now()
         exams = Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], released=None).annotate(
@@ -76,7 +76,7 @@ class ExamsConfig(Tile, AppConfig):
             decided = person.within(exams, 'decide_results')
             for exam in decided.filter(open=0):
                 found.append(task(f'Ergebnisse freigeben: {exam.title}', exam.get_absolute_url()))
-            for thesis in decided.filter(kind=Course.Kind.THESIS).annotate(marked=Count('participations__scores')).filter(marked__gte=2):
+            for thesis in decided.filter(kind=Course.Kind.THESIS).annotate(marked=Count('participations__scores', filter=Q(participations__scores__value__isnull=False))).filter(marked__gte=2):
                 if any(p.third for p in panel.sheet(thesis)[1]):  # Gutachten too far apart, or one failing it (RPSO § 15 Abs. 2)
                     who = ', '.join(p.study.person.last_name for p in thesis.participations.select_related('study__person'))
                     found.append(task(f'Drittes Gutachten bestellen: {who}, {thesis.title}', reverse('exams:edit', args=[thesis.pk])))
@@ -128,17 +128,17 @@ class ExamsConfig(Tile, AppConfig):
             for exam in vacant.distinct():
                 found.append(task(f'{exam.title}: Ersatz für eine befangene Person bestellen', exam.get_absolute_url()))
         if 'teacher' in person.roles:
-            standing_in = Participation.objects.filter(recusals__substitute=person, course__released=None).exclude(scores__examiner=person).exclude(course__kind=Course.Kind.AUDITION)
+            standing_in = Participation.objects.filter(recusals__substitute=person, course__released=None).exclude(scores__in=marked(person)).exclude(course__kind=Course.Kind.AUDITION)
             for row in standing_in.values('course', 'course__title').annotate(n=Count('pk')):
                 found.append(task(f'{row["course__title"]}: Ihre Wertung als Ersatz fehlt für {plural(row["n"], "Teilnahme", "Teilnahmen")}', reverse('exams:exam', args=[row['course']])))
             for exam in exams.filter(staff=person, held__lte=now):
-                missing = exam.participations.exclude(scores__examiner=person).exclude(recusals__examiner=person).count()
+                missing = exam.participations.exclude(scores__in=marked(person)).exclude(recusals__examiner=person).count()
                 if missing:
                     found.append(task(f'{exam.title}: Ihre Wertung fehlt für {plural(missing, "Teilnahme", "Teilnahmen")}', exam.get_absolute_url(), graded_by(exam)))
             handed = Q(participations__study__documents__kind='abschlussarbeit', participations__study__documents__created__gte=F('participations__created'))
             theses = (
                 Course.objects.filter(handed, kind=Course.Kind.THESIS, staff=person, released=None)
-                .exclude(participations__scores__examiner=person).exclude(participations__recusals__examiner=person)
+                .exclude(participations__scores__in=marked(person)).exclude(participations__recusals__examiner=person)
             )
             from .views import handed_in
 

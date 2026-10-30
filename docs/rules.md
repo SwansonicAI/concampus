@@ -24,7 +24,9 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 | Audition mean cut after the first decimal | EPO § 6 Abs. 4 | `courses/panel.py` `rounding()` | code |
 | Module grades and Gesamtnote rounded kaufmännisch; areas between them (Vertiefung) keep their exact mean | RPSO § 15 Abs. 4 | `curriculum/models.py` `weighted()`, `Program.curriculum()` | Einstellungen › Studiengänge (Modul- und Gesamtnoten) |
 | Thesis: Gutachten more than 1,0 apart or one failing → a third; grade the mean of the two better | RPSO § 15 Abs. 2 | `courses/panel.py` `disputed()`, `result()` | code |
-| Examiners see the others' marks only once all have marked; then theirs is locked | practice | `courses/panel.py` `blind()`, `marks()` | code |
+| Examiners see the others' marks only once all have marked, whatever office they also hold; then theirs is locked, the text of a Gutachten too | practice | `courses/panel.py` `blind()`, `marks()` | code |
+| A Gutachten without its grade is a draft its author alone sees; with the grade it is handed in | RPSO § 15 | `courses/panel.py` `marks()`, `exams/views.py` `exam()` | code |
+| Released again after a correction, only whose result changed hears of it, a final fail by a new Bescheid; the Widerspruchsfrist runs from each one's own notice | VwVfG § 41 | `exams/views.py` `release()`, `told_now()`, `exhausted()` | code |
 | A mark set by hand differs from the panel's only with a reason, by the Prüfungsausschuss | practice | `courses/panel.py` `marks()` (`correct`) | Einstellungen › Ämter (`correct_scores`) |
 | The office copies examiners' marks only once the signed Protokoll is in, on paper or as a scan; the sheet says who copied | practice | `courses/panel.py` `marks()`, `exams/views.py` `exam()`, `protocol()` | code |
 | A Befangenheit takes the examiner out of the mean; a substitute marks in their place | § 21 VwVfG | `courses/panel.py` `sheet()`, `courses/views.py` `recuse()` | code |
@@ -45,7 +47,8 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 | Rule | Source | Code | Set in |
 |---|---|---|---|
 | Attempts per exam; when used up, the Prüfungsanspruch is lost: no registration for exams or courses | Prüfungsordnung | `courses/models.py` `attempts()`, `Course.refuses()`, `exams/views.py` `exhausted()`, `courses/views.py` `register()` | Einstellungen › Studiengänge (Prüfungsversuche) |
-| Withdrawal from an exam until some weeks before the Prüfungszeitraum | RPSO | `courses/models.py` `Course.withdraw_by` | Einstellungen › Hochschule (Abmeldung von Prüfungen) |
+| Withdrawal from an exam until some weeks before the Prüfungszeitraum, never once it has begun for the candidate: a sat attempt stays | RPSO | `courses/models.py` `Course.withdraw_by`, `Participation.withdrawable` | Einstellungen › Hochschule (Abmeldung von Prüfungen) |
+| Exams under a Schwerpunkt other than the one chosen are neither offered nor accepted | Studienplan | `courses/models.py` `Course.refuses()`, `exams/views.py` `offered()` | code |
 | Rücktritt (RT) for good reason only with its attest, on paper or as a scan; RT is no attempt | RPSO § 20 | `courses/panel.py` `marks()`, `exams/views.py` `attest()` | code |
 | Nachteilsausgleich granted by the Prüfungsausschuss by Bescheid; examiners see the measure, not the attest | RPSO § 8 | `exams/views.py` `compensate()` | Einstellungen › Ämter (`grant_compensation`) |
 
@@ -83,6 +86,11 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 | An HZB from a school abroad is assessed; German proved where it is not in German; an APS certificate for China, India, Vietnam; both by the Immatrikulation | ThürHG, KMK | `core/models.py` `Person.abroad`, `needs_german`, `needs_aps`; `core/destatis.py` | Einstellungen › Unterlagenarten |
 | Each kind of document takes up to 5 files of 20 MB each unless set otherwise; the video one file of 1.5 GB, which may be taken over into another application in the same Hauptfach | Hochschule | `students/models.py` `DocumentType.size`, `max_files`; `admissions/views.py` `upload()`, `reuse()` | Einstellungen › Unterlagenarten |
 | Semesterbeitrag in three parts, which add up | HfM fees page | `core/models.py` `Term.parts`, `clean()` | Einstellungen › Semester |
+| A newcomer's first Semesterbeitrag is due by the Rückmeldefrist, or, offered the place late, the days to accept and as many again | Hochschule | `students/models.py` `Study.fee_due` | Einstellungen › Hochschule (Frist zur Annahme) |
+| Payments from a bank statement are booked once checked one by one; a payment booked by mistake is taken back and the person told | Hochschule | `students/views.py` `reregistration()`, `unpay()` | code |
+| Without Rückmeldung after the Nachfrist: reason 7, after a preview; whose Zeugnis is issued or Prüfungsanspruch lost leaves on that ground, one by one | Immatrikulationsordnung | `students/views.py` `reregistration()` | code |
+| A Fachwechsel by Bescheid, after a preview; credits for what was passed on application | Immatrikulationsordnung, RPSO | `students/views.py` `change()` | Einstellungen › Texte |
+| An Urlaubssemester taken back by Bescheid; an office entry beyond the rule says so before it is made | Immatrikulationsordnung | `students/views.py` `leave()` | Einstellungen › Texte |
 | Rückmeldung within its window; in the Nachfrist with the Säumnisgebühr; after it, Exmatrikulation | Immatrikulationsordnung | `students/views.py` `reregistration()` | Einstellungen › Semester, › Hochschule |
 | Urlaubssemester asked for in the Rückmeldung window, at most two in the rule, in the first semester only for illness or Mutterschutz; the office decides beyond, reminded | Immatrikulationsordnung | `students/views.py` `leave()`, `students/models.py` `LEAVE_TERMS`, `FIRST_TERM_LEAVES` | code |
 | Exmatrikulation names the last day enrolled; after a final fail the day the Bescheid became final, at the earliest the day before this semester | ThürHG | `students/views.py` `leaving_day()`, `exmatriculate()` | code |

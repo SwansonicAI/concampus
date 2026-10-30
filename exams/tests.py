@@ -27,6 +27,9 @@ class ExamTest(Seeded):
         Term.objects.filter(pk=exam.term_id).update(exams_start=today)
         self.assertIn('Abmelden ging nur bis zum', flashes(student.post(url, follow=True))[0])
         Term.objects.filter(pk=exam.term_id).update(exams_start=today + timedelta(weeks=4))
+        exam.participations.filter(study=study).update(slot=timezone.now() - timedelta(hours=1))
+        self.assertIn('Abmelden ging nur bis zur Prüfung', flashes(student.post(url, follow=True))[0])  # sat, the attempt stays
+        exam.participations.filter(study=study).update(slot=None)
         self.assertEqual(flashes(student.post(url, follow=True)), ['Abgemeldet.'])
         self.assertFalse(exam.participations.filter(study=study).exists())
 
@@ -117,8 +120,12 @@ class ExamTest(Seeded):
         study = resit.participations.first().study
         self.assertTrue(any(p.module.code.startswith('BM-BS-01') for p in study.record()))
         self.assertEqual(office.post(f'/pruefungen/{resit.pk}/freigabe/').status_code, 403)  # reopening is the Prüfungsausschuss's
-        self.login('pruefungsausschuss').post(f'/pruefungen/{resit.pk}/freigabe/')
+        chair = self.login('pruefungsausschuss')
+        chair.post(f'/pruefungen/{resit.pk}/freigabe/')
         self.assertIsNone(Course.objects.get(pk=resit.pk).released)
+        told = Message.objects.count()
+        r = chair.post(f'/pruefungen/{resit.pk}/freigabe/', follow=True)  # nothing changed: nobody hears again
+        self.assertEqual((Message.objects.count(), flashes(r)[-1]), (told, 'Ergebnisse freigegeben und gesperrt; nichts geändert, niemand benachrichtigt.'))
 
     def test_only_the_pruefungsausschuss_sets_another_grade_and_says_why(self):
         resit = Course.objects.get(title__contains='Wiederholung')

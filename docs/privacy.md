@@ -62,7 +62,7 @@ with the administration (HfM Hanns Eisler Berlin, HMTM München, HfM Würzburg).
 ### Marks
 
 Examiners judge on their own: until every examiner has marked a candidate, an examiner sees neither the others' marks
-nor the mean, and no ranking. Once all have marked, the marks show and are locked: an examiner can no longer change or
+nor the mean, and no ranking, even one whose office otherwise sees results (`blind()`, `office`). Once all have marked, the marks show and are locked: an examiner can no longer change or
 delete theirs, so nobody adjusts to the others; only the office that decides results (for auditions, the one that runs
 them) changes a mark, and the Verlauf keeps it (`courses/panel.py`, `blind()`, `marks()`). A single examiner gives a
 step of the scale (1,0 to 4,0 by 0,3, or 5,0); with several examiners the grade is the mean of theirs and may fall
@@ -74,7 +74,7 @@ substitute, so everyone is marked by as many (EPO § 3 Abs. 5); the substitute s
 reason shows to the panel and the office on the sheet; only the office lifts it.
 
 Gutachten on a thesis (`Score.report`) belong to tier 2. Each Gutachter:in sees their own until all are in, then all;
-the office that decides results sees them throughout. Candidates see them on request (Einsicht, RPSO 2026 § 22), not
+the office that decides results sees them throughout, but not a draft, saved without its grade, which only its author sees. Candidates see them on request (Einsicht, RPSO 2026 § 22), not
 in the portal.
 
 ### Finding students by name

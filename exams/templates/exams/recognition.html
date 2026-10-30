@@ -17,9 +17,10 @@
   {% if not study %}{% include "students/_enrolled.html" %}{% endif %}
   <div>
     <h3>Zuletzt anerkannt · {{ course.term }}</h3>
+    <p class="muted"><small>Eine falsche Note oder ein falsches Modul berichtigen Sie unter <a href="{% url 'exams:exam' course.pk %}">Anerkennungen {{ course.term }}</a>.</small></p>
     <table data-panel>
       {% for p in recent %}
-      <tr><td><a href="{% url 'exams:transcript' p.study.pk %}">{{ p.study.person.name }}</a></td><td>{{ p.module.code }}</td><td class="num">{% if p.grade is not None %}{{ p.grade|floatformat:1 }}{% else %}bestanden{% endif %}</td></tr>
+      <tr><td><a href="{% url 'exams:transcript' p.study.pk %}">{{ p.study.person.name }}</a></td><td>{{ p.module.code }}</td><td class="num">{% if p.grade is not None %}{{ p.grade|floatformat:1 }}{% else %}bestanden{% endif %}</td><td><a href="{% url 'exams:exam' course.pk %}"><small>berichtigen</small></a></td></tr>
       {% empty %}<tr><td class="empty">Noch keine Anerkennungen in diesem Semester.</td></tr>
       {% endfor %}
     </table>

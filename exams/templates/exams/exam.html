@@ -12,8 +12,8 @@
     {% if course.kind != 'recognition' and decide or course.kind == 'exam' and user in staff %}
     <form method="post" action="{% url 'exams:release' course.pk %}">
       {% csrf_token %}
-      {% if course.released %}{% if correct %}<button class="btn ghost">Wieder öffnen</button>{% endif %}
-      {% else %}<button class="btn" data-confirm="Freigeben, sperren und benachrichtigen?"{% if missing %} title="Noch {{ missing }} ohne Ergebnis" disabled{% elif not rows %} title="Niemand ist angemeldet" disabled{% endif %}>Ergebnisse freigeben</button>{% endif %}
+      {% if course.released %}{% if correct %}<button class="btn ghost" data-confirm="Wieder öffnen? Prüfende und Amt können dann ändern. Bei erneuter Freigabe erhält nur Nachricht, wessen Ergebnis sich geändert hat; die Widerspruchsfrist der anderen bleibt.">Wieder öffnen</button>{% endif %}
+      {% else %}<button class="btn" data-confirm="{{ releasing }}"{% if missing %} title="Noch {{ missing }} ohne Ergebnis" disabled{% elif not rows %} title="Niemand ist angemeldet" disabled{% endif %}>Ergebnisse freigeben</button>{% endif %}
     </form>
     {% endif %}
   </div>
@@ -78,7 +78,8 @@
         {% if p.error %}<p class="fail">{{ p.error }}</p>{% endif %}
         <div><label for="id_note">Note</label><select id="id_note" name="score-{{ p.pk }}-{{ e.pk }}"><option value="">Bitte wählen</option>{% for s in steps %}<option{% if value|mark == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>
         <div><label for="id_report">Gutachten</label><textarea id="id_report" name="report-{{ p.pk }}-{{ e.pk }}" rows="14">{{ p.reports|of:e.pk|default:"" }}</textarea></div>
-        <div class="actions"><button class="btn">Gutachten speichern</button>{% if not handed %}<small class="muted">Die Arbeit ist noch nicht abgegeben.</small>{% endif %}</div>
+        <div class="actions"><button class="btn" data-confirm="Gutachten mit Note abgeben? Sobald alle Gutachten vorliegen, sind sie gesperrt.">Gutachten abgeben</button><button class="btn ghost" name="entwurf" value="1">Entwurf speichern</button>{% if not handed %}<small class="muted">Die Arbeit ist noch nicht abgegeben.</small>{% endif %}</div>
+        <small class="muted">Ein Entwurf wird ohne Note gespeichert und ist nur für Sie zu sehen.</small>
       </form>
       {% elif p.blind and e != user %}<p class="muted">Zu sehen, sobald alle Gutachten vorliegen.</p>
       {% elif value is None %}<p class="muted">Noch nicht eingereicht.</p>
@@ -102,11 +103,12 @@
   <div class="inline" style="margin-top: 16px">
     <a class="more" href="{% url 'exams:roster' course.pk %}?format=csv">Als CSV</a>
     {% if course.released %}<a class="more" href="{% url 'exams:roster' course.pk %}?aushang">Aushang nach Matrikelnummer</a>{% endif %}
-    {% if importing %}
+    {% if importing and user not in staff and not course.protocol_received %}<small class="muted">Noten aus einer Datei übertragen Sie, sobald das unterschriebene Protokoll verbucht ist.</small>
+    {% elif importing %}
     <form method="post" enctype="multipart/form-data" action="{% url 'exams:marks' course.pk %}" class="inline">
       {% csrf_token %}
       <label>Noten aus Datei<input type="file" name="file" accept=".csv,.txt" required></label>
-      {% if user not in staff %}<label>Wertungen von<select name="spalte">{% for e in staff %}<option value="{{ e.pk }}">{{ e.last_name }}</option>{% endfor %}</select></label>{% endif %}
+      {% if user not in staff %}<label>Wertungen von<select name="spalte" required><option value="">Bitte wählen</option>{% for e in staff %}<option value="{{ e.pk }}">{{ e.last_name }}</option>{% endfor %}</select></label>{% endif %}
       <button class="btn ghost small">Übernehmen</button>
     </form>
     <small class="muted">Je Zeile Matrikelnummer und Note, getrennt durch Semikolon oder Tabulator; sie füllen {% if user in staff %}Ihre Spalte{% else %}die Spalte der gewählten Person{% endif %}.</small>

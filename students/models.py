@@ -1,6 +1,7 @@
 import re
 import uuid
 from collections import defaultdict
+from datetime import timedelta
 from pathlib import Path
 
 from django.db import models
@@ -9,7 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core import destatis, texts
-from core.models import Keyed, Message, Person, Term, Tracked
+from core.models import Institution, Keyed, Message, Person, Term, Tracked
 from core.text import matching
 from curriculum.models import Program, Subject, weighted
 
@@ -152,6 +153,12 @@ class Study(Tracked, models.Model):
         subject, body = self.wording(key, *after, **values)
         message = Message.send(self.person, subject, body, link, sender=texts.block('absender_bescheide'))
         Document.objects.create(person=self.person, study=self, kind=DocumentType.system('notice'), title=subject, message=message)
+
+    @property
+    def fee_due(self):
+        """When a newcomer's first Semesterbeitrag is due: by the Rückmeldefrist, or later for whoever was offered the place
+        late, as from the Nachrückliste: the days to accept it, then as many again to pay."""
+        return max(self.start_term.deadline, self.since + timedelta(days=2 * Institution.get().accept_days))
 
     def missing(self):
         """What still blocks the enrolment of an admitted applicant."""

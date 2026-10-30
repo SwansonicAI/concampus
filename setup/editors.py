@@ -12,7 +12,7 @@ from core.dates import DayField, PastField
 from core.models import Grant, Holiday, Institute, Institution, Membership, Office, Person, Term
 from courses.forms import AuditionForm
 from courses.models import Appointment, Area, Course, Format, Reduction
-from curriculum.forms import ModuleForm
+from curriculum.forms import ModuleForm, ProgramForm
 from curriculum.models import Module, Program, Subject
 from instruments.models import Instrument
 from rooms.models import BookingCategory, Room, RoomFunction
@@ -302,7 +302,7 @@ EDITORS = {e.key: e for e in [
         ],
     ),
     Editor(
-        'studiengaenge', Program, 'Studiengänge', 'edit_curriculum', 'Studium und Lehre',
+        'studiengaenge', Program, 'Studiengänge', 'edit_curriculum', 'Studium und Lehre', form=ProgramForm,
         sections=[
             (None, [('degree', 'name', 'version'), ('semesters', 'attempts', 'thesis_weeks'), 'postgraduate', 'subjects']),
             ('Noten', [('rounding', 'mean_rounding', 'honours')]),

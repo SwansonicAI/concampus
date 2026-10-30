@@ -3,6 +3,12 @@ from django import forms
 from .models import Module
 
 
+class ProgramForm(forms.ModelForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.note = self.instance.pk and self.instance.in_use
+
+
 class ModuleForm(forms.ModelForm):
     class Meta:
         model = Module
@@ -13,6 +19,7 @@ class ModuleForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.note = self.instance.program.in_use
         modules = list(self.instance.program.modules.all())
         below, frontier = set(), {self.instance.pk} - {None}
         while frontier:  # neither the module itself nor anything under it can hold it

@@ -24,6 +24,7 @@ from core.access import kept, require
 from core.apps import plural
 from core.dates import months_before, working
 from core.models import Consent, Export, Message, Office, Term
+from core.templatetags.marks import mark
 from core.text import matching
 from core.views import without_term
 from courses import panel
@@ -64,12 +65,19 @@ def exhausted(study):
     lost = list(Module.objects.filter(pk__in=[m for m, ps in failed.items() if len(ps) >= study.program.attempts and m not in passed]))
     for module in lost:
         module.failures = failed[module.pk]
-        released = module.failures[-1].course.released
+        released = module.failures[-1].told or module.failures[-1].course.released
         notice = study.documents.filter(kind='notice', created__gte=released).select_related('message').order_by('created').first()
         opened = study.person.electronic and notice and notice.message and notice.message.read
         known = timezone.localtime(opened).date() + timedelta(days=1) if opened else timezone.localtime(notice.created if notice else released).date() + timedelta(days=4)
         module.appeal = working(months_before(known, -1))  # a Frist ending on a weekend or holiday runs on (§ 31 Abs. 3 VwVfG)
     return lost
+
+
+def told_now(rows):
+    """(rows whose result differs from what they were told, how many of them get the Bescheid über endgültiges
+    Nichtbestehen): released again after a correction, only those whose result changed hear of it."""
+    told = [p for p in rows if p.told_result != p.result]
+    return told, sum(1 for p in told if p.passed is False and getattr(p, 'last', False))
 
 
 def outcome(p):
@@ -100,13 +108,15 @@ def register_resits(course):
 
 
 def offered(person):
-    """Exams of this term the person may still register for: their programme's modules, due by now, not yet passed;
-    artistic exams held per Hauptfach only in their own."""
+    """Exams of this term the person may still register for: their programme's modules, due by now, not yet passed,
+    none under a Schwerpunkt other than the one chosen; artistic exams held per Hauptfach only in their own."""
     studies = person.studies.filter(status=Study.Status.ENROLLED)
     passed = Participation.objects.filter(study__in=studies, passed=True, module__isnull=False).values('module')  # NOT IN with a NULL matches nothing
     semester = max((s.semester for s in studies), default=0)
+    elsewhere = {pk for s in studies.select_related('program') if s.focus_id for pk, option in s.program.chosen_by().items() if option.pk != s.focus_id}
     return (  # with those whose registration opens later in the term
-        Course.objects.filter(term=Term.current(), kind=Course.Kind.EXAM, modules__program__studies__in=studies, deadline__gte=timezone.localdate())
+        Course.objects.filter(term=Term.current(), kind=Course.Kind.EXAM, deadline__gte=timezone.localdate())
+        .filter(modules__in=Module.objects.filter(program__studies__in=studies).exclude(pk__in=elsewhere))
         .filter(Q(subject=None) | Q(subject__in=studies.values('subject')))
         .filter(modules__semester__lte=semester).exclude(participations__study__in=studies).exclude(modules__in=passed)
         .annotate(date=Min('bookings__start')).distinct()
@@ -149,7 +159,7 @@ def index(request):
         ahead = [p for p in mine if not p.course.released]
         for p in ahead:
             held = min(p.course.bookings.all(), key=lambda b: b.start, default=None)
-            p.when, p.where = p.slot or (held and held.start), held and held.room
+            p.when, p.where = p.begins, held and held.room
         theses = list(
             Participation.objects.filter(study__in=studies, course__kind=Course.Kind.THESIS).select_related('course', 'module', 'study')
             .prefetch_related('course__staff').order_by('-created')
@@ -187,16 +197,19 @@ def exam(request, pk):
     if request.method == 'POST':
         if course.released:
             raise PermissionDenied('Freigegebene Ergebnisse öffnet nur der Prüfungsausschuss wieder.')
+        post = request.POST.copy()  # a Gutachten saved as a draft, or handed in without a grade, keeps its text only
+        draft = bool(post.pop('entwurf', None)) or any(k.startswith('report-') for k in post) and any(k.startswith('score-') and not post[k] for k in post)
+        for key in [k for k in post if k.startswith('score-')] if draft else []:
+            post[key] = ''
         try:
-            panel.save(request.POST, rows, columns, decide=decide or correct, correct=correct, by=person)
+            panel.save(post, rows, columns, decide=decide or correct, correct=correct, by=person)
         except panel.Refused as error:  # shown with what was typed, by its row
             refused, (staff, rows) = error, sheet()
             messages.error(request, 'Nichts gespeichert. Bitte die markierte Zeile berichtigen.')
         else:
-            messages.success(request, 'Gutachten gespeichert.' if course.kind == Course.Kind.THESIS else 'Ergebnisse gespeichert.')
+            messages.success(request, 'Entwurf gespeichert; abgegeben ist das Gutachten mit seiner Note.' if draft else 'Gutachten abgegeben.' if course.kind == Course.Kind.THESIS else 'Ergebnisse gespeichert.')
             return redirect(course)
-    if not (decide or correct):
-        panel.blind(rows, person)
+    panel.blind(rows, person, office=decide or correct)
     if refused:
         panel.retype(rows, request.POST, refused)
     handed = handed_in(rows[0]) if course.kind == Course.Kind.THESIS and rows else None
@@ -223,8 +236,20 @@ def exam(request, pk):
         'handed': handed, 'grading': handed and timezone.localdate(handed.created) + timedelta(weeks=8),  # RPSO § 13 Abs. 11
         'adding': AddForm(),
         'importing': not course.released and course.kind == Course.Kind.EXAM and (decide or member),
+        'releasing': release_note(course, rows) if rows and not course.released else '',
         'reachable': Study.reachable(person, Study.objects.filter(participations__course=course)),
     })
+
+
+def release_note(course, rows):
+    """What releasing does, for its confirm: who hears, who gets a Bescheid, that only the Prüfungsausschuss reopens."""
+    told, final = told_now(rows)
+    return ' '.join([
+        f'Freigeben und sperren? {plural(len(told), "Person erhält", "Personen erhalten")} das Ergebnis'
+        + (f', {plural(final, "davon den Bescheid", "davon den Bescheid")} über endgültiges Nichtbestehen.' if final else '.'),
+        *(['Das unterschriebene Protokoll ist noch nicht verbucht.'] if course.kind == Course.Kind.EXAM and not course.protocol_received else []),
+        'Danach ändert nur der Prüfungsausschuss, nach Wiederöffnen.',
+    ])
 
 
 @require('manage_exams')
@@ -286,7 +311,11 @@ def protocol(request, pk):
     if request.method == 'POST':
         if not office or course.released:
             raise PermissionDenied('Das Protokoll lädt das Amt hoch, das die Ergebnisse einträgt, bis sie freigegeben sind.')
-        course.protocol_received = dates.day(request.POST.get('received', '')) or timezone.localdate()
+        try:
+            course.protocol_received = dates.received(request.POST.get('received', ''))
+        except forms.ValidationError as error:
+            messages.error(request, f'Protokoll eingegangen am: {error.messages[0]}')
+            return redirect(course)
         course.protocol = request.FILES.get('file') or course.protocol
         course.save(update_fields=['protocol', 'protocol_received'])
         messages.success(request, f'Protokoll vom {date_format(course.protocol_received, "j.n.Y")} verbucht. Die Wertungen lassen sich jetzt übertragen.')
@@ -326,7 +355,11 @@ def unmet(study, module):
 def filed(study, request, what):
     """The attest an office files for `what`, with the person's signed consent: the scan, or the day the paper arrived;
     (document, '') or (None, why not)."""
-    kind, file, received = DocumentType.system('attest'), request.FILES.get('file'), dates.day(request.POST.get('received', ''))
+    kind, file, text = DocumentType.system('attest'), request.FILES.get('file'), request.POST.get('received', '').strip()
+    try:
+        received = text and dates.received(text)
+    except forms.ValidationError as error:
+        return None, f'Attest eingegangen am: {error.messages[0]}'
     if not (file or received):
         return None, 'Bitte das Attest hochladen oder angeben, wann es auf Papier eingegangen ist.'
     if file and (refusal := kind.refuses(file)):
@@ -496,13 +529,16 @@ def release(request, pk):
             messages.error(request, missing)
             return redirect(course)
         course.released = timezone.now()
-        final = 0
-        for p in rows:
+        told, final = told_now(rows)
+        for p in told:
             texts.send('ergebnis', p.study.person, reverse('exams:index'), pruefung=course.title)
             if p.passed is False and getattr(p, 'last', False):
                 p.study.notify('endgueltig', reverse('exams:index'), pruefung=course.title, modul=p.module, versuch=p.attempt)
-                final += 1
-        messages.success(request, 'Ergebnisse freigegeben und gesperrt.' + (f' {plural(final, "Bescheid", "Bescheide")} über endgültiges Nichtbestehen versandt.' if final else ''))
+            p.told, p.told_result = course.released, p.result
+        Participation.objects.bulk_update(told, ['told', 'told_result'])
+        messages.success(request, 'Ergebnisse freigegeben und gesperrt; ' + (
+            f'{plural(len(told), "Person", "Personen")} benachrichtigt' if told else 'nichts geändert, niemand benachrichtigt'
+        ) + (f', {plural(final, "Bescheid", "Bescheide")} über endgültiges Nichtbestehen versandt.' if final else '.'))
     course.save(update_fields=['released'])
     if course.released:  # who failed is registered for the next exam of the module already planned
         later = (
@@ -555,11 +591,12 @@ def register(request, pk):
 @require_POST
 def withdraw(request, pk):
     participation = get_object_or_404(Participation, pk=pk, study__person=request.user, course__kind=Course.Kind.EXAM)
-    if participation.course.withdrawable and participation.passed is None:
+    if participation.withdrawable and participation.passed is None:
         participation.delete()
         messages.success(request, 'Abgemeldet.')
     else:
-        messages.error(request, f'Abmelden ging nur bis zum {date_format(participation.course.withdraw_by, "j.n.Y")}. Bei triftigem Grund ist ein Rücktritt mit Nachweis möglich.')
+        until = 'bis zur Prüfung' if participation.course.withdrawable else f'bis zum {date_format(participation.course.withdraw_by, "j.n.Y")}'
+        messages.error(request, f'Abmelden ging nur {until}. Bei triftigem Grund ist ein Rücktritt mit Nachweis möglich; zuständig: {Office.holding("decide_results", participation.study.program) or "das zuständige Amt"}.')
     return redirect('exams:index')
 
 
@@ -653,7 +690,7 @@ def recognition(request):
         if data['proof']:
             Document.hand_in(study, DocumentType.system('anerkennung'), data['proof'])
         study.notify('anerkennung', reverse('exams:transcript', args=[study.pk]), modul=codes, herkunft=data['note'])
-        messages.success(request, f'{codes} für {study.person} anerkannt' + (f' mit {data["grade"]}.' if data['grade'] is not None else '.'))
+        messages.success(request, f'{codes} für {study.person} anerkannt' + (f' mit {mark(data["grade"])}.' if data['grade'] is not None else '.'))
         return redirect(f'{reverse("exams:recognition")}?studium={study.pk}')
     return render(request, 'exams/recognition.html', {
         'form': form, 'course': course, 'study': study,

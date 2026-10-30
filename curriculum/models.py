@@ -157,6 +157,19 @@ class Program(Tracked, models.Model):
         walk(self.curriculum(), 100)
         return found
 
+    @property
+    def in_use(self):
+        """What a change to this Prüfungsordnung changes at once, said where it is edited: grades and Zeugnisse are
+        reckoned from it, not stored."""
+        counts = dict(self.studies.filter(status__in=['enrolled', 'graduated']).values_list('status').annotate(n=models.Count('pk')))
+        if not counts:
+            return ''
+        return (
+            f'Änderungen an ECTS, Gewichtung, Rundung oder Versuchen gelten sofort: für die Noten von {counts.get("enrolled", 0)} '
+            f'Studierenden dieser Prüfungsordnung und für die Zeugnisse von {counts.get("graduated", 0)} Absolvent:innen. Ein neuer '
+            'Studienplan ist eine neue PO-Version.'
+        )
+
     def chosen_by(self):
         """{module pk: the Schwerpunkt it belongs to}, for every course work and exam under one."""
         found = {}

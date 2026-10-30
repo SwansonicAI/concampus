@@ -145,13 +145,14 @@ def off_scale(rows):
     return f'Keine Note der Skala: {", ".join(found)}. Bitte die Wertung berichtigen lassen.' if found else ''
 
 
-def blind(rows, examiner):
-    """For an examiner on the panel: until all have marked a row they see neither the others' marks nor the mean, so each
-    judges on their own; once all have, the row is `locked` to them and only the office that decides changes it."""
+def blind(rows, examiner, office=False):
+    """For an examiner on the panel, whatever office they also hold: until all have marked a row they see neither the
+    others' marks nor the mean, so each judges on their own; once all have, the row is `locked` to them and only the
+    office that decides changes it, which is never locked out."""
     for p in rows:
         on = any(e == examiner for e, _ in p.marks)
         p.blind = on and bool(p.missing or p.vacant)
-        p.locked = on and not p.blind
+        p.locked = on and not p.blind and not office
 
 
 def scorers(staff, rows):
@@ -207,19 +208,18 @@ def marks(post, p, columns, decide, correct, by=None):
         if key not in post or e.pk not in values or e.pk in p.recused:  # whoever stands back, or marks elsewhere, sends nothing here
             continue
         score, value, report = scores.get(e.pk), grade(post[key], p.course), post.get(f'report-{p.pk}-{e.pk}')
-        if not decide and not p.missing and not p.vacant and value != values[e.pk]:
+        text = report if report is not None else score.report if score else ''  # a Gutachten without a grade is a draft
+        if not decide and not p.missing and not p.vacant and (value != values[e.pk] or score and text != score.report):
             raise Refused('Alle haben gewertet, die Wertungen sind gesperrt. Ändern kann sie jetzt nur das zuständige Amt.')
-        if p.course.kind == Course.Kind.THESIS and value is not None and not (report if report is not None else score.report if score else '').strip():
+        if p.course.kind == Course.Kind.THESIS and value is not None and not text.strip():
             raise Refused('Zur Note gehört das schriftliche Gutachten.')
-        if value is None and (report or '').strip():
-            raise Refused('Bitte zum Gutachten die Note wählen.')
         copied = by if by and by.pk != e.pk and value != values[e.pk] else None
         if copied and not correct and p.course.kind == Course.Kind.EXAM and not p.course.protocol_received:
             raise Refused('Erst den Eingang des unterschriebenen Protokolls verbuchen; danach lassen sich die Wertungen der Prüfenden übertragen.')
         values[e.pk] = value
-        if score is None and value is not None:
-            new.append(Score(participation=p, examiner=e, value=value, report=report or '', entered_by=copied))
-        elif score and value is None:
+        if score is None and (value is not None or text.strip()):
+            new.append(Score(participation=p, examiner=e, value=value, report=text, entered_by=copied))
+        elif score and value is None and not text.strip():
             cleared.append(score.pk)
         elif score and (score.value != value or report is not None and score.report != report):
             score.value, score.report, score.entered_by = value, score.report if report is None else report, copied

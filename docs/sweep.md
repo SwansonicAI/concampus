@@ -6,6 +6,8 @@ code and, where it matters, on pages rendered from the seeded data or by a reque
 serious were checked again. One line each: role and page, pattern, what happens, the fix. Grouped by what to fix first:
 what costs most when it goes wrong, then what many people meet often.
 
+Status: group A fixed on 30 October 2026, except where an item says otherwise.
+
 ## A. Grades, Bescheide and money
 
 1. [student] Prüfungen – #7 – an exam already sat, not yet marked, can still be withdrawn until the withdrawal date,
@@ -22,7 +24,8 @@ what costs most when it goes wrong, then what many people meet often.
    „Entwurf speichern“, „Gutachten abgeben“ with a confirm naming the lock, the lock enforced on the server.
 5. [examiner] marking sheet – #8 – any examiner releases; the confirm says neither how many are told, nor that a
    Bescheid über endgültiges Nichtbestehen goes out, nor who can reopen; release does not wait for the Protokoll –
-   name all three; release after the Protokoll is in.
+   name all three; release after the Protokoll is in. Done: the confirm names all three and a Protokoll not yet
+   booked; release does not wait for it while who sends the Protokoll is open (`docs/rules.md`, to confirm).
 6. [student] Prüfungen – #1/#7 – exams of a Schwerpunkt not chosen are offered and accepted (71 students) – leave
    them out and refuse them.
 7. [ASA] Rückmeldung – #8/#9 – „N ohne Rückmeldung exmatrikulieren“ acts on all at once without a preview, with reason
@@ -39,13 +42,15 @@ what costs most when it goes wrong, then what many people meet often.
     the page and the letter.
 11. [ASA] Studienakte, Fachwechsel – #8/#5 – one click ends the study and starts the new one, without a preview, a
     Bescheid or a way back; an unchanged Studiengang and Hauptfach is accepted – a preview, refuse the unchanged, send
-    the Bescheid, a to-do for the recognition.
+    the Bescheid, a to-do for the recognition. Done but the to-do: recognition is on application (RPSO), as the
+    Bescheid says.
 12. [ASA] Studienakte, Urlaubssemester eintragen – #6/#8 – the Bescheid goes out at once, and only then is a broken rule
     named („Als Ausnahme eingetragen“); taking the leave back is one click and tells the student nothing – the rule note
     before, confirm, notify.
 13. [dekanatsreferat] Module and Studiengang – #6 – changing credits, weights, rounding or attempts changes the grades of
     116 enrolled students and the Zeugnisse of 272 graduates without a word – name who is affected; „als neue
-    PO-Version kopieren“.
+    PO-Version kopieren“. Done: who is affected. Open: copying needs a „gilt ab“ semester on the Studiengang first,
+    since the newest version is what applicants start in at once.
 14. [Prüfungsausschuss] Anerkennung – #8 – a recognised module leaves the choices and its correction page is linked from
     nowhere; the message prints „1.7“ – link each entry to its correction; the grade as „1,7“.
 15. [Prüfungsamt] Noten aus Datei – #8 – „Wertungen von“ has no empty choice, so a file goes into the first examiner's
