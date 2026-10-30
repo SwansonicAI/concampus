@@ -185,6 +185,8 @@ class FakeMoodle:
             for c in p['courses']:
                 self.courses[len(self.courses) + 1] = dict(c)
             return [{'id': len(self.courses)}]
+        if function == 'core_course_get_courses_by_field':
+            return {'courses': [{'id': i, **c} for i, c in self.courses.items() if c['idnumber'] == p['value']]}
         if function == 'core_course_update_courses':
             for c in p['courses']:
                 self.courses[c['id']].update(c)
@@ -228,4 +230,8 @@ class MoodleTest(Seeded):
         Course.objects.filter(pk=course.pk).update(cancelled=timezone.now())
         sync(moodle)
         self.assertFalse(moodle.courses[mine]['visible'])
+        Course.objects.filter(pk=course.pk).update(cancelled=None)
+        MoodleCourse.objects.all().delete()  # Campus's links lost, as from an older backup: Moodle's courses are taken up again
+        sync(moodle)
+        self.assertEqual((len(moodle.courses), MoodleCourse.objects.get(course=course).moodle_id), (made, mine))
         self.assertEqual(flat({'courses': [{'fullname': 'X', 'visible': True}]}), {'courses[0][fullname]': 'X', 'courses[0][visible]': 1})

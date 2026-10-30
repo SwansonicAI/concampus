@@ -82,11 +82,13 @@ def sync(call=call):
             'idnumber': f'campus-course-{course.pk}', 'summary': course.description, 'summaryformat': 2,  # plain text
             'startdate': stamp(term.lectures_start), 'enddate': stamp(term.end), 'visible': course.cancelled is None,
         }
-        if mirror := mirrors.get(course.pk):
-            call('core_course_update_courses', courses=[{'id': mirror.moodle_id, **fields}])
-        else:
-            mirror = MoodleCourse.objects.create(course=course, moodle_id=call('core_course_create_courses', courses=[fields])[0]['id'])
-            counts['Kurse angelegt'] += 1
+        if not (mirror := mirrors.get(course.pk)):  # one made before, its link here lost, is taken up again
+            if there := call('core_course_get_courses_by_field', field='idnumber', value=fields['idnumber'])['courses']:
+                mirror = MoodleCourse.objects.create(course=course, moodle_id=there[0]['id'])
+            else:
+                mirror = MoodleCourse.objects.create(course=course, moodle_id=call('core_course_create_courses', courses=[fields])[0]['id'])
+                counts['Kurse angelegt'] += 1
+        call('core_course_update_courses', courses=[{'id': mirror.moodle_id, **fields}])
         if course.cancelled:  # hidden; whoever is in keeps what is there
             continue
         roles = {users[e]: role for e, role in wanted[course.pk].items() if e in users}
