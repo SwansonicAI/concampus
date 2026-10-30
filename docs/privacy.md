@@ -13,7 +13,7 @@ approves before production use.
 - **GDPR**: purpose limitation and data minimisation (Art. 5(1)(b), (c)); by default only the data each purpose needs is
   accessible (Art. 25(2)); health data is a special category (Art. 9); access control (Art. 32).
 - **Health insurance**: the insurer reports the status electronically for enrolment and Rückmeldung (§ 199a SGB V,
-  Studentenkrankenversicherungs-Meldeverordnung). It is the student office's business alone.
+  Gemeinsame Grundsätze of the GKV-Spitzenverband and the HRK; `docs/smv.md`). It is the student office's business alone.
 
 ## Principle
 
