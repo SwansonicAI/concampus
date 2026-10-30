@@ -90,7 +90,7 @@ def account(request):
         return redirect('account')
     staff = not person.roles & {'student', 'applicant', 'alumni'}  # employees: their personnel file is HR's
     return render(request, 'core/account.html', {
-        'form': form, 'email_form': email, 'staff': staff, 'office': 'die Personalabteilung' if staff else Office.holding('manage_students'),
+        'form': form, 'email_form': email, 'staff': staff, 'office': 'die Personalabteilung' if staff else Office.holding('manage_students', linked=True),
         'consents': person.consents.all(), 'sign_ins': person.sign_ins.all()[:5],
     })
 

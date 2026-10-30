@@ -6,7 +6,7 @@ code and, where it matters, on pages rendered from the seeded data or by a reque
 serious were checked again. One line each: role and page, pattern, what happens, the fix. Grouped by what to fix first:
 what costs most when it goes wrong, then what many people meet often.
 
-Status: groups A and B fixed on 30 October 2026, except where an item says otherwise.
+Status: groups A, B and C fixed on 30 October 2026, and G 1 for the pages of students and applicants, except where an item says otherwise.
 
 ## A. Grades, Bescheide and money
 

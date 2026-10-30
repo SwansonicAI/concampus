@@ -1,4 +1,5 @@
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.db.models import Prefetch
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -8,7 +9,7 @@ from django.views.decorators.http import require_POST
 
 from core import texts
 from core.access import require
-from core.models import Institute, Term
+from core.models import Institute, Office, Term
 from core.text import matching
 from .forms import LendForm
 from .models import Instrument, Loan
@@ -100,13 +101,17 @@ def remind(request, pk):
     return redirect('instruments:instrument', pk=loan.instrument_id)
 
 
-@require('manage_instruments')
 def agreement(request, pk):
-    """The loan agreement to print and sign at handover."""
-    loan = get_object_or_404(request.user.within(Loan.objects.all(), 'manage_instruments').select_related('instrument', 'person'), pk=pk)
+    """The loan agreement to print and sign at handover; the borrower reads their own."""
+    loan = get_object_or_404(Loan.objects.select_related('instrument', 'person'), pk=pk)
+    if not (loan.person == request.user or request.user.may('manage_instruments', loan)):
+        raise PermissionDenied
     return render(request, 'instruments/agreement.html', {'loan': loan, 'terms': texts.block('leihbedingungen'), 'sender': texts.block('absender_leihe')})
 
 
 def mine(request):
-    """The instruments the person has borrowed, out now and before."""
-    return render(request, 'instruments/mine.html', {'loans': request.user.loans.select_related('instrument')})
+    """The instruments the person has borrowed, out now and before, each with whom to return or extend it with."""
+    loans = list(request.user.loans.select_related('instrument'))
+    for loan in loans:
+        loan.lender = Office.holding('manage_instruments', institute=loan.instrument.institute_id, linked=True)
+    return render(request, 'instruments/mine.html', {'loans': loans})

@@ -13,6 +13,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
+from django.utils.html import format_html
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
@@ -30,7 +31,7 @@ from rooms.views import agenda, called_off, legend, week
 from students.models import Study
 from . import panel
 from .forms import AddForm, CourseForm, DateForm, EnsembleForm, Lessons, PlanForm, TeachingForm
-from .models import Area, Course, Ensemble, Format, Participation, Recusal, Reduction, Signup, marked
+from .models import Area, Course, Ensemble, Format, Participation, Recusal, Reduction, Signup, marked, owed_module
 
 TEACHING = [Course.Kind.COURSE, Course.Kind.LESSON]
 MANAGERS = {Course.Kind.EXAM: 'manage_exams', Course.Kind.RECOGNITION: 'recognise', Course.Kind.AUDITION: 'run_auditions'}
@@ -128,6 +129,13 @@ def catalogue(request):
         courses = courses.filter(confirmed=None, cancelled=None).exclude(origin=None)
     if q := request.GET.get('q', '').strip():
         courses = matching(courses, q, 'title', 'staff__last_name', 'subject__name', 'area__name', 'description', 'modules__title', 'modules__code')  # also by the module's name in the Studienplan
+    passed = Participation.objects.filter(study__in=studies, passed=True, module__isnull=False).values('module')
+    counting = Module.objects.filter(courses=OuterRef('pk'), program__in=studies.values('program'))
+    courses = courses.annotate(counting=Exists(counting), owed=Exists(counting.exclude(pk__in=passed)))
+    done = request.GET.get('bestandene') == '1'
+    if studies and not done:  # a student sees what is still to pass first; the passed on asking
+        courses = courses.exclude(counting=True, owed=False)
+    mine = set(Participation.objects.filter(study__in=studies, course__term=term).values_list('course', flat=True))
     return render(request, 'courses/catalogue.html', {
         'term': term,
         'terms': Term.shown(person).filter(courses__kind__in=TEACHING).distinct().order_by('-start').filter(**since(request.user)), 'open': open_,
@@ -140,7 +148,7 @@ def catalogue(request):
         'form': form,
         'q': q,
         'office': 'manage_courses' in person.roles,
-        'scoped': scoped, 'reach': reach,
+        'scoped': scoped, 'reach': reach, 'student': studies.exists(), 'done': done, 'mine': mine,
     })
 
 
@@ -152,7 +160,7 @@ def course(request, pk):
 
     def sheet():  # a coach of an ensemble course sees and grades the members of their own ensembles
         staff, rows = panel.sheet(course)
-        if course.allocation == Course.Allocation.ENSEMBLE and not office:
+        if course.allocation == Course.Allocation.ENSEMBLE and staffed and not office:
             coached = set(Study.objects.filter(ensembles__course=course, ensembles__coach=person).values_list('pk', flat=True))
             rows = [p for p in rows if p.study_id in coached]
         return staff, rows
@@ -176,6 +184,8 @@ def course(request, pk):
     if refused:
         panel.retype(rows, request.POST, refused)
     own = [p for p in rows if p.study.person_id == person.pk]
+    counting = list(person.studies.filter(status=Study.Status.ENROLLED, program__modules__courses=course).distinct())
+    eligible = [s for s in counting if owed_module(course, s)]  # a module of it still to pass
     upcoming = course.bookings.filter(start__gte=timezone.now())
     if course.allocation == Course.Allocation.ENSEMBLE and staffed and not person.may('manage_courses', course):  # a coach: the course's own dates and their ensembles'
         upcoming = upcoming.filter(Q(ensemble=None) | Q(ensemble__coach=person))
@@ -207,7 +217,9 @@ def course(request, pk):
         'signups': course.signups.select_related('study__person', 'study__program', 'study__subject') if staffed else [],
         'count': len(rows),
         'staffed': staffed,
-        'eligible': person.studies.filter(status=Study.Status.ENROLLED, program__modules__courses=course).distinct(),
+        'eligible': eligible, 'completed': counting and not eligible and not own,
+        'counts_for': besides_focus(course, eligible[0]) if eligible and not own else '',
+        'clashing': clashes(person, course.bookings.filter(start__gte=timezone.now(), participants=None)[:8]) if eligible and not own else [],
         'running': running, 'cancelling': office and not course.term.planning and not course.cancelled and running,
         'from': max(course.term.lectures_start, timezone.localdate()), 'office': office,
         'modules': credited(course),
@@ -217,7 +229,7 @@ def course(request, pk):
         'lessons': timetable,
         'lesson_rows': zip([s for s, _ in lessons], timetable or []),
         'ensembles': ensembles,
-        'grouping': EnsembleForm(course=course) if course.allocation == Course.Allocation.ENSEMBLE else None,
+        'grouping': EnsembleForm(sent(request, 'ensemble'), course=course, person=person) if course.allocation == Course.Allocation.ENSEMBLE else None,
         'adding': AddForm() if staffed else None,
         'reachable': Study.reachable(person, Study.objects.filter(Q(participations__course=course) | Q(signups__course=course))) if staffed else set(),
         'panel': False,
@@ -247,7 +259,10 @@ def edit(request, pk=None):
     back = course.get_absolute_url() if pk else reverse('courses:catalogue')
     return render(request, 'courses/form.html', {
         'form': form, 'course': course, 'menu': 'courses/_nav.html', 'heading': 'Neue Veranstaltung', 'back': back,
-        'note': None if office and planning else f'{"Umfang (SWS), Lehrform und Module" if office else "Umfang (SWS), Lehrende, Module und Lehrform"} trägt {Office.holding("plan_teaching") or "das zuständige Amt"} ein: sie zählen im Deputat und in den Studienplänen.',
+        'note': None if office and planning else format_html(
+            '{} trägt {} ein: sie zählen im Deputat und in den Studienplänen.', 'Umfang (SWS), Lehrform und Module' if office else 'Umfang (SWS), Lehrende, Module und Lehrform',
+            Office.holding('plan_teaching', linked=True) or 'das zuständige Amt',
+        ),
     })
 
 
@@ -299,7 +314,7 @@ def drop(request, pk):
 def register(request, pk):
     course = get_object_or_404(Course, pk=pk, kind__in=TEACHING)
     study = get_object_or_404(Study, pk=request.POST.get('study'), person=request.user, status=Study.Status.ENROLLED)
-    module = course.modules.filter(program=study.program).order_by('semester').first()
+    module = owed_module(course, study)
     late = not course.is_open and not course.upcoming  # the teachers may still take someone while the term runs
     besides = besides_focus(course, study)
     if course.cancelled or course.term.planning:
@@ -313,7 +328,8 @@ def register(request, pk):
     elif late and course.term.end < timezone.localdate():
         messages.error(request, 'Der Anmeldeschluss ist vorbei.')
     elif module is None:
-        messages.error(request, 'Diese Veranstaltung ist in Ihrem Studiengang nicht anrechenbar.')
+        counts = course.modules.filter(program=study.program_id).exists()
+        messages.error(request, 'Die Module dieser Veranstaltung haben Sie bereits bestanden.' if counts else 'Diese Veranstaltung ist in Ihrem Studiengang nicht anrechenbar.')
     elif lost(study):
         messages.error(request, 'Der Prüfungsanspruch ist erloschen; neue Anmeldungen sind nicht möglich.')
     elif course.allocation == Course.Allocation.CHOICE or late:
@@ -327,6 +343,12 @@ def register(request, pk):
         else:
             messages.success(request, f'Sie sind angemeldet.{besides}')
     return redirect(course)
+
+
+def clashes(person, bookings):
+    """Of these dates, those that overlap something already in the person's timetable."""
+    mine = agenda(person)
+    return [b for b in bookings if mine.filter(start__lt=b.end, end__gt=b.start).exclude(course=b.course_id).exists()]
 
 
 def lost(study):
@@ -354,13 +376,13 @@ def ensemble(request, pk):
     """Register an ensemble: everyone in it takes part in the course, and the others hear who registered them."""
     course = get_object_or_404(Course.objects.select_related('term'), pk=pk, kind__in=TEACHING, allocation=Course.Allocation.ENSEMBLE)
     study = get_object_or_404(Study, pk=request.POST.get('study'), person=request.user, status=Study.Status.ENROLLED)
-    form = EnsembleForm(request.POST, course=course)
+    form = EnsembleForm(request.POST, course=course, person=request.user)
     if not course.is_open:
         messages.error(request, 'Der Anmeldeschluss ist vorbei.' if not course.upcoming else f'Die Anmeldung beginnt am {date_format(course.opens, "j.n.Y")}.')
         return redirect(course)
-    if not form.is_valid():
-        messages.error(request, ' '.join(e for errors in form.errors.values() for e in errors))
-        return redirect(course)
+    if not form.is_valid():  # back with what was typed
+        messages.error(request, 'Nicht angemeldet. Bitte die markierten Angaben berichtigen.')
+        return again(request, course, 'ensemble')
     members = list(dict.fromkeys([study, *form.cleaned_data['members']]))
     if not course.modules.filter(program=study.program_id).exists():
         messages.error(request, 'Diese Veranstaltung ist in Ihrem Studiengang nicht anrechenbar.')
@@ -373,6 +395,26 @@ def ensemble(request, pk):
     for s in members[1:]:
         texts.send('ensemble', s.person, course.get_absolute_url(), veranstaltung=course.title, besetzung=group.name, von=request.user)
     messages.success(request, f'„{group.name}“ angemeldet. Wer es betreut, erfahren Sie im Postfach.')
+    return redirect(course)
+
+
+@require_POST
+def disband(request, pk):
+    """A member takes their ensemble back while registration runs and before anyone coaches it: its members leave the
+    course, unless they play in another ensemble of it, and hear why."""
+    group = get_object_or_404(Ensemble.objects.select_related('course__term'), pk=pk, members__person=request.user, coach=None)
+    course = group.course
+    if not course.is_open:
+        messages.error(request, 'Der Anmeldeschluss ist vorbei; auflösen kann jetzt nur das Institut.')
+        return redirect(course)
+    members = list(group.members.select_related('person'))
+    with transaction.atomic():
+        group.delete()
+        course.participations.filter(study__in=members, passed=None).exclude(study__ensembles__course=course).delete()
+    for s in members:
+        if s.person != request.user:
+            texts.send('ensemble_zurueckgezogen', s.person, course.get_absolute_url(), veranstaltung=course.title, besetzung=group.name, von=request.user)
+    messages.success(request, f'„{group.name}“ zurückgezogen.')
     return redirect(course)
 
 
@@ -642,6 +684,7 @@ def mine(request):
         for p in registrations:
             p.next = coming.get(p.course_id)
         context['registrations'] = registrations
+        context['requests'] = Signup.objects.filter(study__person=person, course__term=term).select_related('course', 'module')  # the teachers still decide
     return render(request, 'courses/mine.html', context)
 
 
@@ -877,7 +920,7 @@ def rollover(request):
         'contracts': len(contracts), 'contract_hours': sum(contracts),
         'leave': Reduction.objects.filter(term=target, reason=Reduction.Reason.LEAVE, person__teaching__in=live).distinct().select_related('person'),
         'gaps': gaps(target)[:12] if planned.exists() else [],
-        'publishers': Office.holding('publish_term'),
+        'publishers': Office.holding('publish_term', linked=True),
     })
 
 

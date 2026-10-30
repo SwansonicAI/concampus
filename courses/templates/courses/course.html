@@ -25,7 +25,7 @@
 <div class="cols">
   <div>
     <dl class="facts">
-      <dt>Lehrende</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
+      <dt>Lehrende</dt><dd>{% for s in staff %}{% if s.email %}<a href="mailto:{{ s.email }}">{{ s }}</a>{% else %}{{ s }}{% endif %}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
       <dt>Umfang</dt><dd>{% if lengths %}{% for sws, n in lengths %}{{ sws|mark }} SWS × {{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}<br><small class="muted">je Teilnahme nach ihrem Studienplan</small>{% else %}{{ course.hours|default_if_none:"–" }} SWS{% endif %}</dd>
       <dt>Teilnahmen</dt><dd>{{ count }}{% if course.capacity %} von {{ course.capacity }} Plätzen{% endif %}</dd>
       <dt>Platzvergabe</dt><dd>{{ course.get_allocation_display|capfirst }}</dd>
@@ -78,6 +78,7 @@
   </div>
 </div>
 
+{% if completed %}<p class="muted">Die Module dieser Veranstaltung haben Sie bereits bestanden.</p>{% endif %}
 {% if eligible or own or wished %}
 <section>
   <h2>Meine Anmeldung</h2>
@@ -107,6 +108,8 @@
   {% elif course.is_open %}
   <form method="post" action="{% url 'courses:register' course.pk %}" class="actions">
     {% csrf_token %}
+    {% if clashing %}<p class="fail"><small>Überschneidet sich mit Ihrem Stundenplan: {% for b in clashing %}{{ b.start|date:"D j.n., H:i" }}{% if not forloop.last %}, {% endif %}{% endfor %}.</small></p>{% endif %}
+    {% if counts_for %}<p class="muted"><small>{{ counts_for }}</small></p>{% endif %}
     <select name="study" aria-label="Für welches Studium">{% for s in eligible %}<option value="{{ s.pk }}">{{ s.subject }} · {{ s.program }}</option>{% endfor %}</select>
     {% if course.allocation == 'choice' %}<input name="note" placeholder="Nachricht an die Lehrenden (freiwillig)" aria-label="Nachricht an die Lehrenden">{% endif %}
     <button class="btn">{% if course.allocation == 'choice' %}Platz anfragen{% else %}Anmelden{% endif %}</button>
@@ -149,7 +152,7 @@
           <form method="post" action="{% url 'courses:coach' e.pk %}" class="inline">{% csrf_token %}<b>Sie</b><button class="link" name="coach" value="" data-confirm="Betreuung abgeben?"><small>abgeben</small></button></form>
           {% elif staffed and not e.coach %}
           <form method="post" action="{% url 'courses:coach' e.pk %}">{% csrf_token %}<button class="btn ghost small" name="coach" value="{{ user.pk }}">Übernehmen</button></form>
-          {% else %}{{ e.coach|default:"noch offen" }}{% endif %}
+          {% else %}{{ e.coach|default:"noch offen" }}{% if not e.coach and course.is_open and not staffed %}<form method="post" action="{% url 'courses:disband' e.pk %}">{% csrf_token %}<button class="link" data-confirm="„{{ e.name }}“ zurückziehen? Alle Mitglieder werden abgemeldet und benachrichtigt."><small>zurückziehen</small></button></form>{% endif %}{% endif %}
         </td>
       </tr>
       {% endfor %}

@@ -2,13 +2,13 @@ import re
 from collections import defaultdict
 
 from django import forms
-from django.db.models import F, Q
+from django.db.models import F, Min, Q
 from django.utils import timezone
 
 from core.dates import ClockField, DayField, MomentField, working
 from core.models import Institution, Person
 from curriculum.models import Module, Program
-from rooms.forms import RoomField, bookable
+from rooms.forms import Participants, People, RoomField, bookable
 from rooms.models import Booking, Room
 from students.models import Study
 from .models import Appointment, Course
@@ -311,24 +311,29 @@ class EnsembleForm(forms.Form):
     """Register an ensemble: the person registering and the others who play with them."""
 
     name = forms.CharField(label='Besetzung', max_length=80, help_text='Z. B. „Streichquartett“ oder „Duo Violine/Klavier“.')
-    members = forms.CharField(label='Weitere Mitglieder', widget=forms.Textarea(attrs={'rows': 3}), help_text='Eine Person je Zeile: Name oder E-Mail-Adresse.')
+    members = Participants(
+        label='Weitere Mitglieder', queryset=None, widget=People,
+        help_text='Ihre Klasse und wer schon mit Ihnen spielt steht hier; alle anderen finden Sie, wenn Sie oben einen Namen tippen.',
+    )
     repertoire = forms.CharField(label='Repertoire', widget=forms.Textarea(attrs={'rows': 3}), required=False)
     wish = forms.ModelChoiceField(label='Wunsch-Betreuung', queryset=None, required=False, empty_label='Keine Angabe')
 
-    def __init__(self, *args, course, **kwargs):
+    def __init__(self, *args, course, person, **kwargs):
         super().__init__(*args, **kwargs)
         self.course = course
         self.fields['wish'].queryset = course.staff.all()
+        enrolled, field = Q(studies__status='enrolled'), self.fields['members']
+        field.queryset = Person.objects.filter(enrolled).annotate(subject=Min('studies__subject__name', filter=enrolled)).exclude(pk=person.pk)
+        field.near = Q(studies__teacher__in=person.studies.values('teacher')) | Q(studies__ensembles__members__person=person)
+        field.picked = self.data.getlist('members') if self.is_bound else []
 
     def clean_members(self):
-        """Each line one enrolled person for whose Studiengang the course counts."""
+        """Each person picked, by the study the course counts for."""
         found = []
-        for line in filter(None, (line.strip() for line in self.cleaned_data['members'].splitlines())):
-            studies = [s for s in Study.find(line) if self.course.modules.filter(program=s.program_id).exists()]
-            if len(studies) != 1:
-                names = ', '.join(str(s.person) for s in studies)
-                raise forms.ValidationError(f'„{line}“: mehrere passen ({names}). Bitte genauer.' if studies else f'„{line}“: niemand, für den die Veranstaltung anrechenbar ist.')
-            found.append(studies[0])
+        for person in self.cleaned_data['members']:
+            if not (study := Study.objects.filter(person=person, status=Study.Status.ENROLLED, program__modules__courses=self.course).first()):
+                raise forms.ValidationError(f'{person}: für dessen Studium ist die Veranstaltung nicht anrechenbar.')
+            found.append(study)
         return found
 
 

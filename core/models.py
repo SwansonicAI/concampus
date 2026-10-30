@@ -11,6 +11,7 @@ from django.db.models.functions import Cast, Concat
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
+from django.utils.html import format_html, format_html_join
 from django.utils.text import slugify
 
 from . import destatis
@@ -447,15 +448,21 @@ class Office(Tracked, Group):
         return ', '.join(map(str, [*self.institutes.all(), *self.programs.all()])) or 'ganze Hochschule'
 
     @classmethod
-    def holding(cls, capability, program=None, remit=False):
+    def holding(cls, capability, program=None, remit=False, linked=False, institute=None):
         """The offices that hold a capability (or any of several), for sentences like 'Zentral vergeben: …'; with a
-        programme, those for it; with `remit`, each limited one says for what."""
+        programme, those for it; with `remit`, each limited one says for what; `linked` for a page, each a link to its
+        shared address so the person can write at once."""
         offices = cls.objects.filter(permissions__codename__in=[capability] if isinstance(capability, str) else capability).distinct()
         if program:
             offices = offices.filter(models.Q(programs=None) | models.Q(programs=program), institutes=None)
-        names = [o.name + (limited(o) if remit else '') for o in offices.prefetch_related('institutes', 'programs')]
+        if institute:
+            offices = offices.filter(models.Q(institutes=None) | models.Q(institutes=institute), programs=None)
+        names = [
+            format_html('<a href="mailto:{}">{}</a>', o.email, name) if linked and o.email else name
+            for o in offices.prefetch_related('institutes', 'programs') for name in [o.name + (limited(o) if remit else '')]
+        ]
         *rest, last = names or ['']
-        return f'{", ".join(rest)} oder {last}' if rest else last
+        return format_html_join(', ', '{}', ((n,) for n in rest)) + format_html(' oder {}', last) if rest else format_html('{}', last)
 
 
 def limited(office):

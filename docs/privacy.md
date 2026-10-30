@@ -79,8 +79,8 @@ in the portal.
 
 ### Finding students by name
 
-Nobody gets a list of all students. Where a teacher or student adds someone to a course, a booking or an instrument
-loan, the form lists only who is near (their class, their courses' and ensembles' members, the ticked) and finds
+Nobody gets a list of all students. Where a teacher or student adds someone to a course, a booking, an ensemble or an
+instrument loan, the form lists only who is near (their class, their courses' and ensembles' members, the ticked) and finds
 anyone else enrolled by name from three letters, eight at most, with Hauptfach and degree to tell namesakes apart and
 no Matrikelnummer (`students/views.py`, `suggest()`). Who already knows a Matrikelnummer may still type it.
 

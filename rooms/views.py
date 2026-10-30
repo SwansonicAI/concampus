@@ -238,7 +238,7 @@ def room(request, pk):
     room = get_object_or_404(Room.objects.prefetch_related('institutes'), pk=pk)
     day = understood(request.GET.get('tag', '')) or timezone.localdate()
     return render(request, 'rooms/room.html', {
-        'room': room, 'day': day, 'bookable': bookable(request.user).filter(pk=pk).exists(), 'central': Office.holding('book_any_room'),
+        'room': room, 'day': day, 'bookable': bookable(request.user).filter(pk=pk).exists(), 'central': Office.holding('book_any_room', linked=True),
         'edit': request.user.may('manage_rooms', room), 'requestable': room.function.central and requestable(request.user),
         **week(room.bookings.filter(requested=False), day),
     })
@@ -378,7 +378,7 @@ def booking(request, pk=None):
         told = [p.name for p in recipients(booking, person)]
         told = told if len(told) <= 3 else [f'alle {len(told)} Teilnehmenden']
     return render(request, 'rooms/booking.html', {
-        'form': form, 'booking': booking, 'series': series, 'central': Office.holding('book_any_room'),
+        'form': form, 'booking': booking, 'series': series, 'central': Office.holding('book_any_room', linked=True),
         'told': told, 'cancel': CancelForm(sent(request, 'absagen'), person=person), 'instead': form.instead(),
         'rules': Institution.get(), 'special': BookingCategory.objects.filter(students=True).exclude(ahead_hours=None, participants=0),
         'history': booking.pk and bool(Booking.seen_by(person, booking.pk)), 'now': timezone.now(), 'asking': bool(form.fields['room'].asked),

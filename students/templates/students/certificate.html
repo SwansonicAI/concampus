@@ -17,8 +17,8 @@
     <dt>Hauptfach</dt><dd>{{ study.subject }}</dd>
     <dt>Abschlussziel</dt><dd>{{ study.program.qualification|default:study.program.degree }}</dd>
     <dt>Studienart</dt><dd>{{ study.studienart }}, Vollzeitstudium</dd>
-    <dt>Fachsemester</dt><dd>{{ study.semester }}</dd>
-    <dt>Hochschulsemester</dt><dd>{{ study.university_semester }}</dd>
+    <dt>Fachsemester</dt><dd>{{ fs }}</dd>
+    <dt>Hochschulsemester</dt><dd>{{ hs }}</dd>
     {% if bafoeg %}<dt>Beginn des Studiums</dt><dd>{{ study.start_term.lectures_start|date:"j. F Y" }} ({{ study.start_term }})</dd>
     <dt>Ersteinschreibung</dt><dd>{{ first|default:"–" }}</dd>
     <dt>Regelstudienzeit</dt><dd>{{ study.program.semesters }} Semester</dd>{% endif %}

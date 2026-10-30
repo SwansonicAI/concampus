@@ -25,6 +25,7 @@ urlpatterns = [
     path('<int:pk>/ensemble/', views.ensemble, name='ensemble'),
     path('<int:pk>/befangen/', views.recuse, name='recuse'),
     path('ensemble/<int:pk>/', views.coach, name='coach'),
+    path('ensemble/<int:pk>/zurueckziehen/', views.disband, name='disband'),
     path('anfrage/<int:pk>/', views.choose, name='choose'),
     path('anfrage/<int:pk>/zurueckziehen/', views.retract, name='retract'),
 ]

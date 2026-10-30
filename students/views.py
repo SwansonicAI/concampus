@@ -16,6 +16,7 @@ from django.utils import timezone
 from django.utils.formats import date_format, number_format
 from django.contrib.auth.decorators import login_not_required
 from django.utils.crypto import constant_time_compare, salted_hmac
+from django.utils.html import format_html
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
@@ -286,7 +287,7 @@ def study(request, pk):
         'bank': Institution.get(), 'owed': upcoming and upcoming.due(today, late_fee),
         'next': study.terms.filter(term=upcoming).first(),
         'paid': StudyTerm.objects.filter(study__person=study.person, term=upcoming, paid__isnull=False).exists(),
-        'missing': study.person.missing() if personal else [],
+        'missing': remedies(study, study.person.missing()) if personal else [],
         'documents': study.documents.all() if identity else [],
         'others': [o for o in study.person.studies.exclude(pk=study.pk).exclude(status=Study.Status.REJECTED).select_related('program', 'subject') if personal or o.pk in reachable],
         'reachable': reachable,
@@ -296,10 +297,11 @@ def study(request, pk):
         'leaving': leaving(study) if office and study.status == Study.Status.ENROLLED else [],
         'leaving_day': leaving_day(study, lost) if office and study.status == Study.Status.ENROLLED else None,
         'options': options if own else [], 'fs': fs,
+        'choose_by': own and options and not study.focus_id and Study.choose_by(fs, options[0].first),
         'advising': options if study.teacher_id == person.pk and not study.focus_id else [],
         'recording': study.program.choices() if not own and study.status == Study.Status.ENROLLED and decides(person, study) else [],
-        'changes': Office.holding('decide_results', study.program),
-        'leaves_to': Office.holding('manage_students'),
+        'changes': Office.holding('decide_results', study.program, linked=True),
+        'leaves_to': Office.holding('manage_students', linked=True), 'attest_kind': DocumentType.system('attest'),
         'window': upcoming and upcoming.reregistration_start <= today <= upcoming.closes,  # when students ask for an Urlaubssemester
         'leave_rules': [  # what an office entry goes beyond, said before it is made
             *([f'schon {LEAVE_TERMS} Urlaubssemester, in der Regel das Höchste.'] if study.terms.filter(leave=True).count() >= LEAVE_TERMS else []),
@@ -544,6 +546,21 @@ def unpay(request, pk):
     texts.send('zahlung_zurueckgenommen', registration.study.person, registration.study.get_absolute_url(), rueckmeldesemester=registration.term, datum=date_format(paid_on, 'j.n.Y'))
     messages.success(request, f'Zahlung vom {date_format(paid_on, "j.n.Y")} für das {registration.term} zurückgenommen; {registration.study.person} ist benachrichtigt.')
     return redirect(registration.study.get_absolute_url())
+
+
+def remedies(study, missing):
+    """Each thing that holds the Rückmeldung back, with what to do about it and whom to ask: [(what, what to do)]."""
+    found = []
+    for reason in missing:
+        if reason.startswith('Sperre'):
+            found.append((reason, format_html('aufzuheben über {}', Office.holding('manage_students', study.program, linked=True))))
+        elif reason.startswith('Versicherungsmeldung'):
+            found.append((reason, 'bitte Ihre Krankenkasse, Ihren Versicherungsstatus elektronisch an die Hochschule zu melden'))
+        elif reason.startswith('Leihinstrument'):
+            found.append((reason, format_html('zurückzugeben bei {}', Office.holding('manage_instruments', linked=True))))
+        else:
+            found.append((reason, ''))
+    return found
 
 
 def leaving(study):
@@ -803,10 +820,13 @@ def certificate(request, pk):
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term'), pk=pk, status=Study.Status.ENROLLED)
     if not (study.person == request.user or request.user.may('manage_students', study)):
         raise PermissionDenied
-    term = Term.current()
+    term, coming = Term.current(), Term.upcoming()  # the coming semester too, once its Rückmeldung is paid: for a BAföG Folgeantrag
+    ahead = coming and request.GET.get('semester') == str(coming.pk) and study.terms.filter(term=coming, paid__isnull=False).first()
+    term = coming if ahead else term
     first = StudyTerm.objects.filter(study__person=study.person_id, withdrawn=False).order_by('term__start').select_related('term').first()
     return render(request, 'students/certificate.html', {
         'study': study, 'term': term, 'registration': study.terms.filter(term=term).first(), 'today': timezone.localdate(),
+        'fs': study.semester + (bool(ahead) and not ahead.leave), 'hs': study.university_semester + bool(ahead),
         'bafoeg': 'bafoeg' in request.GET, 'first': study.person.first_term or (first and first.term),
         'sender': texts.block('absender_bescheinigungen'), 'code': f'{study.pk}-{term.pk}-{signature(study.pk, term.pk)}',
         'check': request.build_absolute_uri(reverse('students:verify')),

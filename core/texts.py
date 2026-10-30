@@ -180,6 +180,11 @@ TEXTS = {
         NACHRICHT, 'Mit einem Ensemble angemeldet', 'Ensemble: {besetzung}',
         '{von} hat Sie mit „{besetzung}“ für „{veranstaltung}“ angemeldet. Die Betreuung teilen die Lehrenden zu.', ('veranstaltung', 'besetzung', 'von'),
     ),
+    'ensemble_zurueckgezogen': Spec(
+        NACHRICHT, 'Ensemble zurückgezogen', 'Ensemble: {besetzung}',
+        '{von} hat „{besetzung}“ für „{veranstaltung}“ zurückgezogen; Sie sind dort abgemeldet, solange Sie in keinem anderen '
+        'Ensemble spielen.', ('veranstaltung', 'besetzung', 'von'),
+    ),
     'betreuung': Spec(
         NACHRICHT, 'Betreuung eines Ensembles', 'Betreuung: {besetzung}',
         '„{besetzung}“ wird in „{veranstaltung}“ von {betreuung} betreut.', ('veranstaltung', 'besetzung', 'betreuung'),

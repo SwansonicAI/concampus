@@ -15,6 +15,7 @@
     <label>Lehrform<select name="lehrform" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for f in formats %}<option value="{{ f.pk }}"{% if f.pk|stringformat:'s' == form %} selected{% endif %}>{{ f }}</option>{% endfor %}</select></label>
     <label>Studiengang<select name="studiengang" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for p in programs %}<option value="{{ p.pk }}"{% if p.pk|stringformat:'s' == program %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Titel oder Lehrende"></label>
+    {% if student %}<label>Module<select name="bestandene" onchange="this.form.requestSubmit()"><option value="">noch offene</option><option value="1"{% if done %} selected{% endif %}>auch bestandene</option></select></label>{% endif %}
   </div>
 </form>
 {% regroup courses by area as groups %}
@@ -26,7 +27,7 @@
     <tbody>
       {% for c in group.list %}
       <tr>
-        <td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a>{% if c.cancelled %} <span class="badge no">entfällt</span>{% elif term.planning and c.origin_id %} {% if c.confirmed %}<span class="badge yes">bestätigt</span>{% else %}<span class="badge wait">offen</span>{% endif %}{% endif %}<br><small class="muted">{{ c.format|default:c.get_kind_display }}{% if c.subject %} · {{ c.subject }}{% endif %}</small></td>
+        <td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a>{% if c.cancelled %} <span class="badge no">entfällt</span>{% elif term.planning and c.origin_id %} {% if c.confirmed %}<span class="badge yes">bestätigt</span>{% else %}<span class="badge wait">offen</span>{% endif %}{% endif %}{% if c.pk in mine %} <span class="badge open">angemeldet</span>{% elif student and c.counting and not c.owed %} <span class="badge yes">bestanden</span>{% endif %}<br><small class="muted">{{ c.format|default:c.get_kind_display }}{% if c.subject %} · {{ c.subject }}{% endif %}</small></td>
         <td>{% for s in c.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
         <td class="num">{{ c.hours|default_if_none:"" }}</td>
         <td class="num">{{ c.size }}{% if c.capacity %} / {{ c.capacity }}{% endif %}</td>

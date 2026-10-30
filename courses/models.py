@@ -372,6 +372,12 @@ class Participation(Judged, Tracked, models.Model):
         return self.course.withdrawable and not (self.begins and self.begins <= timezone.now())
 
 
+def owed_module(course, study):
+    """The module of the study's programme a course counts for: the earliest not yet passed; None once all are."""
+    passed = Participation.objects.filter(study=study, passed=True, module__isnull=False).values('module')
+    return course.modules.filter(program=study.program_id).exclude(pk__in=passed).order_by('semester', 'code').first()
+
+
 def marked(person):
     """The marks `person` has given; a Gutachten still a draft is none."""
     return Score.objects.filter(examiner=person, value__isnull=False)

@@ -14,7 +14,8 @@
 </div>
 <p class="actions">
   {% if certify %}<small class="muted">Bescheinigungen:</small>
-  {% if study.status == 'enrolled' %}<a href="{% url 'students:certificate' study.pk %}">Immatrikulation</a><a href="{% url 'students:certificate' study.pk %}?bafoeg">für das BAföG-Amt (§ 9)</a>{% endif %}
+  {% if study.status == 'enrolled' %}<a href="{% url 'students:certificate' study.pk %}">Immatrikulation</a><a href="{% url 'students:certificate' study.pk %}?bafoeg">für das BAföG-Amt (§ 9)</a>
+  {% if next.paid %}<a href="{% url 'students:certificate' study.pk %}?semester={{ upcoming.pk }}">Immatrikulation {{ upcoming }}</a><a href="{% url 'students:certificate' study.pk %}?semester={{ upcoming.pk }}&amp;bafoeg">für das BAföG-Amt, {{ upcoming }}</a>{% endif %}{% endif %}
   {% if terms %}<a href="{% url 'students:periods' study.pk %}">Studienzeiten</a>{% endif %}
   {% if study.status == 'graduated' or study.status == 'left' %}<a href="{% url 'students:exmatriculation' study.pk %}">Exmatrikulation</a>{% endif %}{% endif %}
   {% if office %}<a href="{% url 'setup:edit' 'personen' study.person.pk %}?next={{ request.path|urlencode }}" data-panel>Stammdaten</a>{% endif %}
@@ -60,7 +61,7 @@
         {% else %}<small class="fail">Versicherungsmeldung fehlt</small>{% if office %} <form method="post" action="{% url 'students:insured' study.pk %}" style="display: inline">{% csrf_token %}<button class="link"><small>Eingang verbuchen</small></button></form>{% endif %}{% endif %}
       </dd>
       {% endif %}
-      <dt>{% if study.program.kind == '5' %}Betreuung{% else %}Hauptfachlehrer:in{% endif %}</dt><dd>{{ study.teacher|default:"–" }}</dd>
+      <dt>{% if study.program.kind == '5' %}Betreuung{% else %}Hauptfachlehrer:in{% endif %}</dt><dd>{% if study.teacher %}<a href="mailto:{{ study.teacher.email }}">{{ study.teacher }}</a>{% else %}–{% endif %}</dd>
       {% if study.compensation and identity or compensate %}<dt>Nachteilsausgleich</dt><dd>{{ study.compensation|default:"–" }}
         {% if compensate %}<details><summary><small>{% if study.compensation %}ändern oder beenden{% else %}gewähren{% endif %}</small></summary><form method="post" enctype="multipart/form-data" action="{% url 'exams:compensate' study.pk %}" class="inline" style="margin-top: 8px">{% csrf_token %}<label>Maßnahme<input name="compensation" value="{{ study.compensation }}" size="40" placeholder="z. B. 50 % mehr Bearbeitungszeit bei Klausuren"></label><label>Attest auf Papier am<input name="received" data-day autocomplete="off" size="11"></label><label>oder als Scan<input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png"></label><div class="choices"><label><input type="checkbox" name="consent" value="1"> Einwilligung liegt unterschrieben vor</label></div><button class="btn ghost small">Speichern</button></form><small class="muted">Leer gespeichert, endet er. Die Prüfenden sehen nur die Maßnahme.</small></details>{% endif %}</dd>{% endif %}
       {% if study.focus %}<dt>Schwerpunkt</dt><dd>{{ study.focus.title }}</dd>{% elif study.advised %}<dt>Schwerpunkt</dt><dd>noch nicht gewählt · <small class="muted">empfohlen: {{ study.advised.title }}</small></dd>{% endif %}
@@ -79,7 +80,7 @@
     {% elif study.status == 'enrolled' and personal %}
     <h2>Rückmeldung {{ upcoming }}</h2>
     <p>{% if paid and not missing %}<span class="badge green">zurückgemeldet</span>{% elif paid %}<span class="badge wait">bezahlt</span>{% elif upcoming.reregistration_open %}<span class="badge wait">offen</span> Semesterbeitrag {{ upcoming.fee }} €{% if upcoming.parts %} <small class="muted">({% for name, amount in upcoming.parts %}{{ name }} {{ amount }}{% if not forloop.last %} · {% endif %}{% endfor %})</small>{% endif %} bis {{ upcoming.deadline|date:"j. F Y" }}{% else %}Semesterbeitrag {{ upcoming.fee }} € vom {{ upcoming.reregistration_start|date:"j. F" }} bis {{ upcoming.deadline|date:"j. F Y" }}{% endif %}{% if not paid and upcoming.late_deadline %}<br><small class="muted">Nachfrist bis {{ upcoming.late_deadline|date:"j. F" }} mit {{ late_fee }} € Säumnisgebühr; danach folgt die Exmatrikulation.</small>{% endif %}{% if next.leave %} · <span class="badge">Urlaubssemester · {{ next.get_leave_reason_display }}</span>{% endif %}</p>
-    {% if missing %}<p class="fail">Für die Rückmeldung fehlt noch: {{ missing|join:" · " }}</p>{% endif %}
+    {% if missing %}<p class="fail">Für die Rückmeldung fehlt noch:</p><ul>{% for what, todo in missing %}<li>{{ what }}{% if todo %} <small class="muted">– {{ todo }}</small>{% endif %}</li>{% endfor %}</ul>{% endif %}
     {% if own and not paid %}{% include "students/_transfer.html" with amount=owed reference=study.person.matriculation|add:" "|add:study.person.last_name %}{% endif %}
     {% if own or office %}
     {% if next.leave %}
@@ -92,7 +93,8 @@
       <form method="post" enctype="multipart/form-data" action="{% url 'students:leave' study.pk %}" class="inline" style="margin-top: 8px">
         {% csrf_token %}
         <label>Grund<select name="reason" required><option value="">–</option>{% for code, name in leaves %}<option value="{{ code }}">{{ name }}</option>{% endfor %}</select></label>
-        <label>Nachweis, etwa ein Attest<input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png"></label>
+        <label>Nachweis, etwa ein Attest<input type="file" name="file" accept="{{ attest_kind.extensions|join:',' }}" data-max="{% widthratio attest_kind.size 1 1048576 %}" data-too-big="Höchstens {{ attest_kind.limit }}. Bitte verkleinern."></label>
+        <small class="muted">{{ attest_kind.accepted }}</small>
         <div class="choices"><label><input type="checkbox" name="consent" value="1"> {% if own %}Mit Nachweis: {% text 'einwilligung_gesundheit' zweck='zum Urlaubssemester' %}{% else %}Einwilligung zum Nachweis liegt unterschrieben vor{% endif %}</label></div>
         <button class="btn ghost small"{% if not own %} data-confirm="Urlaubssemester eintragen und den Bescheid versenden?{% for rule in leave_rules %} Ausnahme: {{ rule }}{% endfor %}"{% endif %}>{% if own %}Beantragen{% else %}Eintragen{% endif %}</button>
       </form>
@@ -161,7 +163,7 @@
   {% if options %}{% with first=options.0 %}
   <form method="post" action="{% url 'students:focus' study.pk %}" class="panel" style="margin-bottom: 16px">
     {% csrf_token %}
-    <h3>{{ first.choice.title }} {% if study.focus %}ändern{% else %}wählen{% endif %}</h3>
+    <h3>{{ first.choice.title }} {% if study.focus %}ändern{% else %}wählen{% endif %}{% if choose_by %} <small class="{% if choose_by < today %}fail{% else %}muted{% endif %}">{% if choose_by < today %}überfällig seit{% else %}bis{% endif %} {{ choose_by|date:"j.n.Y" }}</small>{% endif %}</h3>
     <p class="muted"><small>{{ first.choice.description }} Vorher ist eine Studienfachberatung vorgesehen{% if study.teacher %}, etwa bei <a href="mailto:{{ study.teacher.email }}">{{ study.teacher }}</a>{% endif %}. {% if fs < first.first %}Bis zum Beginn des {{ first.first }}. Semesters können Sie die Wahl hier ändern, danach nur über: {% else %}Ändern lässt sie sich danach nur über: {% endif %}{{ changes|default:"die Hochschule" }}.</small></p>
     <div class="choices">{% for o in options %}<label for="focus-{{ o.pk }}"><input type="radio" id="focus-{{ o.pk }}" name="focus" value="{{ o.pk }}" required{% if o.pk == study.focus_id %} checked{% endif %}> {{ o.title }}{% if o.pk == study.advised_id %} <span class="badge">von den Lehrenden empfohlen</span>{% endif %}</label>{% endfor %}</div>
     <p style="margin: 12px 0 0"><button class="btn">{% if study.focus %}Ändern{% else %}Wählen{% endif %}</button></p>

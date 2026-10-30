@@ -58,7 +58,7 @@ class EnsembleTest(Seeded):
         cellist = Study.objects.filter(status='enrolled', subject__name='Violoncello', program__modules__courses=chamber).exclude(person__username='student').first()
         student = Study.objects.get(person__username='student')
         r = self.login('student').post(f'/lehre/{chamber.pk}/ensemble/', {
-            'study': student.pk, 'name': 'Duo Violine/Violoncello', 'members': cellist.person.email, 'repertoire': 'Ravel: Sonate',
+            'study': student.pk, 'name': 'Duo Violine/Violoncello', 'members': [cellist.person_id], 'repertoire': 'Ravel: Sonate',
         }, follow=True)
         self.assertEqual(flashes(r), ['„Duo Violine/Violoncello“ angemeldet. Wer es betreut, erfahren Sie im Postfach.'])
         duo = Ensemble.objects.get(name='Duo Violine/Violoncello')
@@ -68,6 +68,19 @@ class EnsembleTest(Seeded):
         before = deputat(wendt.teaching.filter(term=chamber.term), wendt)
         self.login('lehre').post(f'/lehre/ensemble/{duo.pk}/', {'coach': wendt.pk})
         self.assertEqual(deputat(wendt.teaching.filter(term=chamber.term), wendt), before + chamber.hours)
+
+    def test_a_member_takes_the_ensemble_back_while_registration_runs(self):
+        chamber = Course.objects.get(term__name='WiSe 2026/27', title='Kammermusik')
+        chamber.opens = chamber.deadline = None
+        chamber.save()
+        cellist = Study.objects.filter(status='enrolled', subject__name='Violoncello', program__modules__courses=chamber, ensembles=None).exclude(person__username='student').first()
+        student = self.login('student')
+        student.post(f'/lehre/{chamber.pk}/ensemble/', {'study': Study.objects.get(person__username='student').pk, 'name': 'Duo', 'members': [cellist.person_id]})
+        page = student.get(f'/lehre/{chamber.pk}/')
+        self.assertEqual((page.context['count'] > 1, 'Ensemble anmelden' in page.content.decode()), (True, False))  # in one: everyone counted, no second form
+        duo = Ensemble.objects.get(name='Duo')
+        self.login(cellist.person.username).post(f'/lehre/ensemble/{duo.pk}/zurueckziehen/')
+        self.assertFalse(Ensemble.objects.filter(pk=duo.pk).exists() or chamber.participations.filter(study=cellist).exists())
 
     def test_a_coach_grades_their_own_ensembles(self):
         chamber = Course.objects.get(term__name='WiSe 2026/27', title='Kammermusik')

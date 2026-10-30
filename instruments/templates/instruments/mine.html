@@ -4,7 +4,7 @@
 {% block content %}
 <h1>Meine Leihinstrumente</h1>
 <table>
-  <thead><tr><th>Instrument</th><th>Inventarnummer</th><th>Ausgeliehen</th><th>Rückgabe bis</th><th>Zurück</th></tr></thead>
+  <thead><tr><th>Instrument</th><th>Inventarnummer</th><th>Ausgeliehen</th><th>Rückgabe bis</th><th>Zurück</th><th>Rückgabe und Verlängerung</th></tr></thead>
   <tbody>
     {% for loan in loans %}
     <tr>
@@ -13,8 +13,9 @@
       <td>{{ loan.start|date:"j.n.Y" }}</td>
       <td>{{ loan.due|date:"j.n.Y" }}{% if loan.overdue %} <span class="badge no">überfällig</span>{% endif %}</td>
       <td>{{ loan.returned|date:"j.n.Y"|default:"–" }}</td>
+      <td>{% if not loan.returned %}<small>{{ loan.lender|default:"–" }}</small><br>{% endif %}<a class="more" href="{% url 'instruments:agreement' loan.pk %}"><small>Leihvertrag</small></a></td>
     </tr>
-    {% empty %}<tr><td colspan="5" class="empty">Sie haben keine Instrumente ausgeliehen.</td></tr>
+    {% empty %}<tr><td colspan="6" class="empty">Sie haben keine Instrumente ausgeliehen.</td></tr>
     {% endfor %}
   </tbody>
 </table>

@@ -153,13 +153,17 @@ def index(request):
     if 'student' in person.roles:
         studies = person.studies.filter(status=Study.Status.ENROLLED)
         mine = (
-            Participation.objects.filter(study__in=studies, course__kind=Course.Kind.EXAM).select_related('course__term', 'module')
+            Participation.objects.filter(study__in=studies, course__kind=Course.Kind.EXAM).select_related('course__term', 'module', 'study__program')
             .prefetch_related('course__staff', 'course__bookings__room').order_by('-course__term__start')
         )
         ahead = [p for p in mine if not p.course.released]
+        studies = list(studies.select_related('program'))
         for p in ahead:
             held = min(p.course.bookings.all(), key=lambda b: b.start, default=None)
             p.when, p.where = p.begins, held and held.room
+            p.attempt = attempts(person, p.module) + 1 if p.module else 1
+            p.last = p.attempt >= p.study.program.attempts
+        withdrawing = Office.holding('decide_results', studies[0].program) if studies else None
         theses = list(
             Participation.objects.filter(study__in=studies, course__kind=Course.Kind.THESIS).select_related('course', 'module', 'study')
             .prefetch_related('course__staff').order_by('-created')
@@ -171,7 +175,8 @@ def index(request):
             module = c.modules.filter(program__studies__in=studies).first()
             c.attempt = attempts(person, module) + 1 if module else 1
         context.update(
-            mine=[p for p in mine if p.course.released], ahead=ahead, offered=offers, studies=studies, theses=theses,
+            mine=[p for p in mine if p.course.released], ahead=ahead, offered=offers, studies=studies, theses=theses, withdrawing=withdrawing,
+            thesis_kind=DocumentType.system('abschlussarbeit'),
             allowed=studies[0].program.attempts if studies else None,
         )
     return render(request, 'exams/index.html', context)

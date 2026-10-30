@@ -50,7 +50,8 @@
   {% if p.course.is_open and not p.course.released %}
   <form method="post" enctype="multipart/form-data" action="{% url 'exams:submit' p.pk %}" class="inline handed" data-upload>
     {% csrf_token %}
-    <input type="file" name="file" accept=".pdf" aria-label="Abschlussarbeit als PDF">
+    <input type="file" name="file" accept="{{ thesis_kind.extensions|join:',' }}" data-max="{% widthratio thesis_kind.size 1 1048576 %}" data-too-big="Höchstens {{ thesis_kind.limit }}. Bitte verkleinern." aria-label="Abschlussarbeit">
+    <small class="muted">{{ thesis_kind.accepted }}</small>
     <div class="choices"><label><input type="checkbox" name="declared" value="1" required> Ich versichere, dass ich die Arbeit selbstständig verfasst und keine anderen als die angegebenen Quellen und Hilfsmittel benutzt habe, auch keine KI ohne Angabe.</label></div>
     <button class="btn small">{% if p.handed %}Neue Fassung abgeben{% else %}Abgeben{% endif %}</button>
   </form>
@@ -85,7 +86,7 @@
 <section>
   <h2>Angemeldet</h2>
   <table>
-    <thead><tr><th>Termin</th><th>Prüfung</th><th>Raum</th><th>Prüfende</th><th></th></tr></thead>
+    <thead><tr><th>Termin</th><th>Prüfung</th><th>Raum</th><th>Prüfende</th><th>Versuch</th><th>Abmelden bis</th><th></th></tr></thead>
     <tbody>
       {% for p in ahead %}
       <tr>
@@ -93,12 +94,15 @@
         <td><b>{{ p.course.title }}</b><br><small class="muted">{{ p.module.code }} · {{ p.course.term }}</small></td>
         <td>{{ p.where|default:"–" }}</td>
         <td><small>{% for s in p.course.staff.all %}{{ s }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</small></td>
-        <td class="num">{% if p.withdrawable %}<form method="post" action="{% url 'exams:withdraw' p.pk %}" title="Bis {{ p.course.withdraw_by|date:'j.n.Y' }}">{% csrf_token %}<button class="btn ghost small" data-confirm="Wirklich abmelden?">Abmelden</button></form>{% else %}<span class="badge open">angemeldet</span>{% endif %}</td>
+        <td class="num">{{ p.attempt }}.{% if p.last %} <span class="badge no">letzter</span>{% endif %}</td>
+        <td class="nowrap">{{ p.course.withdraw_by|date:"j.n.Y"|default:"–" }}</td>
+        <td class="num">{% if p.withdrawable %}<form method="post" action="{% url 'exams:withdraw' p.pk %}">{% csrf_token %}<button class="btn ghost small" data-confirm="Von {{ p.course.title }} abmelden?">Abmelden</button></form>{% else %}<span class="badge open">angemeldet</span>{% endif %}</td>
       </tr>
-      {% empty %}<tr><td colspan="5" class="empty">Zurzeit keine Prüfung angemeldet.</td></tr>
+      {% empty %}<tr><td colspan="7" class="empty">Zurzeit keine Prüfung angemeldet.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+  {% if ahead %}<p class="muted"><small>Nach der Abmeldefrist, aus triftigem Grund wie Krankheit: Rücktritt mit Attest, unverzüglich einzureichen{% if withdrawing %}; zuständig: {{ withdrawing }}{% endif %} (RPSO § 20). Ein Rücktritt zählt nicht als Versuch.</small></p>{% endif %}
 </section>
 
 <section>

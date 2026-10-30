@@ -22,7 +22,7 @@ from core.forms import again, sent
 from core.access import CODENAMES, require
 from core.apps import plural
 from core.history import tables
-from core.models import Consent, Institution, Message, Term
+from core.models import Consent, Institution, Message, Office, Term
 from core.text import matching, untimed
 from core.templatetags.marks import mark
 from core.views import preview
@@ -708,7 +708,7 @@ def mine(request):
     return render(request, 'admissions/mine.html', {
         'studies': studies, 'documents': person.documents.exclude(message=None), 'accept': AcceptForm(sent(request, 'accept'), instance=person),
         'entrance': EntranceForm(sent(request, 'entrance'), instance=person) if not person.entrance else None,
-        'insurers': Institution.get().insurers.splitlines(), 'bank': Institution.get(),
+        'insurers': Institution.get().insurers.splitlines(), 'bank': Institution.get(), 'deciders': Office.holding('decide_applications', linked=True),
     })
 
 
