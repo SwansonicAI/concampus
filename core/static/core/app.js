@@ -413,6 +413,34 @@ document.addEventListener('click', event => {
 });
 document.addEventListener('keydown', event => event.key === 'Escape' && document.querySelectorAll('button[data-armed]').forEach(disarm));
 
+// An explainer (a popover, opened by the button that names it) stands under what it explains, its tip pointing at it,
+// or above where there is no room below, and within the page's width; the browser closes it on a click elsewhere or
+// Escape.
+function place(tip) {
+  if (!tip.anchor) return;
+  const cell = (tip.anchor.closest('th, td') ?? tip.anchor).getBoundingClientRect(), at = tip.anchor.getBoundingClientRect();
+  const main = document.querySelector('main'), pad = parseFloat(getComputedStyle(main).paddingLeft), page = main.getBoundingClientRect();
+  const width = tip.offsetWidth || 320, middle = at.left + at.width / 2;
+  const left = Math.max(16, Math.min(middle - 28, page.right - pad - width));
+  const above = cell.bottom + 10 + tip.offsetHeight > innerHeight && cell.top > tip.offsetHeight + 10;
+  tip.classList.toggle('above', above);
+  tip.style.left = `${left}px`;
+  tip.style.top = `${above ? cell.top - 10 - tip.offsetHeight : cell.bottom + 10}px`;
+  tip.style.setProperty('--caret', `${Math.min(Math.max(middle - left, 16), width - 16)}px`);
+}
+document.addEventListener('click', ({target}) => {
+  const opener = target.closest('[popovertarget]');
+  if (opener) document.getElementById(opener.getAttribute('popovertarget')).anchor = opener;
+}, true);
+for (const type of ['beforetoggle', 'toggle']) {
+  document.addEventListener(type, ({target, newState}) => {
+    if (!target.matches?.('.explainer')) return;
+    target.anchor?.classList.toggle('open', newState === 'open');
+    if (newState === 'open') place(target);
+  }, true);
+}
+for (const type of ['scroll', 'resize']) addEventListener(type, () => document.querySelectorAll('.explainer:popover-open').forEach(place), {passive: true});
+
 // In a course's grade sheet a grade decides „bestanden“ (the server does the same): the choice follows it and waits.
 document.addEventListener('change', ({target}) => {
   const sheet = target.closest('form[data-pass]');

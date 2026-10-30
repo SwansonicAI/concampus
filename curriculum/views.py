@@ -9,7 +9,7 @@ from django.views.decorators.http import require_POST
 from core.access import require
 from core.models import Office, Term
 from core.transfer import FORMAT, load, plan as written
-from courses.models import Course
+from courses.models import Course, Format
 from students.models import Study
 from .apps import OVERSIGHT
 from .models import Module, Program
@@ -17,11 +17,11 @@ from .models import Module, Program
 
 def plan(tree, semesters, choices=(), taking=(), late=()):
     """Rows of the Studienverlaufsplan as the SVPP prints it: every module, and under it its course work and exams
-    with their credits per semester. Groups and choices become headings; between the Schwerpunkte of a choice
-    (Program.choices()) stands „oder“. For a student each cell has its `state`: passed, taken this term (`taking`), an
-    exam overdue (`late`), or waived for the Hauptfach („off“)."""
+    with their credits per semester. Groups and choices become headings; each Schwerpunkt of a choice (Program.choices())
+    is a block of its own (`within`, from where it `opens`), „oder“ between them. For a student each cell has its
+    `state`: passed, taken this term (`taking`), an exam overdue (`late`), or waived for the Hauptfach („off“)."""
     rows, area = [], {o.pk: o.choice.pk for o in choices}
-    begun = {}  # each choice's Schwerpunkt listed last
+    begun = set()  # the choices whose first Schwerpunkt is listed
 
     def state(items):
         for i in items:
@@ -31,15 +31,16 @@ def plan(tree, semesters, choices=(), taking=(), late=()):
                 return 'done' if i.done else 'now' if i.pk in taking else 'late'
         return ''
 
-    def visit(node, depth):
+    def visit(node, depth, within=False):
         leaves = [n for n in node.nodes if not n.nodes]
-        if node.pk in area:
+        if opens := node.pk in area:
             if area[node.pk] in begun:
-                rows.append({'kind': 'or', 'depth': depth, 'instead': begun[area[node.pk]]})
-            begun[area[node.pk]] = node.title
+                rows.append({'kind': 'or', 'depth': depth})
+            begun.add(area[node.pk])
+        within = within or opens
         rows.append({
             'kind': 'module' if leaves else 'group', 'node': node, 'depth': depth, 'choosing': node.pk in area or node.pk in area.values(),
-            'options': list(area.values()).count(node.pk),  # of a choice: how many Schwerpunkte it has, one to be studied
+            'options': list(area.values()).count(node.pk), 'within': within, 'opens': opens,  # a choice: how many Schwerpunkte, one to be studied
         })
         parts = {}
         for leaf in leaves:
@@ -47,7 +48,7 @@ def plan(tree, semesters, choices=(), taking=(), late=()):
         for title, items in sorted(parts.items(), key=lambda part: part[1][0].exam):  # course work first, then exams
             cells = [[i for i in items if i.semester == s] for s in range(1, semesters + 1)]
             rows.append({
-                'kind': 'part', 'title': title, 'items': items, 'depth': depth + 1, 'exam': items[0].exam,
+                'kind': 'part', 'title': title, 'items': items, 'depth': depth + 1, 'exam': items[0].exam, 'within': within,
                 'form': items[0].description, 'weight': items[0].weight, 'off': all(i.excused for i in items),
                 'cells': [{'items': cell, 'state': state(cell)} for cell in cells],
                 'grades': [i.grade for i in items if getattr(i, 'grade', None)],
@@ -55,7 +56,7 @@ def plan(tree, semesters, choices=(), taking=(), late=()):
             })
         for child in node.nodes:
             if child.nodes:
-                visit(child, depth + 1)
+                visit(child, depth + 1, within)
 
     for root in tree:
         visit(root, 0)
@@ -88,7 +89,7 @@ def program(request, pk):
             row['offers'] = sorted({c for i in row['items'] for c in offers[i.pk]}, key=lambda c: c.title)
     figures = bool(request.user.roles & OVERSIGHT)
     return render(request, 'curriculum/program.html', {
-        'program': program, 'rows': rows, 'semesters': range(1, program.semesters + 1), 'term': term, 'edit': request.user.may('edit_curriculum', program),
+        'program': program, 'rows': rows, 'formats': Format.objects.exclude(short=''), 'semesters': range(1, program.semesters + 1), 'term': term, 'edit': request.user.may('edit_curriculum', program),
         'reachable': Course.reachable(request.user, Course.objects.filter(pk__in=[c.pk for found in offers.values() for c in found])),
         'total': sum(m.credits for m in tree), 'figures': figures, 'students': figures and program.studies.filter(status='enrolled').count(),
         'coming': Term.objects.filter(start__gt=timezone.localdate()).order_by('start'),

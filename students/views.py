@@ -31,7 +31,7 @@ from core.apps import plural
 from core.models import Consent, Export, Institution, Office, Person, Term
 from core.text import fold, handle, matching
 from core.views import SHOWN, preview, without_term
-from courses.models import Course, Participation
+from courses.models import Course, Format, Participation
 from courses.views import untimed
 from curriculum.models import Module, Program, Subject
 from curriculum.views import plan
@@ -320,7 +320,7 @@ def study(request, pk):
         'certify': own or office,  # Bescheinigungen
         'unpaying': 'manage_reregistration' in person.roles,
         'enrolling': study.missing() if office and study.status == Study.Status.ADMITTED else [],
-        'rows': plan(tree, study.program.semesters, choices, taking, late), 'findable': findable(study, tree, choices, taking) if own and study.status == Study.Status.ENROLLED else set(),
+        'rows': plan(tree, study.program.semesters, choices, taking, late), 'formats': Format.objects.exclude(short=''), 'findable': findable(study, tree, choices, taking) if own and study.status == Study.Status.ENROLLED else set(),
         'semesters': range(1, study.program.semesters + 1),
         'taking': taking,
         'late': late,

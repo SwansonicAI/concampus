@@ -2,20 +2,20 @@
   <table class="svpp" data-panel>
     <thead>
       <tr>
-        <th>Modul · Lehrveranstaltung · Prüfung</th>
-        <th class="fmt">Form</th>
-        {% for s in semesters %}<th class="sem{% if progress and s == fs %} current{% endif %}">{{ s }}.</th>{% endfor %}
-        <th class="num cp">CP</th>
-        <th class="num" title="Anteil an der Note des Moduls bzw. an der Gesamtnote">Gewicht</th>
-        {% if progress %}<th class="num">Note</th>{% endif %}
+        <th><button type="button" class="explain" popovertarget="zum-plan">Modul · Lehrveranstaltung · Prüfung</button></th>
+        <th class="fmt"><button type="button" class="explain" popovertarget="zur-form">Form</button></th>
+        {% for s in semesters %}<th class="sem{% if progress and s == fs %} current{% endif %}"><button type="button" class="explain" popovertarget="zum-semester">{{ s }}.</button></th>{% endfor %}
+        <th class="num cp"><button type="button" class="explain" popovertarget="zu-cp">CP</button></th>
+        <th class="num"><button type="button" class="explain" popovertarget="zum-gewicht">Gewicht</button></th>
+        {% if progress %}<th class="num"><button type="button" class="explain" popovertarget="zur-note">Note</button></th>{% endif %}
       </tr>
     </thead>
     <tbody>
       {% for r in rows %}
       {% if r.kind == 'or' %}
-      <tr class="or"><td colspan="{% if progress %}{{ semesters|length|add:5 }}{% else %}{{ semesters|length|add:4 }}{% endif %}" style="padding-left: calc(10px + {{ r.depth }} * 16px)"><div class="either">oder statt „{{ r.instead }}“</div></td></tr>
+      <tr class="or"><td colspan="{% if progress %}{{ semesters|length|add:5 }}{% else %}{{ semesters|length|add:4 }}{% endif %}"><div class="either"><span>oder</span></div></td></tr>
       {% elif r.kind == 'part' %}
-      <tr class="part{% if r.exam %} exam{% endif %}{% if progress and r.off %} off{% endif %}">
+      <tr class="part{% if r.exam %} exam{% endif %}{% if progress and r.off %} off{% endif %}{% if r.within %} opt{% endif %}">
         <td style="padding-left: calc(10px + {{ r.depth }} * 16px)">
           {% if r.exam %}<span class="tag-exam">Prüfung</span>{% endif %}{% if edit %}<a href="{% url 'setup:edit' 'module' r.items.0.pk %}?next={{ request.path|urlencode }}">{{ r.title }}</a>{% else %}{{ r.title }}{% endif %}{% if progress and r.off %} · {{ r.form|default:"entfällt" }}{% endif %}
           {% if r.offers|length > 3 %}<details class="tail"><summary><small>{{ r.offers|length }} Veranstaltungen</small></summary>{% for c in r.offers %}<small>{% if c.pk in reachable %}<a href="{{ c.get_absolute_url }}">{{ c.title }}</a>{% else %}{{ c.title }}{% endif %}</small><br>{% endfor %}</details>
@@ -31,7 +31,7 @@
         {% if progress %}<td class="num">{% for g in r.grades %}{{ g|floatformat:1 }}{% if not forloop.last %} · {% endif %}{% endfor %}</td>{% endif %}
       </tr>
       {% else %}
-      <tr class="{{ r.kind }}">
+      <tr class="{{ r.kind }}{% if r.within %} opt{% endif %}{% if r.opens %} opens{% endif %}">
         <td colspan="2" style="padding-left: calc(10px + {{ r.depth }} * 16px)">
           {% if edit %}<a href="{% url 'setup:edit' 'module' r.node.pk %}?next={{ request.path|urlencode }}">{% if r.node.code %}<span class="code">{{ r.node.code }}</span>{% endif %}<span class="name">{{ r.node.title }}</span></a>
           <a class="muted" href="{% url 'setup:new' 'module' %}?studiengang={{ r.node.program_id }}&unter={{ r.node.pk }}&next={{ request.path|urlencode }}" title="Ein Modul darunter anlegen"><small>+ Untermodul</small></a>
@@ -50,4 +50,34 @@
       {% endfor %}
     </tbody>
   </table>
-</div>
+  <div popover class="explainer" id="zum-plan">
+    <b>Studienplan</b>
+    <p>Grau hinterlegt sind die Module, dunkler die Bereiche aus mehreren Modulen. Darunter steht, was zu einem Modul gehört: seine Lehrveranstaltungen und Prüfungen.</p>
+    <p>Abgeschlossen ist ein Modul, wenn alle seine CP erreicht und seine Prüfungen bestanden sind.</p>
+  </div>
+  <div popover class="explainer" id="zur-form">
+    <b>Lehrform</b>
+    <p>Wie eine Lehrveranstaltung stattfindet, mit ihren Minuten pro Woche: „E 90“ ist Einzelunterricht, 90 Minuten in der Woche.</p>
+    <dl class="codes">{% for f in formats %}<dt>{{ f.short }}</dt><dd>{{ f.name }}</dd>{% endfor %}</dl>
+  </div>
+  <div popover class="explainer" id="zum-semester">
+    <b>Fachsemester</b>
+    <p>Wann der Studienplan etwas vorsieht. Im Feld stehen die CP einer Lehrveranstaltung, „T“ für ein Testat ohne eigene CP und „●“ für eine Prüfung.</p>
+    {% if progress and fs %}<p>Grün beschriftet ist Ihr jetziges Fachsemester, das {{ fs }}.</p>{% endif %}
+  </div>
+  <div popover class="explainer" id="zu-cp">
+    <b>Leistungspunkte (CP)</b>
+    <p>Credit Points nach ECTS. Ein CP steht für 25 bis 30 Stunden Arbeit.</p>
+    <p>{% if progress %}In Modulzeilen: erreicht von erforderlich, etwa 16/16. „Prüfung offen“: Die CP sind erreicht, eine Prüfung fehlt noch.{% else %}In Modulzeilen: wie viele CP das Modul verlangt.{% endif %}</p>
+    <p>„Wahl“: Aus dem Angebot wird so viel belegt, wie das Modul verlangt. CP ohne festes Semester stehen in dieser Spalte.</p>
+  </div>
+  <div popover class="explainer" id="zum-gewicht">
+    <b>Gewicht</b>
+    <p>Wie stark eine Note zählt: unter einem Modul ihr Anteil an der Modulnote, in Modulzeilen der Anteil des Moduls an der Gesamtnote.</p>
+    <p>Bei Gewicht 1 und 2 zählt die zweite Note doppelt. Ohne Gewicht zählt eine Note nicht.</p>
+  </div>
+  {% if progress %}<div popover class="explainer" id="zur-note">
+    <b>Note</b>
+    <p>Die Noten bestandener Prüfungen und benoteter Lehrveranstaltungen.</p>
+    <p>In Modulzeilen die Modulnote, sobald das Modul abgeschlossen ist: das Mittel der Noten darin nach ihrem Gewicht, gerundet nach Ihrer Prüfungsordnung.</p>
+  </div>{% endif %}

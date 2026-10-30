@@ -273,11 +273,11 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .svpp .sem { width: 40px; padding-right: 4px; padding-left: 4px; text-align: center; }
 .svpp .fmt { width: 72px; white-space: nowrap; }
 .svpp .cp { width: 84px; padding-left: 4px; }
-.svpp tr:is(.module, .group) td { padding-top: 12px; padding-bottom: 12px; border-top: 20px solid #fff; }
+.svpp tr:is(.module, .group) td { --gap: 20px; padding-top: 12px; padding-bottom: 12px; border-top: var(--gap) solid #fff; }
 .svpp tr.group td { background: #e8e8e8; }
 .svpp tr.module td { background: var(--soft); }
-.svpp tbody tr:first-child td, .svpp tr.or + tr td { border-top-width: 0; }
-.svpp tr:is(.module, .group) + tr:is(.module, .group) td { border-top-width: 2px; }
+.svpp tbody tr:first-child td, .svpp tr.or + tr td { --gap: 0px; }
+.svpp tr:is(.module, .group) + tr:is(.module, .group) td { --gap: 2px; }
 .svpp tr.part td { padding-top: 7px; padding-bottom: 7px; border-bottom: 1px solid #ececec; }
 .svpp tbody tr:is(.part, .module, .group):has(+ tr:is(.module, .group, .or)) td, .svpp tbody tr.part:last-child td { border-bottom-color: transparent; }
 .svpp tr.part :is(.sem, .cp) { color: #767676; font-size: 13px; font-weight: 400; }
@@ -291,9 +291,14 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .svpp .find:hover { text-decoration: underline; }
 .svpp .pending { display: block; margin-top: 2px; color: var(--amber); font-size: 11px; font-weight: 600; line-height: 16px; white-space: nowrap; }
 .svpp tr.part small { line-height: 1; }
-.svpp tr.or td { padding-top: 16px; padding-bottom: 14px; line-height: 16px; }
-.either { display: flex; align-items: center; gap: 12px; font-size: 13px; font-weight: 600; }
-.either::after { flex: 1; border-top: 1px solid var(--line); content: ""; }
+/* Schwerpunkte to choose between: each a block with a bar down its left, „oder“ where one ends and the next begins */
+.svpp tr.opt > td:first-child { position: relative; }
+.svpp tr.opt > td:first-child::before { position: absolute; top: calc(-1 * var(--gap, 0px)); bottom: -1px; left: 0; width: 4px; background: var(--muted); content: ""; }
+.svpp tr.opt.opens > td:first-child::before { top: 0; }
+.svpp tr.or td { padding: 14px 0; line-height: 16px; }
+.either { display: flex; align-items: center; gap: 12px; }
+.either span { padding: 3px 12px; border: 1px solid var(--muted); border-radius: var(--radius); font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+.either::after { flex: 1; border-top: 1px solid var(--muted); content: ""; }
 .tag-exam { display: inline-block; min-width: 56px; margin-right: 8px; color: var(--muted); font-size: 12px; line-height: 1; vertical-align: baseline; }
 /* A square around what is passed, taken or overdue, its number in the middle of it */
 .svpp td:is(.done, .now, .late) { position: relative; }
@@ -314,6 +319,18 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
   .scroll:has(> .svpp) { overflow: visible; }
   .svpp thead th { position: sticky; top: 0; z-index: 3; background: #fff; }
 }
+/* A heading that explains itself: a click opens a note under it, a click elsewhere or Escape closes it */
+.explain { padding: 0; border: 0; background: none; color: inherit; font: inherit; letter-spacing: inherit; text-align: inherit; text-transform: inherit; cursor: pointer; }
+.explain:hover, .explain.open { color: var(--accent); }
+.explainer { position: fixed; inset: auto; width: 320px; max-width: calc(100vw - 32px); margin: 0; padding: 16px 18px; overflow: visible; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; box-shadow: 0 8px 24px rgb(0 0 0 / 0.12); color: var(--ink); font-size: 14px; line-height: 1.5; }
+.explainer::before { position: absolute; top: -6px; left: calc(var(--caret, 24px) - 6px); width: 10px; height: 10px; border: solid var(--line); border-width: 1px 0 0 1px; background: #fff; transform: rotate(45deg); content: ""; }
+.explainer.above::before { top: auto; bottom: -6px; transform: rotate(225deg); }
+.explainer > b { display: block; margin-bottom: 4px; font-size: 15px; }
+.explainer p { margin: 0; }
+.explainer p + p { margin-top: 8px; }
+.explainer .codes { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin: 10px 0 0; }
+.explainer .codes dt { font-weight: 700; }
+.explainer .codes dd { margin: 0; color: var(--muted); }
 .choose h3 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 6px; }
 .choose h3 small { font-size: 13px; font-weight: 600; }
 .choose > p.muted { max-width: 84ch; margin: 0 0 18px; font-size: 14px; line-height: 1.5; }
