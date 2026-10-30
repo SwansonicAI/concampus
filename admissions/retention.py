@@ -8,6 +8,8 @@ from core.models import Change, Message, Person
 from courses.models import Participation
 from students.models import Document, Study
 
+KEPT = {'gender', 'nationality', 'entrance'}  # what the figures still count them by (analytics/figures.py); every other field is emptied
+
 
 def ended(cutoff):
     """Applications that never led to studying here and ended before `cutoff`: turned down, or the place declined or not
@@ -35,10 +37,8 @@ def forget(cutoff):
     Message.objects.filter(person__in=ids).delete()
     Change.objects.filter(person__in=ids).delete()  # what the history kept about them
     Participation.objects.filter(study__person__in=ids).update(note='')
-    Person.objects.filter(pk__in=ids).update(  # gender and nationality stay for the statistics
-        username=Concat(Value('anonym-'), Cast('pk', CharField())), first_name='', last_name='Anonym', title='', given_names='', birth_name='',
-        email='', private_email='', birth_date=None, birth_place='', second_nationality='', address='', home='', residence='', entrance_date=None, entrance_region='',
-        first_university='', first_term='', degree_university='', degree_exam='', degree_field='', degree_date=None, degree_grade='', insurer='', insurance='',
-        insurance_confirmed=None, hold='', password='!', is_active=False,
-    )
+    empty = {f.name: f.get_default() for f in Person._meta.concrete_fields if not f.primary_key and f.name not in KEPT}
+    Person.objects.filter(pk__in=ids).update(**empty | {
+        'username': Concat(Value('anonym-'), Cast('pk', CharField())), 'last_name': 'Anonym', 'password': '!', 'is_active': False,
+    })
     return deleted, len(ids)

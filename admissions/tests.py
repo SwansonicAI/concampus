@@ -282,9 +282,10 @@ class RetentionTest(Seeded):
             .annotate(n=Count('person__studies', distinct=True)).filter(n=1).select_related('person').first()
         )
         gender = study.person.gender
+        Person.objects.filter(pk=study.person_id).update(home_town='16055000')  # Weimar
         forget(timezone.localdate() + timedelta(days=1))
         person = Person.objects.get(pk=study.person_id)
         self.assertFalse(study.documents.exists())
-        self.assertEqual((person.last_name, person.email, person.is_active, person.gender), ('Anonym', '', False, gender))
+        self.assertEqual((person.last_name, person.email, person.phone, person.home_town, person.is_active, person.gender), ('Anonym', '', '', '', False, gender))
         self.assertTrue(Study.objects.filter(pk=study.pk).exists())
         self.assertFalse(Message.objects.filter(person=person).exists())
