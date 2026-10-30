@@ -45,6 +45,7 @@ class Editor:
     single: bool = False  # one record only, like the Hochschule's own data
     adding: bool = True  # False: only some fields of records kept up elsewhere, like the exam dates of a term
     invite: bool = False  # people: its form offers to send a sign-in invitation
+    carry: str = ''  # URL name of a step that takes the last period's entries over, offered above the list
 
     def __post_init__(self):
         if self.sections:
@@ -376,14 +377,14 @@ EDITORS = {e.key: e for e in [
         columns=[('Prüfer:in', 'person'), ('Studienjahr', 'season'), ('Hauptfächer', 'subjects'), ('Ohne Hauptfach', 'general')],
         search=['person__last_name', 'person__first_name'], words='prüfer prüferliste prüfungsausschuss bestellung kommission eignungsprüfung',
         queryset=lambda: Appointment.objects.select_related('person').prefetch_related('subjects').order_by('-year', 'person__last_name'),
-        new=lambda request: Appointment(year=Course(term=Term.current()).year if Term.current() else None),
+        new=lambda request: Appointment(year=Course(term=Term.current()).year if Term.current() else None), carry='courses:appoint_again',
     ),
     Editor(
         'ermaessigungen', Reduction, 'Ermäßigungen der Lehrverpflichtung', 'manage_teaching_load', 'Studium und Lehre', form=ReductionForm,
         columns=[('Lehrperson', 'person'), ('Semester', 'term'), ('Grund', 'reason'), ('LVS', 'hours'), ('Notiz', 'note')],
         search=['person__last_name', 'person__first_name', 'note'], words='deputat lvs dekanat studiendekanat entlastung lehrverpflichtungsverordnung',
         queryset=lambda: Reduction.objects.select_related('person', 'term'),
-        new=lambda request: Reduction(term=Term.current(), person_id=request.GET.get('person') or None),
+        new=lambda request: Reduction(term=Term.upcoming() or Term.current(), person_id=request.GET.get('person') or None),  # set for the semester being planned
     ),
     Editor(
         'fachgebiete', Area, 'Fachgebiete', 'manage_courses', 'Studium und Lehre', sections=[(None, [('name', 'order')])],

@@ -4,7 +4,10 @@
 <p class="eyebrow"><a href="{% url 'setup:index' %}">Einstellungen</a></p>
 <div class="head">
   <h1>{{ editor.title }}</h1>
-  {% if editor.creatable %}<div class="actions"><a class="btn" href="{% url 'setup:new' editor.key %}" data-panel>Neu anlegen</a></div>{% endif %}
+  <div class="actions">
+    {% if editor.carry %}<form method="post" action="{% url editor.carry %}">{% csrf_token %}<button class="btn ghost" data-confirm="Die Einträge des letzten Jahres ins nächste übernehmen, für wer dort noch keinen hat?">Aus dem Vorjahr übernehmen</button></form>{% endif %}
+    {% if editor.creatable %}<a class="btn" href="{% url 'setup:new' editor.key %}" data-panel>Neu anlegen</a>{% endif %}
+  </div>
 </div>
 <p class="lead">{{ count }} Einträge{% if q %} passen zu „{{ q }}“{% endif %}</p>
 <form class="toolbar">

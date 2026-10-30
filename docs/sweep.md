@@ -6,7 +6,7 @@ code and, where it matters, on pages rendered from the seeded data or by a reque
 serious were checked again. One line each: role and page, pattern, what happens, the fix. Grouped by what to fix first:
 what costs most when it goes wrong, then what many people meet often.
 
-Status: groups A to E and G fixed on 30 October 2026, except where an item says otherwise. Open: F.
+Status: every group fixed on 30 October 2026, except where an item says „Open“: F 5, F 7 and F 13 among them.
 
 ## A. Grades, Bescheide and money
 
@@ -196,11 +196,12 @@ Status: groups A to E and G fixed on 30 October 2026, except where an item says 
 4. [Prüfungsamt] Termine vergeben – #5 – any error reads „… alle Teilnehmenden haben schon Termine“, false, and the
    input is lost – the field's own error, input kept.
 5. [ASA] newcomers' Semesterbeitrag – #10 – booked by hand one by one; the Verwendungszweck asked of applicants has no
-   number the statement import could match – a reference number; the import matches admitted applicants too.
+   number the statement import could match – a reference number; the import matches admitted applicants too. Open:
+   the reference's form is to agree with the Hochschule's bank account and the Studierendenwerk.
 6. [ASA] Studienakte of an admitted applicant – #6 – „Immatrikulieren“ without what is missing, refused after the click;
    the term called „immatrikuliert“ – the missing items with their actions; the button once complete.
 7. [ASA] Versandte Bescheide – #10/#9 – „per Post“ only a badge: no filter, no printing them all, no „gedruckt“; each
-   audition's invitation a kind of its own – the filter, print all, mark printed; kinds by template.
+   audition's invitation a kind of its own – the filter, print all, mark printed; kinds by template. Open.
 8. [ASA] Exmatrikulation after the Zeugnis – #1 – the reason left blank, though the to-do says why – „Abschluss des
    Studiums“ preselected.
 9. [ASA] Studium bearbeiten – #4 – Hauptfachlehrer:in only among who taught that Hauptfach, so a new teacher cannot be
@@ -212,7 +213,7 @@ Status: groups A to E and G fixed on 30 October 2026, except where an item says 
 12. [dekanat] Ermäßigungen – #10 – per semester, re-entered each time; SoSe 2027 has none yet – „bis Semester“, or carried
     over in the Semesterwechsel; the coming semester by default.
 13. [institut] Eignungsprüfungen – #10 – 15 stages per intake re-created by hand each year – „wie im Vorjahr anlegen“,
-    dates shifted.
+    dates shifted. Open: an intake's stages, juries and links copied together.
 14. [veranstaltungsbuero, institut] Leihinstrument – #5/#10 – a past return date is accepted and blocks the Rückmeldung
     at once; no „Verlängern“ – refuse past dates; extend.
 15. [campus] Konten – #6 – a teacher made inactive without a word about 13 class students, 23 courses and 230 bookings –

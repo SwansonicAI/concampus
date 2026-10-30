@@ -100,6 +100,7 @@
     <dt>Rückmeldungen</dt><dd>{% if not planned %}–{% elif waiting %}{{ waiting|length }} Lehrende ohne Antwort{% else %}alle beantwortet{% endif %}</dd>
     <dt>Ohne Termin</dt><dd>{{ timeless|length }} Lehrveranstaltung{{ timeless|length|pluralize:"en" }}</dd>
     <dt>Deputat</dt><dd>{{ over|length }} über der Lehrverpflichtung, {{ under|length }} unter der Hälfte · <a href="{% url 'courses:load' %}?semester={{ target.pk }}">Deputat {{ target }}</a></dd>
+    <dt>Ermäßigungen</dt><dd>{{ reductions.0 }} im {{ target }}, {{ reductions.1 }} jetzt{% if reducing and reductions.1 > reductions.0 %}<form method="post" class="inline">{% csrf_token %}<input type="hidden" name="schritt" value="ermaessigungen"><button class="btn ghost small" data-confirm="Ermäßigungen ohne Freisemester ins {{ target }} übernehmen, für wer dort noch keine hat?">übernehmen</button></form>{% endif %}</dd>
     <dt>Freisemester</dt><dd>{% for r in leave %}{{ r.person }} hat Veranstaltungen{% if not forloop.last %}; {% endif %}{% empty %}–{% endfor %}</dd>
     <dt>Lehraufträge</dt><dd>{% if contracts %}{{ contracts }} Lehrbeauftragte mit zusammen {{ contract_hours|floatformat:"-1" }} SWS: ihre Verträge für das {{ target }}{% else %}–{% endif %}</dd>
     <dt>Ohne Angebot</dt><dd>{% for m, n in gaps %}{{ m.code }} {{ m.title }} <small class="muted">{{ m.program.title }}, {{ m.semester }}. Semester: {{ n }} Studierende</small>{% if not forloop.last %}<br>{% endif %}{% empty %}{% if planned %}keine Lücken im Studienplan{% else %}–{% endif %}{% endfor %}</dd>

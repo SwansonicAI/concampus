@@ -31,7 +31,7 @@ from rooms.views import agenda, around, called_off, legend, week
 from students.models import Study
 from . import panel
 from .forms import AddForm, CourseForm, DateForm, EnsembleForm, Lessons, PlanForm, TeachingForm
-from .models import Area, Course, Ensemble, Format, Participation, Recusal, Reduction, Signup, marked, owed_module
+from .models import Appointment, Area, Course, Ensemble, Format, Participation, Recusal, Reduction, Signup, marked, owed_module
 
 TEACHING = [Course.Kind.COURSE, Course.Kind.LESSON]
 MANAGERS = {Course.Kind.EXAM: 'manage_exams', Course.Kind.RECOGNITION: 'recognise', Course.Kind.AUDITION: 'run_auditions'}
@@ -906,8 +906,8 @@ def rollover(request):
     person = request.user
     pending = person.within(missing(target), 'roll_over')
     if request.method == 'POST':
-        step = {'uebernehmen': take_over, 'fragen': ask, 'termine': schedule, 'klassen': fill, 'veroeffentlichen': publish}.get(request.POST.get('schritt'))
-        if step is None or ('publish_term' if step is publish else 'roll_over') not in person.roles:
+        step = {'uebernehmen': take_over, 'fragen': ask, 'termine': schedule, 'klassen': fill, 'veroeffentlichen': publish, 'ermaessigungen': carry}.get(request.POST.get('schritt'))
+        if step is None or {publish: 'publish_term', carry: 'manage_teaching_load'}.get(step, 'roll_over') not in person.roles:
             raise PermissionDenied
         step(request, target, pending)
         return redirect('courses:rollover')
@@ -951,6 +951,8 @@ def rollover(request):
         'leave': Reduction.objects.filter(term=target, reason=Reduction.Reason.LEAVE, person__teaching__in=live).distinct().select_related('person'),
         'gaps': gaps(target)[:12] if planned.exists() else [],
         'publishers': Office.holding('publish_term', linked=True),
+        'reductions': (target.reductions.count(), Term.current() and Term.current().reductions.exclude(reason=Reduction.Reason.LEAVE).count()),
+        'reducing': 'manage_teaching_load' in person.roles,
         'proposed': target.ready_by and max(timezone.localdate() + timedelta(weeks=1), target.ready_by - timedelta(weeks=2)),  # time to answer, and to check after 'unpublishers': Office.holding('manage_terms'),
     })
 
@@ -1049,6 +1051,37 @@ def fill(request, target, pending):
         history.saved(Participation.objects.bulk_create(rows))
         added += len(rows)
     messages.success(request, f'{plural(added, "Person", "Personen")} in die Klassen des {target} eingetragen.')
+
+
+@require('appoint_examiners')
+@require_POST
+def appoint_again(request):
+    """The latest Studienjahr's appointments into the next, for whoever is still active and not appointed there yet;
+    each in the same Hauptfächer. The Prüfungsausschuss then changes what differs."""
+    last = Appointment.objects.order_by('-year').values_list('year', flat=True).first()
+    if last is None:
+        messages.error(request, 'Noch keine Bestellungen, die sich übernehmen ließen.')
+        return redirect('setup:list', 'pruefende')
+    taken = set(Appointment.objects.filter(year=last + 1).values_list('person', flat=True))
+    made = []
+    with transaction.atomic():
+        for a in Appointment.objects.filter(year=last, person__is_active=True).exclude(person__in=taken).prefetch_related('subjects'):
+            made.append(Appointment.objects.create(person_id=a.person_id, year=last + 1, general=a.general))
+            made[-1].subjects.set(a.subjects.all())
+    messages.success(request, f'{plural(len(made), "Bestellung", "Bestellungen")} aus {last}/{(last + 1) % 100:02d} für {last + 1}/{(last + 2) % 100:02d} übernommen.')
+    return redirect('setup:list', 'pruefende')
+
+
+def carry(request, target, pending):
+    """Carry this semester's Ermäßigungen over to the next for whoever has none there yet; a Freisemester is for its
+    semester alone."""
+    now, taken = Term.current(), set(target.reductions.values_list('person', flat=True))
+    made = [
+        Reduction(person_id=r.person_id, term=target, reason=r.reason, hours=r.hours, note=r.note)
+        for r in now.reductions.exclude(reason=Reduction.Reason.LEAVE).exclude(person__in=taken)
+    ] if now else []
+    history.saved(Reduction.objects.bulk_create(made))
+    messages.success(request, f'{plural(len(made), "Ermäßigung", "Ermäßigungen")} aus dem {now} übernommen.' if made else 'Nichts zu übernehmen.')
 
 
 def publish(request, target, pending):

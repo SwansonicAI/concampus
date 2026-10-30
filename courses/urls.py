@@ -10,6 +10,7 @@ urlpatterns = [
     path('stundenplan/', views.timetable, name='timetable'),
     path('deputat/', views.load, name='load'),
     path('semesterwechsel/', views.rollover, name='rollover'),
+    path('pruefende/uebernehmen/', views.appoint_again, name='appoint_again'),
     path('neu/', views.edit, name='new'),
     path('<int:pk>/', views.course, name='course'),
     path('<int:pk>/bearbeiten/', views.edit, name='edit'),
