@@ -2,9 +2,11 @@ from django.contrib import admin
 from django.contrib.auth.views import LoginView
 from django.urls import include, path
 
+from core.forms import SignInForm
+
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('konto/login/', LoginView.as_view(redirect_authenticated_user=True), name='login'),  # signed in already: on to the start page
+    path('konto/login/', LoginView.as_view(redirect_authenticated_user=True, authentication_form=SignInForm), name='login'),  # signed in already: on to the start page
     path('konto/', include('django.contrib.auth.urls')),
     path('studierende/', include('students.urls')),
     path('studiengaenge/', include('curriculum.urls')),

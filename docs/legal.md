@@ -73,10 +73,10 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 | Requirement | Source | Status | In Campus, or missing |
 |---|---|---|---|
 | BSI IT-Grundschutz, Profil für Hochschulen | de facto, through Art. 32 GDPR | no | No security concept |
-| Encrypted connections | Art. 32 | partly | HTTPS through Caddy, secure cookies, CSRF protection; no HSTS |
-| Login | Art. 32 | partly | Hashed passwords with rules; no second factor, no lockout after failed attempts, sessions last two weeks; single sign-on (Shibboleth) planned |
+| Encrypted connections | Art. 32 | yes | HTTPS through Caddy, HSTS, secure cookies, CSRF protection |
+| Login | Art. 32 | partly | Hashed passwords with rules; five failures for a name from one address hold it back there a quarter of an hour (`core/backends.py` `held()`); signed out after two hours idle and when the browser closes. No second factor: in production it comes with single sign-on (Shibboleth) from the Hochschule's identity provider |
 | Rights | Art. 32 | yes | New rights and members confirmed by a second administrator, offices held until a date, exports logged |
-| Security log | Art. 32 | no | Logins and failed logins are not logged |
+| Security log | Art. 32 | yes | Sign-ins and failed tries with the address, kept 90 days; each person sees their last five under Mein Konto, `manage_accounts` all under Einstellungen › Anmeldungen |
 | Backups | Art. 32 | partly | Database: Neon's restore window; uploaded files on the server disk without backup |
 | NIS2 | NIS2UmsuCG | n/a | Universities exempt; for us from 50 staff or €10 million turnover |
 
@@ -93,7 +93,7 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 
 | Requirement | Source | Status | In Campus, or missing |
 |---|---|---|---|
-| Co-determination for systems able to monitor staff | ThürPersVG | Hochschule | Campus records who changed what (Verlauf), who exported what, when each mark was given, room bookings for two years and the Deputat; no login log, no analysis of activity. A Dienstvereinbarung is needed; this list is its starting point |
+| Co-determination for systems able to monitor staff | ThürPersVG | Hochschule | Campus records who changed what (Verlauf), who exported what, when each mark was given, room bookings for two years, sign-ins for 90 days and the Deputat; no analysis of activity. A Dienstvereinbarung is needed; this list is its starting point |
 | Personnel records | Thuringian civil-service law | yes | Beschäftigung and Lehrverpflichtung show only on the Deputat; Mein Konto refers staff to HR; no personnel file |
 
 ## If ConCampus is sold
@@ -111,13 +111,11 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 
 1. Deletion concept for every kind of record; students five years after Exmatrikulation, offered to the archive first.
 2. A complete copy of one's data.
-3. Lockout after failed logins, session timeout, a second factor for offices until single sign-on, a login log agreed
-   with the Personalrat.
-4. HSTS; backup of uploaded files.
-5. Statistics of academic and artistic staff.
-6. Mark a record as restricted.
-7. XHochschule data for the certificates.
-8. WCAG audit and the accessibility statement for Campus.
+3. Backup of uploaded files.
+4. Statistics of academic and artistic staff.
+5. Mark a record as restricted.
+6. XHochschule data for the certificates.
+7. WCAG audit and the accessibility statement for Campus.
 
 ## To check
 

@@ -36,6 +36,9 @@ DEMO_CODE = os.environ.get('DEMO_CODE', 'demo' if DEBUG else '')
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split()
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # the app is only reached through the proxy
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG
+SECURE_HSTS_SECONDS = 365 * 86400  # browsers come back over HTTPS only
+SESSION_COOKIE_AGE = 2 * 3600  # signed out after two hours without a request, and when the browser closes
+SESSION_SAVE_EVERY_REQUEST = SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 CSRF_FAILURE_VIEW = 'core.views.stale'
 
 

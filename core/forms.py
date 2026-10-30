@@ -1,9 +1,11 @@
 from django import forms
+from django.contrib.auth.forms import AuthenticationForm
 from django.db.models import Count
 from django.forms.renderers import DjangoTemplates
 from django.http import QueryDict
 from django.shortcuts import redirect
 
+from .backends import TRIES, held
 from .models import Person
 
 
@@ -39,6 +41,17 @@ class Renderer(DjangoTemplates):
 
     field_template_name = 'core/field.html'
     form_template_name = 'core/form.html'
+
+
+class SignInForm(AuthenticationForm):
+    """Signing in, held back for a while after too many failures (core.backends.held)."""
+
+    def clean(self):
+        if held(self.data.get('username', ''), self.request):
+            raise forms.ValidationError(
+                f'Nach {TRIES} Fehlversuchen ist die Anmeldung von hier eine Viertelstunde gesperrt. Ein neues Passwort setzen Sie über „Passwort vergessen?“.',
+            )
+        return super().clean()
 
 
 class ContactForm(forms.ModelForm):

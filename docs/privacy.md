@@ -106,6 +106,13 @@ upload, in the Baustein „Einwilligung in Gesundheitsdaten“; an office filing
 documents given under it are deleted, the consent stays marked as withdrawn, and what was decided before stays
 (Art. 7 Abs. 3). The consent to electronic Bescheide (§ 41 Abs. 2a VwVfG) is given or withdrawn there too.
 
+### Sign-ins
+
+Each sign-in and failed try is kept with the name given, the person it stands for and the address it came from, for
+the accounts' security alone (Art. 32), and deleted after 90 days (`core.models.SignIn`, `manage.py prune`). The person
+sees their last five under Mein Konto; `manage_accounts` sees all under Einstellungen › Anmeldungen. It is no record of
+anyone's work: the Personalrat agrees to it in the Dienstvereinbarung.
+
 ## Where the code enforces it
 
 - `students/views.py`, `study()`: `personal` (the person or `manage_students`) and `identity` (also `decide_results`);

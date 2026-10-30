@@ -15,7 +15,7 @@ from django.views.decorators.http import require_POST
 
 from core.access import kept, needs, require
 from core.keys import Edition, Key, review
-from core.models import Export, Grant, Membership, Person, Text
+from core.models import Export, Grant, Membership, Person, SignIn, Text
 from core.text import matching
 from core.texts import TEXTS, Values, basics, mail, wording
 from core.views import SHOWN
@@ -47,6 +47,12 @@ def approvals(request):
 def exports(request):
     """Lists with personal data taken out as files, newest first: for whoever answers for access, the last thousand."""
     return render(request, 'setup/exports.html', {'exports': Export.objects.select_related('person')[:1000]})
+
+
+@require('manage_accounts')
+def sign_ins(request):
+    """Sign-ins and failed tries, newest first, the last thousand: to see an account being guessed at or used by another."""
+    return render(request, 'setup/sign_ins.html', {'sign_ins': SignIn.objects.select_related('person')[:1000], 'keep': SignIn.KEEP.days})
 
 
 def usable(person):

@@ -4,11 +4,11 @@ from django.utils import timezone
 from admissions.retention import forget
 from core.dates import months_before
 from core.history import tracked
-from core.models import Change, Institution
+from core.models import Change, Institution, SignIn
 
 
 class Command(BaseCommand):
-    help = 'Delete what is kept longer than allowed: changes past Tracked.keep, and applications that came to nothing past the Hochschule\'s period. Run nightly.'
+    help = 'Delete what is kept longer than allowed: changes past Tracked.keep, sign-ins past SignIn.KEEP, and applications that came to nothing past the Hochschule\'s period. Run nightly.'
 
     def handle(self, *args, **options):
         now = timezone.now()
@@ -17,6 +17,7 @@ class Command(BaseCommand):
             for model in tracked() if model.keep
         )
         self.stdout.write(f'{deleted} Änderungen gelöscht.')
+        self.stdout.write(f'{SignIn.objects.filter(at__lt=now - SignIn.KEEP).delete()[0]} Anmeldungen gelöscht.')
         if months := Institution.get().retention_months:
             documents, people = forget(months_before(timezone.localdate(), months))
             self.stdout.write(f'{documents} Unterlagen gelöscht, {people} Personen anonymisiert.')

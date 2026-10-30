@@ -25,6 +25,7 @@ from rooms.views import agenda, moves
 from students.models import Document, Study
 from . import dates
 from .apps import feature, plural, tile_apps, tiles
+from .backends import address
 from .days import busy, strip
 from .forms import ContactForm
 from .history import because, describe, former, restore, tables
@@ -76,6 +77,7 @@ def account(request):
     staff = not request.user.roles & {'student', 'applicant', 'alumni'}  # employees: their personnel file is HR's
     return render(request, 'core/account.html', {
         'form': form, 'staff': staff, 'office': 'die Personalabteilung' if staff else Office.holding('manage_students'), 'consents': request.user.consents.all(),
+        'sign_ins': request.user.sign_ins.all()[:5],
     })
 
 
@@ -142,7 +144,7 @@ def gate(request):
     target = request.GET.get('next', '')
     target = target if url_has_allowed_host_and_scheme(target, {request.get_host()}) else reverse('login')
     if request.method == 'POST':
-        key = 'gate:' + request.META.get('HTTP_X_FORWARDED_FOR', request.META.get('REMOTE_ADDR', '')).split(',')[-1].strip()  # as the proxy saw it
+        key = f'gate:{address(request)}'
         if (tries := cache.get(key, 0)) >= GUESSES:
             messages.error(request, 'Zu viele Versuche. Bitte in einer Viertelstunde noch einmal.')
         elif constant_time_compare(request.POST.get('code', '').strip().lower(), settings.DEMO_CODE.lower()):

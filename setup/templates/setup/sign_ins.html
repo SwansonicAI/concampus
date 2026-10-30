@@ -1,0 +1,15 @@
+{% extends base %}
+{% block title %}Anmeldungen{% endblock %}
+{% block content %}
+<h1>Anmeldungen</h1>
+<p class="lead">Anmeldungen und Fehlversuche, für die Sicherheit der Konten: wer, wann, von welcher Adresse. Gelöscht nach {{ keep }} Tagen.</p>
+<table>
+  <thead><tr><th>Am</th><th>Angegeben</th><th>Person</th><th>Adresse</th><th>Ergebnis</th></tr></thead>
+  <tbody>
+    {% for s in sign_ins %}
+    <tr><td class="nowrap">{{ s.at|date:"j.n.Y, H:i" }}</td><td>{{ s.username }}</td><td>{{ s.person|default:"–" }}</td><td>{{ s.ip|default:"–" }}</td><td>{% if s.success %}<span class="badge yes">angemeldet</span>{% else %}<span class="badge no">fehlgeschlagen</span>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="5" class="empty">Noch keine Anmeldungen.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

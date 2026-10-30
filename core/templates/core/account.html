@@ -19,6 +19,8 @@
       {% if not staff %}<dt>Bescheide</dt><dd>{% if user.electronic %}elektronisch, eingewilligt am {{ user.electronic|date:"j.n.Y" }}{% else %}per Post{% endif %}
         <form method="post" action="{% url 'delivery' %}">{% csrf_token %}<button class="link"><small>{% if user.electronic %}Einwilligung widerrufen, per Post erhalten{% else %}elektronisch erhalten{% endif %}</small></button></form>
         <small class="muted">Elektronisch gilt ein Bescheid am Tag, nachdem Sie ihn im Postfach geöffnet haben, als bekannt gegeben.</small></dd>{% endif %}
+      <dt>Anmeldungen</dt><dd>{% for s in sign_ins %}{{ s.at|date:"j.n.Y, H:i" }}{% if not s.success %} <span class="badge no">fehlgeschlagen</span>{% endif %}<br>{% endfor %}
+        <small class="muted">Die letzten fünf. Waren Sie das nicht, setzen Sie Ihr Passwort neu.</small></dd>
       {% if consents %}<dt>Einwilligungen</dt><dd>{% for c in consents %}
         <div><details><summary>{{ c }}</summary><small class="muted">{{ c.wording }}</small></details>
         <small class="muted">erteilt am {{ c.given|date:"j.n.Y" }}{% if c.by_id != user.pk %}, auf Papier{% endif %}{% if c.revoked %} · widerrufen am {{ c.revoked|date:"j.n.Y" }}{% endif %}</small>

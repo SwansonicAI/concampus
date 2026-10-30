@@ -728,6 +728,24 @@ class Export(models.Model):
         cls.objects.create(person=person, what=what[:300], rows=rows)
 
 
+class SignIn(models.Model):
+    """A sign-in or a failed try, kept for security alone (Art. 32 DSGVO) and only for `KEEP`: the person sees their own,
+    `manage_accounts` all (docs/privacy.md)."""
+
+    KEEP = timedelta(days=90)
+
+    username = models.CharField('Angegeben', max_length=150)
+    person = models.ForeignKey(Person, models.CASCADE, null=True, related_name='sign_ins', verbose_name='Person')
+    ip = models.CharField('Adresse', max_length=45, blank=True)
+    at = models.DateTimeField('Am', default=timezone.now)
+    success = models.BooleanField('Angemeldet')
+
+    class Meta:
+        ordering = ['-at']
+        verbose_name = 'Anmeldung'
+        verbose_name_plural = 'Anmeldungen'
+
+
 class Consent(models.Model):
     """An Einwilligung to health data in a document (Art. 9 Abs. 2 lit. a, Art. 7 DSGVO): the words the person agreed to,
     when, who recorded it (they themselves, or an office from paper), and when they took it back. Kept after that, to show

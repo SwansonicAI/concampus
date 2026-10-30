@@ -114,6 +114,19 @@ class LoginTest(Seeded):
         self.assertEqual(Client().get('/konto/login/').status_code, 200)
         self.assertEqual(Client().get('/').status_code, 302)
 
+    def test_five_failures_hold_a_name_back_from_that_address(self):
+        mei = Person.objects.get(username='student')
+        mei.set_password('Geige-Weimar-2026')
+        mei.save()
+        client = Client()
+        for _ in range(5):
+            client.post('/konto/login/', {'username': 'student', 'password': 'falsch'})
+        r = client.post('/konto/login/', {'username': mei.email, 'password': 'Geige-Weimar-2026'})  # by e-mail too
+        self.assertContains(r, 'Fehlversuchen')
+        r = Client(REMOTE_ADDR='192.0.2.7').post('/konto/login/', {'username': 'student', 'password': 'Geige-Weimar-2026'})
+        self.assertEqual(r.status_code, 302)  # from elsewhere it goes on
+        self.assertEqual(list(mei.sign_ins.values_list('success', flat=True)), [True] + [False] * 5)
+
     def test_a_stale_form_offers_its_page_again(self):
         r = Client(enforce_csrf_checks=True).post('/konto/login/', {'username': 'student'}, HTTP_REFERER='http://testserver/konto/login/')
         self.assertContains(r, 'href="http://testserver/konto/login/"', status_code=403)
