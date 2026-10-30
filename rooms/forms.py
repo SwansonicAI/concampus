@@ -63,7 +63,7 @@ class RoomField(forms.ModelChoiceField):
     recent = asked = ()
 
     def label_from_instance(self, room):
-        return f'{room.name} · {room.purpose}' if room.purpose not in ('', room.name) else room.name
+        return ' · '.join(filter(None, [room.name, room.purpose if room.purpose != room.name else '', f'{room.capacity} Pl.']))
 
 
 class Nearby(forms.models.ModelChoiceIterator):

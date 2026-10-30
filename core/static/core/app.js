@@ -235,6 +235,22 @@ function filterable(list) {
   };
   input.addEventListener('input', narrow);
   input.addEventListener('filter', narrow);
+
+  // What is ticked shows above, with how many and, in a grouped list, its group: a long list hides nothing. A chip unticks.
+  const chosen = Object.assign(document.createElement('div'), {className: 'chips'});
+  input.before(chosen);
+  const sum = () => {
+    const ticked = [...list.querySelectorAll('input[type=checkbox]:checked')];
+    chosen.replaceChildren(...(ticked.length ? [Object.assign(document.createElement('small'), {className: 'muted', textContent: `${ticked.length} ausgewählt`})] : []), ...ticked.map(box => {
+      const group = box.closest(`#${list.id} > div`)?.querySelector(':scope > label:not(:has(input))')?.textContent.trim();
+      const chip = Object.assign(document.createElement('button'), {type: 'button', className: 'chip yes', title: 'Abwählen'});
+      chip.textContent = `${box.parentElement.textContent.trim()}${group ? ` · ${group}` : ''} ×`;
+      chip.addEventListener('click', () => { box.checked = false; box.dispatchEvent(new Event('change', {bubbles: true})); });
+      return chip;
+    }));
+  };
+  list.addEventListener('change', sum);
+  sum();
 }
 
 // Type-to-find in a long dropdown, such as every Kreis and state: only entries matching the words, or their group, stay.
@@ -579,6 +595,28 @@ document.addEventListener('submit', event => {
   button.disabled = true;
 });
 
+// A form typed into and not saved is not left without asking: leaving the page, the browser asks; „Abbrechen“ or
+// closing the panel asks here first.
+const dirty = root => [...root.querySelectorAll('form[method=post]')].some(form => form.dataset.dirty);
+const leave = () => window.confirm('Ungespeicherte Eingaben verwerfen?');
+document.addEventListener('input', ({target}) => { if (target.form?.method === 'post') target.form.dataset.dirty = '1'; });
+document.addEventListener('submit', ({target}) => { delete target.dataset.dirty; });
+addEventListener('beforeunload', event => { if (dirty(document)) event.preventDefault(); });
+document.addEventListener('click', event => {
+  const cancel = event.target.closest('a.cancel, a[data-close]');
+  if (cancel && !cancel.closest('.drawer') && dirty(document) && !leave()) event.preventDefault();
+  else if (cancel && !cancel.closest('.drawer')) document.querySelectorAll('form[data-dirty]').forEach(form => delete form.dataset.dirty);
+});
+
+// The account menu closes on Escape or a click elsewhere, and gives way to the search's results.
+const menu = document.querySelector('details.menu');
+if (menu) {
+  document.addEventListener('click', event => menu.open && !menu.contains(event.target) && menu.removeAttribute('open'));
+  document.addEventListener('keydown', event => event.key === 'Escape' && menu.open && menu.removeAttribute('open'));
+  menu.addEventListener('toggle', () => menu.open && document.querySelector('.search')?.classList.remove('open'));
+  document.querySelector('.search input')?.addEventListener('focus', () => menu.removeAttribute('open'));
+}
+
 // Side panel: details open beside the page instead of replacing it. Browser back or Esc closes it. A form saved in
 // it returns to the panel's page or closes the panel; either way the page underneath reloads once it closes.
 const drawer = document.querySelector('.drawer');
@@ -610,14 +648,20 @@ if (drawer) {
     }
     drawer.scrollTop = 0;
     init(body);
+    const first = body.querySelector('h1, h2') || body;  // a screen reader starts where the panel does
+    first.tabIndex = -1;
+    first.focus({preventScroll: true});
   };
-  const close = () => drawer.classList.contains('open') && history.back();
+  let opener = null;  // where focus goes back to once the panel closes
+  const close = () => drawer.classList.contains('open') && (!dirty(body) || leave()) && history.back();
 
   addEventListener('popstate', () => {
     if (stale) return location.reload();
     drawer.classList.remove('open', 'wide');
     wider.textContent = 'Breiter';
     body.innerHTML = '';
+    opener?.focus();
+    opener = null;
   });
   drawer.querySelector('.close').addEventListener('click', close);
   wider.addEventListener('click', () => {
@@ -650,6 +694,7 @@ if (drawer) {
     if (url.origin !== location.origin) return;
     event.preventDefault();
     if (inside && (link.hasAttribute('data-close') || url.pathname === location.pathname)) return close();  // back to the page underneath, e.g. 'Abbrechen'
+    if (!inside) opener = link;
     show(url);
   });
   document.addEventListener('submit', event => {

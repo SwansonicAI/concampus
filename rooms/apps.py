@@ -43,7 +43,7 @@ class RoomsConfig(Tile, AppConfig):
         if 'student' in person.roles:
             daily = Institution.get().student_daily_hours
             return f'Übezeit heute: noch {number_format(daily - quota(person, today))} von {daily} Std.'
-        return f'{agenda(person).filter(start__date=today).count()} Termine heute'
+        return f'Ihre Termine heute: {agenda(person).filter(start__date=today).count()}'
 
     def tasks(self, person):
         from django.utils import timezone

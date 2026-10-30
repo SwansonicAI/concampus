@@ -310,6 +310,8 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .chip { padding: 0 6px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .chip.yes { border-color: var(--accent); color: var(--accent); }
 .chip.no { border-color: var(--red); color: var(--red); }
+button.chip { background: none; font: inherit; font-size: 12px; cursor: pointer; }
+.chips + .filter { margin-top: 8px; }
 
 /* Room plan: rooms down, 5-minute columns across */
 .plan { overflow-x: auto; border-top: 2px solid var(--ink); }

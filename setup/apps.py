@@ -20,7 +20,7 @@ class SetupConfig(Tile, AppConfig):
     def figure(self, person):
         from .views import places
 
-        return f'{plural(len(places(person)), "Liste", "Listen")} zu pflegen'
+        return f'{plural(len(places(person)), "Liste", "Listen")} in Ihrer Hand'
 
     def features(self, person):
         from .views import usable

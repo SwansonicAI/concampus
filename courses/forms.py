@@ -6,7 +6,7 @@ from django.db.models import F, Min, Q
 from django.utils import timezone
 
 from core.dates import ClockField, DayField, MomentField, working
-from core.models import Institution, Person
+from core.models import Institution, Person, Term
 from curriculum.models import Module, Program
 from rooms.forms import Participants, People, RoomField, bookable
 from rooms.models import Booking, Room
@@ -28,6 +28,8 @@ class PlanForm(forms.Form):
     def __init__(self, *args, person, course=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['room'].queryset = bookable(person)
+        if course and course.hours:  # an SWS is 45 minutes a week
+            self.fields['minutes'].initial = int(course.hours * 45)
         if course and course.allocation == Course.Allocation.ENSEMBLE:
             for_ensemble(self, person, course)
 
@@ -150,9 +152,9 @@ def substitutes(course):
 
 
 def leaf_modules(exams=False):
-    """Modules a course can count for, or only the exams of the plans, as choices grouped by programme in study-plan order."""
+    """The course work of the plans a course can count for, or their exams, as choices grouped by programme in study-plan order."""
     groups = defaultdict(list)
-    leaves = Module.objects.filter(children=None, **({'exam': True} if exams else {})).select_related('program').order_by('program', F('semester').asc(nulls_last=True), 'code')
+    leaves = Module.objects.filter(children=None, exam=exams).select_related('program').order_by('program', F('semester').asc(nulls_last=True), 'code')
     for m in leaves:
         groups[str(m.program)].append((m.pk, f'{m.code} {m.title}'))
     return list(groups.items())
@@ -169,7 +171,7 @@ class CourseForm(forms.ModelForm):
 
     class Meta:
         model = Course
-        fields = ['title', 'kind', 'area', 'format', 'subject', 'rhythm', 'staff', 'modules', 'hours', 'capacity', 'allocation', 'opens', 'deadline', 'description']
+        fields = ['term', 'title', 'kind', 'area', 'format', 'subject', 'rhythm', 'staff', 'modules', 'hours', 'capacity', 'allocation', 'opens', 'deadline', 'description']
         labels = {'staff': 'Lehrende'}
         localized_fields = ['hours', 'pass_mark']  # a decimal comma, in a text box
         widgets = {
@@ -179,12 +181,13 @@ class CourseForm(forms.ModelForm):
         }
 
     layout = [
-        (None, ['correction', 'title', ('kind', 'allocation'), ('area', 'format', 'subject', 'rhythm')]),
+        (None, ['correction', 'term', 'title', ('kind', 'allocation'), ('area', 'format', 'subject', 'rhythm')]),
         ('Umfang und Anmeldung', [('hours', 'capacity', 'opens', 'deadline')]),
         ('Lehrende und Module', ['staff', 'programme', 'modules']),
         (None, ['description']),
     ]
     planned = ('kind', 'format', 'hours', 'modules', 'programme')  # what counts in the Deputat and the Studienpläne
+    moves = False  # a course stays in its semester; an audition may move
 
     def __init__(self, *args, person=None, planning=True, over=False, **kwargs):
         super().__init__(*args, **kwargs)
@@ -218,10 +221,19 @@ class CourseForm(forms.ModelForm):
             self.fields['subject'].empty_label = 'Keines'
         if 'program' in self.fields:
             self.fields['program'].queryset = Program.planned()
-        if 'term' in self.fields:
-            self.fields['term'].queryset = self.fields['term'].queryset.order_by('-start')
+        if 'term' in self.fields and self.instance.pk and not self.moves:  # its dates and people are that semester's
+            self.fields.pop('term')
+        elif 'term' in self.fields:
+            self.fields['term'].queryset = self.fields['term'].queryset.order_by('-start') if self.moves else Term.objects.filter(end__gte=timezone.localdate()).order_by('start')
         if 'area' in self.fields:
             self.fields['area'].empty_label = 'Keines'
+
+
+    def clean(self):
+        data = super().clean()
+        if 'area' in self.fields and data.get('kind', self.instance.kind) == Course.Kind.COURSE and not data.get('area'):
+            self.add_error('area', 'Bitte das Fachgebiet wählen: danach ordnen sich das Verzeichnis und Moodle.')
+        return data
 
 
 class TeachingForm(CourseForm):
@@ -293,6 +305,7 @@ class ThesisForm(CourseForm):
 class AuditionForm(CourseForm):
     """One stage of an Eignungsprüfung. The first stage, with its programme, is what applicants apply for."""
 
+    moves = True
     deadline = DayField(label='Bewerbungsschluss', required=False, help_text='Bis dahin laden Bewerbende Video und Unterlagen hoch.')
 
     class Meta(CourseForm.Meta):

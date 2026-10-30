@@ -111,6 +111,7 @@ def catalogue(request):
             size=Count('participations'),
             next_start=Subquery(upcoming.values('start')[:1]),
             next_room=Subquery(upcoming.values('room__name')[:1]),
+            booked=Exists(Booking.objects.filter(course=OuterRef('pk'))),
         )
     )
     offered = courses
@@ -262,12 +263,19 @@ def course(request, pk):
     })
 
 
+COPIED = ['kind', 'title', 'area', 'format', 'subject', 'rhythm', 'hours', 'capacity', 'allocation', 'opens', 'deadline', 'description']  # what „Duplizieren“ takes
+
+
 def edit(request, pk=None):
     """Create or change a course: the office for its Institute and Studiengänge; its teachers what is theirs to decide
     (TeachingForm)."""
     person = request.user
     term = Term.pick(request.GET.get('semester'))
     course = get_object_or_404(Course, pk=pk, kind__in=TEACHING) if pk else Course(term=term, opens=term and term.course_signup_start, deadline=term and term.course_signup_end)
+    initial = {}
+    if not pk and (source := Course.objects.filter(pk=request.GET.get('von') or None, kind__in=TEACHING).first()):  # „Duplizieren“: filled in, saved once saved
+        course = Course(term=source.term, **{f: getattr(source, f) for f in COPIED})
+        initial = {'staff': list(source.staff.values_list('pk', flat=True)), 'modules': list(source.modules.values_list('pk', flat=True))}
     office = 'manage_courses' in person.roles and (not pk or person.may('manage_courses', course))
     if not (office or pk and course.staff.filter(pk=person.pk).exists()):
         raise PermissionDenied
@@ -275,7 +283,7 @@ def edit(request, pk=None):
     if over and not office:
         raise PermissionDenied(f'Das {course.term} ist vorbei. Korrekturen trägt {Office.holding("manage_courses") or "das zuständige Amt"} ein, mit Grund.')
     planning = person.may('plan_teaching', course) if pk else 'plan_teaching' in person.roles
-    form = CourseForm(request.POST or None, instance=course, person=person, planning=planning, over=over) if office else TeachingForm(request.POST or None, instance=course, person=person)
+    form = CourseForm(request.POST or None, instance=course, initial=initial, person=person, planning=planning, over=over) if office else TeachingForm(request.POST or None, instance=course, person=person)
     if form.is_valid():
         with history.because(form.cleaned_data.get('correction', '')):
             saved = kept(form, person, 'manage_courses') if office else form.save()

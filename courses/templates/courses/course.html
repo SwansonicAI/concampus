@@ -5,7 +5,7 @@
 {% block content %}
 <div class="head">
   <h1>{{ course.title }}</h1>
-  {% if staffed and not course.term.over or office %}<div class="actions"><a class="btn ghost" href="{% url 'courses:edit' course.pk %}">{% if course.term.over %}Korrigieren{% else %}Bearbeiten{% endif %}</a></div>{% endif %}
+  {% if staffed and not course.term.over or office %}<div class="actions"><a class="btn ghost" href="{% url 'courses:edit' course.pk %}">{% if course.term.over %}Korrigieren{% else %}Bearbeiten{% endif %}</a>{% if office and not course.term.over %}<a class="btn ghost" href="{% url 'courses:new' %}?von={{ course.pk }}" title="Eine weitere Veranstaltung wie diese, etwa eine Parallelgruppe">Duplizieren</a>{% endif %}</div>{% endif %}
 </div>
 <p class="lead">{{ course.format|default:course.get_kind_display }} · {{ course.term }}{% if course.area %} · {{ course.area }}{% endif %}{% if course.subject %} · {{ course.subject }}{% endif %}{% if course.cancelled %} · <span class="badge no">entfällt</span> {{ course.cancel_reason }}{% endif %}</p>
 {% if staffed and course.term.planning and course.origin_id %}
