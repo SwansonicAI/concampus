@@ -13,7 +13,7 @@
       <td><a href="{% url 'admissions:audition' c.pk %}"><b>{{ c.title }}</b></a></td>
       <td data-value="{{ c.term.start|date:'c' }}">{{ c.term }}</td>
       <td class="num">{{ c.size }}</td>
-      <td>{% if c.released %}<span class="badge green">abgeschlossen</span>{% else %}<span class="badge open">offen</span>{% endif %}</td>
+      <td>{% if c.released %}<span class="badge green">abgeschlossen</span>{% elif c.mine %}<span class="badge wait">{{ c.mine }} von Ihnen offen{% if c.marks_by %}, bis {{ c.marks_by|date:"j.n." }}{% endif %}</span>{% else %}<span class="badge open">offen</span>{% endif %}</td>
     </tr>
     {% empty %}<tr><td colspan="5" class="empty">Keine Kommissionen.</td></tr>
     {% endfor %}

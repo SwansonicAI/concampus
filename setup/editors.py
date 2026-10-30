@@ -331,7 +331,7 @@ EDITORS = {e.key: e for e in [
         columns=[('Fachgebiet', 'name'), ('Reihenfolge', 'order')], search=['name'], words='vorlesungsverzeichnis bereiche gliederung',
     ),
     Editor(
-        'lehrformen', Format, 'Lehrformen', 'manage_courses', 'Studium und Lehre', sections=[(None, [('name', 'short', 'order'), 'per_head'])],
+        'lehrformen', Format, 'Lehrformen', 'manage_courses', 'Studium und Lehre', sections=[(None, [('name', 'short', 'order'), ('per_head', 'dated')])],
         columns=[('Lehrform', 'name'), ('Kürzel', 'short')], search=['name', 'short'], words='vorlesung seminar übung einzelunterricht veranstaltungsart',
     ),
     Editor(

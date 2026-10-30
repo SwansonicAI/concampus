@@ -259,7 +259,7 @@ def series(bookings):
 def mine(request):
     person, today = request.user, timezone.localdate()
     context = {
-        'bookings': series(person.bookings.filter(end__gte=timezone.now()).select_related('room', 'course')),
+        'bookings': series(person.bookings.filter(end__gte=timezone.now()).select_related('room', 'course').prefetch_related('participants')),
         'attending': series(person.attending.filter(end__gte=timezone.now()).select_related('room', 'person')),
         'feed': feed(request),
     }
@@ -478,7 +478,7 @@ def day_off(request):
     person = request.user
     day = understood(request.GET.get('tag', '')) or timezone.localdate()
     dates = list(
-        Booking.objects.filter(Q(person=person) | Q(course__staff=person), start__date=day, end__gt=timezone.now(), category__blocks=True, requested=False)
+        Booking.objects.filter(Q(person=person) | Q(course__staff=person) & (Q(ensemble=None) | Q(ensemble__coach=person)), start__date=day, end__gt=timezone.now(), category__blocks=True, requested=False)
         .exclude(course__kind__in=Course.PANEL).select_related('room', 'course', 'person').prefetch_related('participants').distinct().order_by('start')
     )
     for b in dates:

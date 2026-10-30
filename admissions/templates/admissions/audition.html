@@ -20,7 +20,7 @@
     <dt>Bewertung</dt><dd>{% if course.points %}0–{{ course.max_points }} Punkte je Mitglied, bestanden ab {{ course.pass_mark }}{% else %}bestanden / nicht bestanden{% endif %}</dd>
     {% if course.program %}<dt>Bewerbung für</dt><dd>{{ course.program }}, Frist {{ course.deadline|date:"j. F Y" }}</dd>{% endif %}
     {% if course.capacity %}<dt>Studienplätze</dt><dd>{{ course.capacity }}</dd>{% endif %}
-    <dt>{% if course.video %}Sichtung{% else %}Räume{% endif %}</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, {{ b.room }}<br>{% empty %}{% if course.video %}online, bis {{ course.deadline|date:"j. F Y"|default:"zum Abschluss" }}{% else %}noch kein Raum gebucht{% endif %}{% endfor %}</dd>
+    <dt>{% if course.video %}Sichtung{% else %}Räume{% endif %}</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, {{ b.room }}<br>{% empty %}{% if course.video %}online{% if course.deadline %}, Videos bis {{ course.deadline|date:"j. F Y" }}{% endif %}{% if course.marks_by %}; Wertungen bis {{ course.marks_by|date:"j. F Y" }}{% endif %}{% else %}noch kein Raum gebucht{% endif %}{% endfor %}</dd>
   </dl>
   {% if office %}
   <div>

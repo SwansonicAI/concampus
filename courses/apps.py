@@ -80,7 +80,7 @@ class CoursesConfig(Tile, AppConfig):
                         found.append(task(f'Studienfachberatung: {s.person} ({options[0].choice.title})', url, due))
                     elif due < today:  # advised: the choice is the student's, who has the to-do
                         found.append(task(f'{options[0].choice.title}: empfohlen {s.advised.title}, wartet auf {s.person}', url))
-            for course in person.teaching.filter(term=term, kind=TEACHING[0], bookings=None, cancelled=None):
+            for course in person.teaching.filter(term=term, kind=TEACHING[0], bookings=None, cancelled=None).exclude(format__dated=False):
                 found.append(task(f'Termine planen: {course.title}', course.get_absolute_url()))
             for planned in Term.objects.filter(planning=True, replies_by__isnull=False):  # the next semester: one's courses to confirm
                 if n := person.teaching.filter(term=planned, kind__in=TEACHING, confirmed=None, cancelled=None, origin__isnull=False).count():

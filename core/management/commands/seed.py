@@ -971,7 +971,7 @@ class Command(BaseCommand):
         self.institutes = {key: Institute.objects.create(name=name) for key, name in INSTITUTES.items()}
         Holiday.objects.bulk_create(Holiday(name=name, first=first, last=last, public=name in PUBLIC_HOLIDAYS) for name, first, last in HOLIDAYS)
         self.areas = {name: Area.objects.create(name=name, order=n) for n, name in enumerate(AREAS)}
-        self.formats = {code: Format.objects.create(name=name, short=code, per_head=code == 'E', order=n) for n, (name, code) in enumerate(FORMATS)}
+        self.formats = {code: Format.objects.create(name=name, short=code, per_head=code == 'E', dated=code != 'P', order=n) for n, (name, code) in enumerate(FORMATS)}
         self.instruments = [
             Instrument.objects.create(number=f'{key}-{n:03d}', name=name, maker=maker, institute=self.institutes[key], note=note, available=available)
             for key, items in INSTRUMENTS.items() for n, (name, maker, note, available) in enumerate(items, 1)

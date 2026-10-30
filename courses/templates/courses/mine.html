@@ -22,7 +22,7 @@
       {% for c in teaching %}
       <tr><td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a>
         {% if c.cancelled %} <span class="badge no">entfällt</span>{% elif term.planning and c.origin_id %}{% if c.confirmed %} <span class="badge yes">bestätigt</span>{% else %}
-        <form method="post" action="{% url 'courses:reply' c.pk %}" class="inline" style="margin-top: 6px">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn small" name="antwort" value="findet">Findet so statt</button><a class="more" href="{% url 'courses:course' c.pk %}"><small>ändern oder absagen</small></a></form>{% endif %}{% endif %}</td><td>{{ c.format|default:c.get_kind_display }}</td><td class="num">{{ c.hours|default_if_none:"" }}</td><td class="num" data-value="{% if c.allocation == 'ensemble' %}{{ c.mine }}{% else %}{{ c.size }}{% endif %}">{% if c.allocation == 'ensemble' %}{{ c.mine }}<br><small class="muted" title="In Ihren Ensembles, von allen Teilnehmenden">von {{ c.size }}</small>{% else %}{{ c.size }}{% endif %}</td></tr>
+        <form method="post" action="{% url 'courses:reply' c.pk %}" class="inline" style="margin-top: 6px">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn small" name="antwort" value="findet">Findet so statt</button><a class="more" href="{% url 'courses:course' c.pk %}"><small>ändern oder absagen</small></a></form>{% endif %}{% endif %}</td><td>{{ c.format|default:c.get_kind_display }}</td><td class="num">{{ c.sws|default_if_none:""|floatformat:"-1" }}</td><td class="num" data-value="{% if c.allocation == 'ensemble' %}{{ c.mine }}{% else %}{{ c.size }}{% endif %}">{% if c.allocation == 'ensemble' %}{{ c.mine }}<br><small class="muted" title="In Ihren Ensembles, von allen Teilnehmenden">von {{ c.size }}</small>{% else %}{{ c.size }}{% endif %}</td></tr>
       {% empty %}<tr><td colspan="4" class="empty">Keine Veranstaltungen in diesem Semester.</td></tr>
       {% endfor %}
     </tbody>
@@ -50,7 +50,7 @@
       {% for s in students %}
       <tr><td><a href="{{ s.get_absolute_url }}">{{ s.person.name }}</a><br><small class="muted">{{ s.subject }}</small>
         {% if s.lost %}<br><span class="badge no">Prüfungsanspruch erloschen</span>{% elif s.last %}<br><span class="badge wait">letzter Versuch</span>{% endif %}{% if s.over %} <span class="badge wait">über der Regelstudienzeit</span>{% endif %}{% if s.open %} <span class="badge">{{ s.open }} offen</span>{% endif %}</td><td>{{ s.program }}</td><td class="num">{{ s.fs }}</td>
-        <td>{% if s.lesson %}{{ s.lesson }}{% elif s.missing %}<span class="fail">nicht eingetragen</span>{% elif s.until %}<span class="muted">keiner; laut Studienplan bis zum {{ s.until }}. Semester</span>{% else %}<span class="muted">keiner im Studienplan</span>{% endif %}</td></tr>
+        <td>{% if s.lesson %}{{ s.lesson }}{% elif s.missing and term.planning %}<span class="muted">wird nach der Rückmeldung eingetragen</span>{% elif s.missing %}<span class="fail">nicht eingetragen</span>{% elif s.until %}<span class="muted">keiner; laut Studienplan bis zum {{ s.until }}. Semester</span>{% else %}<span class="muted">keiner im Studienplan</span>{% endif %}</td></tr>
       {% endfor %}
     </tbody>
   </table>

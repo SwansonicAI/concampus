@@ -407,7 +407,8 @@ def found(person, q, limit):
     # every app's places, also of apps without a tile for this person: a student applying for a Master
     places = [(f, app.title(roles) or app.verbose_name) for app in tile_apps() for f in app.features(person)]
     places += [(feature('Startseite', reverse('home'), 'aufgaben zu erledigen übersicht'), ''), (feature('Postfach', reverse('inbox'), 'nachrichten bescheide mitteilungen'), ''),
-               (feature('Mein Konto', reverse('account'), 'anschrift adresse telefon kontaktdaten umzug'), '')]
+               (feature('Mein Konto', reverse('account'), 'anschrift adresse telefon kontaktdaten umzug e-mail einwilligungen anmeldungen meine daten'), ''),
+               (feature('Passwort ändern', reverse('password_change'), 'kennwort passwort neu sicherheit'), '')]
     if person.is_superuser:
         places.append((feature('Datenpflege', reverse('admin:index'), 'admin stammdaten verwaltung'), ''))
     groups.append(('Funktionen', [

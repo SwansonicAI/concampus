@@ -140,6 +140,9 @@ def index(request):
         if stand == 'kommission':
             exams = exams.filter(pk__in=Course.short_panels(Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], term=term)))
         exams = exams.filter(pk__in=person.within(Course.objects.all(), 'manage_exams', 'decide_results', 'correct_scores').values('pk')) if office else exams.filter(staff=person)
+        own = office and 'teacher' in person.roles and request.GET.get('meine') == '1'  # an office that also examines: its own exams and theses
+        if own:
+            exams = exams.filter(Q(staff=person) | Q(participations__recusals__substitute=person)).distinct()
         if program.isdigit():
             exams = exams.filter(pk__in=Course.objects.filter(modules__program=program).values('pk'))
         candidate = [f'participations__study__person__{name}' for name in ('first_name', 'last_name', 'matriculation')]
@@ -148,6 +151,7 @@ def index(request):
             c.state = 'freigegeben' if c.released else 'bewertung' if c.graded or c.date and c.date <= timezone.now() else 'offen'  # held: marks are due
         context.update(
             exams=[c for c in exams if stand in ('', 'kommission') or c.state == stand], q=q, stand=stand, program=program, programs=Program.planned(),
+            examining=office and 'teacher' in person.roles, own=own,
             states=[(key, label, sum(c.state == key for c in exams)) for key, label in STATES],
         )
     if 'student' in person.roles:

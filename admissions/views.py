@@ -28,7 +28,7 @@ from core.templatetags.marks import mark
 from core.views import preview
 from courses import panel
 from courses.forms import SlotForm, substitutes
-from courses.models import Course, Participation
+from courses.models import Course, Participation, marked
 from rooms.views import ics
 from curriculum.models import Subject
 from students.models import Document, DocumentType, Study, StudyTerm
@@ -309,6 +309,8 @@ def juries(request):
         .annotate(date=Min('bookings__start'), size=Count('participations', distinct=True))
         .order_by('-term__start', F('deadline').asc(nulls_last=True), F('date').asc(nulls_last=True), 'title')
     )
+    for c in auditions:  # what is still the person's own to mark, recusals left out
+        c.mine = c.participations.exclude(scores__in=marked(request.user)).exclude(recusals__examiner=request.user).count() if not c.released else 0
     return render(request, 'admissions/juries.html', {'auditions': auditions})
 
 

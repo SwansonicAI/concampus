@@ -6,7 +6,7 @@ code and, where it matters, on pages rendered from the seeded data or by a reque
 serious were checked again. One line each: role and page, pattern, what happens, the fix. Grouped by what to fix first:
 what costs most when it goes wrong, then what many people meet often.
 
-Status: groups A, B and C fixed on 30 October 2026, and G 1 for the pages of students and applicants, except where an item says otherwise.
+Status: groups A, B, C, D and G fixed on 30 October 2026, except where an item says otherwise. Open: E and F.
 
 ## A. Grades, Bescheide and money
 
@@ -146,7 +146,8 @@ Status: groups A, B and C fixed on 30 October 2026, and G 1 for the pages of stu
 7. [jury, examiner] candidates' sheet – #11 – the programme is cut at 42 characters, the rest only on hover, which
    tablets in the sitting cannot show – let it wrap, one work per line.
 8. [teacher] course with many participants – #10 – results row by row, two selects each (94 rows) – „alle ohne Ergebnis
-   bestanden“ and the file import exams have.
+   bestanden“ and the file import exams have. Done: „alle ohne Ergebnis bestanden“ where no module is an exam; the
+   file import stays with exams.
 9. [Hauptfachlehrerin] Meine Klasse – #11 – the Einzelunterricht column takes any lesson class, so one missing from the
    Hauptfach class goes unflagged; for a semester in planning all rows show red – Hauptfach classes only; „nach der
    Rückmeldung“ while in planning.
@@ -156,6 +157,7 @@ Status: groups A, B and C fixed on 30 October 2026, and G 1 for the pages of stu
     request – confirm naming the message.
 12. [Korrepetitor] Zu begleiten – #1/#2 – no room, not which accompanist plays, two slots at the same time unflagged; the
     Einzeltermin offers all 244 applicants in one list – room and player columns, overlaps flagged, find by typing.
+    Done: rooms, overlaps; a list that long is found by typing already. Open: which accompanist plays, not yet recorded.
 13. [teacher] start page, „Termine planen“ – #4 – fires for a Praktikum that never has room dates and cannot be cleared –
     skip Lehrformen without dates, or „ohne feste Termine“.
 14. [teacher] Meine Buchungen – #1 – twelve lesson series read „Hauptfach Violine · Klasse Wendt“ with no student –

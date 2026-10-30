@@ -25,9 +25,27 @@ class PlanForm(forms.Form):
     minutes = forms.IntegerField(label='Dauer (Min.)', min_value=15, max_value=480, initial=90)
     room = RoomField(label='Raum', queryset=None, empty_label='Bitte wählen')
 
-    def __init__(self, *args, person, **kwargs):
+    def __init__(self, *args, person, course=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['room'].queryset = bookable(person)
+        if course and course.allocation == Course.Allocation.ENSEMBLE:
+            for_ensemble(self, person, course)
+
+
+def for_ensemble(form, person, course):
+    """'Für': whose dates in an ensemble course, a coach's own ensembles, the office's any; a coach of one has it chosen."""
+    office = person.may('manage_courses', course)
+    ensembles = (course.ensembles.all() if office else course.ensembles.filter(coach=person)).select_related('coach').prefetch_related('members__person')
+    field = form.fields['ensemble'] = EnsembleField(label='Für', queryset=ensembles, required=False, empty_label='Alle')
+    own = [e for e in ensembles if e.coach_id == person.pk]
+    if office:
+        field.choices = [('', 'Alle'), *(
+            (label, [(e.pk, field.label_from_instance(e)) for e in group]) for label, group in
+            [('Meine Ensembles', own), ('Weitere', [e for e in ensembles if e not in own])] if group
+        )]
+    if len(own) == 1:
+        field.initial = own[0].pk
+    form.order_fields(['ensemble'])
 
 
 class LessonForm(PlanForm):
@@ -73,16 +91,7 @@ class DateForm(forms.Form):
             )
             self.order_fields(['student'])
         elif course and course.allocation == Course.Allocation.ENSEMBLE:  # a coaching session of one's own ensembles; the office books for any
-            office = person.may('manage_courses', course)
-            ensembles = (course.ensembles.all() if office else course.ensembles.filter(coach=person)).select_related('coach').prefetch_related('members__person')
-            field = self.fields['ensemble'] = EnsembleField(label='Für', queryset=ensembles, required=False, empty_label='Alle')
-            if office:
-                own = [e for e in ensembles if e.coach_id == person.pk]
-                field.choices = [('', 'Alle'), *(
-                    (label, [(e.pk, field.label_from_instance(e)) for e in group]) for label, group in
-                    [('Meine Ensembles', own), ('Weitere', [e for e in ensembles if e not in own])] if group
-                )]
-            self.order_fields(['ensemble'])
+            for_ensemble(self, person, course)
 
     def clean(self):
         data = super().clean()
