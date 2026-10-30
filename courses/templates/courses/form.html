@@ -3,7 +3,7 @@
 {% block subnav %}{% include menu %}{% endblock %}
 {% block content %}
 <h1>{% if course.pk %}{{ course.title }}{% else %}{{ heading }}{% endif %}</h1>
-<p class="lead">{{ course.term }}</p>
+{% if course.pk %}<p class="lead">{{ course.term }}</p>{% endif %}
 {% if note %}<p class="muted"><small>{{ note }}</small></p>{% endif %}
 <form method="post" class="form">
   {% csrf_token %}

@@ -272,9 +272,11 @@ def edit(request, pk=None):
     person = request.user
     term = Term.pick(request.GET.get('semester'))
     course = get_object_or_404(Course, pk=pk, kind__in=TEACHING) if pk else Course(term=term, opens=term and term.course_signup_start, deadline=term and term.course_signup_end)
-    initial = {}
+    initial, source = {}, None
     if not pk and (source := Course.objects.filter(pk=request.GET.get('von') or None, kind__in=TEACHING).first()):  # „Duplizieren“: filled in, saved once saved
         course = Course(term=source.term, **{f: getattr(source, f) for f in COPIED})
+        if course.deadline and course.deadline < timezone.localdate():  # a registration over is not copied
+            course.opens = course.deadline = None
         initial = {'staff': list(source.staff.values_list('pk', flat=True)), 'modules': list(source.modules.values_list('pk', flat=True))}
     office = 'manage_courses' in person.roles and (not pk or person.may('manage_courses', course))
     if not (office or pk and course.staff.filter(pk=person.pk).exists()):
@@ -292,7 +294,7 @@ def edit(request, pk=None):
             return redirect(saved)
     back = course.get_absolute_url() if pk else reverse('courses:catalogue')
     return render(request, 'courses/form.html', {
-        'form': form, 'course': course, 'menu': 'courses/_nav.html', 'heading': 'Neue Veranstaltung', 'back': back,
+        'form': form, 'course': course, 'menu': 'courses/_nav.html', 'heading': f'Kopie von {source.title}' if source else 'Neue Veranstaltung', 'back': back,
         'note': None if office and planning else format_html(
             '{} trägt {} ein: sie zählen im Deputat und in den Studienplänen.', 'Umfang (SWS), Lehrform und Module' if office else 'Umfang (SWS), Lehrende, Module und Lehrform',
             Office.holding('plan_teaching', linked=True) or 'das zuständige Amt',

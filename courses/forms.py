@@ -28,10 +28,16 @@ class PlanForm(forms.Form):
     def __init__(self, *args, person, course=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['room'].queryset = bookable(person)
+        self.fields['room'].need = course and needed(course)
         if course and course.hours:  # an SWS is 45 minutes a week
             self.fields['minutes'].initial = int(course.hours * 45)
         if course and course.allocation == Course.Allocation.ENSEMBLE:
             for_ensemble(self, person, course)
+
+
+def needed(course):
+    """The seats a course's dates take: its participants, or its places while nobody is in yet."""
+    return course.participations.count() or course.capacity or 0
 
 
 def for_ensemble(form, person, course):
@@ -87,6 +93,8 @@ class DateForm(forms.Form):
     def __init__(self, *args, person, course=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['room'].queryset = bookable(person)
+        if course and course.kind == Course.Kind.COURSE:  # a lesson's date is for one
+            self.fields['room'].need = needed(course)
         if course and course.kind == Course.Kind.LESSON:
             self.fields['student'] = forms.ModelChoiceField(
                 label='Für', queryset=Person.objects.filter(studies__participations__course=course).distinct(), empty_label='Bitte wählen',
@@ -153,10 +161,13 @@ def substitutes(course):
 
 def leaf_modules(exams=False):
     """The course work of the plans a course can count for, or their exams, as choices grouped by programme in study-plan order."""
-    groups = defaultdict(list)
-    leaves = Module.objects.filter(children=None, exam=exams).select_related('program').order_by('program', F('semester').asc(nulls_last=True), 'code')
+    groups, shared = defaultdict(list), defaultdict(set)
+    leaves = list(Module.objects.filter(children=None, exam=exams).select_related('program').order_by('program', F('semester').asc(nulls_last=True), 'code'))
     for m in leaves:
-        groups[str(m.program)].append((m.pk, f'{m.code} {m.title}'))
+        shared[m.code, m.title].add(m.program.name)
+    for m in leaves:
+        others = sorted(shared[m.code, m.title] - {m.program.name}) if m.code else []
+        groups[str(m.program)].append((m.pk, f'{m.code} {m.title}' + (f' · auch in {", ".join(others)}' if others else '')))
     return list(groups.items())
 
 
@@ -181,7 +192,7 @@ class CourseForm(forms.ModelForm):
         }
 
     layout = [
-        (None, ['correction', 'term', 'title', ('kind', 'allocation'), ('area', 'format', 'subject', 'rhythm')]),
+        (None, ['correction', 'term', 'title', ('kind', 'allocation'), ('area', 'format'), ('subject', 'rhythm')]),
         ('Umfang und Anmeldung', [('hours', 'capacity', 'opens', 'deadline')]),
         ('Lehrende und Module', ['staff', 'programme', 'modules']),
         (None, ['description']),
@@ -225,15 +236,9 @@ class CourseForm(forms.ModelForm):
             self.fields.pop('term')
         elif 'term' in self.fields:
             self.fields['term'].queryset = self.fields['term'].queryset.order_by('-start') if self.moves else Term.objects.filter(end__gte=timezone.localdate()).order_by('start')
-        if 'area' in self.fields:
-            self.fields['area'].empty_label = 'Keines'
-
-
-    def clean(self):
-        data = super().clean()
-        if 'area' in self.fields and data.get('kind', self.instance.kind) == Course.Kind.COURSE and not data.get('area'):
-            self.add_error('area', 'Bitte das Fachgebiet wählen: danach ordnen sich das Verzeichnis und Moodle.')
-        return data
+        for name in ('area', 'format'):  # by them the Verzeichnis, the Deputat and Moodle order it: never left empty
+            if name in self.fields:
+                self.fields[name].required, self.fields[name].empty_label = True, 'Bitte wählen'
 
 
 class TeachingForm(CourseForm):

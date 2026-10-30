@@ -647,10 +647,10 @@ if (drawer) {
       drawer.classList.add('open');
     }
     drawer.scrollTop = 0;
-    init(body);
     const first = body.querySelector('h1, h2') || body;  // a screen reader starts where the panel does
     first.tabIndex = -1;
     first.focus({preventScroll: true});
+    init(body);
   };
   let opener = null;  // where focus goes back to once the panel closes
   const close = () => drawer.classList.contains('open') && (!dirty(body) || leave()) && history.back();

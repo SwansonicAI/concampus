@@ -430,6 +430,7 @@ button.chip { background: none; font: inherit; font-size: 12px; cursor: pointer;
 .when .hint { position: absolute; left: 0; top: 100%; margin-top: 2px; color: var(--accent); font-size: 12px; line-height: 16px; white-space: nowrap; }
 .when .hint.bad { color: var(--red); }
 .when:not(:focus-within) .hint { display: none; }
+.form .when .hint { position: static; display: block; }
 
 /* Search palette under the search box */
 .search { position: relative; flex: 0 1 230px; min-width: 150px; }  /* gives way before the menu wraps */

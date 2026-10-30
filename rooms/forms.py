@@ -61,9 +61,11 @@ class RoomField(forms.ModelChoiceField):
 
     iterator = Buildings
     recent = asked = ()
+    need = 0  # the seats a course needs: rooms with fewer say so
 
     def label_from_instance(self, room):
-        return ' · '.join(filter(None, [room.name, room.purpose if room.purpose != room.name else '', f'{room.capacity} Pl.']))
+        small = 'zu klein' if room.capacity < (self.need or 0) else ''
+        return ' · '.join(filter(None, [room.name, room.purpose if room.purpose != room.name else '', f'{room.capacity} Pl.', small]))
 
 
 class Nearby(forms.models.ModelChoiceIterator):
