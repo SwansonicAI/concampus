@@ -5,7 +5,7 @@ from courses.moodle import sync
 
 
 class Command(BaseCommand):
-    help = "Bring the Hochschule's Moodle up to Campus: courses, teachers and participants (docs/moodle.md). Run nightly."
+    help = "Bring the Hochschule's Moodle up to ConCampus: courses, teachers and participants (docs/moodle.md). Run each day; with --changed each minute."
 
     def add_arguments(self, parser):
         parser.add_argument('--changed', action='store_true', help='Only the courses changed since they were last sent; run each minute.')

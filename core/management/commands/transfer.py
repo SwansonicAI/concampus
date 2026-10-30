@@ -9,7 +9,7 @@ from core.transfer import dump, load
 
 
 class Command(BaseCommand):
-    help = 'Load a Campus document (docs/transfer.md) into the database, all or nothing; with --export write one of everything.'
+    help = 'Load a ConCampus document (docs/transfer.md) into the database, all or nothing; with --export write one of everything.'
 
     def add_arguments(self, parser):
         parser.add_argument('file')

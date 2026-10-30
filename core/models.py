@@ -134,7 +134,7 @@ class Institution(Tracked, models.Model):
     website = models.URLField('Website', blank=True)
     imprint = models.URLField('Impressum', blank=True)
     privacy = models.URLField('Datenschutz', blank=True)
-    accessibility = models.URLField('Barrierefreiheit der Website', blank=True, help_text='Die Erklärung der Website; Campus hat eine eigene, unter Texte.')
+    accessibility = models.URLField('Barrierefreiheit der Website', blank=True, help_text='Die Erklärung der Website; ConCampus hat eine eigene, unter Texte.')
     matriculation_start = models.PositiveIntegerField('Erste Matrikelnummer', default=100001, help_text='Danach fortlaufend.')
     university = KeyField('Hochschulnummer', max_length=4, keys=GERMAN, blank=True, help_text='Für die amtliche Statistik, aus dem Schlüsselverzeichnis.')
     region = KeyField('Kreis', max_length=5, keys=DISTRICTS, blank=True, help_text='Sitz der Hochschule, für die amtliche Statistik.')
@@ -844,7 +844,7 @@ class SignIn(models.Model):
 
 
 class Feedback(models.Model):
-    """A barrier in Campus reported through the form under its accessibility statement (ThürBarrWebG): answered by
+    """A barrier in ConCampus reported through the form under its accessibility statement (ThürBarrWebG): answered by
     `manage_institution` within `ANSWER`, deleted `KEEP` after the answer."""
 
     ANSWER, KEEP = timedelta(days=30), timedelta(days=365)

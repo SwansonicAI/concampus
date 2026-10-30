@@ -1,4 +1,4 @@
-"""Data in and out of Campus as one JSON document (docs/transfer.md): Semester, Hauptfächer, Studiengänge with their
+"""Data in and out of ConCampus as one JSON document (docs/transfer.md): Semester, Hauptfächer, Studiengänge with their
 Studienplan, and people with their studies, semesters and results. Records are named by what names them outside, a
 Matrikelnummer, a Semester's name, a Studiengang's Abschluss, name and PO-Version, a module's Kürzel or its place in the
 plan, never by database ids, so that a former system maps onto it. Loading updates what is there and adds what is not;
@@ -101,7 +101,7 @@ def dump(people=None, programs=None):
 
 
 class Loader:
-    """One document loaded: each record checked as Campus checks what is typed in, its faults gathered with where they
+    """One document loaded: each record checked as ConCampus checks what is typed in, its faults gathered with where they
     are, nothing kept unless all fit."""
 
     def __init__(self, document):

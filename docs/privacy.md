@@ -109,7 +109,7 @@ documents given under it are deleted, the consent stays marked as withdrawn, and
 
 ### Sign-ins
 
-Signing in through the Hochschule's login, Campus keeps only the id the login gives the person (`Person.sso_id`); at the
+Signing in through the Hochschule's login, ConCampus keeps only the id the login gives the person (`Person.sso_id`); at the
 first sign-in it finds them by the e-mail address the login sends, which it does not keep (`core/sso.py`).
 
 Each sign-in and failed try is kept with the name given, the person it stands for and the address it came from, for
@@ -119,7 +119,7 @@ anyone's work: the Personalrat agrees to it in the Dienstvereinbarung.
 
 ### A copy, and the end of a file
 
-Under Mein Konto everyone downloads a copy of what Campus keeps about them, with their documents (Art. 15 Abs. 3;
+Under Mein Konto everyone downloads a copy of what ConCampus keeps about them, with their documents (Art. 15 Abs. 3;
 `core/dossier.py`); a booking or course shows without who else took part. The copy is logged as an export.
 
 A former student's file is kept `file_years` (5) after the last Exmatrikulation, then offered to the archive by
@@ -132,10 +132,10 @@ made anonymous (`students/disposal.py`, `manage.py prune`).
 
 ### Moodle and XHochschule files
 
-Campus gives the Hochschule's Moodle the e-mail addresses of the teachers and participants of its courses, to find
+ConCampus gives the Hochschule's Moodle the e-mail addresses of the teachers and participants of its courses, to find
 their accounts there, and enrols them; Moodle already holds their names (`docs/moodle.md`). Each course's summary
 there names its teachers, as the course list here does. Only on the demo,
-whose people are made up, Campus also makes the accounts, with name and e-mail address. A Bescheinigung as an
+whose people are made up, ConCampus also makes the accounts, with name and e-mail address. A Bescheinigung as an
 XHochschule file carries what the printed one does; the Studienzeitbescheinigung also each leave's ground, as the
 standard asks of it, Erkrankung among them: it goes to whoever downloads it, the person or the student office.
 
@@ -143,7 +143,7 @@ standard asks of it, Erkrankung among them: it goes to whoever downloads it, the
 
 A stay abroad and its Learning Agreement (`mobility/`) are seen by the student, the International Office
 (`manage_mobility`, for the whole Hochschule) and whoever recognises in the study; the partner Hochschule learns of
-them from the International Office, by Erasmus Without Paper once Campus is connected (`docs/mobility.md`). They go
+them from the International Office, by Erasmus Without Paper once ConCampus is connected (`docs/mobility.md`). They go
 with the file.
 
 ### Reports with the health insurers

@@ -1,6 +1,6 @@
-# The demo's Moodle (docs/moodle.md), next to Campus on its server: Moodle's PHP image serving Moodle's code from
-# /opt/moodle (its 4.5 branch with the theme Boost Union, as HfM's), its cron, its own Postgres. Campus's Caddy serves it
-# at moodle.concampus.de, over Campus's network, which only the web server joins. .env next to this file: DB_PASSWORD.
+# The demo's Moodle (docs/moodle.md), next to ConCampus on its server: Moodle's PHP image serving Moodle's code from
+# /opt/moodle (its 4.5 branch with the theme Boost Union, as HfM's), its cron, its own Postgres. ConCampus's Caddy serves it
+# at moodle.concampus.de, over ConCampus's network, which only the web server joins. .env next to this file: DB_PASSWORD.
 services:
   moodle:
     image: moodlehq/moodle-php-apache:8.3

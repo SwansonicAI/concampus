@@ -112,7 +112,7 @@ TEXTS = {
     ),
     'email_bestaetigen': Spec(
         NACHRICHT, 'Neue E-Mail-Adresse bestätigen', 'E-Mail-Adresse bestätigen',
-        'Bitte bestätigen Sie Ihre neue E-Mail-Adresse für Campus mit diesem Link: {link}\n\nEr gilt drei Tage. Haben Sie die '
+        'Bitte bestätigen Sie Ihre neue E-Mail-Adresse für ConCampus mit diesem Link: {link}\n\nEr gilt drei Tage. Haben Sie die '
         'Änderung nicht veranlasst, beachten Sie diese Nachricht nicht; es bleibt bei der bisherigen Adresse.',
         ('link',),
     ),
@@ -583,7 +583,7 @@ TEXTS = {
     ),
     'barrierefreiheit_stand': Spec(
         BAUSTEIN, 'Barrierefreiheit: Stand und Ausnahmen', '',
-        'Campus ist mit den Anforderungen der WCAG 2.1, Stufe AA, die § 3 der BITV 2.0 nach der ThürBITVO vorgibt, teilweise vereinbar. '
+        'ConCampus ist mit den Anforderungen der WCAG 2.1, Stufe AA, die § 3 der BITV 2.0 nach der ThürBITVO vorgibt, teilweise vereinbar. '
         'Nicht barrierefrei sind:\n\n'
         '– Bescheinigungen, Bescheide, Zeugnisse und Urkunden: Sie werden als Seite gedruckt oder über den Browser als PDF gespeichert; '
         'ein getaggtes PDF (PDF/UA) gibt es nicht. Auf Anfrage erhalten Sie sie in zugänglicher Form.\n'
@@ -601,7 +601,7 @@ TEXTS = {
         'Der Beauftragte der Thüringer Landesregierung für Menschen mit Behinderungen\nWerner-Seelenbinder-Straße 6\n99096 Erfurt\n'
         'Telefon 0361 573 811 741\nE-Mail vz_bmb@tmasgff.thueringen.de',
     ),
-    'anmeldung': Spec(BAUSTEIN, 'Begrüßung auf der Anmeldeseite', '', 'Campus ist die Verwaltung von Studium, Lehre, Prüfungen, Aufnahme und Räumen der {hochschule}.'),
+    'anmeldung': Spec(BAUSTEIN, 'Begrüßung auf der Anmeldeseite', '', 'ConCampus ist die Verwaltung von Studium, Lehre, Prüfungen, Aufnahme und Räumen der {hochschule}.'),
     'datenschutz_bewerbung': Spec(
         BAUSTEIN, 'Datenschutz beim Bewerben', '',
         'Ihre Angaben verarbeitet die {hochschule} nur für das Bewerbungsverfahren und, wenn Sie hier studieren, für Ihr Studium. '

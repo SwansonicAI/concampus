@@ -1,6 +1,6 @@
 # Data transfer
 
-One JSON document carries a Hochschule's data in and out of Campus (`core/transfer.py`): to take over what a former
+One JSON document carries a Hochschule's data in and out of ConCampus (`core/transfer.py`): to take over what a former
 system holds, to set up the Studienpläne of a new Hochschule, and to hand a Hochschule its data when it leaves.
 
 ```
@@ -9,7 +9,7 @@ manage.py transfer daten.json --export     write everything (logged under Einste
 ```
 
 Loading updates what is there and adds what is not; it removes nothing, so a document can be loaded again after a fix.
-Each record is checked as Campus checks what is typed in: official keys, choices, a Semester against its neighbours.
+Each record is checked as ConCampus checks what is typed in: official keys, choices, a Semester against its neighbours.
 
 ## The document
 

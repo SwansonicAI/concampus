@@ -168,7 +168,7 @@ class PlanTest(Seeded):
 
 
 class FakeMoodle:
-    """Moodle's web services as far as Campus calls them, kept in memory; users for these e-mail addresses only."""
+    """Moodle's web services as far as ConCampus calls them, kept in memory; users for these e-mail addresses only."""
 
     def __init__(self, emails):
         self.users = {e.lower(): n for n, e in enumerate(emails, 100)}
@@ -233,7 +233,7 @@ class MoodleTest(Seeded):
         sync(moodle)
         self.assertFalse(moodle.courses[mine]['visible'])
         Course.objects.filter(pk=course.pk).update(cancelled=None)
-        MoodleCourse.objects.all().delete()  # Campus's links lost, as from an older backup: Moodle's courses are taken up again
+        MoodleCourse.objects.all().delete()  # ConCampus's links lost, as from an older backup: Moodle's courses are taken up again
         sync(moodle)
         self.assertEqual((len(moodle.courses), MoodleCourse.objects.get(course=course).moodle_id), (made, mine))
         self.assertEqual(flat({'courses': [{'fullname': 'X', 'visible': True}]}), {'courses[0][fullname]': 'X', 'courses[0][visible]': 1})

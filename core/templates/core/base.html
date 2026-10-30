@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}{% endblock %} · Campus {{ institution.short_name|default:institution.name }}</title>
+<title>{% block title %}{% endblock %} · ConCampus {{ institution.short_name|default:institution.name }}</title>
 <link rel="stylesheet" href="{% static 'core/campus.css' %}">
 {% if institution.look %}<style>:root { {% for name, value in institution.look.items %}--{{ name }}: {{ value }}; {% endfor %}}</style>{% endif %}
 <script src="{% static 'core/app.js' %}" defer></script>
@@ -14,7 +14,7 @@
   <div class="wrap appbar-row">
     <a class="product" href="{% url 'home' %}">
       <span class="house">{% for line in institution.lines %}{% if forloop.first %}{{ line }}{% else %}<br><span>{{ line }}</span>{% endif %}{% endfor %}</span>
-      <span class="name">Campus</span>
+      <span class="name">ConCampus</span>
     </a>
     {% if nav %}
     <nav class="apps">
@@ -48,7 +48,7 @@
 </main>
 <footer class="foot">
   <div class="wrap">
-    <span>Campus · {{ institution.name }}</span>
+    <span>ConCampus · {{ institution.name }}</span>
     {% if institution.email %}<a href="mailto:{{ institution.email }}">Hilfe und Rückmeldung</a>{% endif %}
     {% if institution.website %}<a href="{{ institution.website }}">Website der Hochschule</a>{% endif %}
     {% if institution.imprint %}<a href="{{ institution.imprint }}">Impressum</a>{% endif %}

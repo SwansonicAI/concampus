@@ -1,7 +1,7 @@
 <?php
 // Once after Moodle's install, again at will: the demo set up as HfM's Moodle is (seen 30.10.2026, docs/moodle.md),
 // its theme and logos, its categories and information courses, its dashboard; sign-in required; web services for
-// Campus with a service of the functions it calls, an account for Campus, its token printed.
+// ConCampus with a service of the functions it calls, an account for ConCampus, its token printed.
 define('CLI_SCRIPT', true);
 require('/var/www/html/config.php');
 require_once($CFG->dirroot . '/course/lib.php');
@@ -12,14 +12,14 @@ require_once($CFG->dirroot . '/webservice/lib.php');
 (new \tool_langimport\controller())->install_languagepacks(['de', 'es']);
 foreach ([
     'lang' => 'en', 'timezone' => 'Europe/Berlin', 'country' => 'DE', 'forcelogin' => 1, 'guestloginbutton' => 0,
-    'passwordpolicy' => 0,  // Campus gives the demo's users its access code, whatever it is
+    'passwordpolicy' => 0,  // ConCampus gives the demo's users its access code, whatever it is
     'theme' => 'boost_union', 'defaulthomepage' => HOMEPAGE_MY, 'frontpage' => FRONTPAGECATEGORYCOMBO, 'frontpageloggedin' => FRONTPAGECATEGORYCOMBO,
     'enablewebservices' => 1, 'webserviceprotocols' => 'rest',
 ] as $name => $value) {
     set_config($name, $value);
 }
 foreach (['brandcolor' => '#9E000C', 'navbarcolor' => 'coloreddark',
-    'logininstructionsbelow' => '<p>Demo: der Benutzername wie in Campus (student, lehre, …), als Passwort der Zugangscode der Demo.</p>',
+    'logininstructionsbelow' => '<p>Demo: der Benutzername wie in ConCampus (student, lehre, …), als Passwort der Zugangscode der Demo.</p>',
     'footnote' => '<p>Demo · <a href="https://www.hfm-weimar.de">Hochschule für Musik FRANZ LISZT Weimar</a></p>'] as $name => $value) {
     set_config($name, $value, 'theme_boost_union');
 }
@@ -37,7 +37,7 @@ foreach ([  // HfM's own, from its Moodle
     set_config($area, "/$filename", 'theme_boost_union');
 }
 
-// HfM's categories beside the semesters Campus makes, and the information courses its dashboard links to, open to guests.
+// HfM's categories beside the semesters ConCampus makes, and the information courses its dashboard links to, open to guests.
 function category($idnumber, $name, $parent = 0) {
     global $DB;
     return $DB->get_field('course_categories', 'id', ['idnumber' => $idnumber])
@@ -92,7 +92,7 @@ $functions = ['core_course_get_categories', 'core_course_create_categories', 'co
 $manager = new webservice();
 if (!$service = $DB->get_record('external_services', ['shortname' => 'campus'])) {
     $service = $DB->get_record('external_services', ['id' => $manager->add_external_service((object) [
-        'name' => 'Campus', 'shortname' => 'campus', 'enabled' => 1, 'restrictedusers' => 0, 'downloadfiles' => 0, 'uploadfiles' => 0,
+        'name' => 'ConCampus', 'shortname' => 'campus', 'enabled' => 1, 'restrictedusers' => 0, 'downloadfiles' => 0, 'uploadfiles' => 0,
     ])]);
 }
 foreach ($functions as $function) {
@@ -103,7 +103,7 @@ foreach ($functions as $function) {
 
 if (!$campus = $DB->get_record('user', ['username' => 'campus-sync'])) {
     $campus = $DB->get_record('user', ['id' => user_create_user((object) [
-        'username' => 'campus-sync', 'firstname' => 'Campus', 'lastname' => 'Abgleich', 'email' => 'campus-sync@localhost',
+        'username' => 'campus-sync', 'firstname' => 'ConCampus', 'lastname' => 'Abgleich', 'email' => 'campus-sync@localhost',
         'auth' => 'manual', 'password' => random_string(32), 'confirmed' => 1, 'mnethostid' => $CFG->mnet_localhost_id,
     ])]);
 }

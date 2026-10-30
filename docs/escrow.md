@@ -1,14 +1,14 @@
 # Escrow
 
-What HfM gets if ConCampus can no longer run Campus, and how. Planned, not set up. A Hochschule that depends on one
+What HfM gets if ConCampus can no longer run ConCampus, and how. Planned, not set up. A Hochschule that depends on one
 small provider for its student records will ask for this in the tender.
 
 ## What is deposited
 
 - **Code**: the repository with its history; the deployment (`Dockerfile`, Compose, Caddy, `deploy.sh`, the CI
-  workflow); a guide to build and run Campus, tested on a clean machine. The repository is public now; once it is
+  workflow); a guide to build and run ConCampus, tested on a clean machine. The repository is public now; once it is
   private, the deposit is the copy HfM can count on.
-- **Access**: every account that runs Campus for HfM, and the way into it:
+- **Access**: every account that runs ConCampus for HfM, and the way into it:
   - the server host (Hetzner): the project and the root SSH key;
   - the database host (Neon now);
   - the code host (GitHub): the repository and the secrets of its Actions;
@@ -22,7 +22,7 @@ small provider for its student records will ask for this in the tender.
 ## Keeping it current
 
 - The code with every release, deposited by CI; access whenever a password or key changes.
-- Each year the escrow agent checks the deposit: Campus builds and starts from it alone.
+- Each year the escrow agent checks the deposit: ConCampus builds and starts from it alone.
 - Passwords in a deposit go stale and are one more place to steal them from. Better: an emergency account in each
   service, used only after release, its use logged; or HfM as co-owner of its hosting account from the start.
 
@@ -34,7 +34,7 @@ so someone must be named who can give it. On release HfM, or a firm it names, ge
 
 ## Rights
 
-A deposit is useless without the right to use it. On release HfM may use Campus, change it and have others maintain it,
+A deposit is useless without the right to use it. On release HfM may use ConCampus, change it and have others maintain it,
 for its own purposes. The licence is granted now with release as its condition, so that it holds in insolvency
 (§ 103 InsO); to be drafted with a lawyer.
 

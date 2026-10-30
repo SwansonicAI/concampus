@@ -3,7 +3,7 @@
 {% block title %}Erklärung zur Barrierefreiheit{% endblock %}
 {% block content %}
 <h1>Erklärung zur Barrierefreiheit</h1>
-<p class="lead">Die {{ institution.name }} ist bemüht, Campus barrierefrei zugänglich zu machen, nach dem Thüringer Gesetz über den barrierefreien Zugang zu den Websites und mobilen Anwendungen öffentlicher Stellen (ThürBarrWebG). Diese Erklärung gilt für Campus.{% if institution.accessibility %} Für die Website der Hochschule gilt <a href="{{ institution.accessibility }}">deren eigene Erklärung</a>.{% endif %}</p>
+<p class="lead">Die {{ institution.name }} ist bemüht, ConCampus barrierefrei zugänglich zu machen, nach dem Thüringer Gesetz über den barrierefreien Zugang zu den Websites und mobilen Anwendungen öffentlicher Stellen (ThürBarrWebG). Diese Erklärung gilt für ConCampus.{% if institution.accessibility %} Für die Website der Hochschule gilt <a href="{{ institution.accessibility }}">deren eigene Erklärung</a>.{% endif %}</p>
 <div class="cols">
   <div>
     <h2>Stand der Vereinbarkeit</h2>
@@ -15,7 +15,7 @@
   </div>
   <div>
     <h2>Barriere melden</h2>
-    <p>Was ist in Campus für Sie nicht zugänglich, oder brauchen Sie eine Information in anderer Form? Schreiben Sie uns; wir antworten innerhalb von {{ answer }} Tagen.{% if institution.email %} Oder per E-Mail an <a href="mailto:{{ institution.email }}">{{ institution.email }}</a>.{% endif %}</p>
+    <p>Was ist in ConCampus für Sie nicht zugänglich, oder brauchen Sie eine Information in anderer Form? Schreiben Sie uns; wir antworten innerhalb von {{ answer }} Tagen.{% if institution.email %} Oder per E-Mail an <a href="mailto:{{ institution.email }}">{{ institution.email }}</a>.{% endif %}</p>
     <form method="post" class="form">
       {% csrf_token %}
       {{ form }}

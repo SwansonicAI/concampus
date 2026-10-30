@@ -559,7 +559,7 @@ class SsoTest(Seeded):
         asked = stranger.get('/konto/sso/')
         stranger.post('/konto/sso/acs/', {'SAMLResponse': self.answer(asked, 'x9@uni-weimar.de', 'x9@uni-weimar.de')})
         self.assertNotIn('_auth_user_id', stranger.session)
-        asked = stranger.get('/konto/sso/')  # an answer changed after signing, to someone Campus knows
+        asked = stranger.get('/konto/sso/')  # an answer changed after signing, to someone ConCampus knows
         forged = base64.b64encode(base64.b64decode(self.answer(asked, 'x9@uni-weimar.de', 'x9@uni-weimar.de')).replace(b'x9@', b'k7@')).decode()
         stranger.post('/konto/sso/acs/', {'SAMLResponse': forged})
         self.assertNotIn('_auth_user_id', stranger.session)

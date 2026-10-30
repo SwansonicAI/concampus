@@ -1,11 +1,11 @@
 # Stays abroad and Erasmus Without Paper
 
-Campus keeps the Hochschule's Erasmus+ partners, the agreements with them, and its students' stays abroad with their
+ConCampus keeps the Hochschule's Erasmus+ partners, the agreements with them, and its students' stays abroad with their
 Learning Agreements (`mobility/`, Internationales). Its data follows Erasmus Without Paper (EWP), the network through
 which Hochschulen exchange agreements and Learning Agreements since 2021, so that a connection to it carries them over;
 the connection itself is not built.
 
-## In Campus
+## In ConCampus
 
 - **Partnerhochschulen and Abkommen** (Internationales › Partnerhochschulen; Einstellungen): each partner with its
   Erasmus code and EWP id; each agreement with its Studienjahre, ISCED-F field, EQF levels, places and months each way,
@@ -26,7 +26,7 @@ reads the stays of the studies it may recognise in.
 
 ## Onto EWP
 
-| Campus | EWP |
+| ConCampus | EWP |
 |---|---|
 | `Partner` | HEI (`hei-id`: the SCHAC code), with its Erasmus code |
 | `Agreement` | IIA (v7): one `student-studies-mobility-spec` each way (`mobilities-per-year`, `total-months-per-year` from places × months, `subject-area` with the ISCED-F code, `eqf-level`, `recommended-language-skill`), `staff-teacher-mobility-spec` for teaching stays, the academic years, each side's signature |
@@ -40,13 +40,13 @@ reads the stays of the studies it may recognise in.
 Three ways; which one is HfM's to say.
 
 1. **The EWP Dashboard** of the European University Foundation, free for Hochschulen without their own connection:
-   agreements and Learning Agreements are kept there, Campus keeps its own and the International Office carries them
+   agreements and Learning Agreements are kept there, ConCampus keeps its own and the International Office carries them
    over by hand, or by the Dashboard's interface where it has one (to check).
-2. **Campus as an EWP node**: a manifest in the EWP registry for each Hochschule, signed requests both ways (HTTP
+2. **ConCampus as an EWP node**: a manifest in the EWP registry for each Hochschule, signed requests both ways (HTTP
    signatures with registered keys), and the APIs: Institutions, Organizational Units, IIAs with approval and change
    notifications, Outgoing Mobilities, OMobility Learning Agreements; tested on EWP's development network before the
    live one.
-3. **The mobility software HfM uses now**, if it has one already connected to EWP: Campus then leaves agreements and
+3. **The mobility software HfM uses now**, if it has one already connected to EWP: ConCampus then leaves agreements and
    Learning Agreements there and takes over only what recognition needs.
 
 ## Not yet
@@ -60,7 +60,7 @@ code lists for the kind of stay and programme are to check).
 
 1. Which software it uses now for Erasmus, and whether that is connected to EWP.
 2. Who signs Learning Agreements for the Hochschule: the International Office, or a coordinator for each subject.
-3. Whether students apply for Erasmus places through Campus.
+3. Whether students apply for Erasmus places through ConCampus.
 
 ## Sources
 

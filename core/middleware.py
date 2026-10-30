@@ -10,7 +10,7 @@ from .views import admitted
 def gate(get_response):
     """In the demo, strangers give the shared access code first (core.views.gate); whoever is signed in is past it,
     calendar apps fetch the feeds without it, whoever was handed a Bescheinigung checks it without it, and the Hochschule's
-    login answers and reads Campus's metadata without it."""
+    login answers and reads ConCampus's metadata without it."""
 
     def middleware(request):
         free = request.path in (reverse('gate'), reverse('students:verify'), reverse('sso_acs'), reverse('sso_metadata')) or request.path.endswith('.ics')

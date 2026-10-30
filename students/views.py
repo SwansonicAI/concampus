@@ -497,7 +497,7 @@ def fee_paid(request, pk):
 
 @require('manage_students')
 def insurers(request):
-    """Studierendenmeldeverfahren (students/smv.py): the insurers' reports Campus found nobody for, to book by hand or drop;
+    """Studierendenmeldeverfahren (students/smv.py): the insurers' reports ConCampus found nobody for, to book by hand or drop;
     then every report in and out, newest first. An office for the whole Hochschule only: unbooked reports may be about
     anyone."""
     if not request.user.everywhere('manage_students'):

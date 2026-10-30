@@ -1,7 +1,7 @@
-"""Sign-in through the Hochschule's identity provider with SAML 2.0, as Shibboleth and the DFN-AAI use it; Campus is the
-service provider (settings.SAML). Whoever the provider vouches for signs in as the person Campus knows by that id; at
+"""Sign-in through the Hochschule's identity provider with SAML 2.0, as Shibboleth and the DFN-AAI use it; ConCampus is the
+service provider (settings.SAML). Whoever the provider vouches for signs in as the person ConCampus knows by that id; at
 their first sign-in, as the one active person with the e-mail address it gives, who keeps the id from then on. Nobody is
-made here: Campus knows its people from their application, enrolment or appointment. Only answers to Campus's own
+made here: ConCampus knows its people from their application, enrolment or appointment. Only answers to ConCampus's own
 requests count."""
 from functools import cache
 from pathlib import Path
@@ -35,7 +35,7 @@ def provider():
 
 
 def config(request):
-    """python3-saml's settings: the provider's, and Campus's own addresses on this host; 404 without a provider."""
+    """python3-saml's settings: the provider's, and ConCampus's own addresses on this host; 404 without a provider."""
     own = settings.SAML
     if not own['idp']:
         raise Http404
@@ -89,7 +89,7 @@ def vouched(attributes):
     return first[0], sso_id
 
 
-@csrf_exempt  # the identity provider posts here; its signature and Campus's own request id stand in for the token
+@csrf_exempt  # the identity provider posts here; its signature and ConCampus's own request id stand in for the token
 @login_not_required
 @require_POST
 def acs(request):
@@ -100,7 +100,7 @@ def acs(request):
     person, sso_id = vouched(auth.get_attributes()) if asked and auth.is_authenticated() and not auth.get_errors() else (None, '')
     if person is None:
         SignIn.objects.create(username=sso_id[:150], ip=address(request), success=False)
-        why = 'zu diesem Hochschulkonto gibt es in Campus kein Konto' if sso_id else 'die Antwort der Hochschule ließ sich nicht prüfen'
+        why = 'zu diesem Hochschulkonto gibt es in ConCampus kein Konto' if sso_id else 'die Antwort der Hochschule ließ sich nicht prüfen'
         messages.error(request, f'Anmeldung mit dem Hochschulkonto nicht möglich: {why}.')
         response = redirect('login')
     else:
@@ -112,5 +112,5 @@ def acs(request):
 
 @login_not_required
 def metadata(request):
-    """Campus as a service provider, for the Hochschule's identity provider and the federation."""
+    """ConCampus as a service provider, for the Hochschule's identity provider and the federation."""
     return HttpResponse(OneLogin_Saml2_Settings(config(request), sp_validation_only=True).get_sp_metadata(), content_type='application/samlmetadata+xml')

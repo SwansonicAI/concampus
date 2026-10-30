@@ -24,7 +24,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-%)0d+-lm(h92#hmxl_=l)4@d8&st)!27uy&)n1gcm$0ye5vt*=')
 
 DEBUG = 'SECRET_KEY' not in os.environ
-# Accounts the login page offers without a password, to see Campus as each kind of user; only in development and on the demo server.
+# Accounts the login page offers without a password, to see ConCampus as each kind of user; only in development and on the demo server.
 DEMO = [
     'student', 'promotion', 'bewerbung', 'absolvent', 'lehre', 'korrepetition', 'asa', 'pruefungsamt', 'pruefungsausschuss', 'dekanat', 'dekanatsreferat',
     'institut', 'veranstaltungsbuero', 'international', 'archiv', 'praesidium', 'campus',
@@ -61,7 +61,7 @@ INSTALLED_APPS = [
     'mobility',
     'analytics',
     'setup',
-    'django.contrib.admin',  # last: its registration templates must not stand in for Campus's own
+    'django.contrib.admin',  # last: its registration templates must not stand in for ConCampus's own
 ]
 
 MIDDLEWARE = [
@@ -174,7 +174,7 @@ LOGOUT_REDIRECT_URL = 'login'
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 # Sign-in through the Hochschule's identity provider (core/sso.py): its SAML metadata, an https address or a file; without
-# it, off. The key and certificate, as files, that Campus signs its requests with and has assertions encrypted to.
+# it, off. The key and certificate, as files, that ConCampus signs its requests with and has assertions encrypted to.
 SAML = {
     'idp': os.environ.get('SAML_IDP_METADATA', ''), 'key': os.environ.get('SAML_SP_KEY', ''), 'cert': os.environ.get('SAML_SP_CERT', ''),
     'id': os.environ.get('SAML_ID_ATTRIBUTE', 'urn:oid:1.3.6.1.4.1.5923.1.1.1.6'),  # eduPersonPrincipalName

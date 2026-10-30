@@ -20,7 +20,7 @@
     <p class="demo-entry"><button type="button" class="btn ghost small" onclick="document.getElementById('demo').showModal()">Demo-Profil wählen</button></p>
     <dialog id="demo" class="demo" aria-labelledby="demo-title" onclick="event.target === this && this.close()">
       <div class="head"><h2 id="demo-title">Demo-Profil wählen</h2><form method="dialog"><button class="link">Schließen</button></form></div>
-      <p class="muted">Ohne Passwort anmelden und Campus so sehen, wie diese Person ihn sieht.</p>
+      <p class="muted">Ohne Passwort anmelden und ConCampus mit den Augen dieser Person sehen.</p>
       <form method="post" action="{% url 'demo' %}" class="people" onsubmit="this.setAttribute('aria-busy', 'true'); event.submitter.lastElementChild.textContent = 'Wird geöffnet …'">
         {% csrf_token %}
         {% for role, person in demo %}<button name="konto" value="{{ person.username }}"><b>{{ role }}</b><span class="muted">{{ person }}</span></button>{% endfor %}

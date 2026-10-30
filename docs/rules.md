@@ -182,7 +182,7 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 
 | Rule | Source | Code | Set in |
 |---|---|---|---|
-| Campus has its own accessibility statement, reached from every page | ThürBarrWebG | `core/views.py` `accessibility()` | Einstellungen › Texte (Bausteine „Barrierefreiheit“) |
+| ConCampus has its own accessibility statement, reached from every page | ThürBarrWebG | `core/views.py` `accessibility()` | Einstellungen › Texte (Bausteine „Barrierefreiheit“) |
 | A reported barrier is answered within 30 days, then marked; deleted a year later | ThürBarrWebG (deadline to confirm) | `core/models.py` `Feedback` | code |
 
 ## For the Hochschule to confirm

@@ -524,7 +524,7 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
     'Dekanat': ['view_teaching_load', 'manage_teaching_load', 'publish_term', 'view_curriculum', 'view_statistics'],  # the dean approves; the Referat does the work
     'Dekanatsreferat': ['manage_courses', 'plan_teaching', 'view_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings'],
     'Veranstaltungsbüro': ['book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms', 'manage_instruments'],
-    'Campus-Team': ['manage_accounts', 'manage_institution', 'manage_terms'],
+    'ConCampus-Team': ['manage_accounts', 'manage_institution', 'manage_terms'],
     'Präsidium': ['view_statistics', 'view_curriculum', 'view_teaching_load'],
     'Institut Streichinstrumente und Harfe': [
         'view_students', 'view_files', 'message_students', 'view_applications', 'run_auditions', 'manage_courses', 'view_teaching_load',
@@ -564,7 +564,7 @@ STAFF = [  # username, title, first, last, office
     ('stefan.kuehn', '', 'Stefan', 'Kühn', 'Prüfungsamt'),  # deputies: no office rests on one person
     ('monika.hartmann', '', 'Monika', 'Hartmann', 'Akademische und Studentische Angelegenheiten (ASA)'),
     ('veranstaltungsbuero', '', 'Michael', 'Görlitz', 'Veranstaltungsbüro'),
-    ('campus', '', 'Lena', 'Hofmann', 'Campus-Team'),
+    ('campus', '', 'Lena', 'Hofmann', 'ConCampus-Team'),
     ('praesidium', 'Prof. Dr.', 'Andreas', 'Lindemann', 'Präsidium'),
     ('institut', '', 'Katrin', 'Vogt', 'Institut Streichinstrumente und Harfe'),
 ]
@@ -1108,14 +1108,14 @@ class Command(BaseCommand):
             if subject:
                 self.by_subject[subject].append(self.teachers[key])
         self.teachers['neumann'].groups.add(offices['Prüfungsausschuss'])  # chairs it, and teaches
-        second = Person.objects.create(  # the Campus-Team's second person, who confirms rights; made apart, so the other demo data stays as it was
+        second = Person.objects.create(  # the ConCampus-Team's second person, who confirms rights; made apart, so the other demo data stays as it was
             username='jan.reuter', first_name='Jan', last_name='Reuter', email='jan.reuter@hfm-weimar.de', password=self.password, phone='+49 3643 555 120',
         )
-        second.groups.add(offices['Campus-Team'])
+        second.groups.add(offices['ConCampus-Team'])
         Person.objects.create(  # the Dekanatsreferentin, who plans the teaching for the dean
             username='dekanatsreferat', first_name='Ines', last_name='Weißgerber', email='ines.weissgerber@hfm-weimar.de', password=self.password, phone='+49 3643 555 140',
         ).groups.add(offices['Dekanatsreferat'])
-        Membership.objects.create(  # a stand-in, waiting for the Campus-Team's second person to confirm it
+        Membership.objects.create(  # a stand-in, waiting for the ConCampus-Team's second person to confirm it
             person=self.staff['monika.hartmann'], office=offices['Veranstaltungsbüro'], until=date(2027, 3, 31),
             note='Vertretung während der Elternzeit von Michael Görlitz', by=self.staff['campus'],
         )
@@ -2401,7 +2401,7 @@ class Command(BaseCommand):
                 Document.objects.create(person=demo, study=study, kind_id='notice', title=subject, message=sent, created=when)
         Message.objects.bulk_create([
             Message(person=demo, subject='Prüfungsanmeldung vom 01. bis 15.11.2026', created=at(date(2026, 10, 15), hour=9),
-                    body='Melden Sie sich bitte vom 01. bis 15.11.2026 im Campus zu den Prüfungen dieses Semesters an. Abmelden können Sie sich bis zum 18.01.2027.',
+                    body='Melden Sie sich bitte vom 01. bis 15.11.2026 in ConCampus zu den Prüfungen dieses Semesters an. Abmelden können Sie sich bis zum 18.01.2027.',
                     link='/pruefungen/'),
             Message(person=demo, subject='Ergebnis: Künstlerische Präsentation I · Künstlerisch-praktische Prüfung (20 Min.) · Violine', created=at(date(2026, 7, 30), hour=12),
                     body='Ihr Prüfungsergebnis ist freigegeben.', link='/pruefungen/', read=at(date(2026, 7, 30), hour=18)),

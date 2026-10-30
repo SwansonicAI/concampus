@@ -1,7 +1,7 @@
 # Studierendenmeldeverfahren
 
 The reports between the Hochschule and the statutory health insurers about each student's insurance (§ 199a SGB V).
-Electronic only, both ways, since 1.1.2022; the insurers accept no paper. Inside Campus it is built
+Electronic only, both ways, since 1.1.2022; the insurers accept no paper. Inside ConCampus it is built
 (`students/smv.py`, Studierende › Krankenkassen); the files to and from dakota are not, as they wait for the GKV's XML
 schemata. From research of October 2026; what is still to be checked is listed at the end.
 
@@ -17,7 +17,7 @@ schemata. From research of October 2026; what is still to be checked is listed a
 
 ## The reports
 
-| Meldung | From | When | What Campus does with it |
+| Meldung | From | When | What ConCampus does with it |
 |---|---|---|---|
 | M10 | Insurer | The applicant asks their insurer, naming the Hochschule's Absendernummer; status insured, or exempt. Only a statutory insurer sends it: the privately insured go to one with their exemption | Match it to the applicant, set insurer, status and day; Immatrikulation waits for it, as now (`Person.missing()`) |
 | M11 | New insurer | The student changes insurer, from a date | Change the insurer; send M20 to the new one once the date has come |
@@ -53,18 +53,18 @@ still ask for an M10.
 
 ## Using HfM's dakota
 
-The likeliest way: Campus connects to the dakota HfM already runs, instead of one of its own.
+The likeliest way: ConCampus connects to the dakota HfM already runs, instead of one of its own.
 
 - The Absendernummer and the certificate are HfM's, not HIS's: they stay.
 - HIS supplies dakota's licence within the HISinOne fees; without HISinOne, HfM may need its own from ITSG.
-- HISinOne talks to dakota through HIS's script on the dakota machine (`smv.py` at OTH). Campus needs its own
-  counterpart there: it hands dakota Campus's reports and passes on what dakota fetched, over https. Hosted outside
-  HfM, Campus must be reachable from that machine through HfM's proxy.
-- One system takes the reports at a time: HISinOne stops on a set day and Campus takes over, with the reports still
+- HISinOne talks to dakota through HIS's script on the dakota machine (`smv.py` at OTH). ConCampus needs its own
+  counterpart there: it hands dakota ConCampus's reports and passes on what dakota fetched, over https. Hosted outside
+  HfM, ConCampus must be reachable from that machine through HfM's proxy.
+- One system takes the reports at a time: HISinOne stops on a set day and ConCampus takes over, with the reports still
   open in HISinOne carried across.
 - Our part on HfM's machine falls under the processor agreement (`docs/legal.md`).
 
-## In Campus
+## In ConCampus
 
 - **Absendernummer** under Einstellungen › Hochschule; applicants read it where they accept their place, students where
   a missing report holds their Rückmeldung back.
@@ -102,9 +102,9 @@ The likeliest way: Campus connects to the dakota HfM already runs, instead of on
 3. dakota for a software maker: licence, platform, whether it runs on Linux, one installation for several Hochschulen;
    or eXTra without dakota.
 4. Whether HfM asks for an M10 from students over 30, Promovierende and Jungstudierende.
-5. How long the reports are kept; Campus keeps them with the file.
-6. Whether an insurer that exempted a student also wants M20 and M30; Campus sends them only for the statutorily insured.
-7. Which fields identify a person in the insurers' reports: Campus matches by birth date and names, and would use the
+5. How long the reports are kept; ConCampus keeps them with the file.
+6. Whether an insurer that exempted a student also wants M20 and M30; ConCampus sends them only for the statutorily insured.
+7. Which fields identify a person in the insurers' reports: ConCampus matches by birth date and names, and would use the
    Krankenversichertennummer or Matrikelnummer if the reports carry them.
 
 ## Sources

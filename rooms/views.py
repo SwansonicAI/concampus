@@ -600,7 +600,7 @@ def ics(request, events, filename=None):
         return moment.astimezone(UTC).strftime('%Y%m%dT%H%M%SZ')
 
     name, host, now = Institution.get().name, request.get_host().split(':')[0], timezone.now()
-    lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', f'PRODID:-//{text(name)}//Campus//DE', f'X-WR-CALNAME:{text(name)}']
+    lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', f'PRODID:-//{text(name)}//ConCampus//DE', f'X-WR-CALNAME:{text(name)}']
     for uid, start, end, summary, location in events:
         lines += [
             'BEGIN:VEVENT', f'UID:{uid}@{host}', f'DTSTAMP:{stamp(now)}', f'DTSTART:{stamp(start)}', f'DTEND:{stamp(end)}',

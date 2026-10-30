@@ -1,4 +1,4 @@
-// Campus in the browser: forgiving list filters, dates in plain words, the search palette, the side panel and
+// ConCampus in the browser: forgiving list filters, dates in plain words, the search palette, the side panel and
 // keyboard shortcuts. Everything works without it; it only removes clicks.
 
 // Matching ignores case, accents and umlaut spellings, like the server does.

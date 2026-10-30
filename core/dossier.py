@@ -1,4 +1,4 @@
-"""A person's file as one copy: what Campus keeps about them, in readable values, with the files they handed in. For the
+"""A person's file as one copy: what ConCampus keeps about them, in readable values, with the files they handed in. For the
 person's own request (Art. 15 DSGVO) and for the archive taking a file over. Others' data stays out: a booking or a
 course shows without who else took part."""
 import json

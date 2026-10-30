@@ -115,7 +115,7 @@ def confirm_email(request, token):
 
 
 def copy(request):
-    """A copy of what Campus keeps about the person (Art. 15 Abs. 3 DSGVO)."""
+    """A copy of what ConCampus keeps about the person (Art. 15 Abs. 3 DSGVO)."""
     Export.log(request.user, 'Eigene Daten (Art. 15 DSGVO)', 1)
     return FileResponse(dossier(request.user), as_attachment=True, filename=f'campus-{request.user.username}.zip')
 
@@ -193,7 +193,7 @@ def accessibility(request):
     if form.is_valid():
         feedback = form.save()
         if to := Institution.get().email:
-            transaction.on_commit(lambda: send_mail('Barriere in Campus gemeldet', f'{feedback.text}\n\n{feedback.page}\n{feedback.name} <{feedback.email}>', None, [to], fail_silently=True))
+            transaction.on_commit(lambda: send_mail('Barriere in ConCampus gemeldet', f'{feedback.text}\n\n{feedback.page}\n{feedback.name} <{feedback.email}>', None, [to], fail_silently=True))
         messages.success(request, f'Danke. Wir antworten bis zum {date_format(feedback.due, "j. F Y")}.')
         return redirect('accessibility')
     return render(request, 'core/accessibility.html', {'form': form, 'answer': Feedback.ANSWER.days})
@@ -243,7 +243,7 @@ def message(request, pk):
         letter.read = timezone.now()
         letter.save(update_fields=['read'])
     place = letter.link and dict((app.label, title) for app, title in tiles(request.user)).get(resolve(urlsplit(letter.link).path).app_name)
-    response = render(request, 'core/message.html', {'letter': letter, 'place': place or 'Campus'})
+    response = render(request, 'core/message.html', {'letter': letter, 'place': place or 'ConCampus'})
     if fresh:  # read in the side panel: the Postfach underneath, its counter with it, reloads once the panel closes
         response['X-Stale'] = '1'
     return response

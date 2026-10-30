@@ -233,4 +233,4 @@ Status: every group fixed on 30 October 2026, except where an item says „Open�
    Sie sich an die Hochschule“ for a lapsed offer, „trägt Dekanatsreferat ein“ on course editing – `Office.holding()`
    returns bare names though offices have an address: link every person and office named to their e-mail.
 2. [all] Passwort – #13/#7 – Mein Konto says „setzen Sie Ihr Passwort neu“, but nothing links to changing it, the search
-   finds nothing, and the page is Django's admin page – „Passwort ändern“ in Mein Konto and the menu, in Campus's look.
+   finds nothing, and the page is Django's admin page – „Passwort ändern“ in Mein Konto and the menu, in ConCampus's look.

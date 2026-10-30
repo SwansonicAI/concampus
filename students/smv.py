@@ -1,4 +1,4 @@
-"""The Studierendenmeldeverfahren inside Campus (§ 199a SGB V, docs/smv.md): the insurers' reports booked to the people
+"""The Studierendenmeldeverfahren inside ConCampus (§ 199a SGB V, docs/smv.md): the insurers' reports booked to the people
 they are about, the Hochschule's own made from the list of status changes. Sending and fetching them through dakota
 comes with the GKV's XML schemata; until then the Hochschule's wait as open."""
 from django.db import transaction

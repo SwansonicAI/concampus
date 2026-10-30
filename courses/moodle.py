@@ -1,6 +1,6 @@
 """Courses and their people into the Hochschule's Moodle through its web services (docs/moodle.md): each published
 semester's Lehrveranstaltungen as Moodle courses, under the semester, the Fachgebiet and the Lehrform, their teachers
-and participants enrolled, whoever left taken out again, a course called off hidden. Campus is the record and Moodle
+and participants enrolled, whoever left taken out again, a course called off hidden. ConCampus is the record and Moodle
 follows. People are found there by e-mail address; whoever has not signed in to Moodle yet is enrolled the night after
 they have. Off without settings.MOODLE."""
 import json
@@ -73,13 +73,13 @@ def summary(course, slot):
 
 
 def sync(call=call, accounts=False, changed=False):
-    """Bring Moodle up to Campus; returns {what: how many}. With changed, only the courses whose title, place, dates,
-    summary or people have changed since Campus last sent them. With accounts, as on the demo, where no login of the
+    """Bring Moodle up to ConCampus; returns {what: how many}. With changed, only the courses whose title, place, dates,
+    summary or people have changed since ConCampus last sent them. With accounts, as on the demo, where no login of the
     Hochschule makes them, whoever has no account gets one."""
     own, counts, categories = settings.MOODLE, Counter(), {}
 
     def category(idnumber, name, parent):
-        """A category of Campus's, found by its idnumber or made."""
+        """A category of ConCampus's, found by its idnumber or made."""
         if idnumber not in categories:
             found = call('core_course_get_categories', criteria=[{'key': 'idnumber', 'value': idnumber}], addsubcategories=False)
             if not found:

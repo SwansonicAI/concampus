@@ -36,7 +36,7 @@ class Format(Tracked, models.Model):
     name = models.CharField('Name', max_length=60, unique=True)
     short = models.CharField('Kürzel', max_length=8, blank=True, help_text='Wie in den Studienplänen, z. B. „S“ für Seminar.')
     per_head = models.BooleanField('Zählt je Teilnahme', default=False, help_text='Im Deputat zählen die Stunden für jede Teilnahme, wie im Einzelunterricht.')
-    dated = models.BooleanField('Mit Terminen im Raum', default=True, help_text='Ohne Haken, etwa bei Projekten und Praktika, fragt Campus die Lehrenden nicht nach Terminen.')
+    dated = models.BooleanField('Mit Terminen im Raum', default=True, help_text='Ohne Haken, etwa bei Projekten und Praktika, fragt ConCampus die Lehrenden nicht nach Terminen.')
     order = models.PositiveSmallIntegerField('Reihenfolge', default=0)
 
     class Meta:
@@ -560,14 +560,14 @@ class Appointment(Tracked, models.Model):
 
 
 class MoodleCourse(models.Model):
-    """A Lehrveranstaltung as it stands in the Hochschule's Moodle (courses/moodle.py): its course there, and whom Campus
-    enrolled in it, so that Campus takes out only whom it put in."""
+    """A Lehrveranstaltung as it stands in the Hochschule's Moodle (courses/moodle.py): its course there, and whom ConCampus
+    enrolled in it, so that ConCampus takes out only whom it put in."""
 
     course = models.OneToOneField(Course, models.CASCADE, related_name='moodle', verbose_name='Veranstaltung')
     moodle_id = models.PositiveIntegerField('Kurs in Moodle')
-    people = models.JSONField('Von Campus eingeschrieben', default=list, help_text='Die Nutzer-IDs in Moodle.')
+    people = models.JSONField('Von ConCampus eingeschrieben', default=list, help_text='Die Nutzer-IDs in Moodle.')
     synced = models.DateTimeField('Abgeglichen', default=timezone.now)
-    state = models.CharField('Stand', max_length=64, blank=True, help_text='Prüfsumme dessen, was Campus zuletzt geschickt hat.')
+    state = models.CharField('Stand', max_length=64, blank=True, help_text='Prüfsumme dessen, was ConCampus zuletzt geschickt hat.')
 
     class Meta:
         verbose_name = 'Moodle-Kurs'

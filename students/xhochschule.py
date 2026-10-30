@@ -17,7 +17,7 @@ XHS, XBD = 'http://xhochschule.de/def/xhochschule/1.2/xsd', 'http://xbildung.de/
 X, B, E = ElementMaker(namespace=XHS, nsmap={'xhs': XHS, 'xbd': XBD}), ElementMaker(namespace=XBD), ElementMaker()
 LANG = '{http://www.w3.org/XML/1998/namespace}lang'
 STATUS = 'http://xhochschule.de/def/xhochschule/1.0/code/'
-FULL_TIME = 'http://xbildung.de/def/xbildung/2025-02-04/code/lernzeitmodell/vollzeit'  # Campus knows no part-time study
+FULL_TIME = 'http://xbildung.de/def/xbildung/2025-02-04/code/lernzeitmodell/vollzeit'  # ConCampus knows no part-time study
 EQF = {'bachelor': '6', 'master': '7', 'diplom': '7'}  # Program.Level
 SCHEMAS = Path(__file__).parent / 'schemas' / 'xhochschule-1.2'
 
