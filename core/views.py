@@ -289,8 +289,10 @@ def history(request, table, row):
         raise PermissionDenied(f'Diesen Verlauf {keepers(model, record)}.')
     shown = tables(seen)
     changes = Change.objects.filter(model.history(row), table__in=shown).select_related('by')[:200]
+    back = request.GET.get('next', '')
     return render(request, 'core/history.html', {
         'record': record, 'changes': describe(changes, request.user), 'others': Change.objects.filter(model.history(row)).exclude(table__in=shown).exists(),
+        'back': back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else getattr(record, 'get_absolute_url', lambda: '')(),
     })
 
 

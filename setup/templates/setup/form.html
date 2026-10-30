@@ -10,7 +10,7 @@
   <div class="actions">
     <button class="btn">Speichern</button>
     <a class="btn ghost" data-close href="{{ back }}">Abbrechen</a>
-    {% if history %}<a href="{% url 'history' table object.pk %}">Verlauf</a>{% endif %}
+    {% if history %}<a href="{% url 'history' table object.pk %}?next={{ request.get_full_path|urlencode }}">Verlauf</a>{% endif %}
   </div>
 </form>
 {% if object.pk and editor.invite %}
@@ -23,7 +23,7 @@
 {% endif %}
 {% if object.pk and editor.deletable %}
 <form method="post" action="{% url 'setup:delete' editor.key object.pk %}?next={{ back|urlencode }}" style="margin-top: 32px">
-  {% csrf_token %}<button class="link"><small>Löschen</small></button>
+  {% csrf_token %}<button class="btn danger small" data-confirm="Wirklich löschen? Im Verlauf wiederherstellbar.">Löschen</button>
 </form>
 {% endif %}
 {% endblock %}

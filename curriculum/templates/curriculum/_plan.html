@@ -22,7 +22,7 @@
         </td>
         <td class="muted"><small>{{ r.form }}</small></td>
         {% for cell in r.cells %}
-        <td class="num{% for i in cell %}{% if progress %}{% if i.excused %} muted{% elif i.done %} done{% elif i.pk in taking %} now{% elif i.pk in late %} late{% endif %}{% endif %}{% endfor %}">{% for i in cell %}{% if i.excused %}<small>entfällt</small>{% elif i.exam %}<span title="{{ i.title }}{% if i.pk in late %}: laut Plan im {{ i.semester }}. Semester empfohlen{% endif %}">●</span>{% elif i.credits %}{{ i.credits }}{% else %}<span title="Testat, ohne eigene CP">T</span>{% endif %}{% endfor %}</td>
+        <td class="num{% for i in cell %}{% if progress %}{% if i.excused %} muted{% elif i.done %} done{% elif i.pk in taking %} now{% elif i.pk in late %} late{% endif %}{% endif %}{% endfor %}">{% for i in cell %}{% if edit and not progress %}<a href="{% url 'setup:edit' 'module' i.pk %}?next={{ request.path|urlencode }}" title="{{ i.code|default:i.title }} bearbeiten">{% endif %}{% if i.excused %}<small>entfällt</small>{% elif i.exam %}<span title="{{ i.title }}{% if i.pk in late %}: laut Plan im {{ i.semester }}. Semester empfohlen{% endif %}">●</span>{% elif i.credits %}{{ i.credits }}{% else %}<span title="Testat, ohne eigene CP">T</span>{% endif %}{% if edit and not progress %}</a>{% endif %}{% endfor %}</td>
         {% endfor %}
         <td class="num muted{% if progress %}{% for i in r.open %}{% if i.done %} done{% elif i.pk in taking %} now{% endif %}{% endfor %}{% endif %}">{% if r.open %}{{ r.open.0.credits }}{% endif %}</td>
         <td class="num muted">{% if r.weight %}{{ r.weight|floatformat:"-2" }}{% endif %}</td>
@@ -32,7 +32,7 @@
       <tr class="{{ r.kind }}{% if progress and r.node.done %} complete{% endif %}">
         <td colspan="2" style="padding-left: calc(10px + {{ r.depth }} * 16px)">
           {% if edit %}<a href="{% url 'setup:edit' 'module' r.node.pk %}?next={{ request.path|urlencode }}"><b>{{ r.node.code }}</b> {{ r.node.title }}</a>
-          <a class="muted" href="{% url 'setup:new' 'module' %}?studiengang={{ r.node.program_id }}&unter={{ r.node.pk }}&next={{ request.path|urlencode }}" title="Modul darunter anlegen"><small>+ darunter</small></a>
+          <a class="muted" href="{% url 'setup:new' 'module' %}?studiengang={{ r.node.program_id }}&unter={{ r.node.pk }}&next={{ request.path|urlencode }}" title="Ein Modul darunter anlegen"><small>+ Untermodul</small></a>
           {% else %}<b>{{ r.node.code }}</b> {{ r.node.title }}{% endif %}
           {% if r.node.offered > r.node.credits %}<span class="badge">Wahl: {{ r.node.credits }} von {{ r.node.offered }} CP</span>{% endif %}
           {% if r.node.description %}<br><small class="muted">{{ r.node.description }}</small>{% endif %}

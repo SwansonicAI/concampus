@@ -374,7 +374,7 @@ EDITORS = {e.key: e for e in [
             ('Noten', [('rounding', 'mean_rounding', 'honours')]),
             ('Diploma Supplement und Statistik', [('level', 'kind', 'field'), ('qualification', 'english'), 'outcomes', ('exam', 'exam_office')]),
         ],
-        columns=[('Abschluss', 'degree'), ('Studiengang', 'name'), ('PO-Version', 'version'), ('Regelstudienzeit', 'semesters')],
+        columns=[('Studiengang', 'name'), ('Abschluss', 'degree'), ('PO-Version', 'version'), ('Regelstudienzeit', 'semesters')], queryset=lambda: Program.objects.ordered(),
         search=['degree', 'name'], words='prüfungsordnung po fpso diploma supplement abschlussarbeit bearbeitungszeit statistik abschlussprüfung studienfach',
     ),
     Editor('module', Module, 'Module', 'edit_curriculum', form=ModuleForm, new=new_module),

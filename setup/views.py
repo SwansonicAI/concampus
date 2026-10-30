@@ -15,6 +15,7 @@ from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_en
 from django.views.decorators.http import require_POST
 
 from core.access import kept, needs, require
+from core.history import because
 from core.keys import Edition, Key, review
 from core.models import Export, Feedback, Grant, Membership, Person, SignIn, Text
 from core.text import matching
@@ -151,6 +152,12 @@ def listing(request, key):
     })
 
 
+def save(form, person, capability):
+    """kept(), with the reason a form asks for a change kept in the Verlauf."""
+    with because(form.cleaned_data.get('reason', '')):
+        return kept(form, person, capability)
+
+
 def edit(request, key, pk=None):
     e = editor(request, key)
     if not (pk or e.creatable):
@@ -165,7 +172,7 @@ def edit(request, key, pk=None):
         field.queryset = field.queryset.filter(pk__in=ours)
         if not obj.pk:
             form.initial |= {'institutes': list(ours)} if 'institutes' in form.fields else {'institute': next(iter(ours))}
-    if form.is_valid() and (saved := kept(form, request.user, e.capability)):
+    if form.is_valid() and (saved := save(form, request.user, e.capability)):
         obj = saved
         messages.success(request, f'„{obj}“ gespeichert.' + (' Neue Rechte und Mitgliedschaften gelten, sobald eine zweite Person sie unter „Freigaben“ bestätigt.' if getattr(form, 'pending', False) else ''))
         return redirect(back(request, e))
@@ -238,6 +245,9 @@ def delete(request, key, pk):
     if not e.deletable:
         raise Http404
     obj = get_object_or_404(e.objects(request.user), pk=pk)
+    if why := getattr(obj, 'used', lambda: '')():
+        messages.error(request, f'„{obj}“ bleibt: daran hängen {why}.')
+        return redirect(back(request, e))
     try:
         obj.delete()
     except (ProtectedError, RestrictedError):

@@ -1,6 +1,7 @@
 import re
 
 from django.core import mail
+from django.db.models import Count
 from django.test import Client
 
 from core.models import Change, Grant, Membership, Office, Person, Term
@@ -102,6 +103,25 @@ class CurriculumEditorTest(Seeded):
         self.assertIn('parent', r.context['form'].errors)
         self.assertIn('Modul hinzufügen', dekanat.get(f'/studiengaenge/{program.pk}/').text)
 
+
+    def test_a_change_to_what_grades_are_reckoned_from_needs_a_reason(self):
+        """In a Prüfungsordnung in use a change to credits or weights shows before and after and saves only with its
+        reason, which the Verlauf keeps; a module the plan still holds things under is not deleted."""
+        dekanat = self.login('dekanatsreferat')
+        program = Program.objects.annotate(n=Count('studies')).filter(n__gt=0).first()
+        module = program.modules.filter(children=None, exam=False, credits__gt=0, parent__isnull=False).first()
+        data = {
+            'parent': module.parent_id, 'code': module.code, 'title': module.title, 'credits': module.credits + 1,
+            'semester': module.semester or '', 'weight': module.weight, **({'final': 'on'} if module.final else {}),
+        }
+        r = dekanat.post(f'/einstellungen/module/{module.pk}/', data)
+        self.assertIn(f'{module.credits} → {module.credits + 1}', str(r.context['form'].non_field_errors()))
+        dekanat.post(f'/einstellungen/module/{module.pk}/', data | {'reason': 'Beschluss des Fakultätsrats'})
+        module.refresh_from_db()
+        self.assertEqual(Change.objects.filter(table='curriculum.module', row=module.pk).latest('at').reason, 'Beschluss des Fakultätsrats')
+        r = dekanat.post(f'/einstellungen/module/{module.parent_id}/loeschen/', follow=True)
+        self.assertIn('bleibt', flashes(r)[-1])
+        self.assertTrue(Module.objects.filter(pk=module.parent_id).exists())
 
 class InvitationTest(Seeded):
     def test_a_new_account_sets_its_password_from_the_invitation(self):

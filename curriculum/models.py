@@ -161,18 +161,11 @@ class Program(Tracked, models.Model):
         walk(self.curriculum(), 100)
         return found
 
-    @property
-    def in_use(self):
-        """What a change to this Prüfungsordnung changes at once, said where it is edited: grades and Zeugnisse are
-        reckoned from it, not stored."""
+    def affected(self):
+        """(enrolled, graduated): whose grades and Zeugnisse a change to this Prüfungsordnung changes at once, as they are
+        reckoned from it, not stored (curriculum/forms.py)."""
         counts = dict(self.studies.filter(status__in=['enrolled', 'graduated']).values_list('status').annotate(n=models.Count('pk')))
-        if not counts:
-            return ''
-        return (
-            f'Änderungen an ECTS, Gewichtung, Rundung oder Versuchen gelten sofort: für die Noten von {counts.get("enrolled", 0)} '
-            f'Studierenden dieser Prüfungsordnung und für die Zeugnisse von {counts.get("graduated", 0)} Absolvent:innen. Ein neuer '
-            'Studienplan ist eine neue PO-Version: auf der Seite des Studiengangs „Als neue PO-Version kopieren“, mit dem Semester, ab dem sie gilt.'
-        )
+        return counts.get('enrolled', 0), counts.get('graduated', 0)
 
     def chosen_by(self):
         """{module pk: the Schwerpunkt it belongs to}, for every course work and exam under one."""
@@ -279,6 +272,14 @@ class Module(Tracked, models.Model):
 
     def __str__(self):
         return f'{self.code} {self.title}'.strip()
+
+    def used(self):
+        """What still hangs on the module, in words: empty when it may go (setup/views.py delete())."""
+        counts = [
+            (self.children.count(), 'Untermodul', 'Untermodule'), (self.courses.count(), 'Veranstaltung', 'Veranstaltungen'),
+            (self.participations.count(), 'Leistung', 'Leistungen'),
+        ]
+        return ', '.join(f'{n} {one if n == 1 else many}' for n, one, many in counts if n)
 
     @classmethod
     def counted(cls):
