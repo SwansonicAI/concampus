@@ -101,6 +101,8 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 
 | Requirement | Source | Status | In Campus, or missing |
 |---|---|---|---|
+| Procurement | GWB, VgV; below the threshold UVgO through the ThürVgG | Hochschule | HfM buys Campus through a procedure fitting its value, counted over the contract's term (48 months if open-ended): EU-wide from €216,000 net (2026–27), a Direktauftrag up to €30,000. A tender asks for the accessibility conformance report and the security concept |
+| Contract terms | EVB-IT Cloud (IT-Planungsrat 2022/01) | no | Public buyers of software as a service contract on them: service levels, BSI C5, the data at the contract's end. Our terms to fit them |
 | Impressum for concampus.de | § 5 DDG | no | The product page has none |
 | Cyber Resilience Act | Regulation (EU) 2024/2847 | n/a | Out of scope as SaaS; in scope if a Hochschule runs Campus on its own servers: reporting from 11.9.2026, CE marking from 11.12.2027 |
 | Switching provider | Data Act | partly | A complete copy per person; none yet of a Hochschule's data as a whole; switching charges banned from 12.1.2027 |
@@ -136,6 +138,7 @@ Outside the code:
 13. The processor agreement (Art. 28) and the description of technical and organisational measures for the
     Hochschule's records of processing and impact assessment.
 14. An Impressum for concampus.de.
+15. Terms of service that fit EVB-IT Cloud.
 
 ## To check
 
@@ -150,3 +153,4 @@ Outside the code:
 7. Whether HfM is among the seven Thuringian universities on the MACH ERP.
 8. The answer deadline for accessibility feedback in the ThürBarrWebG; Campus uses 30 days.
 9. HfM's Absendernummer for the Studierendenmeldeverfahren, and the rest of `docs/smv.md`'s list.
+10. Thuringia's Wertgrenzen under the ThürVVöA of March 2025, which sources give differently.

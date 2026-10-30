@@ -49,6 +49,19 @@ still ask for an M10.
   number or an unknown response ID never reaches the database, so errors must be fixed at once or they multiply. dakota
   leaves `KomMalFunc.txt` when the server was not reached; nothing is sent then.
 
+## Using HfM's dakota
+
+The likeliest way: Campus connects to the dakota HfM already runs, instead of one of its own.
+
+- The Absendernummer and the certificate are HfM's, not HIS's: they stay.
+- HIS supplies dakota's licence within the HISinOne fees; without HISinOne, HfM may need its own from ITSG.
+- HISinOne talks to dakota through HIS's script on the dakota machine (`smv.py` at OTH). Campus needs its own
+  counterpart there: it hands dakota Campus's reports and passes on what dakota fetched, over https. Hosted outside
+  HfM, Campus must be reachable from that machine through HfM's proxy.
+- One system takes the reports at a time: HISinOne stops on a set day and Campus takes over, with the reports still
+  open in HISinOne carried across.
+- Our part on HfM's machine falls under the processor agreement (`docs/legal.md`).
+
 ## What Campus needs
 
 1. The Absendernummer in the Hochschule's settings, shown to applicants.
@@ -60,14 +73,16 @@ still ask for an M10.
 5. The Sperre from M12 and its lifting by M13; the Exmatrikulation for reason 7 at the semester's change.
 6. A log of every file and report, sent or received, with its status and error; a to-do for the student office when one
    fails or stays unmatched.
-7. dakota beside the server: a Windows machine, or ITSG's module built in. For several Hochschulen, one Absendernummer
-   and certificate each.
+7. dakota: HfM's own (above); otherwise a Windows machine of ours, or ITSG's module built in. For several
+   Hochschulen, one Absendernummer and certificate each.
 8. A test against the procedure's test system before going live.
 9. Who sees the reports: the student office alone, as the insurance now (`docs/privacy.md`); how long they are kept.
 
 ## To check
 
-1. HfM's Absendernummer: not on its website. And how HfM runs the procedure today, presumably HISinOne with dakota.
+1. HfM's Absendernummer: not on its website. How HfM runs the procedure today: where dakota runs and who looks after
+   it, its licence through HIS or ITSG, the certificate's holder and expiry, how HISinOne exchanges files with it,
+   how many reports a semester, who matches those that match no one.
 2. The current Grundsätze, Verfahrensbeschreibung and Anlagen: each report's fields, Storno, deadlines. gkv-datenaustausch.de
    did not answer during this research.
 3. dakota for a software maker: licence, platform, whether it runs on Linux, one installation for several Hochschulen.
