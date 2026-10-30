@@ -133,7 +133,8 @@ made anonymous (`students/disposal.py`, `manage.py prune`).
 ### Moodle and XHochschule files
 
 Each night Campus gives the Hochschule's Moodle the e-mail addresses of the teachers and participants of its courses, to
-find their accounts there, and enrols them; Moodle already holds their names (`docs/moodle.md`). A Bescheinigung as an
+find their accounts there, and enrols them; Moodle already holds their names (`docs/moodle.md`). Only on the demo,
+whose people are made up, Campus also makes the accounts, with name and e-mail address. A Bescheinigung as an
 XHochschule file carries what the printed one does; the Studienzeitbescheinigung also each leave's ground, as the
 standard asks of it, Erkrankung among them: it goes to whoever downloads it, the person or the student office.
 

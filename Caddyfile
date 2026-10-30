@@ -11,6 +11,13 @@ concampus.de {
 	file_server
 }
 
+# The demo's Moodle: demo-moodle/, docs/moodle.md
+moodle.concampus.de {
+	encode zstd gzip
+	header X-Robots-Tag "noindex, nofollow"
+	reverse_proxy moodle:80
+}
+
 www.concampus.de {
 	redir https://concampus.de{uri} permanent
 }

@@ -4,6 +4,7 @@ and participants enrolled, whoever left taken out again, a course called off hid
 follows. People are found there by e-mail address; whoever has not signed in to Moodle yet is enrolled the night after
 they have. Off without settings.MOODLE."""
 import json
+import secrets
 from collections import Counter
 from datetime import datetime, time
 from urllib.parse import urlencode
@@ -45,8 +46,18 @@ def stamp(day):
     return int(timezone.make_aware(datetime.combine(day, time())).timestamp())
 
 
-def sync(call=call):
-    """Bring Moodle up to Campus; returns {what: how many}."""
+def account(person):
+    """The demo's Moodle account for someone: the demo's users sign in with its access code, the others not at all."""
+    login = person.username in settings.DEMO and settings.DEMO_CODE
+    return {
+        'username': person.username.lower(), 'email': person.email, 'firstname': person.first_name, 'lastname': person.last_name,
+        'auth': 'manual' if login else 'nologin', 'password': settings.DEMO_CODE if login else secrets.token_urlsafe(),
+    }
+
+
+def sync(call=call, accounts=False):
+    """Bring Moodle up to Campus; returns {what: how many}. With accounts, as on the demo, where no login of the
+    Hochschule makes them, whoever has no account gets one."""
     own, counts, categories = settings.MOODLE, Counter(), {}
 
     def category(idnumber, name, parent):
@@ -70,6 +81,13 @@ def sync(call=call):
     users = {}
     for i in range(0, len(emails), 50):
         users |= {u['email'].lower(): u['id'] for u in call('core_user_get_users_by_field', field='email', values=emails[i:i + 50])}
+    if accounts:
+        people = {p.email.lower(): p for c in courses for p in [*c.staff.all(), *(q.study.person for q in c.participations.all())]}
+        new = [people[e] for e in emails if e not in users]
+        for i in range(0, len(new), 50):
+            made = {u['username']: u['id'] for u in call('core_user_create_users', users=[account(p) for p in new[i:i + 50]])}
+            users |= {p.email.lower(): made[p.username.lower()] for p in new[i:i + 50]}
+        counts['Konten angelegt'] += len(new)
     for course in courses:
         term = course.term
         parent = category(f'campus-{term.pk}', term.name.replace('WiSe', 'Wintersemester').replace('SoSe', 'Sommersemester'), own['category'])

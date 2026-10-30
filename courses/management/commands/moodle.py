@@ -11,4 +11,4 @@ class Command(BaseCommand):
         if not settings.MOODLE['url']:
             self.stdout.write('Kein Moodle eingerichtet (MOODLE_URL, MOODLE_TOKEN).')
             return
-        self.stdout.write(', '.join(f'{n} {what}' for what, n in sync().items()) + '.')
+        self.stdout.write(', '.join(f'{n} {what}' for what, n in sync(accounts=bool(settings.DEMO)).items()) + '.')
