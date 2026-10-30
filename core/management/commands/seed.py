@@ -989,6 +989,7 @@ class Command(BaseCommand):
             privacy='https://www.hfm-weimar.de/footer/datenschutz', accessibility='https://www.hfm-weimar.de/footer/barrierefreiheit',
             insurers='\n'.join(INSURERS), university='2850', region='16055', report_id='28500000',
             iban='DE02120300000000202051', bic='BYLADEM1001',  # a published sample account, not the Hochschule's
+            credit_hours=30,  # RPSO 2026 § 5 Abs. 3
         )
         Text.objects.bulk_create(Text(key=key, subject=texts.TEXTS[key].subject, body=body) for key, body in TEXTS.items())
         RoomFunction.objects.bulk_create(RoomFunction(key=key, name=name, central=central, order=n) for n, (key, name, central) in enumerate(FUNCTIONS))

@@ -92,6 +92,10 @@ class Program(Tracked, models.Model):
     thesis_weeks = models.PositiveSmallIntegerField(
         'Bearbeitungszeit der Abschlussarbeit (Wochen)', null=True, blank=True, help_text='Ab Ausgabe des Themas; leer: die Abgabe wird von Hand eingetragen.',
     )
+    weekly = models.CharField(
+        'Umfang im Studienplan', max_length=8, choices=[('minuten', 'Minuten pro Woche, etwa „E 90“'), ('sws', 'Semesterwochenstunden, etwa „E 2“')],
+        default='minuten', help_text='Wie die Zahl hinter der Lehrform zu lesen ist; danach rechnet auch das Deputat.',
+    )
     level = models.CharField('Stufe', max_length=8, choices=Level, blank=True, help_text='Für das Diploma Supplement; leer: keines.')
     qualification = models.CharField('Abschluss ausgeschrieben', max_length=120, blank=True, help_text='Wie im Diploma Supplement, z. B. „Bachelor of Music (B.Mus.)“.')
     english = models.CharField('Studiengang auf Englisch', max_length=120, blank=True)

@@ -5,15 +5,15 @@
         <th><button type="button" class="explain" popovertarget="zum-plan">Modul · Lehrveranstaltung · Prüfung</button></th>
         <th class="fmt"><button type="button" class="explain" popovertarget="zur-form">Form</button></th>
         {% for s in semesters %}<th class="sem{% if progress and s == fs %} current{% endif %}"><button type="button" class="explain" popovertarget="zum-semester">{{ s }}.</button></th>{% endfor %}
-        <th class="num cp"><button type="button" class="explain" popovertarget="zu-cp">CP</button></th>
-        <th class="num"><button type="button" class="explain" popovertarget="zum-gewicht">Gewicht</button></th>
+        {% if credited %}<th class="num cp"><button type="button" class="explain" popovertarget="zu-cp">CP</button></th>{% endif %}
+        {% if weighted %}<th class="num"><button type="button" class="explain" popovertarget="zum-gewicht">Gewicht</button></th>{% endif %}
         {% if progress %}<th class="num"><button type="button" class="explain" popovertarget="zur-note">Note</button></th>{% endif %}
       </tr>
     </thead>
     <tbody>
       {% for r in rows %}
       {% if r.kind == 'or' %}
-      <tr class="or"><td colspan="{% if progress %}{{ semesters|length|add:5 }}{% else %}{{ semesters|length|add:4 }}{% endif %}"><div class="either"><span>oder</span></div></td></tr>
+      <tr class="or"><td colspan="{{ span }}"><div class="either"><span>oder</span></div></td></tr>
       {% elif r.kind == 'part' %}
       <tr class="part{% if r.exam %} exam{% endif %}{% if progress and r.off %} off{% endif %}{% if r.within %} opt{% endif %}">
         <td style="padding-left: calc(10px + {{ r.depth }} * 16px)">
@@ -26,8 +26,8 @@
         {% for cell in r.cells %}
         <td class="sem{% if progress and cell.state %} {{ cell.state }}{% endif %}">{% if progress and cell.state == 'off' %}{% elif progress and cell.state %}{% with i=cell.items.0 %}<span class="tile"{% if i.exam %} title="{{ i.title }}{% if cell.state == 'late' %}: laut Plan im {{ i.semester }}. Semester empfohlen{% endif %}"{% elif not i.credits %} title="Testat, ohne eigene CP"{% endif %}><span class="tile-num{% if i.exam %} dot{% endif %}">{% if i.exam %}●{% elif i.credits %}{{ i.credits }}{% else %}T{% endif %}</span></span>{% endwith %}{% else %}{% for i in cell.items %}{% if edit and not progress %}<a href="{% url 'setup:edit' 'module' i.pk %}?next={{ request.path|urlencode }}" title="{{ i.code|default:i.title }} bearbeiten">{% endif %}{% if i.excused %}<small>entfällt</small>{% elif i.exam %}<span title="{{ i.title }}">●</span>{% elif i.credits %}{{ i.credits }}{% else %}<span title="Testat, ohne eigene CP">T</span>{% endif %}{% if edit and not progress %}</a>{% endif %}{% endfor %}{% endif %}</td>
         {% endfor %}
-        <td class="num cp{% if progress and r.open_state %} {{ r.open_state }}{% endif %}">{% if r.open %}{% if progress and r.open_state and r.open_state != 'off' %}<span class="tile"><span class="tile-num">{{ r.open.0.credits }}</span></span>{% else %}<span class="plain">{{ r.open.0.credits }}</span>{% endif %}{% endif %}</td>
-        <td class="num muted">{% if r.weight %}{{ r.weight|floatformat:"-2" }}{% endif %}</td>
+        {% if credited %}<td class="num cp{% if progress and r.open_state %} {{ r.open_state }}{% endif %}">{% if r.open %}{% if progress and r.open_state and r.open_state != 'off' %}<span class="tile"><span class="tile-num">{{ r.open.0.credits }}</span></span>{% else %}<span class="plain">{{ r.open.0.credits }}</span>{% endif %}{% endif %}</td>{% endif %}
+        {% if weighted %}<td class="num muted">{% if r.weight %}{{ r.weight|floatformat:"-2" }}{% endif %}</td>{% endif %}
         {% if progress %}<td class="num">{% for g in r.grades %}{{ g|floatformat:1 }}{% if not forloop.last %} · {% endif %}{% endfor %}</td>{% endif %}
       </tr>
       {% else %}
@@ -42,8 +42,8 @@
           {% if r.node.pk in findable %}<a class="find" href="{% url 'courses:catalogue' %}?modul={{ r.node.pk }}">Veranstaltungen finden</a>{% endif %}
         </td>
         {% for s in semesters %}<td></td>{% endfor %}
-        <td class="num"><b>{% if progress %}{{ r.node.earned }}/{% endif %}{{ r.node.credits }}</b>{% if progress and r.node.credits and r.node.earned >= r.node.credits and not r.node.done %}<small class="pending">Prüfung offen</small>{% endif %}</td>
-        <td class="num">{% if r.node.weight %}{% if not progress or not r.choosing %}{{ r.node.weight|floatformat:"-2" }}{% endif %}{% endif %}</td>
+        {% if credited %}<td class="num"><b>{% if progress %}{{ r.node.earned }}/{% endif %}{{ r.node.credits }}</b>{% if progress and r.node.credits and r.node.earned >= r.node.credits and not r.node.done %}<small class="pending">Prüfung offen</small>{% endif %}</td>{% endif %}
+        {% if weighted %}<td class="num">{% if r.node.weight %}{% if not progress or not r.choosing %}{{ r.node.weight|floatformat:"-2" }}{% endif %}{% endif %}</td>{% endif %}
         {% if progress %}<td class="num"><b>{% if r.node.done and r.node.grade and r.kind != 'group' %}{{ r.node.grade }}{% endif %}</b></td>{% endif %}
       </tr>
       {% endif %}
@@ -57,25 +57,25 @@
   </div>
   <div popover class="explainer" id="zur-form">
     <b>Lehrform</b>
-    <p>Wie eine Lehrveranstaltung stattfindet, mit ihren Minuten pro Woche: „E 90“ ist Einzelunterricht, 90 Minuten in der Woche.</p>
+    {% with f=formats.0 %}<p>{% if minutes %}Wie eine Lehrveranstaltung stattfindet, mit ihren Minuten pro Woche: „{{ f.short }} 90“ ist {{ f.name }}, 90 Minuten in der Woche.{% else %}Wie eine Lehrveranstaltung stattfindet, mit ihren Semesterwochenstunden (SWS): „{{ f.short }} 2“ ist {{ f.name }}, zwei SWS.{% endif %}</p>{% endwith %}
     <dl class="codes">{% for f in formats %}<dt>{{ f.short }}</dt><dd>{{ f.name }}</dd>{% endfor %}</dl>
   </div>
   <div popover class="explainer" id="zum-semester">
     <b>Fachsemester</b>
-    <p>Wann der Studienplan etwas vorsieht. Im Feld stehen die CP einer Lehrveranstaltung, „T“ für ein Testat ohne eigene CP und „●“ für eine Prüfung.</p>
+    <p>Wann der Studienplan etwas vorsieht. Im Feld stehen {% if credited %}die CP einer Lehrveranstaltung, „T“ für ein Testat ohne eigene CP{% else %}„T“ für eine Lehrveranstaltung{% endif %} und „●“ für eine Prüfung.</p>
     {% if progress and fs %}<p>Grün beschriftet ist Ihr jetziges Fachsemester, das {{ fs }}.</p>{% endif %}
   </div>
-  <div popover class="explainer" id="zu-cp">
+  {% if credited %}<div popover class="explainer" id="zu-cp">
     <b>Leistungspunkte (CP)</b>
-    <p>Credit Points nach ECTS. Ein CP steht für 25 bis 30 Stunden Arbeit.</p>
+    <p>Credit Points nach ECTS.{% if institution.credit_hours %} Ein CP steht für {{ institution.credit_hours }} Stunden Arbeit.{% endif %}</p>
     <p>{% if progress %}In Modulzeilen: erreicht von erforderlich, etwa 16/16. „Prüfung offen“: Die CP sind erreicht, eine Prüfung fehlt noch.{% else %}In Modulzeilen: wie viele CP das Modul verlangt.{% endif %}</p>
     <p>„Wahl“: Aus dem Angebot wird so viel belegt, wie das Modul verlangt. CP ohne festes Semester stehen in dieser Spalte.</p>
-  </div>
-  <div popover class="explainer" id="zum-gewicht">
+  </div>{% endif %}
+  {% if weighted %}<div popover class="explainer" id="zum-gewicht">
     <b>Gewicht</b>
     <p>Wie stark eine Note zählt: unter einem Modul ihr Anteil an der Modulnote, in Modulzeilen der Anteil des Moduls an der Gesamtnote.</p>
     <p>Bei Gewicht 1 und 2 zählt die zweite Note doppelt. Ohne Gewicht zählt eine Note nicht.</p>
-  </div>
+  </div>{% endif %}
   {% if progress %}<div popover class="explainer" id="zur-note">
     <b>Note</b>
     <p>Die Noten bestandener Prüfungen und benoteter Lehrveranstaltungen.</p>

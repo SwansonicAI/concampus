@@ -63,6 +63,14 @@ def plan(tree, semesters, choices=(), taking=(), late=()):
     return rows
 
 
+def columns(rows, program, graded):
+    """What a plan shows: CP and Gewicht only where its Studiengang has them (a Konzertexamen may have neither), Note for
+    whoever sees grades, `span` how many columns there are; and whether its forms count `minutes` or SWS."""
+    nodes = [r['node'] for r in rows if 'node' in r] + [i for r in rows for i in r.get('items', ())]
+    credited, weighted = any(n.credits for n in nodes), any(n.weight for n in nodes)
+    return {'credited': credited, 'weighted': weighted, 'span': 2 + program.semesters + credited + weighted + bool(graded), 'minutes': program.weekly == 'minuten'}
+
+
 def index(request):
     sizes = dict(Module.counted().values('program').annotate(n=Count('pk')).values_list('program', 'n'))
     programs = list(Program.objects.ordered().prefetch_related('subjects'))
@@ -89,7 +97,7 @@ def program(request, pk):
             row['offers'] = sorted({c for i in row['items'] for c in offers[i.pk]}, key=lambda c: c.title)
     figures = bool(request.user.roles & OVERSIGHT)
     return render(request, 'curriculum/program.html', {
-        'program': program, 'rows': rows, 'formats': Format.objects.exclude(short=''), 'semesters': range(1, program.semesters + 1), 'term': term, 'edit': request.user.may('edit_curriculum', program),
+        'program': program, 'rows': rows, 'formats': Format.objects.exclude(short=''), **columns(rows, program, False), 'semesters': range(1, program.semesters + 1), 'term': term, 'edit': request.user.may('edit_curriculum', program),
         'reachable': Course.reachable(request.user, Course.objects.filter(pk__in=[c.pk for found in offers.values() for c in found])),
         'total': sum(m.credits for m in tree), 'figures': figures, 'students': figures and program.studies.filter(status='enrolled').count(),
         'coming': Term.objects.filter(start__gt=timezone.localdate()).order_by('start'),

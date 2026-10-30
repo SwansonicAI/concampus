@@ -34,7 +34,7 @@ from core.views import SHOWN, preview, without_term
 from courses.models import Course, Format, Participation
 from courses.views import untimed
 from curriculum.models import Module, Program, Subject
-from curriculum.views import plan
+from curriculum.views import columns, plan
 from exams.views import exhausted
 from instruments.models import Loan
 from . import payments, smv, xhochschule
@@ -308,6 +308,8 @@ def study(request, pk):
     reachable = Study.reachable(person, study.person.studies.exclude(pk=study.pk))
     taking = set(study.participations.filter(course__term=Term.current()).values_list('module_id', flat=True))
     choices = study.program.choices()
+    rows = plan(tree, study.program.semesters, choices, taking, late)
+    grades = own or files or study.teacher_id == person.pk  # the student office sees outcomes: Prüfungsanspruch, Abschluss
     options = study.options() if study.status == Study.Status.ENROLLED else []
     lost = exhausted(study) if study.status == Study.Status.ENROLLED else []  # the Prüfungsanspruch: no Rückmeldung then
     return render(request, 'students/study.html', {
@@ -316,11 +318,11 @@ def study(request, pk):
         'own': own,
         'personal': personal, 'identity': identity,
         'files': own or files,  # Leistungsübersicht
-        'grades': own or files or study.teacher_id == person.pk,  # the student office sees outcomes: Prüfungsanspruch, Abschluss
+        'grades': grades,
         'certify': own or office,  # Bescheinigungen
         'unpaying': 'manage_reregistration' in person.roles,
         'enrolling': study.missing() if office and study.status == Study.Status.ADMITTED else [],
-        'rows': plan(tree, study.program.semesters, choices, taking, late), 'formats': Format.objects.exclude(short=''), 'findable': findable(study, tree, choices, taking) if own and study.status == Study.Status.ENROLLED else set(),
+        'rows': rows, 'formats': Format.objects.exclude(short=''), **columns(rows, study.program, grades), 'findable': findable(study, tree, choices, taking) if own and study.status == Study.Status.ENROLLED else set(),
         'semesters': range(1, study.program.semesters + 1),
         'taking': taking,
         'late': late,

@@ -43,7 +43,7 @@ def deputat(courses, person):
     """A teacher's load in SWS: each course's hours; per participant in one-to-one teaching, per ensemble they coach in
     ensemble courses."""
     courses = (
-        courses.filter(cancelled=None).select_related('format', 'term').prefetch_related('participations__module', 'origin__participations__module')
+        courses.filter(cancelled=None).select_related('format', 'term').prefetch_related('participations__module__program', 'origin__participations__module__program')
         .annotate(size=Count('participations', distinct=True), coached=Count('ensembles', filter=Q(ensembles__coach=person), distinct=True))
     )
     return sum(sws(c, c.coached) for c in courses)
@@ -61,9 +61,10 @@ def sws(course, coached):
 
 
 def minutes(module):
-    """The SWS of one lesson in a plan whose form says its weekly minutes, 'E 60' or 'E 90'; None where it does not."""
+    """The SWS of one lesson in a plan whose form says its weekly extent, 'E 90' in minutes or 'E 2' in SWS as its
+    Studiengang reads it (Program.weekly); None where it does not."""
     found = module and re.search(r'(\d+)\s*$', module.description)
-    return Decimal(found[1]) / 60 if found else None
+    return Decimal(found[1]) / (60 if module.program.weekly == 'minuten' else 1) if found else None
 
 
 def share(course, coached):
@@ -280,7 +281,7 @@ def course(request, pk):
     ensembles.sort(key=lambda e: (e.coach_id != person.pk, e.coach_id is not None, e.wish_id != person.pk))  # one's own, then those still open
     return render(request, 'courses/course.html', {
         'course': course, 'playing': playing, 'players': list(course.staff.all()) if playing is not None else [],
-        'lengths': sorted(Counter(minutes(p.module) or course.hours for p in course.participations.select_related('module')).items(), reverse=True) if course.kind == Course.Kind.LESSON and staffed else [],
+        'lengths': sorted(Counter(minutes(p.module) or course.hours for p in course.participations.select_related('module__program')).items(), reverse=True) if course.kind == Course.Kind.LESSON and staffed else [],
         'share': minutes(own[0].module) or course.hours if own and course.kind == Course.Kind.LESSON else None,
         'staff': staff,
         'rows': rows if staffed else [],
@@ -768,7 +769,7 @@ def lesson_times(course):
     for b in upcoming:
         for p in b.participants.all():
             nexts.setdefault(p.pk, b)
-    planned = {p.study.person_id: minutes(p.module) for p in course.participations.select_related('module', 'study')}  # 'E 45': the plan's length
+    planned = {p.study.person_id: minutes(p.module) for p in course.participations.select_related('module__program', 'study')}  # 'E 45': the plan's length
     rows = []
     for student in students:
         row = {'person': student.pk, 'room': rooms.most_common(1)[0][0] if rooms else None}
@@ -840,7 +841,7 @@ def mine(request):
         taught_here = list(teaching.annotate(
             size=Count('participations', distinct=True), asked=Count('signups', distinct=True), mine=Count('ensembles__members', filter=Q(ensembles__coach=person), distinct=True),
             coached=Count('ensembles', filter=Q(ensembles__coach=person), distinct=True),
-        ).select_related('subject', 'format', 'term').prefetch_related('participations__module', 'origin__participations__module'))
+        ).select_related('subject', 'format', 'term').prefetch_related('participations__module__program', 'origin__participations__module__program'))
         for c in taught_here:  # as the Deputat counts it: a lesson class by its students' minutes
             c.sws = None if c.cancelled else sws(c, c.coached)
         context.update(
@@ -907,7 +908,7 @@ def hours(term, seen):
     """{teacher: [(course, SWS)]} of a term's teaching, for the teachers `seen` (pks; None: all)."""
     courses = (
         term.courses.filter(kind__in=TEACHING, cancelled=None).select_related('format', 'term')
-        .prefetch_related('staff', 'ensembles', 'participations__module', 'origin__participations__module').annotate(size=Count('participations'))
+        .prefetch_related('staff', 'ensembles', 'participations__module__program', 'origin__participations__module__program').annotate(size=Count('participations'))
     )
     if seen is not None:
         courses = courses.filter(pk__in=Course.objects.filter(staff__in=seen).values('pk'))

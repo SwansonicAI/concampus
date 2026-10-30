@@ -304,6 +304,7 @@ EDITORS = {e.key: e for e in [
             ('Rückmeldung und Prüfungen', [('late_fee', 'withdraw_weeks'), 'payee', ('iban', 'bic')]),
             ('Raumbuchung', [('student_daily_hours', 'student_ahead_hours'), ('last_minute_hours', 'teacher_ahead_days')]),
             ('Deputat', ['load_since']),
+            ('Studienpläne', ['credit_hours']),
             ('Amtliche Statistik', [('university', 'region', 'report_id')]),
         ],
         columns=[('Name', 'name'), ('Ort', 'place')],
@@ -370,7 +371,7 @@ EDITORS = {e.key: e for e in [
     Editor(
         'studiengaenge', Program, 'Studiengänge', 'edit_curriculum', 'Studium und Lehre', form=ProgramForm,
         sections=[
-            (None, [('degree', 'name'), ('version', 'starts'), ('semesters', 'attempts', 'thesis_weeks'), 'postgraduate', 'subjects']),
+            (None, [('degree', 'name'), ('version', 'starts'), ('semesters', 'attempts', 'thesis_weeks'), 'weekly', 'postgraduate', 'subjects']),
             ('Noten', [('rounding', 'mean_rounding', 'honours')]),
             ('Diploma Supplement und Statistik', [('level', 'kind', 'field'), ('qualification', 'english'), 'outcomes', ('exam', 'exam_office')]),
         ],
