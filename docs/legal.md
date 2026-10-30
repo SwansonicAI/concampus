@@ -84,7 +84,7 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 
 | Requirement | Source | Status | In Campus, or missing |
 |---|---|---|---|
-| XHochschule documents | XBildung, IT-Planungsrat 2025/43 | partly | Immatrikulations-, Studienzeit- and Exmatrikulationsbescheinigung, Leistungsübersicht, Zeugnis, Urkunde, Diploma Supplement in English and German, as printable pages; the Immatrikulationsbescheinigung checkable by its Prüfcode. No XHochschule data, no BAföG § 9 version, no eIDAS seal |
+| XHochschule documents | XBildung, IT-Planungsrat 2025/43 | partly | Immatrikulations-, Studienzeit- and Exmatrikulationsbescheinigung, Leistungsübersicht, Zeugnis, Urkunde, Diploma Supplement in English and German, as printable pages; the Immatrikulationsbescheinigung checkable by its Prüfcode, also as the version of § 9 BAföG, which stands in for Formblatt 2. No XHochschule data, no eIDAS seal |
 | Statistics delivery | HStatG | yes | eSTATISTIK.core files |
 | Reports with the health insurers, electronic only since 2022 | § 199a SGB V, Gemeinsame Grundsätze of the GKV-Spitzenverband and the HRK; Absendernummer under § 18n SGB IV | partly | Campus keeps the insurer, the status and the day the insurer's report came, and enrols and accepts a Rückmeldung only with it; the office enters that day by hand. No connection to the insurers' data exchange: their reports (M10 status, M11 change of insurer) are not received, the Hochschule's (M20 Einschreibung, M30 Exmatrikulation) not sent. Needs HfM's Absendernummer |
 | Erasmus Without Paper | European Commission | no | No mobility |
@@ -112,33 +112,29 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 
 Every requirement above that is not „yes“ is here.
 
-Before the pitch:
+In Campus:
 
-1. The Immatrikulationsbescheinigung as the BAföG § 9 version.
-
-In Campus, after the pitch:
-
-2. Electronic reports with the health insurers (§ 199a SGB V): receive M10 and M11, send M20 and M30.
-3. XHochschule data for the certificates, with an eIDAS seal.
-4. Statistics of academic and artistic staff.
-5. Mark a record as restricted (Art. 18).
-6. A hearing step before Bescheide that need one (§ 28 VwVfG), once the Hochschule has named them.
-7. Periods for staff records and the export log.
-8. A complete export of a Hochschule's data, for switching provider (Data Act).
-9. Erasmus Without Paper and booking fees to the Hochschule's finance system, if wanted.
+1. Electronic reports with the health insurers (§ 199a SGB V): receive M10 and M11, send M20 and M30.
+2. XHochschule data for the certificates, with an eIDAS seal.
+3. Statistics of academic and artistic staff.
+4. Mark a record as restricted (Art. 18).
+5. A hearing step before Bescheide that need one (§ 28 VwVfG), once the Hochschule has named them.
+6. Periods for staff records and the export log.
+7. A complete export of a Hochschule's data, for switching provider (Data Act).
+8. Erasmus Without Paper and booking fees to the Hochschule's finance system, if wanted.
 
 In production:
 
-10. A second factor at sign-in, through single sign-on (Shibboleth) with the Hochschule's identity provider.
-11. Backup of uploaded files; an EU host, BSI C5 where a cloud is used.
+9. A second factor at sign-in, through single sign-on (Shibboleth) with the Hochschule's identity provider.
+10. Backup of uploaded files; an EU host, BSI C5 where a cloud is used.
 
 Outside the code:
 
-12. A security concept after BSI IT-Grundschutz (Profil für Hochschulen).
-13. A manual accessibility test (BITV-Test) by a third party, and the conformance report a tender asks for.
-14. The processor agreement (Art. 28) and the description of technical and organisational measures for the
+11. A security concept after BSI IT-Grundschutz (Profil für Hochschulen).
+12. A manual accessibility test (BITV-Test) by a third party, and the conformance report a tender asks for.
+13. The processor agreement (Art. 28) and the description of technical and organisational measures for the
     Hochschule's records of processing and impact assessment.
-15. An Impressum for concampus.de.
+14. An Impressum for concampus.de.
 
 ## To check
 

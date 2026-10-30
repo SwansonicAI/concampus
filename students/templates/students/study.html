@@ -14,7 +14,7 @@
 </div>
 <p class="actions">
   {% if certify %}<small class="muted">Bescheinigungen:</small>
-  {% if study.status == 'enrolled' %}<a href="{% url 'students:certificate' study.pk %}">Immatrikulation</a>{% endif %}
+  {% if study.status == 'enrolled' %}<a href="{% url 'students:certificate' study.pk %}">Immatrikulation</a><a href="{% url 'students:certificate' study.pk %}?bafoeg">für das BAföG-Amt (§ 9)</a>{% endif %}
   {% if terms %}<a href="{% url 'students:periods' study.pk %}">Studienzeiten</a>{% endif %}
   {% if study.status == 'graduated' or study.status == 'left' %}<a href="{% url 'students:exmatriculation' study.pk %}">Exmatrikulation</a>{% endif %}{% endif %}
   {% if office %}<a href="{% url 'setup:edit' 'personen' study.person.pk %}?next={{ request.path|urlencode }}" data-panel>Stammdaten</a>{% endif %}

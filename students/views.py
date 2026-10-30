@@ -739,13 +739,16 @@ def exmatriculation(request, pk):
 
 
 def certificate(request, pk):
-    """Immatrikulationsbescheinigung for the current term."""
-    study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject'), pk=pk, status=Study.Status.ENROLLED)
+    """Immatrikulationsbescheinigung for the current term; with ?bafoeg the version of § 9 BAföG, which stands in for
+    Formblatt 2: what its part C asks of a Hochschule besides."""
+    study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term'), pk=pk, status=Study.Status.ENROLLED)
     if not (study.person == request.user or request.user.may('manage_students', study)):
         raise PermissionDenied
     term = Term.current()
+    first = StudyTerm.objects.filter(study__person=study.person_id, withdrawn=False).order_by('term__start').select_related('term').first()
     return render(request, 'students/certificate.html', {
         'study': study, 'term': term, 'registration': study.terms.filter(term=term).first(), 'today': timezone.localdate(),
+        'bafoeg': 'bafoeg' in request.GET, 'first': study.person.first_term or (first and first.term),
         'sender': texts.block('absender_bescheinigungen'), 'code': f'{study.pk}-{term.pk}-{signature(study.pk, term.pk)}',
         'check': request.build_absolute_uri(reverse('students:verify')),
     })

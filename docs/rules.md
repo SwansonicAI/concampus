@@ -78,6 +78,7 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 
 | Rule | Source | Code | Set in |
 |---|---|---|---|
+| The Immatrikulationsbescheinigung also as the version of § 9 BAföG, with the start of the study, the first enrolment and the Regelstudienzeit; it stands in for Formblatt 2 | BAföG § 9, Formblatt 2 Teil C | `students/views.py` `certificate()` | code |
 | Immatrikulation once the place is accepted, the fee paid, the insurer's report in and the HZB on record | ThürHG, § 199a SGB V | `students/models.py` `Study.missing()` | code |
 | An HZB from a school abroad is assessed; German proved where it is not in German; an APS certificate for China, India, Vietnam; both by the Immatrikulation | ThürHG, KMK | `core/models.py` `Person.abroad`, `needs_german`, `needs_aps`; `core/destatis.py` | Einstellungen › Unterlagenarten |
 | Each kind of document takes up to 5 files of 20 MB each unless set otherwise; the video one file of 1.5 GB, which may be taken over into another application in the same Hauptfach | Hochschule | `students/models.py` `DocumentType.size`, `max_files`; `admissions/views.py` `upload()`, `reuse()` | Einstellungen › Unterlagenarten |

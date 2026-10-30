@@ -71,6 +71,7 @@ class StudentsConfig(Tile, AppConfig):
             found.append(feature(f'Mein Studium {study.subject}', study.get_absolute_url(), 'akte status ects fachsemester rückmeldung urlaubssemester beurlaubung abschluss'))
             if study.status == 'enrolled':
                 found.append(feature('Immatrikulationsbescheinigung', reverse('students:certificate', args=[study.pk]), 'bescheinigung studienbescheinigung nachweis drucken pdf'))
+                found.append(feature('Immatrikulationsbescheinigung nach § 9 BAföG', f"{reverse('students:certificate', args=[study.pk])}?bafoeg", 'bafög formblatt 2 amt für ausbildungsförderung studienförderung'))
             found.append(feature(f'Studienzeitbescheinigung {study.subject}', reverse('students:periods', args=[study.pk]), 'studienzeiten semester rentenversicherung nachweis drucken pdf'))
         return found
 
