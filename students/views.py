@@ -248,24 +248,34 @@ def compose(request):
     return render(request, 'students/compose.html', {'form': form, 'people': people, 'studies': studies, 'back': back, 'sender': sender})
 
 
-def findable(tree, taking):
-    """The open modules and areas of a student's plan with courses this term for what is still open in them and not
-    taken yet (`taking`): each leads to the Vorlesungsverzeichnis, narrowed to it."""
+def findable(study, tree, choices, taking):
+    """The modules of a student's plan that lead to their courses this term, in the Vorlesungsverzeichnis narrowed to
+    them: those with something open for this semester or the next, and free electives (a Wahlkatalog); never a
+    Schwerpunkt or its choice, nor what lies under a Schwerpunkt before one is chosen. Only where a course this term is
+    there to take."""
     offered = set(Course.modules.through.objects.filter(course__term=Term.current(), course__kind=Course.Kind.COURSE, course__cancelled=None).values_list('module', flat=True))
-    found = set()
+    options, areas = {o.pk for o in choices}, {o.choice.pk for o in choices}
+    soon, found = {study.semester, study.semester + 1}, set()
 
-    def visit(node):
-        if node.done:
-            return False
-        if not node.nodes:
-            return node.pk in offered and node.pk not in taking
-        hits = [visit(child) for child in node.nodes]  # every child, so each open one is marked
-        if any(hits):
-            found.add(node.pk)
-        return any(hits)
+    def leaves(node):
+        return [node] if not node.nodes else [leaf for child in node.nodes for leaf in leaves(child)]
+
+    def takeable(nodes):
+        return any(n.pk in offered and n.pk not in taking and not n.done for n in nodes)
+
+    def visit(node, hidden):
+        hidden = hidden or node.pk in options and not study.focus_id
+        if node.done or not node.nodes:
+            return
+        if not hidden and node.pk not in options | areas:
+            due = [n for n in node.nodes if not n.nodes and not n.done and n.semester in soon]
+            if takeable(due) or node.offered > node.credits and takeable(leaves(node)):
+                found.add(node.pk)
+        for child in node.nodes:
+            visit(child, hidden)
 
     for root in tree:
-        visit(root)
+        visit(root, False)
     return found
 
 
@@ -297,6 +307,7 @@ def study(request, pk):
         t.due = t.term.fee if t.term_id == study.start_term_id else t.term.due(t.paid or today, late_fee)
     reachable = Study.reachable(person, study.person.studies.exclude(pk=study.pk))
     taking = set(study.participations.filter(course__term=Term.current()).values_list('module_id', flat=True))
+    choices = study.program.choices()
     options = study.options() if study.status == Study.Status.ENROLLED else []
     lost = exhausted(study) if study.status == Study.Status.ENROLLED else []  # the Prüfungsanspruch: no Rückmeldung then
     return render(request, 'students/study.html', {
@@ -309,7 +320,7 @@ def study(request, pk):
         'certify': own or office,  # Bescheinigungen
         'unpaying': 'manage_reregistration' in person.roles,
         'enrolling': study.missing() if office and study.status == Study.Status.ADMITTED else [],
-        'rows': plan(tree, study.program.semesters), 'findable': findable(tree, taking) if own and study.status == Study.Status.ENROLLED else set(),
+        'rows': plan(tree, study.program.semesters, choices, taking, late), 'findable': findable(study, tree, choices, taking) if own and study.status == Study.Status.ENROLLED else set(),
         'semesters': range(1, study.program.semesters + 1),
         'taking': taking,
         'late': late,

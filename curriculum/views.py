@@ -15,24 +15,40 @@ from .apps import OVERSIGHT
 from .models import Module, Program
 
 
-def plan(tree, semesters):
+def plan(tree, semesters, choices=(), taking=(), late=()):
     """Rows of the Studienverlaufsplan as the SVPP prints it: every module, and under it its course work and exams
-    with their credits per semester. Groups and choices become headings."""
-    rows = []
+    with their credits per semester. Groups and choices become headings; between the Schwerpunkte of a choice
+    (Program.choices()) stands „oder“. For a student each cell has its `state`: passed, taken this term (`taking`), an
+    exam overdue (`late`), or waived for the Hauptfach („off“)."""
+    rows, area = [], {o.pk: o.choice.pk for o in choices}
+    begun = set()  # the choices whose first Schwerpunkt is listed
+
+    def state(items):
+        for i in items:
+            if i.excused:
+                return 'off'
+            if i.done or i.pk in taking or i.pk in late:
+                return 'done' if i.done else 'now' if i.pk in taking else 'late'
+        return ''
 
     def visit(node, depth):
         leaves = [n for n in node.nodes if not n.nodes]
-        rows.append({'kind': 'module' if leaves else 'group', 'node': node, 'depth': depth})
+        if node.pk in area:
+            if area[node.pk] in begun:
+                rows.append({'kind': 'or', 'depth': depth})
+            begun.add(area[node.pk])
+        rows.append({'kind': 'module' if leaves else 'group', 'node': node, 'depth': depth, 'choosing': node.pk in area or node.pk in area.values()})
         parts = {}
         for leaf in leaves:
             parts.setdefault(leaf.title, []).append(leaf)
         for title, items in sorted(parts.items(), key=lambda part: part[1][0].exam):  # course work first, then exams
+            cells = [[i for i in items if i.semester == s] for s in range(1, semesters + 1)]
             rows.append({
                 'kind': 'part', 'title': title, 'items': items, 'depth': depth + 1, 'exam': items[0].exam,
-                'form': items[0].description, 'weight': items[0].weight,
-                'cells': [[i for i in items if i.semester == s] for s in range(1, semesters + 1)],
+                'form': items[0].description, 'weight': items[0].weight, 'off': all(i.excused for i in items),
+                'cells': [{'items': cell, 'state': state(cell)} for cell in cells],
                 'grades': [i.grade for i in items if getattr(i, 'grade', None)],
-                'open': [i for i in items if i.semester is None],
+                'open': [i for i in items if i.semester is None], 'open_state': state([i for i in items if i.semester is None]),
             })
         for child in node.nodes:
             if child.nodes:
@@ -63,7 +79,7 @@ def program(request, pk):
     for link in Course.modules.through.objects.filter(module__program=program, course__term=term).select_related('course'):
         offers[link.module_id].add(link.course)
     tree = program.curriculum()
-    rows = plan(tree, program.semesters)
+    rows = plan(tree, program.semesters, program.choices())
     for row in rows:
         if row['kind'] == 'part':
             row['offers'] = sorted({c for i in row['items'] for c in offers[i.pk]}, key=lambda c: c.title)

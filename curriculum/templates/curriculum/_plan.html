@@ -3,44 +3,46 @@
     <thead>
       <tr>
         <th>Modul · Lehrveranstaltung · Prüfung</th>
-        <th>Form</th>
-        {% for s in semesters %}<th class="num">{{ s }}.</th>{% endfor %}
-        <th class="num">CP</th>
+        <th class="fmt">Form</th>
+        {% for s in semesters %}<th class="sem{% if progress and s == fs %} current{% endif %}">{{ s }}.</th>{% endfor %}
+        <th class="num cp">CP</th>
         <th class="num" title="Anteil an der Note des Moduls bzw. an der Gesamtnote">Gewicht</th>
         {% if progress %}<th class="num">Note</th>{% endif %}
       </tr>
     </thead>
     <tbody>
       {% for r in rows %}
-      {% if r.kind == 'part' %}
-      <tr class="part{% if r.exam %} exam{% endif %}">
+      {% if r.kind == 'or' %}
+      <tr class="or"><td colspan="{% if progress %}{{ semesters|length|add:5 }}{% else %}{{ semesters|length|add:4 }}{% endif %}" style="padding-left: calc(10px + {{ r.depth }} * 16px)"><div class="either">oder</div></td></tr>
+      {% elif r.kind == 'part' %}
+      <tr class="part{% if r.exam %} exam{% endif %}{% if progress and r.off %} off{% endif %}">
         <td style="padding-left: calc(10px + {{ r.depth }} * 16px)">
-          {% if r.exam %}<span class="tag-exam">Prüfung</span> {% endif %}{% if edit %}<a href="{% url 'setup:edit' 'module' r.items.0.pk %}?next={{ request.path|urlencode }}">{{ r.title }}</a>{% else %}{{ r.title }}{% endif %}
+          {% if r.exam %}<span class="tag-exam">Prüfung</span>{% endif %}{% if edit %}<a href="{% url 'setup:edit' 'module' r.items.0.pk %}?next={{ request.path|urlencode }}">{{ r.title }}</a>{% else %}{{ r.title }}{% endif %}{% if progress and r.off %} · {{ r.form|default:"entfällt" }}{% endif %}
           {% if r.offers|length > 3 %}<details class="tail"><summary><small>{{ r.offers|length }} Veranstaltungen</small></summary>{% for c in r.offers %}<small>{% if c.pk in reachable %}<a href="{{ c.get_absolute_url }}">{{ c.title }}</a>{% else %}{{ c.title }}{% endif %}</small><br>{% endfor %}</details>
           {% else %}{% for c in r.offers %}<br><small>{% if c.pk in reachable %}<a href="{{ c.get_absolute_url }}">{{ c.title }}</a>{% else %}{{ c.title }}{% endif %}</small>{% endfor %}{% endif %}
           {% if progress %}{% for i in r.items %}{% for f in i.failures %}<br><small class="fail">{{ forloop.counter }}. Versuch, {{ f.course.term }}: {% if f.grade is not None %}{{ f.grade|floatformat:1 }}{% else %}nicht bestanden{% endif %}{% if f.remark %} ({{ f.remark|upper }}){% endif %}</small>{% endfor %}{% if i.last %}<br><small class="fail"><b>Der nächste Versuch ist der letzte.</b></small>{% endif %}{% endfor %}{% endif %}
         </td>
-        <td class="muted"><small>{{ r.form }}</small></td>
+        <td class="fmt muted"><small>{% if not progress or not r.off %}{{ r.form }}{% endif %}</small></td>
         {% for cell in r.cells %}
-        <td class="num{% for i in cell %}{% if progress %}{% if i.excused %} muted{% elif i.done %} done{% elif i.pk in taking %} now{% elif i.pk in late %} late{% endif %}{% endif %}{% endfor %}">{% for i in cell %}{% if edit and not progress %}<a href="{% url 'setup:edit' 'module' i.pk %}?next={{ request.path|urlencode }}" title="{{ i.code|default:i.title }} bearbeiten">{% endif %}{% if i.excused %}<small>entfällt</small>{% elif i.exam %}<span title="{{ i.title }}{% if i.pk in late %}: laut Plan im {{ i.semester }}. Semester empfohlen{% endif %}">●</span>{% elif i.credits %}{{ i.credits }}{% else %}<span title="Testat, ohne eigene CP">T</span>{% endif %}{% if edit and not progress %}</a>{% endif %}{% endfor %}</td>
+        <td class="sem{% if progress and cell.state %} {{ cell.state }}{% endif %}">{% if progress and cell.state == 'off' %}{% elif progress and cell.state %}{% with i=cell.items.0 %}<span class="tile"{% if i.exam %} title="{{ i.title }}{% if cell.state == 'late' %}: laut Plan im {{ i.semester }}. Semester empfohlen{% endif %}"{% elif not i.credits %} title="Testat, ohne eigene CP"{% endif %}><span class="tile-num{% if i.exam %} dot{% endif %}">{% if i.exam %}●{% elif i.credits %}{{ i.credits }}{% else %}T{% endif %}</span></span>{% endwith %}{% else %}{% for i in cell.items %}{% if edit and not progress %}<a href="{% url 'setup:edit' 'module' i.pk %}?next={{ request.path|urlencode }}" title="{{ i.code|default:i.title }} bearbeiten">{% endif %}{% if i.excused %}<small>entfällt</small>{% elif i.exam %}<span title="{{ i.title }}">●</span>{% elif i.credits %}{{ i.credits }}{% else %}<span title="Testat, ohne eigene CP">T</span>{% endif %}{% if edit and not progress %}</a>{% endif %}{% endfor %}{% endif %}</td>
         {% endfor %}
-        <td class="num muted{% if progress %}{% for i in r.open %}{% if i.done %} done{% elif i.pk in taking %} now{% endif %}{% endfor %}{% endif %}">{% if r.open %}{{ r.open.0.credits }}{% endif %}</td>
+        <td class="num cp{% if progress and r.open_state %} {{ r.open_state }}{% endif %}">{% if r.open %}{% if progress and r.open_state and r.open_state != 'off' %}<span class="tile"><span class="tile-num">{{ r.open.0.credits }}</span></span>{% else %}<span class="plain">{{ r.open.0.credits }}</span>{% endif %}{% endif %}</td>
         <td class="num muted">{% if r.weight %}{{ r.weight|floatformat:"-2" }}{% endif %}</td>
         {% if progress %}<td class="num">{% for g in r.grades %}{{ g|floatformat:1 }}{% if not forloop.last %} · {% endif %}{% endfor %}</td>{% endif %}
       </tr>
       {% else %}
-      <tr class="{{ r.kind }}{% if progress and r.node.done %} complete{% endif %}">
+      <tr class="{{ r.kind }}">
         <td colspan="2" style="padding-left: calc(10px + {{ r.depth }} * 16px)">
-          {% if edit %}<a href="{% url 'setup:edit' 'module' r.node.pk %}?next={{ request.path|urlencode }}"><b>{{ r.node.code }}</b> {{ r.node.title }}</a>
+          {% if edit %}<a href="{% url 'setup:edit' 'module' r.node.pk %}?next={{ request.path|urlencode }}">{% if r.node.code %}<span class="code">{{ r.node.code }}</span>{% endif %}<span class="name">{{ r.node.title }}</span></a>
           <a class="muted" href="{% url 'setup:new' 'module' %}?studiengang={{ r.node.program_id }}&unter={{ r.node.pk }}&next={{ request.path|urlencode }}" title="Ein Modul darunter anlegen"><small>+ Untermodul</small></a>
-          {% else %}<b>{{ r.node.code }}</b> {{ r.node.title }}{% endif %}
-          {% if r.node.offered > r.node.credits %}<span class="badge">Wahl: {{ r.node.credits }} von {{ r.node.offered }} CP</span>{% endif %}
-          {% if r.node.pk in findable %}<a href="{% url 'courses:catalogue' %}?modul={{ r.node.pk }}"><small>Veranstaltungen finden</small></a>{% endif %}
-          {% if r.node.description %}<br><small class="muted">{{ r.node.description }}</small>{% endif %}
+          {% else %}{% if r.node.code %}<span class="code">{{ r.node.code }}</span>{% endif %}<span class="name">{{ r.node.title }}</span>{% endif %}
+          {% if r.node.offered > r.node.credits %}<span class="choice">· Wahl: {{ r.node.credits }} von {{ r.node.offered }} CP</span>{% endif %}
+          {% if r.node.description %}<small class="about">{{ r.node.description }}</small>{% endif %}
+          {% if r.node.pk in findable %}<a class="find" href="{% url 'courses:catalogue' %}?modul={{ r.node.pk }}">Veranstaltungen finden</a>{% endif %}
         </td>
         {% for s in semesters %}<td></td>{% endfor %}
-        <td class="num"><b>{% if progress %}{{ r.node.earned }}/{% endif %}{{ r.node.credits }}</b>{% if progress and r.node.credits and r.node.earned >= r.node.credits and not r.node.done %}<br><small class="muted">Prüfung offen</small>{% endif %}</td>
-        <td class="num">{% if r.node.weight %}{{ r.node.weight|floatformat:"-2" }}{% endif %}</td>
+        <td class="num"><b>{% if progress %}{{ r.node.earned }}/{% endif %}{{ r.node.credits }}</b>{% if progress and r.node.credits and r.node.earned >= r.node.credits and not r.node.done %}<small class="pending">Prüfung offen</small>{% endif %}</td>
+        <td class="num">{% if r.node.weight %}{% if not progress or not r.choosing %}{{ r.node.weight|floatformat:"-2" }}{% endif %}{% endif %}</td>
         {% if progress %}<td class="num"><b>{% if r.node.done and r.node.grade and r.kind != 'group' %}{{ r.node.grade }}{% endif %}</b></td>{% endif %}
       </tr>
       {% endif %}

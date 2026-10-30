@@ -169,12 +169,12 @@
 <section id="studienverlauf">
   <h2>Studienverlauf</h2>
   {% if options %}{% with first=options.0 %}
-  <form method="post" action="{% url 'students:focus' study.pk %}" class="panel" style="margin-bottom: 16px">
+  <form method="post" action="{% url 'students:focus' study.pk %}" class="panel choose">
     {% csrf_token %}
     <h3>{{ first.choice.title }} {% if study.focus %}ändern{% else %}wählen{% endif %}{% if choose_by %} <small class="{% if choose_by < today %}fail{% else %}muted{% endif %}">{% if choose_by < today %}überfällig seit{% else %}bis{% endif %} {{ choose_by|date:"j.n.Y" }}</small>{% endif %}</h3>
-    <p class="muted"><small>{{ first.choice.description }} Vorher ist eine Studienfachberatung vorgesehen{% if study.teacher %}, etwa bei <a href="mailto:{{ study.teacher.email }}">{{ study.teacher }}</a>{% endif %}. {% if fs < first.first %}Bis zum Beginn des {{ first.first }}. Semesters können Sie die Wahl hier ändern, danach nur über: {% else %}Ändern lässt sie sich danach nur über: {% endif %}{{ changes|default:"die Hochschule" }}.</small></p>
-    <div class="choices">{% for o in options %}<label for="focus-{{ o.pk }}"><input type="radio" id="focus-{{ o.pk }}" name="focus" value="{{ o.pk }}" required{% if o.pk == study.focus_id %} checked{% endif %}> {{ o.title }}{% if o.pk == study.advised_id %} <span class="badge">von den Lehrenden empfohlen</span>{% endif %}</label>{% endfor %}</div>
-    <p style="margin: 12px 0 0"><button class="btn">{% if study.focus %}Ändern{% else %}Wählen{% endif %}</button></p>
+    <p class="muted">{{ first.choice.description }} Vorher ist eine Studienfachberatung vorgesehen{% if study.teacher %}, etwa bei <a href="mailto:{{ study.teacher.email }}">{{ study.teacher }}</a>{% endif %}. {% if fs < first.first %}Bis zum Beginn des {{ first.first }}. Semesters können Sie die Wahl hier ändern, danach nur über: {% else %}Ändern lässt sie sich danach nur über: {% endif %}{{ changes|default:"die Hochschule" }}.</p>
+    <div class="choices">{% for o in options %}<label for="focus-{{ o.pk }}"><input type="radio" id="focus-{{ o.pk }}" name="focus" value="{{ o.pk }}" required{% if o.pk == study.focus_id %} checked{% endif %}> {{ o.title }}{% if o.pk == study.advised_id %} <span class="badge yes">von den Lehrenden empfohlen</span>{% endif %}</label>{% endfor %}</div>
+    <p style="margin: 20px 0 0"><button class="btn">{% if study.focus %}Ändern{% else %}Wählen{% endif %}</button></p>
   </form>
   {% endwith %}{% elif recording %}
   <form method="post" action="{% url 'students:focus' study.pk %}" class="panel" style="margin-bottom: 16px">
@@ -191,7 +191,7 @@
     <div class="inline"><label>Empfehlung<select name="advised"><option value="">keine</option>{% for o in advising %}<option value="{{ o.pk }}"{% if o.pk == study.advised_id %} selected{% endif %}>{{ o.title }}</option>{% endfor %}</select></label><button class="btn ghost">Speichern</button></div>
   </form>
   {% endwith %}{% endif %}
-  {% if not grades %}<p class="lead">Der Studienverlaufs- und Prüfungsplan; was erbracht ist und mit welchen Noten, sieht die Prüfungsverwaltung.</p>{% else %}<p class="lead">Der Studienverlaufs- und Prüfungsplan mit allem, was bisher erbracht ist. Grün: bestanden. Grün umrandet: in diesem Semester belegt. Orange umrandet: Prüfung, die der Plan für ein früheres Semester empfiehlt. Gewicht: Anteil an der Note des Moduls, bei Modulen an der Gesamtnote.</p>{% endif %}
+  {% if not grades %}<p class="lead">Der Studienverlaufs- und Prüfungsplan; was erbracht ist und mit welchen Noten, sieht die Prüfungsverwaltung.</p>{% else %}<div class="squares"><span class="done"><span class="tile"><span class="tile-num">2</span></span> bestanden</span><span class="now"><span class="tile"><span class="tile-num">3</span></span> dieses Semester belegt</span><span class="late"><span class="tile"><span class="tile-num dot">●</span></span> Prüfung nachholen</span><span>Zahlen = CP</span></div>{% endif %}
   {% include "curriculum/_plan.html" with progress=grades %}
 </section>
 {% endblock %}

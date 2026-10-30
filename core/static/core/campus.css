@@ -264,18 +264,62 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 48px; }
 .cols > section, .cols > div > section:first-child { margin-top: 0; }
 
-/* Studienverlaufs- und Prüfungsplan */
-.svpp { font-size: 14px; }
+/* Studienverlaufs- und Prüfungsplan: rows of whole pixels, so the squares sit alike in every row */
+.svpp { border-collapse: separate; border-spacing: 0; font-size: 14px; }
 .svpp th, .svpp td { padding: 6px 8px; }
-.svpp tr.group td { padding-top: 14px; background: #e8e8e8; }
-.svpp tr.module td { border-top: 6px solid #fff; background: var(--soft); }
-.svpp tr.module.complete td:first-child { box-shadow: inset 4px 0 var(--accent); }
-.svpp tr.part td { border-bottom: 1px solid #ececec; }
-.svpp td.num { width: 44px; }
-.svpp td.done { background: var(--accent-pale); color: var(--accent-dark); font-weight: 700; }
-.svpp td.now { outline: 2px solid var(--accent); outline-offset: -3px; font-weight: 700; }
-.svpp td.late { outline: 2px solid var(--amber); outline-offset: -3px; }
-.tag-exam { padding: 0 5px; border: 1px solid var(--amber); color: var(--amber); font-size: 11px; font-weight: 700; text-transform: uppercase; }
+.svpp thead th { padding-top: 14px; padding-bottom: 12px; border-bottom: 0; box-shadow: inset 0 -2px 0 var(--ink); line-height: 20px; }
+.svpp thead th.current { color: var(--accent-dark); }
+.svpp thead th[title] { text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
+.svpp tbody td { line-height: 22px; }
+.svpp .sem { width: 40px; padding-right: 4px; padding-left: 4px; text-align: center; }
+.svpp .fmt { width: 72px; white-space: nowrap; }
+.svpp .cp { width: 84px; padding-left: 4px; }
+.svpp tr:is(.module, .group) td { padding-top: 12px; padding-bottom: 12px; border-top: 20px solid #fff; }
+.svpp tr.group td { background: #e8e8e8; }
+.svpp tr.module td { background: var(--soft); }
+.svpp tbody tr:first-child td, .svpp tr.or + tr td { border-top-width: 0; }
+.svpp tr:is(.module, .group) + tr:is(.module, .group) td { border-top-width: 2px; }
+.svpp tr.part td { padding-top: 7px; padding-bottom: 7px; border-bottom: 1px solid #ececec; }
+.svpp tbody tr:is(.part, .module, .group):has(+ tr:is(.module, .group, .or)) td, .svpp tbody tr.part:last-child td { border-bottom-color: transparent; }
+.svpp tr.part:hover td { background: #f7f7f7; }
+.svpp tr.part :is(.sem, .cp) { color: #767676; font-size: 13px; font-weight: 400; }
+.svpp tr.off td { color: #767676; }
+.svpp .code { margin-right: 8px; color: var(--muted); font-size: 12px; font-weight: 600; line-height: 1; }
+.svpp .name { color: var(--ink); font-size: 15px; font-weight: 700; line-height: 1; }
+.svpp a .name { color: inherit; }
+.svpp .choice { margin-left: 6px; color: var(--muted); font-size: 13px; line-height: 1; }
+.svpp .about { display: block; max-width: 90ch; margin-top: 4px; color: var(--muted); font-size: 13px; line-height: 20px; }
+.svpp .find { display: block; margin-top: 6px; color: var(--accent-dark); font-size: 13px; font-weight: 400; line-height: 20px; text-decoration: none; }
+.svpp .find:hover { text-decoration: underline; }
+.svpp .pending { display: block; margin-top: 2px; color: var(--amber); font-size: 11px; font-weight: 600; line-height: 16px; white-space: nowrap; }
+.svpp tr.part small { line-height: 1; }
+.svpp tr.or td { padding-top: 16px; padding-bottom: 14px; line-height: 16px; }
+.either { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.either::after { flex: 1; border-top: 1px solid var(--line); content: ""; }
+.tag-exam { display: inline-block; min-width: 56px; margin-right: 8px; color: var(--muted); font-size: 12px; line-height: 1; vertical-align: baseline; }
+/* A square around what is passed, taken or overdue, its number in the middle of it */
+.svpp td:is(.done, .now, .late) { position: relative; }
+.tile { position: absolute; top: 50%; left: 50%; display: flex; align-items: center; justify-content: center; width: 32px; height: 28px; margin: -14px 0 0 -16px; border-radius: var(--radius); font-size: 13px; font-weight: 700; }
+.done > .tile { background: var(--accent-pale); color: var(--accent-dark); }
+.now > .tile { box-shadow: inset 0 0 0 2px var(--accent); color: var(--ink); }
+.late > .tile { box-shadow: inset 0 0 0 2px var(--amber); color: var(--ink); }
+.tile-num { display: block; line-height: 1; text-box: trim-both cap alphabetic; font-variant-numeric: proportional-nums; }
+.tile-num.dot { position: relative; top: -1px; }
+.svpp tr.part td.cp { padding-right: 0; }
+.svpp td.cp .tile { right: 4px; left: auto; margin-left: 0; }
+.svpp .plain { display: inline-block; width: 40px; text-align: center; }
+.squares { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; margin: 0 0 26px; color: var(--muted); font-size: 13px; }
+.panel + .squares { margin-top: 36px; }
+.squares > span { display: inline-flex; align-items: center; gap: 8px; }
+.squares .tile { position: static; margin: 0; }
+@media (min-width: 1100px) {
+  .scroll:has(> .svpp) { overflow: visible; }
+  .svpp thead th { position: sticky; top: 0; z-index: 3; background: #fff; }
+}
+.choose h3 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 6px; }
+.choose h3 small { font-size: 13px; font-weight: 600; }
+.choose > p.muted { max-width: 84ch; margin: 0 0 18px; font-size: 14px; line-height: 1.5; }
+.choose .badge { margin-left: 8px; font-size: 12px; }
 
 /* Curriculum tree */
 .tree { border-top: 2px solid var(--ink); }
