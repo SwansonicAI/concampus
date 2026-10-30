@@ -269,7 +269,6 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .svpp th, .svpp td { padding: 6px 8px; }
 .svpp thead th { padding-top: 14px; padding-bottom: 12px; border-bottom: 0; box-shadow: inset 0 -2px 0 var(--ink); line-height: 20px; }
 .svpp thead th.current { color: var(--accent-dark); }
-.svpp thead th[title] { text-decoration: underline dotted; text-underline-offset: 3px; cursor: help; }
 .svpp tbody td { line-height: 22px; }
 .svpp .sem { width: 40px; padding-right: 4px; padding-left: 4px; text-align: center; }
 .svpp .fmt { width: 72px; white-space: nowrap; }
