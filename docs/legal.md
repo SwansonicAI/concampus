@@ -27,8 +27,8 @@ report, grounds of leave (illness, Mutterschutz) and a Schwerbehinderung behind 
 | Portability | Art. 20 | n/a | Not for processing under Art. 6(1)(e) (Art. 20(3)) |
 | No decision by machine alone | Art. 22, § 35a VwVfG | yes | Rankings, the Nachrückliste and a lost Prüfungsanspruch are worked out; every Bescheid is issued by an office after its preview. Resits are registered automatically as the RPSO says |
 | Deletion concept | Art. 5(1)(e), Art. 17 | yes | Periods for applications, former students' files and their Grunddaten, former staff, set under Einstellungen › Hochschule; bookings two years, sign-ins 90 days, the export log two years; the Verlauf per kind of record (`docs/rules.md`) |
-| Security of processing | Art. 32 | partly | See IT security |
-| Records of processing; impact assessment | Art. 30, Art. 35 | Hochschule | `docs/privacy.md` is the input; a description of the technical and organisational measures still to write |
+| Security of processing | Art. 32 | partly | See IT security; the measures, with what is open, in `docs/measures.md` |
+| Records of processing; impact assessment | Art. 30, Art. 35 | Hochschule | `docs/privacy.md` is the input, with the technical and organisational measures in `docs/measures.md` |
 | Processor agreement | Art. 28 | no | Needed once we host or maintain ConCampus; to draft (precedent: HIS eG's access at Jena) |
 | Transfers outside the EU | Chapter V | partly | Demo: app and files at Hetzner Nuremberg, database at Neon on AWS Frankfurt; both in the EU, but Neon and AWS are US companies. Production: an EU provider, with BSI C5 where a cloud is used |
 | Minors | § 12 VwVfG, BGB | partly | Applicants under 18 hand in the parents' consent (Unterlagenart „bei Minderjährigen“); Bescheide go to the minor; no status for Jungstudierende |
@@ -134,8 +134,8 @@ Outside the code:
 
 8. A security concept after BSI IT-Grundschutz (Profil für Hochschulen).
 9. A manual accessibility test (BITV-Test) by a third party, and the conformance report a tender asks for.
-10. The processor agreement (Art. 28) and the description of technical and organisational measures for the
-    Hochschule's records of processing and impact assessment.
+10. The processor agreement (Art. 28), with the technical and organisational measures of `docs/measures.md` as its
+    annex, and what that document still marks open.
 11. An Impressum for concampus.de.
 12. Terms of service that fit EVB-IT Cloud.
 13. Escrow (`docs/escrow.md`).
