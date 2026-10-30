@@ -13,13 +13,13 @@ require_once($CFG->dirroot . '/webservice/lib.php');
 foreach ([
     'lang' => 'en', 'timezone' => 'Europe/Berlin', 'country' => 'DE', 'forcelogin' => 1, 'guestloginbutton' => 0,
     'passwordpolicy' => 0,  // Campus gives the demo's users its access code, whatever it is
-    'auth_instructions' => 'Demo: der Benutzername wie in Campus (student, lehre, …), als Passwort der Zugangscode der Demo.',
     'theme' => 'boost_union', 'defaulthomepage' => HOMEPAGE_MY, 'frontpage' => FRONTPAGECATEGORYCOMBO, 'frontpageloggedin' => FRONTPAGECATEGORYCOMBO,
     'enablewebservices' => 1, 'webserviceprotocols' => 'rest',
 ] as $name => $value) {
     set_config($name, $value);
 }
 foreach (['brandcolor' => '#9E000C', 'navbarcolor' => 'coloreddark',
+    'logininstructionsbelow' => '<p>Demo: der Benutzername wie in Campus (student, lehre, …), als Passwort der Zugangscode der Demo.</p>',
     'footnote' => '<p>Demo · <a href="https://www.hfm-weimar.de">Hochschule für Musik FRANZ LISZT Weimar</a></p>'] as $name => $value) {
     set_config($name, $value, 'theme_boost_union');
 }

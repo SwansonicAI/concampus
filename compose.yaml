@@ -11,17 +11,20 @@ services:
     volumes:
       - media:/app/media
     restart: unless-stopped
-  prune:  # nightly: deletion periods (manage.py prune), then Moodle (manage.py moodle)
+  prune:  # nightly: deletion periods (manage.py prune)
     build: .
     env_file: .env
-    command: sh -c 'while true; do python manage.py prune; python manage.py moodle; sleep 86400; done'
+    command: sh -c 'while true; do python manage.py prune; sleep 86400; done'
     volumes:
       - media:/app/media
     restart: unless-stopped
-  moodlesync:  # each minute: the courses changed since, to Moodle (manage.py moodle --changed)
+  moodlesync:  # each minute the courses changed since to Moodle, on the first run of each day all of them (manage.py moodle)
     build: .
     env_file: .env
-    command: sh -c 'while true; do python manage.py moodle --changed; sleep 60; done'
+    command: >
+      sh -c 'day=; while true; do
+      if [ "$$(date +%F)" != "$$day" ]; then day=$$(date +%F); python manage.py moodle; else python manage.py moodle --changed; fi;
+      sleep 60; done'
     restart: unless-stopped
   proxy:
     image: caddy:2

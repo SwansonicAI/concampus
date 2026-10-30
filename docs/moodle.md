@@ -1,9 +1,9 @@
 # Moodle
 
-Campus keeps the Hochschule's Moodle up to date (`courses/moodle.py`): each minute the courses changed since
-(`manage.py moodle --changed`, compose service `moodlesync`), each night all of them (`manage.py moodle`, with
-`prune`), which also enrols whoever has signed in to Moodle since. Off without `MOODLE_URL` and `MOODLE_TOKEN`. Campus
-is the record, Moodle follows.
+Campus keeps the Hochschule's Moodle up to date (`courses/moodle.py`, compose service `moodlesync`): each minute the
+courses changed since (`manage.py moodle --changed`), on its first run each day all of them (`manage.py moodle`),
+which also enrols whoever has signed in to Moodle since. Off without `MOODLE_URL` and `MOODLE_TOKEN`. Campus is the
+record, Moodle follows.
 
 ## What goes over
 
@@ -57,7 +57,7 @@ Set up once, on the server:
    `MOODLE_405_STABLE` (github.com/moodle-an-hochschulen/moodle-theme_boost_union) into `/opt/moodle/theme/boost_union`;
    `touch /opt/moodle/config.php` (the mount point of `demo-moodle/config.php`).
 2. In `/opt/concampus/demo-moodle`: `.env` with `DB_PASSWORD`; `docker compose up -d`; `docker compose exec --user
-   www-data moodle php admin/cli/install_database.php --agree-license --fullname="Moodle der HfM Weimar · Demo" --shortname="Moodle HfM"
+   www-data moodle php admin/cli/install_database.php --agree-license --fullname="Moodle der HfM Weimar · Demo" --shortname="Moodle der HfM Weimar · Demo"
    --adminuser=admin --adminpass=… --adminemail=…`; `docker compose exec -T --user www-data moodle php < setup.php`,
    which prints the token.
 3. In Campus's `.env`: `MOODLE_URL=https://moodle.concampus.de`, the token as `MOODLE_TOKEN`; `docker compose up -d`.
