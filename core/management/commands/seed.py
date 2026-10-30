@@ -1433,10 +1433,10 @@ class Command(BaseCommand):
             label = {WS: 'Werkstudium', PIANO: 'Klavier (Pflichtfach)', SPEECH: 'Bühnensprechen'}.get(taught, title)
             rooms = LESSON_ROOMS[subject if taught == SECTION else taught]
             return self.course(term, f'{label} · {teacher.first_name} {teacher.last_name}', Course.Kind.LESSON, hours=sws(form), format=self.formats['E']), teacher, rooms
-        now = term == self.current  # enrolment from early September to the second week of lectures
+        now = term == self.current  # enrolment from early September to the second week of lectures, in the demo at least four weeks from seeding, to be tried
         course = self.course(
             term, title, hours=sws(form) if form else None, format=self.formats.get(short(form or '', title)),
-            opens=date(2026, 9, 7) if now else None, deadline=date(2026, 10, 16) if now else None,
+            opens=date(2026, 9, 7) if now else None, deadline=max(date(2026, 11, 13), timezone.localdate() + timedelta(weeks=4)) if now else None,
         )
         course.form = form
         return course, self.teachers[lecturer(title)], None
@@ -1514,8 +1514,8 @@ class Command(BaseCommand):
 
     def allocation(self):
         """How places are given: lessons by their teachers, two electives by choosing among requests (the demo student
-        waits for one), Kammermusik in ensembles, two courses still open for registration, and Liturgik as a block seminar
-        on three Mondays."""
+        waits for one), Kammermusik in ensembles, one course nearly full and one with a waitlist, and Liturgik as a block
+        seminar on three Mondays."""
         now = Course.objects.filter(term=self.current)
         now.filter(models.Q(kind=Course.Kind.LESSON) | models.Q(format=self.formats['E+x'])).update(allocation=Course.Allocation.STAFF, opens=None, deadline=None)
         notes = ['Ich spiele im Februar Probespiele und möchte vorher Auftrittspraxis sammeln.', '', 'Ich hatte mich im Sommer schon angemeldet.', '']
@@ -1535,11 +1535,11 @@ class Command(BaseCommand):
                 for n, s in enumerate(wishing)
             )
         self.ensembles(now.filter(title='Kammermusik').first())
-        for title, spare in [('Historische Spielpraxis auf modernen Instrumenten', 3), ('Schreibwerkstatt: wissenschaftliches Schreiben', 0)]:  # registration into the second week of lectures: one with places, one full
+        for title, spare in [('Historische Spielpraxis auf modernen Instrumenten', 3), ('Schreibwerkstatt: wissenschaftliches Schreiben', -2)]:  # places: a few left, and a waitlist
             course = now.filter(title=title).annotate(size=models.Count('participations')).first()
             if course:
-                course.deadline, course.capacity = date(2026, 11, 13), course.size + spare
-                course.save(update_fields=['deadline', 'capacity'])
+                course.capacity = course.size + spare
+                course.save(update_fields=['capacity'])
         block = now.filter(title='Liturgik und Hymnologie').first()
         if block:
             block.bookings.all().delete()
