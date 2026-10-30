@@ -15,6 +15,7 @@ urlpatterns = [
     path('aufnahme/', include('admissions.urls')),
     path('raeume/', include('rooms.urls')),
     path('instrumente/', include('instruments.urls')),
+    path('international/', include('mobility.urls')),
     path('auswertungen/', include('analytics.urls')),
     path('einstellungen/', include('setup.urls')),
     path('', include('core.urls')),

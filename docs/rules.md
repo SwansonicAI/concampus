@@ -165,6 +165,8 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 | Sign-ins and failed tries kept 90 days; five failures for a name from one address hold it back there a quarter of an hour | GDPR Art. 32 | `core/backends.py`, `core/models.py` `SignIn` | code |
 | Health data only with consent, kept with its wording; withdrawing it deletes the document | GDPR Art. 7, Art. 9(2)(a) | `core/models.py` `Consent`, `core/views.py` `revoke()` | Einstellungen › Texte (wording) |
 | Reports with the health insurers go with the file; those about nobody here after the period for applications | GDPR Art. 5(1)(e) | `students/disposal.py`, `core/management/commands/prune.py` | Einstellungen › Hochschule (Löschfrist) |
+| A Learning Agreement counts once the student, the Hochschule and the partner have signed; a line changed afterwards asks for every signature anew | Erasmus+ Learning Agreement, EWP | `mobility/models.py` `Mobility.changed()` | code |
+| A stay abroad takes the agreement of its Studienjahr, from September | Erasmus+ | `mobility/forms.py` `academic()` | code |
 
 ## Official keys
 

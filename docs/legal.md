@@ -88,7 +88,7 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 | XHochschule documents | XBildung, IT-Planungsrat 2025/43 | partly | Immatrikulations-, Studienzeit- and Exmatrikulationsbescheinigung, Leistungsübersicht, Zeugnis, Urkunde, Diploma Supplement in English and German, as printable pages; the Immatrikulationsbescheinigung checkable by its Prüfcode, also as the version of § 9 BAföG, which stands in for Formblatt 2. Immatrikulations-, BAföG-, Exmatrikulations- and Studienzeitbescheinigung also as XHochschule 1.2 files, each checked against the standard's schemas before it goes out (`students/xhochschule.py`); its further rules (Schematron, XSLT 2) not run. Leistungsübersicht, Zeugnis and Diploma Supplement not yet as data; no eIDAS seal |
 | Statistics delivery | HStatG | yes | eSTATISTIK.core files |
 | Reports with the health insurers, electronic only since 2022 | § 199a SGB V, Gemeinsame Grundsätze of the GKV-Spitzenverband and the HRK; Absendernummer under § 18n SGB IV | partly | Inside Campus: the insurers' reports (M10 to M13) booked to their person, by hand where none or several match; enrolment only with the status, the Rückmeldung held back by arrears; the Hochschule's reports (M20, M30, Storno) made when someone begins or stops studying here; the Absendernummer shown to applicants. Not yet: the files to and from dakota, which wait for the GKV's XML schemata; HfM's Absendernummer and certificate (`docs/smv.md`) |
-| Erasmus Without Paper | European Commission | no | No mobility: no inter-institutional agreements, no online learning agreements |
+| Erasmus Without Paper | European Commission | partly | Partners, agreements (IIA) and students' stays abroad with their Learning Agreements, signed by student, Hochschule and partner, then recognised, shaped after EWP (`docs/mobility.md`); no connection to the EWP network, nothing yet for students coming here |
 | Finance system | – | no | Payments come in from bank statements; nothing is booked to the Hochschule's ERP |
 
 ## Staff
@@ -125,7 +125,8 @@ In Campus:
 5. A hearing step before Bescheide that need one (§ 28 VwVfG), once the Hochschule has named them.
 6. Periods for staff records and the export log.
 7. A complete export of a Hochschule's data, for switching provider (Data Act).
-8. Erasmus Without Paper and booking fees to the Hochschule's finance system, if wanted.
+8. The connection to Erasmus Without Paper, and students coming here (`docs/mobility.md`); booking fees to the
+   Hochschule's finance system, if wanted.
 
 In production:
 

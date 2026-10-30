@@ -32,7 +32,7 @@ from core.dates import months_before, working
 from core.text import handle, untimed
 from admissions.views import DECISIONS, grounds, invite
 from core import destatis, history, keys, texts
-from core.models import Change, Holiday, Institute, Institution, Membership, Message, Office, Person, Term, Text
+from core.models import Change, Holiday, Institute, Institution, Key, Membership, Message, Office, Person, Term, Text
 from courses import panel as sheets
 from courses.models import Appointment, Area, Course, Ensemble, Format, Participation, Recusal, Reduction, Score, Signup
 from courses.panel import mean, rounding
@@ -43,6 +43,7 @@ from rooms.views import agenda
 from students.disposal import ended, reduce
 from students.models import Disposal, Document, DocumentType, Event, InsuranceReport, Study, StudyTerm
 from students.smv import book
+from mobility.models import Agreement, Component, Mobility, Partner
 from ..plans import EARLY, HF, JENA, PIANO, PROGRAMS, RESEARCH, SECTION, SPEECH, STRINGS, TEACHING, VOCAL, WINDS, WS
 
 FEE = Decimal('341.30')  # Semesterbeitrag WiSe 2026/27: Studierendenwerk 95,00 + Deutschlandsemesterticket 226,80 + Studierendenrat 19,50
@@ -531,7 +532,23 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
     ],
     'Prüfungsausschuss': ['view_students', 'view_files', 'correct_scores', 'appoint_examiners', 'recognise', 'grant_compensation', 'view_curriculum'],
     'Prüfungsausschuss Lehramt': ['view_files', 'manage_exams', 'decide_results', 'correct_scores', 'recognise', 'grant_compensation', 'view_curriculum'],
+    'International Office': ['manage_mobility', 'view_students', 'view_files'],
 }
+PARTNERS = [  # some of the HfM's Erasmus+ partners as its website names them, with the language they recommend; places and months made up
+    ('Liszt Ferenc Academy of Music Budapest', 'Budapest', 'Ungarn', 'Englisch B2'),
+    ('Conservatoire National Supérieur de Musique et de Danse de Paris', 'Paris', 'Frankreich, einschl. Korsika', 'Französisch B1'),
+    ('Conservatorio di Musica „Santa Cecilia“', 'Rom', 'Italien', 'Italienisch B1'),
+    ('University of the Arts, Sibelius Academy Helsinki', 'Helsinki', 'Finnland', 'Englisch B2'),
+    ('The Royal Danish Academy of Music', 'Kopenhagen', 'Dänemark', 'Englisch B2'),
+    ('Universität für Musik und darstellende Kunst Wien', 'Wien', 'Österreich', ''),
+    ('Universität Mozarteum Salzburg', 'Salzburg', 'Österreich', ''),
+    ('Conservatorium van Amsterdam', 'Amsterdam', 'Niederlande', 'Englisch B2'),
+    ('Academy of Music Krakow', 'Krakau', 'Polen', 'Englisch B2'),
+    ('Royal Irish Academy of Music', 'Dublin', 'Irland', 'Englisch B2'),
+    ('Escola Superior de Música de Catalunya', 'Barcelona', 'Spanien', 'Spanisch B1'),
+    ('Norwegian Academy of Music', 'Oslo', 'Norwegen', 'Englisch B2'),
+    ('Royal College of Music Stockholm', 'Stockholm', 'Schweden', 'Englisch B2'),
+]
 MAILBOXES = {  # the offices' shared addresses, as the HfM gives them
     'Akademische und Studentische Angelegenheiten (ASA)': 'studservice@hfm-weimar.de',
     'Prüfungsamt': 'pruefungsamt@hfm-weimar.de',
@@ -923,6 +940,7 @@ class Command(BaseCommand):
             forget(months_before(timezone.localdate(), Institution.get().retention_months))  # as the nightly prune would have
             self.archive()
             self.insurance()
+            self.mobility()
         self.territory()
         self.changes()
         self.stdout.write(self.style.SUCCESS(
@@ -1863,6 +1881,53 @@ class Command(BaseCommand):
             book(r, person)
             InsuranceReport.objects.filter(pk=r.pk).update(done=r.created)
             InsuranceReport.objects.filter(cancels=None, person=person, state=State.OPEN).update(created=r.created)
+
+    def mobility(self):
+        """The International Office, Erasmus+ partners with their agreements, one not yet signed by the partner, and stays
+        abroad in every state: the demo student's in the summer at the Liszt Academy, its Learning Agreement half filled in;
+        two abroad now, one with a change after approval; one signed by the student and waiting here; one back from the
+        summer with a module still to recognise; one called off."""
+        Person.objects.create(  # last, like the archive: made apart, so the other demo data stays as it was
+            username='international', first_name='Katrin', last_name='Ebert', email='katrin.ebert@hfm-weimar.de', password=self.password, phone='+49 3643 555 160',
+        ).groups.add(Office.objects.get(name='International Office'))
+        countries = dict(Key.objects.filter(listing='staat').values_list('name', 'code'))
+        agreements = []
+        for n, (name, city, country, language) in enumerate(PARTNERS):
+            partner = Partner.objects.create(name=name, city=city, country=countries[country])
+            agreements.append(Agreement.objects.create(
+                partner=partner, first_year=2021, last_year=2027, language=language, months_out=10 if n % 4 == 0 else 5, teaching=1,
+                signed=date(2021, 3, 1) + timedelta(days=3 * n), partner_signed=None if name.startswith('Royal College') else date(2021, 4, 1) + timedelta(days=5 * n),
+            ))
+        semesters = {t.name: t for t in Term.objects.filter(name__in=['SoSe 2026', 'SoSe 2027'])}
+        busy = {self.demo, self.late, self.changing, self.owing}
+        pool = [s for s in sorted(self.enrolled, key=lambda s: s.pk) if s.program.degree == 'B.Mus.' and 3 <= s.fs <= 6 and s.person not in busy]
+        international = Person.objects.get(username='international')
+        S = Mobility.Status
+        cases = [  # study, partner, start, end, status, (A lines), signed by student, here, partner, changes
+            (self.demo_study(), 0, date(2027, 2, 8), date(2027, 6, 15), S.NOMINATED, [('Main Subject', 'MS-2', 15), ('Hungarian Folk Music', 'HFM-1', 3)], None, None, None, 0),
+            (pool[0], 3, date(2026, 8, 31), date(2027, 1, 22), S.ACCEPTED, [('Instrumental Studies', 'MUS-A2', 20), ('Chamber Music', 'CM-1', 5), ('Finnish Folk Music', 'FFM', 5)], date(2026, 5, 12), date(2026, 5, 19), date(2026, 6, 2), 0),
+            (pool[1], 1, date(2026, 9, 14), date(2027, 2, 12), S.ACCEPTED, [('Discipline principale', 'DP-3', 20), ('Musique de chambre', 'MC-2', 6), ('Analyse', 'AN-1', 4)], date(2026, 5, 4), date(2026, 5, 11), date(2026, 5, 26), 1),
+            (pool[2], 5, date(2027, 3, 1), date(2027, 6, 30), S.NOMINATED, [('Zentrales künstlerisches Fach', 'ZKF', 18), ('Kammermusik', 'KM', 6)], date(2026, 10, 20), None, None, 0),
+            (pool[3], 7, date(2026, 2, 2), date(2026, 6, 30), S.DONE, [('Main Subject', 'CVA-MS', 20), ('Ensemble', 'CVA-ENS', 5), ('Music Theory', 'CVA-MT', 5)], date(2025, 11, 3), date(2025, 11, 10), date(2025, 11, 24), 0),
+            (pool[4], 2, date(2027, 2, 15), date(2027, 6, 30), S.CANCELLED, [], None, None, None, 0),
+        ]
+        recognised = Course.objects.get_or_create(term=semesters['SoSe 2026'], kind=Course.Kind.RECOGNITION, defaults={'title': 'Anerkennungen SoSe 2026'})[0]
+        for study, n, start, end, status, lines, student, here, partner, changes in cases:
+            agreement = agreements[n]
+            mobility = Mobility.objects.create(
+                study=study, partner=agreement.partner, agreement=agreement, start=start, end=end, status=status, changes=changes,
+                signed_student=student and at(student, hour=10), signed_here=here and at(here, hour=11), signed_here_by=here and international, signed_partner=partner,
+            )
+            Component.objects.bulk_create(Component(mobility=mobility, table=Component.Table.ABROAD, title=t, code=c, credits=e) for t, c, e in lines)
+            passed = Participation.objects.filter(study=study, passed=True, module__isnull=False).values('module')
+            open_ = list(Module.objects.filter(program=study.program, children=None, credits__gt=0).exclude(pk__in=passed).order_by('semester', 'code')[:2 if lines else 0])
+            if study is self.demo_study():
+                open_ = open_[:1]  # half filled in
+            Component.objects.bulk_create(Component(mobility=mobility, table=Component.Table.HOME, module=m, credits=m.credits) for m in open_)
+            if status == S.DONE and open_:  # the first recognised after the return, the second still to do
+                Participation.objects.create(
+                    course=recognised, study=study, module=open_[0], grade=Decimal('1.7'), passed=True, note=f'{agreement.partner}, SoSe 2026', created=at(date(2026, 7, 20), hour=10),
+                )
 
     def territory(self):
         """A Gemeindeverzeichnis comes in after the people, as the quarterly one would: Hanau, kreisfrei since 1.1.2026,

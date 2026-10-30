@@ -17,7 +17,7 @@ health insurers in `docs/smv.md`.
 | Health insurers (§ 199a SGB V) | no | `docs/smv.md` |
 | Official statistics | yes | Files for Studierende, Prüfungen, Promovierende and Gasthörer:innen; not yet delivered for real. Staff statistics: from MACH, to check |
 | Moodle | partly | Campus creates each semester's courses in Moodle and enrols teachers and participants nightly (`docs/moodle.md`); HfM's Moodle still to connect |
-| Erasmus Without Paper | no | No mobility: no inter-institutional agreements, no online learning agreements |
+| Erasmus Without Paper | partly | Partners, agreements, students' stays abroad with their Learning Agreements and the recognition after, shaped after EWP (`docs/mobility.md`); not connected to EWP; students coming here not yet |
 | XHochschule | partly | Immatrikulations-, BAföG-, Exmatrikulations- and Studienzeitbescheinigung also as XHochschule 1.2 files, checked against the standard's schemas; Leistungsübersicht, Zeugnis and Diploma Supplement still as pages only; no seal |
 | Migration | partly | Campus loads people, studies, semesters, results, insurance and Studienpläne from one document (`docs/transfer.md`); HISinOne's export is still to be mapped onto it |
 
@@ -57,7 +57,8 @@ Most of it can be built before HfM's systems are open to us; what needs them wai
 5. Done: **Moodle**: courses and participants through its web services (`docs/moodle.md`).
 6. Done for the Bescheinigungen: **XHochschule data** (`students/xhochschule.py`); the Leistungsübersicht, Zeugnis and
    Diploma Supplement next, the seal once HfM has a trust service.
-7. **Erasmus Without Paper**: a mobility part, the largest; with HfM's international office.
+7. Done for students going abroad: **the mobility part** (`docs/mobility.md`); students coming here and the EWP
+   connection with HfM's International Office, once it has said how it works now.
 
 Alongside, at the desk: our fields against the ThürHDatVO 2019; the escrow (`docs/escrow.md`).
 

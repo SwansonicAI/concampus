@@ -718,7 +718,7 @@ def recognition(request):
     if pk:
         studies = request.user.within(Study.objects.select_related('person', 'program', 'subject'), 'recognise')
         study = get_object_or_404(studies, pk=pk if pk.isdigit() else 0, status=Study.Status.ENROLLED)
-    form = RecognitionForm(request.POST or None, request.FILES or None, study=study)
+    form = RecognitionForm(request.POST or None, request.FILES or None, study=study, initial=request.GET.dict())  # filled in from an Auslandsaufenthalt
     if form.is_valid() and study is None:
         if request.user.may('recognise', found := form.cleaned_data['who']):
             return redirect(f'{reverse("exams:recognition")}?studium={found.pk}')

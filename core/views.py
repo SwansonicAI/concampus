@@ -49,8 +49,9 @@ def home(request):
         b.clash = any(o is not b and o.start < b.end and b.start < o.end for o in shown)
     moves(shown)
     apps = tiles(person)
-    tasks = sorted(
-        ({**t, 'app': title} for app, title in apps for t in app.tasks(person)),
+    titles = dict(apps)
+    tasks = sorted(  # from every app, also one without a tile for the person, such as their own loan or stay abroad
+        ({**t, 'app': titles.get(app, app.verbose_name)} for app in tile_apps() for t in app.tasks(person)),
         key=lambda t: (t['due'] is None, t['due'] or today),
     )
     return render(request, 'core/home.html', {

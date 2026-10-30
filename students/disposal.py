@@ -46,9 +46,12 @@ def assess(people, archival, by):
 
 def reduce():
     """Cut assessed files down to the Grunddaten; everything else goes: documents, messages, the Verlauf, consents,
-    sign-ins, loans and bookings, notes and Gutachten, grounds of leave, a Nachteilsausgleich. Returns how many."""
+    sign-ins, loans and bookings, stays abroad, notes and Gutachten, grounds of leave, a Nachteilsausgleich. Returns how many."""
+    from mobility.models import Mobility  # an app that builds on this one
+
     ids = list(Person.objects.filter(disposal__assessed__isnull=False, disposal__reduced=None).values_list('pk', flat=True))
     with quietly():
+        Mobility.objects.filter(study__person__in=ids).delete()  # the results recognised from a stay abroad stay
         Document.purge(Document.objects.filter(person__in=ids))
         for model in (Message, Consent, SignIn, Loan, Booking, Event, InsuranceReport):
             model.objects.filter(person__in=ids).delete()

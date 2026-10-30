@@ -1,0 +1,33 @@
+{% extends base %}
+{% block title %}Partnerhochschulen{% endblock %}
+{% block subnav %}{% include "mobility/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Partnerhochschulen</h1>
+  <div class="actions">
+    <a class="btn ghost" href="{% url 'setup:new' 'partnerhochschulen' %}?next={{ request.path|urlencode }}" data-panel>Partnerhochschule erfassen</a>
+    <a class="btn ghost" href="{% url 'setup:new' 'abkommen' %}?next={{ request.path|urlencode }}" data-panel>Abkommen erfassen</a>
+  </div>
+</div>
+<p class="lead">{{ partners|length }} Partnerhochschule{{ partners|length|pluralize:"n" }}. Plätze für Studierende von hier im Studienjahr {{ current }}: belegt von angeboten.</p>
+<form class="toolbar"><div class="inline"><label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name, Ort oder Erasmus-Code"></label></div></form>
+<table>
+  <thead><tr><th>Partnerhochschule</th><th>Abkommen</th><th>Plätze von hier</th><th>Plätze von dort</th><th>Unterzeichnet</th></tr></thead>
+  <tbody>
+    {% for p in partners %}
+    {% for a in p.agreements.all %}
+    <tr>
+      {% if forloop.first %}<td rowspan="{{ p.agreements.all|length }}"><a href="{% url 'setup:edit' 'partnerhochschulen' p.pk %}?next={{ request.path|urlencode }}" data-panel><b>{{ p.name }}</b></a><br><small class="muted">{{ p.city }}{% if p.city %}, {% endif %}{{ p.get_country_display }}{% if p.erasmus %} · {{ p.erasmus }}{% endif %}</small></td>{% endif %}
+      <td><a href="{% url 'setup:edit' 'abkommen' a.pk %}?next={{ request.path|urlencode }}" data-panel>{{ a.years }}</a><br><small class="muted">ISCED {{ a.isced }} · EQR {{ a.levels }}{% if a.subjects.all %} · {{ a.subjects.all|join:", " }}{% endif %}{% if a.language %} · {{ a.language }}{% endif %}</small></td>
+      <td class="nowrap">{% if a.first_year <= now and now <= a.last_year %}{{ a.taken }} von {{ a.places_out }}{% else %}{{ a.places_out }}{% endif %} <small class="muted">je {{ a.months_out }} Monate</small></td>
+      <td class="nowrap">{{ a.places_in }} <small class="muted">je {{ a.months_in }} Monate</small></td>
+      <td>{% if a.approved %}<span class="badge green">beide</span>{% elif a.signed %}<span class="badge wait">wartet auf die Partnerhochschule</span>{% else %}<span class="badge open">noch nicht von hier</span>{% endif %}</td>
+    </tr>
+    {% empty %}
+    <tr><td><a href="{% url 'setup:edit' 'partnerhochschulen' p.pk %}?next={{ request.path|urlencode }}" data-panel><b>{{ p.name }}</b></a><br><small class="muted">{{ p.get_country_display }}</small></td><td colspan="4" class="muted">Kein Abkommen.</td></tr>
+    {% endfor %}
+    {% empty %}<tr><td colspan="5" class="empty">Keine Partnerhochschulen.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

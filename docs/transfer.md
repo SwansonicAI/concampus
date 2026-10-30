@@ -67,8 +67,8 @@ password by e-mail.
 ## Not carried
 
 Offices and rights, courses and room bookings, documents and messages, the Verlauf, applications' auditions, the
-reports with the health insurers (`docs/smv.md`): each is set up anew or stays where it was. A thesis comes in as a
-result, without its topic.
+reports with the health insurers (`docs/smv.md`), stays abroad (`docs/mobility.md`): each is set up anew or stays where
+it was. A thesis comes in as a result, without its topic.
 
 ## Checked
 

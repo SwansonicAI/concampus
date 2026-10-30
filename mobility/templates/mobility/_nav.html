@@ -1,0 +1,8 @@
+{% with here=request.resolver_match.url_name %}
+<nav class="subnav">
+  {% if 'manage_mobility' in user.roles %}
+  <a href="{% url 'mobility:index' %}" class="{% if here == 'index' or here == 'mobility' %}on{% endif %}">Auslandsaufenthalte</a>
+  <a href="{% url 'mobility:partners' %}" class="{% if here == 'partners' %}on{% endif %}">Partnerhochschulen</a>
+  {% else %}<a href="{% url 'mobility:mine' %}" class="on">Mein Auslandsaufenthalt</a>{% endif %}
+</nav>
+{% endwith %}

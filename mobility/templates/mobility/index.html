@@ -1,0 +1,39 @@
+{% extends base %}
+{% block title %}Auslandsaufenthalte{% endblock %}
+{% block subnav %}{% include "mobility/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Auslandsaufenthalte</h1>
+</div>
+<p class="lead">Studierende an Partnerhochschulen im Studienjahr {% for y, label in years %}{% if y == chosen %}{{ label }}{% endif %}{% endfor %}: {% for value, label, n in states %}{{ n }} {{ label }}{% if not forloop.last %} · {% endif %}{% endfor %}.</p>
+<details class="panel"{% if form.errors %} open{% endif %}>
+  <summary><b>Auslandsaufenthalt erfassen</b></summary>
+  <form method="post" class="form" style="margin-top: 12px">
+    {% csrf_token %}
+    {{ form }}
+    <div class="actions"><button class="btn">Erfassen</button></div>
+  </form>
+</details>
+<form class="toolbar">
+  <div class="inline">
+    <label>Studienjahr<select name="jahr" onchange="this.form.requestSubmit()">{% for y, label in years %}<option value="{{ y }}"{% if y == chosen %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for value, label, n in states %}<option value="{{ value }}"{% if value == stand %} selected{% endif %}>{{ label }} ({{ n }})</option>{% endfor %}</select></label>
+    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name oder Partnerhochschule"></label>
+  </div>
+</form>
+<table>
+  <thead><tr><th>Studierende:r</th><th>Partnerhochschule</th><th>Zeitraum</th><th>Learning Agreement</th><th>Stand</th></tr></thead>
+  <tbody>
+    {% for m in mobilities %}
+    <tr>
+      <td><a href="{% url 'mobility:mobility' m.pk %}"><b>{{ m.study.person.name }}</b></a><br><small class="muted">{{ m.study.program.degree }} {{ m.study.subject }}</small></td>
+      <td>{{ m.partner }}{% if m.partner.city %}<br><small class="muted">{{ m.partner.city }}</small>{% endif %}</td>
+      <td class="nowrap">{{ m.start|date:"j.n.Y" }} bis {{ m.end|date:"j.n.Y" }}<br><small class="muted">{{ m.get_kind_display }}</small></td>
+      <td>{% if m.signed %}<span class="badge green">genehmigt</span>{% elif m.signed_here %}<span class="badge wait">wartet auf die Partnerhochschule</span>{% elif m.signed_student %}<span class="badge open">zu genehmigen</span>{% elif m.lines %}<span class="badge">in Arbeit</span>{% else %}<span class="muted">noch leer</span>{% endif %}{% if m.changes %} <small class="muted">{{ m.changes }} Änderung{{ m.changes|pluralize:"en" }}</small>{% endif %}</td>
+      <td>{% if m.abroad %}<span class="badge green">im Ausland</span>{% else %}{{ m.get_status_display }}{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty">Keine Auslandsaufenthalte.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

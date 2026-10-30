@@ -137,6 +137,13 @@ find their accounts there, and enrols them; Moodle already holds their names (`d
 XHochschule file carries what the printed one does; the Studienzeitbescheinigung also each leave's ground, as the
 standard asks of it, Erkrankung among them: it goes to whoever downloads it, the person or the student office.
 
+### Stays abroad
+
+A stay abroad and its Learning Agreement (`mobility/`) are seen by the student, the International Office
+(`manage_mobility`, for the whole Hochschule) and whoever recognises in the study; the partner Hochschule learns of
+them from the International Office, by Erasmus Without Paper once Campus is connected (`docs/mobility.md`). They go
+with the file.
+
 ### Reports with the health insurers
 
 An insurer's report names the person (names, birth date), their insurer and its Betriebsnummer, and the status, a new

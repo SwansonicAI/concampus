@@ -10,6 +10,7 @@ from django.utils.text import capfirst
 
 from courses.models import Course, Reduction
 from instruments.models import Loan
+from mobility.models import Mobility
 from rooms.models import Booking
 from .history import describe, show
 from .models import Change, Export
@@ -56,6 +57,10 @@ def contents(person):
         'Meldungen im Studierendenmeldeverfahren': [values(r) for r in person.insurance_reports.select_related('term')],
         'Anmeldungen': [values(s) for s in person.sign_ins.all()],
         'Leihinstrumente': [values(loan) for loan in Loan.objects.filter(person=person).select_related('instrument')],
+        'Auslandsaufenthalte': [
+            values(m) | {'Learning Agreement': [values(c) for c in m.components.select_related('module')]}
+            for m in Mobility.objects.filter(study__person=person).select_related('partner', 'agreement', 'study')
+        ],
         'Raumbuchungen': [values(b) for b in Booking.objects.filter(Q(person=person) | Q(participants=person)).select_related('room', 'category', 'course').distinct()],
         'Lehre': [values(c) for c in Course.objects.filter(staff=person).select_related('term', 'subject')],
         'Ermäßigungen': [values(r) for r in Reduction.objects.filter(person=person)],

@@ -44,6 +44,9 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
         ('manage_rooms', 'Räume, Raumfunktionen und Buchungskategorien pflegen'),
         ('manage_instruments', 'Leihinstrumente pflegen und verleihen'),
     ]),
+    ('Internationales', [
+        ('manage_mobility', 'Partnerhochschulen und Abkommen pflegen, Auslandsaufenthalte erfassen, Learning Agreements genehmigen'),
+    ]),
     ('Verwaltung', [
         ('manage_terms', 'Semester anlegen und pflegen'),
         ('manage_institution', 'Hochschuldaten, Institute und Texte pflegen'),
@@ -56,7 +59,7 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
     ]),
 ]
 CODENAMES = [codename for _, group in CAPABILITIES for codename, _ in group]
-EVERYWHERE = {'manage_reregistration', 'manage_terms', 'manage_institution', 'manage_accounts', 'view_statistics', 'report_statistics', 'dispose_files', 'assess_files'}  # never limited to Institute
+EVERYWHERE = {'manage_reregistration', 'manage_terms', 'manage_institution', 'manage_accounts', 'view_statistics', 'report_statistics', 'dispose_files', 'assess_files', 'manage_mobility'}  # never limited to Institute
 
 
 def kept(form, person, capability):

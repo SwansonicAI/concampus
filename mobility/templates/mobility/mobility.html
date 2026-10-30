@@ -1,0 +1,66 @@
+{% extends base %}
+{% block title %}Auslandsaufenthalt {{ mobility.study.person.name }}{% endblock %}
+{% block subnav %}{% include "mobility/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>{{ mobility.partner }}</h1>
+  {% if office %}<form method="post" class="inline actions">{% csrf_token %}<label>Stand<select name="stand">{% for value, label in states %}<option value="{{ value }}"{% if value == mobility.status %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label><button class="btn ghost small">Ändern</button></form>{% endif %}
+</div>
+<p class="lead">{% if office %}<a href="{{ mobility.study.get_absolute_url }}">{{ mobility.study.person.name }}</a>{% else %}{{ mobility.study.person.name }}{% endif %} · {{ mobility.study.program.degree }} {{ mobility.study.subject }} · {{ mobility.get_kind_display }} vom {{ mobility.start|date:"j.n.Y" }} bis {{ mobility.end|date:"j.n.Y" }} ·
+  {% if mobility.abroad %}<span class="badge green">im Ausland</span>{% else %}{{ mobility.get_status_display }}{% endif %}</p>
+<dl class="facts">
+  <dt>Partnerhochschule</dt><dd>{{ mobility.partner }}{% if mobility.partner.city %}, {{ mobility.partner.city }}{% endif %}, {{ mobility.partner.get_country_display }}{% if mobility.partner.email %} · <a href="mailto:{{ mobility.partner.email }}">{{ mobility.partner.email }}</a>{% endif %}</dd>
+  <dt>Abkommen</dt><dd>{% if mobility.agreement %}{{ mobility.agreement.years }}{% if mobility.agreement.language %} · empfohlen {{ mobility.agreement.language }}{% endif %}{% else %}–{% endif %}</dd>
+</dl>
+
+<h2>Learning Agreement</h2>
+<p class="muted">Was {% if own %}Sie{% else %}die oder der Studierende{% endif %} dort belegt (A) und wofür es hier zählt (B). Wird eine Zeile geändert, nachdem unterschrieben ist, wird neu unterschrieben{% if mobility.changes %}; bisher {{ mobility.changes }} Änderung{{ mobility.changes|pluralize:"en" }}{% endif %}.</p>
+
+<h3>A · An der Partnerhochschule</h3>
+<table>
+  <thead><tr><th>Kürzel</th><th>Veranstaltung</th><th class="num">ECTS</th>{% if editing %}<th></th>{% endif %}</tr></thead>
+  <tbody>
+    {% for c in abroad %}
+    <tr><td>{{ c.code|default:"–" }}</td><td>{{ c.title }}</td><td class="num">{{ c.credits }}</td>{% if editing %}<td class="num"><form method="post">{% csrf_token %}<button class="link" name="entfernen" value="{{ c.pk }}"><small>entfernen</small></button></form></td>{% endif %}</tr>
+    {% empty %}<tr><td colspan="{{ editing|yesno:'4,3' }}" class="empty">Noch keine Veranstaltung.</td></tr>
+    {% endfor %}
+    {% if abroad %}<tr><td></td><td><b>Zusammen</b></td><td class="num"><b>{{ credits.0 }}</b></td>{% if editing %}<td></td>{% endif %}</tr>{% endif %}
+  </tbody>
+</table>
+{% if editing %}{% with form=adding.A %}
+<form method="post" class="inline" style="margin: 8px 0 24px">{% csrf_token %}{{ form.table }}
+  <label>Veranstaltung{{ form.title }}</label><label>Kürzel dort{{ form.code }}</label><label>ECTS{{ form.credits }}</label>
+  <button class="btn ghost small" name="zeile" value="1">Ergänzen</button>
+</form>{% endwith %}{% endif %}
+
+<h3>B · Anerkennung hier</h3>
+<table>
+  <thead><tr><th>Modul</th><th class="num">ECTS</th>{% if recognising %}<th>Anerkennung</th>{% endif %}{% if editing %}<th></th>{% endif %}</tr></thead>
+  <tbody>
+    {% for c, passed in home %}
+    <tr>
+      <td>{{ c.module }}</td><td class="num">{{ c.credits }}</td>
+      {% if recognising %}<td>{% if passed %}<span class="badge green">anerkannt</span>{% else %}<a href="{% url 'exams:recognition' %}?studium={{ mobility.study_id }}&amp;module={{ c.module_id }}&amp;origin=9990{{ mobility.partner.country }}&amp;place={{ mobility.partner.name|urlencode }}&amp;taken={{ taken|urlencode }}&amp;credits={{ c.credits }}">anerkennen</a>{% endif %}</td>{% endif %}
+      {% if editing %}<td class="num"><form method="post">{% csrf_token %}<button class="link" name="entfernen" value="{{ c.pk }}"><small>entfernen</small></button></form></td>{% endif %}
+    </tr>
+    {% empty %}<tr><td colspan="4" class="empty">Noch kein Modul.</td></tr>
+    {% endfor %}
+    {% if home %}<tr><td><b>Zusammen</b></td><td class="num"><b>{{ credits.1 }}</b></td></tr>{% endif %}
+  </tbody>
+</table>
+{% if editing %}{% with form=adding.B %}
+<form method="post" class="inline" style="margin: 8px 0 24px">{% csrf_token %}{{ form.table }}
+  <label>Modul{{ form.module }}</label><label>ECTS{{ form.credits }}</label>
+  <button class="btn ghost small" name="zeile" value="1">Ergänzen</button>
+</form>{% endwith %}{% endif %}
+
+<h3>Unterschriften</h3>
+<dl class="facts">
+  <dt>Studierende:r</dt>
+  <dd>{% if mobility.signed_student %}unterschrieben am {{ mobility.signed_student|date:"j.n.Y" }}{% elif own and editing and abroad and home %}<form method="post" class="inline">{% csrf_token %}<button class="btn small" name="unterschreiben" value="1" data-confirm="Learning Agreement unterschreiben? Danach prüft es die Hochschule.">Unterschreiben</button></form>{% else %}<span class="muted">noch nicht{% if own and editing %}: erst beide Tabellen ausfüllen{% endif %}</span>{% endif %}</dd>
+  <dt>Hochschule</dt>
+  <dd>{% if mobility.signed_here %}genehmigt am {{ mobility.signed_here|date:"j.n.Y" }} von {{ mobility.signed_here_by|default:"–" }}{% elif office and mobility.signed_student %}<form method="post" class="inline">{% csrf_token %}<button class="btn small" name="genehmigen" value="1">Genehmigen</button></form>{% else %}<span class="muted">noch nicht</span>{% endif %}</dd>
+  <dt>Partnerhochschule</dt>
+  <dd>{% if mobility.signed_partner %}genehmigt am {{ mobility.signed_partner|date:"j.n.Y" }}{% elif office and mobility.signed_here %}<form method="post" class="inline">{% csrf_token %}<label>Genehmigt am<input name="am" data-day autocomplete="off" size="11" required></label><button class="btn ghost small" name="partner" value="1">Vermerken</button></form><small class="muted">Über Erasmus Without Paper kommt sie künftig von selbst.</small>{% else %}<span class="muted">noch nicht</span>{% endif %}</dd>
+</dl>
+{% endblock %}

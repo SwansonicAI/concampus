@@ -21,6 +21,7 @@ from courses.models import Appointment, Area, Course, Format, Reduction
 from curriculum.forms import ModuleForm, ProgramForm
 from curriculum.models import Module, Program, Subject
 from instruments.models import Instrument
+from mobility.models import Agreement, Partner
 from rooms.models import Booking, BookingCategory, Room, RoomFunction
 from students.forms import StudyForm
 from students.models import DocumentType, Study
@@ -418,6 +419,22 @@ EDITORS = {e.key: e for e in [
         'instrumente', Instrument, 'Leihinstrumente', 'manage_instruments', 'Räume', sections=[(None, [('name', 'maker', 'number'), 'institute', 'note', 'available'])],
         columns=[('Instrument', 'name'), ('Inventarnummer', 'number'), ('Institut', 'institute'), ('Verleihbar', 'available')],
         search=['name', 'number', 'maker'], words='instrumentenpool inventar leihe', queryset=lambda: Instrument.objects.select_related('institute'),
+    ),
+    Editor(
+        'partnerhochschulen', Partner, 'Partnerhochschulen', 'manage_mobility', 'Internationales',
+        sections=[(None, ['name', ('city', 'country'), ('erasmus', 'hei'), ('website', 'email')])],
+        columns=[('Partnerhochschule', 'name'), ('Ort', 'city'), ('Staat', 'country'), ('Erasmus-Code', 'erasmus')], search=['name', 'city', 'erasmus'],
+        words='erasmus partner austausch ausland schac',
+    ),
+    Editor(
+        'abkommen', Agreement, 'Abkommen', 'manage_mobility', 'Internationales',
+        sections=[
+            (None, ['partner', ('first_year', 'last_year'), ('isced', 'levels', 'language'), 'subjects']),
+            ('Plätze im Jahr', [('places_out', 'months_out'), ('places_in', 'months_in'), 'teaching']),
+            ('Unterzeichnet', [('signed', 'partner_signed'), 'note']),
+        ],
+        columns=[('Partnerhochschule', 'partner'), ('Ab', 'first_year'), ('Bis', 'last_year'), ('Von hier unterzeichnet', 'signed')],
+        search=['partner__name'], words='erasmus iia inter-institutional agreement plätze ausland', queryset=lambda: Agreement.objects.select_related('partner'),
     ),
     Editor(
         'unterlagen', DocumentType, 'Unterlagenarten', 'run_auditions', 'Aufnahme',
