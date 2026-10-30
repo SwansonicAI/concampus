@@ -728,6 +728,32 @@ class Export(models.Model):
         cls.objects.create(person=person, what=what[:300], rows=rows)
 
 
+class Consent(models.Model):
+    """An Einwilligung to health data in a document (Art. 9 Abs. 2 lit. a, Art. 7 DSGVO): the words the person agreed to,
+    when, who recorded it (they themselves, or an office from paper), and when they took it back. Kept after that, to show
+    it was given."""
+
+    person = models.ForeignKey(Person, models.CASCADE, related_name='consents', verbose_name='Person')
+    purpose = models.CharField('Wofür', max_length=200, help_text='Wie im Wortlaut, z. B. „zum Nachteilsausgleich“.')
+    wording = models.TextField('Wortlaut')
+    by = models.ForeignKey(Person, models.SET_NULL, null=True, related_name='+', verbose_name='Verbucht von')
+    given = models.DateTimeField('Erteilt', default=timezone.now)
+    revoked = models.DateTimeField('Widerrufen', null=True, blank=True)
+
+    class Meta:
+        ordering = ['-given']
+        verbose_name = 'Einwilligung'
+        verbose_name_plural = 'Einwilligungen'
+
+    def __str__(self):
+        return f'Nachweis {self.purpose}'
+
+    @classmethod
+    def give(cls, person, purpose, by):
+        from .texts import block
+        return cls.objects.create(person=person, purpose=purpose, wording=block('einwilligung_gesundheit', zweck=purpose), by=by)
+
+
 class Grant(Tracked, models.Model):
     """Rights given to an office, waiting until a second person who keeps accounts confirms them."""
 

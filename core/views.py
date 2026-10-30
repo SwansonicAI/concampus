@@ -27,10 +27,10 @@ from . import dates
 from .apps import feature, plural, tile_apps, tiles
 from .days import busy, strip
 from .forms import ContactForm
-from .history import describe, former, restore, tables
+from .history import because, describe, former, restore, tables
 from .dates import months_before
 from .keys import DISTRICTS, replaced
-from .models import Change, Institution, Key, Message, Office, Person, Term, Tracked, limited
+from .models import Change, Consent, Institution, Key, Message, Office, Person, Term, Tracked, limited
 from .text import fold, matching, words
 
 
@@ -74,7 +74,33 @@ def account(request):
         messages.success(request, 'Kontaktdaten gespeichert.')
         return redirect('account')
     staff = not request.user.roles & {'student', 'applicant', 'alumni'}  # employees: their personnel file is HR's
-    return render(request, 'core/account.html', {'form': form, 'office': 'die Personalabteilung' if staff else Office.holding('manage_students')})
+    return render(request, 'core/account.html', {
+        'form': form, 'staff': staff, 'office': 'die Personalabteilung' if staff else Office.holding('manage_students'), 'consents': request.user.consents.all(),
+    })
+
+
+@require_POST
+def delivery(request):
+    """Bescheide in the Postfach or by post: the consent of § 41 Abs. 2a VwVfG, given or taken back for what comes after."""
+    person = request.user
+    person.electronic = None if person.electronic else timezone.now()
+    person.save(update_fields=['electronic'])
+    messages.success(request, f'Bescheide kommen ab jetzt {"elektronisch ins Postfach" if person.electronic else "per Post"}.')
+    return redirect('account')
+
+
+@require_POST
+def revoke(request, pk):
+    """Widerruf (Art. 7 Abs. 3 DSGVO): the documents given under the consent are deleted; what was decided before stays."""
+    consent = get_object_or_404(Consent, pk=pk, person=request.user, revoked=None)
+    with because('Einwilligung widerrufen'):
+        for d in consent.documents.all():
+            d.drop_file()
+            d.delete()
+    consent.revoked = timezone.now()
+    consent.save(update_fields=['revoked'])
+    messages.success(request, f'Einwilligung widerrufen, {consent} gelöscht. Was bis dahin entschieden ist, bleibt bestehen.')
+    return redirect('account')
 
 
 ROLES = {'student': 'Studierende', 'applicant': 'Bewerbende', 'teacher': 'Lehrende', 'alumni': 'Ehemalige'}

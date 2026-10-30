@@ -145,7 +145,10 @@ class OfficeTest(Seeded):
         data |= {f'grade-{p.pk}': '' for p in rows} | {f'remark-{first.pk}': 'rt', f'remark-{last.pk}': 'ne'}
         refused = office.post(f'/pruefungen/{resit.pk}/', data)  # a Rücktritt needs its attest
         self.assertIn('Attest', next(r.error for r in refused.context['rows'] if getattr(r, 'error', None)))
-        office.post(f'/pruefungen/{resit.pk}/attest/', {'participation': first.pk, 'file': SimpleUploadedFile('attest.pdf', b'%PDF-1.4')})
+        attest = {'participation': first.pk, 'file': SimpleUploadedFile('attest.pdf', b'%PDF-1.4')}
+        office.post(f'/pruefungen/{resit.pk}/attest/', attest)  # health data: only with the signed consent
+        self.assertFalse(first.study.documents.filter(kind='attest').exists())
+        office.post(f'/pruefungen/{resit.pk}/attest/', attest | {'file': SimpleUploadedFile('attest.pdf', b'%PDF-1.4'), 'consent': '1'})
         office.post(f'/pruefungen/{resit.pk}/', data)
         r = office.post(f'/pruefungen/{resit.pk}/freigabe/', follow=True)
         self.assertIn('1 Bescheid über endgültiges Nichtbestehen versandt.', ' '.join(flashes(r)))
@@ -155,6 +158,10 @@ class OfficeTest(Seeded):
         r = asa.post(f'/studierende/{last.study.pk}/exmatrikulieren/', {'reason': '8'}, follow=True)
         self.assertIn('Erst nach der Widerspruchsfrist', flashes(r)[0])
         self.assertEqual(attempts(first.study.person, first.module), 1)  # the withdrawal is no attempt
+        consent = first.study.person.consents.get()
+        self.login(first.study.person.username).post(f'/konto/einwilligung/{consent.pk}/widerruf/')
+        first.refresh_from_db()
+        self.assertEqual((first.study.documents.filter(kind='attest').exists(), first.remark), (False, 'rt'))  # the attest goes, the Rücktritt stays
 
     def test_the_office_enters_only_whom_the_exam_is_for_and_takes_a_mistake_back(self):
         exam = Course.objects.filter(kind='exam', released=None, subject=None, modules__program__degree='B.Mus.').first()

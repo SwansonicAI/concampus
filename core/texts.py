@@ -554,6 +554,13 @@ TEXTS = {
         'Ihre Angaben verarbeitet die {hochschule} nur für das Bewerbungsverfahren und, wenn Sie hier studieren, für Ihr Studium. '
         'Sie sehen nur die Stellen, die damit befasst sind; die Prüfungskommission sieht Ihre künstlerischen Unterlagen.',
     ),
+    'einwilligung_gesundheit': Spec(
+        BAUSTEIN, 'Einwilligung in Gesundheitsdaten', '',
+        'Ich willige ein, dass die {hochschule} die Gesundheitsangaben in meinem Nachweis {zweck} verarbeitet (Art. 9 Abs. 2 lit. a DSGVO). '
+        'Ihn sehen nur die Stellen, die darüber entscheiden. Ich kann die Einwilligung jederzeit unter „Mein Konto“ widerrufen; der Nachweis '
+        'wird dann gelöscht. Was bis dahin entschieden ist, bleibt bestehen.',
+        ('zweck',),
+    ),
     'bewerbung_hinweise': Spec(
         BAUSTEIN, 'Hinweise beim Bewerben', '',
         'Pro Studiengang und Hauptfach ist eine Bewerbung möglich. Nach dem Absenden laden Sie unter „Meine Bewerbung“ Ihr Video und Ihre '

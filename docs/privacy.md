@@ -97,6 +97,15 @@ Schwerbehinderung is health data (Art. 9): its reason shows only as that, never 
 When a form is refused, what was typed is kept in the session to fill it in again (`core/forms.py`, `again()`, `sent()`),
 never in the address: a note may say why someone was ill, and addresses end up in logs.
 
+### Consent to health data
+
+Health data in a document (an attest to a Rücktritt, a Nachteilsausgleich or an Urlaubssemester, a phoniatric report)
+is processed on the person's consent (Art. 9 Abs. 2 lit. a DSGVO, as in the HfM's own notices). It is asked with each
+upload, in the Baustein „Einwilligung in Gesundheitsdaten“; an office filing a paper attest confirms the signed consent.
+`core.models.Consent` keeps the wording, when and who recorded it. The person withdraws it under Mein Konto: the
+documents given under it are deleted, the consent stays marked as withdrawn, and what was decided before stays
+(Art. 7 Abs. 3). The consent to electronic Bescheide (§ 41 Abs. 2a VwVfG) is given or withdrawn there too.
+
 ## Where the code enforces it
 
 - `students/views.py`, `study()`: `personal` (the person or `manage_students`) and `identity` (also `decide_results`);

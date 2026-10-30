@@ -17,10 +17,10 @@ report, grounds of leave (illness, Mutterschutz) and a Schwerbehinderung behind 
 |---|---|---|---|
 | Each role sees what its task needs, by default | GDPR Art. 25 | yes | Tiers and roles in `docs/privacy.md`; the jury sees only documents marked for it; nobody lists all students; form input never in the address |
 | Information when data is collected | Art. 13 | yes | Baustein „Datenschutz beim Bewerben“ at signup and application, with the deletion period and the Hochschule's notice (`admissions/templates/admissions/_privacy.html`) |
-| Consent for health data, recorded and withdrawable | Art. 9(2)(a), Art. 7 | no | Attests and reports are uploaded without asking or recording consent |
+| Consent for health data, recorded and withdrawable | Art. 9(2)(a), Art. 7 | yes | Asked with every attest or health report, recorded with its wording, when and by whom (the person, or an office from the signed paper); withdrawn under Mein Konto, which deletes the document; decisions taken stay (`core.models.Consent`) |
 | Access | Art. 15 | partly | The person sees their record, results, documents and Postfach; no complete copy with the Verlauf, the exports they were in and who received them |
 | Rectification | Art. 16 | yes | Address and phone in Mein Konto; name and birth data by the office on proof (`core/views.py` `account()`) |
-| Erasure | Art. 17 | partly | Applications that came to nothing: documents deleted and the person made anonymous after the Löschfrist; health data once the application is decided; room bookings after two years. Students, alumni and staff are never deleted. Anonymising leaves the phone number and the three Gemeinden (`admissions/retention.py` `forget()`): a defect |
+| Erasure | Art. 17 | partly | Applications that came to nothing: documents deleted and the person made anonymous after the Löschfrist; health data once the application is decided; room bookings after two years. Anonymising empties every field but those the figures count (`admissions/retention.py` `KEPT`). Students, alumni and staff are never deleted |
 | Restriction | Art. 18 | no | No way to mark a record as restricted |
 | Objection | Art. 21 | Hochschule | Decided by the office; nothing in Campus |
 | Portability | Art. 20 | n/a | Not for processing under Art. 6(1)(e) (Art. 20(3)) |
@@ -109,17 +109,15 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 
 ## To do in Campus
 
-1. Anonymise the phone number and the Gemeinden too.
-2. Ask, record and allow withdrawal of consent with each upload of health data.
-3. Deletion concept for every kind of record; students five years after Exmatrikulation, offered to the archive first.
-4. A complete copy of one's data.
-5. Lockout after failed logins, session timeout, a second factor for offices until single sign-on, a login log agreed
+1. Deletion concept for every kind of record; students five years after Exmatrikulation, offered to the archive first.
+2. A complete copy of one's data.
+3. Lockout after failed logins, session timeout, a second factor for offices until single sign-on, a login log agreed
    with the Personalrat.
-6. HSTS; backup of uploaded files.
-7. Statistics of academic and artistic staff.
-8. Mark a record as restricted.
-9. XHochschule data for the certificates.
-10. WCAG audit and the accessibility statement for Campus.
+4. HSTS; backup of uploaded files.
+5. Statistics of academic and artistic staff.
+6. Mark a record as restricted.
+7. XHochschule data for the certificates.
+8. WCAG audit and the accessibility statement for Campus.
 
 ## To check
 

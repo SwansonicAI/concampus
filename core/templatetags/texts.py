@@ -6,6 +6,6 @@ register = template.Library()
 
 
 @register.simple_tag
-def text(key):
+def text(key, **values):
     """A text block as the Hochschule words it (core.texts)."""
-    return block(key)
+    return block(key, **values)

@@ -4,7 +4,7 @@ from django.db.models import CharField, Q, Value
 from django.db.models.functions import Cast, Concat
 
 from core.dates import months_before
-from core.models import Change, Message, Person
+from core.models import Change, Consent, Message, Person
 from courses.models import Participation
 from students.models import Document, Study
 
@@ -36,6 +36,7 @@ def forget(cutoff):
     ids = list(people.values_list('pk', flat=True))
     Message.objects.filter(person__in=ids).delete()
     Change.objects.filter(person__in=ids).delete()  # what the history kept about them
+    Consent.objects.filter(person__in=ids).delete()
     Participation.objects.filter(study__person__in=ids).update(note='')
     empty = {f.name: f.get_default() for f in Person._meta.concrete_fields if not f.primary_key and f.name not in KEPT}
     Person.objects.filter(pk__in=ids).update(**empty | {

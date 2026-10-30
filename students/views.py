@@ -22,7 +22,7 @@ from core import dates, texts
 from core.access import CODENAMES, require
 from core.history import tables
 from core.apps import plural
-from core.models import Export, Institution, Message, Office, Person, Term
+from core.models import Consent, Export, Institution, Message, Office, Person, Term
 from core.text import fold, handle, matching
 from core.views import SHOWN, preview, without_term
 from courses.models import Participation
@@ -505,10 +505,10 @@ def leave(request, pk):
         messages.error(request, rule if reason in dict(LEAVES) else 'Bitte den Grund der Beurlaubung wählen.')
         return redirect(study.get_absolute_url())
     if leave and (file := request.FILES.get('file')):  # an attest, say: for the student office only
-        if refusal := DocumentType.system('attest').refuses(file):
+        if refusal := DocumentType.system('attest').refuses(file) or (not request.POST.get('consent') and 'Ohne Einwilligung lässt sich der Nachweis nicht hochladen.'):
             messages.error(request, refusal)
             return redirect(study.get_absolute_url())
-        Document.hand_in(study, DocumentType.system('attest'), file)
+        Document.hand_in(study, DocumentType.system('attest'), file, Consent.give(study.person, 'zum Urlaubssemester', request.user))
     registration, _ = StudyTerm.objects.get_or_create(study=study, term=term)
     registration.leave, registration.leave_reason = leave, reason
     registration.save(update_fields=['leave', 'leave_reason'])

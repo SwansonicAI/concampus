@@ -23,7 +23,7 @@ from core.keys import UNIVERSITIES, KeyChoice, label
 from core.access import kept, require
 from core.apps import plural
 from core.dates import months_before, working
-from core.models import Export, Message, Office, Term
+from core.models import Consent, Export, Message, Office, Term
 from core.text import matching
 from core.views import without_term
 from courses import panel
@@ -324,13 +324,20 @@ def unmet(study, module):
 
 
 def filed(study, request, what):
-    """The attest an office files for `what`: the scan, or the day the paper arrived; (document, '') or (None, why not)."""
-    kind, file = DocumentType.system('attest'), request.FILES.get('file')
+    """The attest an office files for `what`, with the person's signed consent: the scan, or the day the paper arrived;
+    (document, '') or (None, why not)."""
+    kind, file, received = DocumentType.system('attest'), request.FILES.get('file'), dates.day(request.POST.get('received', ''))
+    if not (file or received):
+        return None, 'Bitte das Attest hochladen oder angeben, wann es auf Papier eingegangen ist.'
+    if file and (refusal := kind.refuses(file)):
+        return None, refusal
+    if not request.POST.get('consent'):
+        return None, 'Ein Attest lässt sich nur mit der unterschriebenen Einwilligung verbuchen.'
+    consent = Consent.give(study.person, what, request.user)
     if file:
-        return (None, refusal) if (refusal := kind.refuses(file)) else (Document.hand_in(study, kind, file), '')
-    if received := dates.day(request.POST.get('received', '')):
-        return Document.objects.create(person=study.person, study=study, kind=kind, title=f'Attest {what}, auf Papier eingegangen am {date_format(received, "j.n.Y")}'), ''
-    return None, 'Bitte das Attest hochladen oder angeben, wann es auf Papier eingegangen ist.'
+        return Document.hand_in(study, kind, file, consent), ''
+    title = f'Attest {what}, auf Papier eingegangen am {date_format(received, "j.n.Y")}'
+    return Document.objects.create(person=study.person, study=study, kind=kind, title=title, consent=consent), ''
 
 
 @require_POST

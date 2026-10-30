@@ -377,6 +377,9 @@ class Document(Tracked, models.Model):
     url = models.URLField('Link', max_length=2000, blank=True)  # shared video links run long
     message = models.ForeignKey(Message, models.CASCADE, null=True, blank=True, related_name='+', verbose_name='Bescheid')
     declared = models.DateTimeField('Selbstständigkeitserklärung', null=True, blank=True, help_text='Bei einer Abschlussarbeit: wann sie mit ihr abgegeben wurde.')
+    consent = models.ForeignKey(
+        'core.Consent', models.SET_NULL, null=True, blank=True, related_name='documents', verbose_name='Einwilligung', help_text='Bei Gesundheitsdaten.',
+    )
     created = models.DateTimeField('Eingegangen', default=timezone.now)
 
     class Meta:
@@ -388,13 +391,13 @@ class Document(Tracked, models.Model):
         return self.title
 
     @classmethod
-    def hand_in(cls, study, kind, file):
+    def hand_in(cls, study, kind, file, consent=None):
         """File an upload; where the kind keeps one file only, it replaces the one before."""
         if kind.single:
             for old in study.documents.filter(kind=kind):
                 old.drop_file()
                 old.delete()
-        return cls.objects.create(person=study.person, study=study, kind=kind, title=file.name[:120], file=file)
+        return cls.objects.create(person=study.person, study=study, kind=kind, title=file.name[:120], file=file, consent=consent)
 
     def drop_file(self):
         """Delete the file, unless another document keeps it too, like the demo's placeholder."""

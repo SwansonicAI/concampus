@@ -67,7 +67,7 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 
 | Rule | Source | Code | Set in |
 |---|---|---|---|
-| A Bescheid in the Postfach counts as delivered the day after it is opened, where the person agreed to that at signup; otherwise by post, on the fourth day | § 41 Abs. 2, 2a VwVfG | `core/models.py` `Person.electronic`, `exams/views.py` `exhausted()` | code |
+| A Bescheid in the Postfach counts as delivered the day after it is opened, where the person agreed to that at signup or later under Mein Konto, until they withdraw it; otherwise by post, on the fourth day | § 41 Abs. 2, 2a VwVfG | `core/models.py` `Person.electronic`, `exams/views.py` `exhausted()` | code |
 | Every Bescheid has an Aktenzeichen and is filed in the student's file | practice | `core/models.py` `Message.reference`, `students/models.py` `Study.notify()` | code |
 | Bescheide that turn someone down, or that the Hochschule issues by itself (Exmatrikulation reasons 0, 7, 8), carry the Rechtsbehelfsbelehrung | VwVfG, VwGO | `core/texts.py` `appeal`, `students/models.py` `OFFICIAL` | Einstellungen › Texte (wording) |
 | A rejection names the part of the Eignungsprüfung not passed, with its points | VwVfG § 39 | `admissions/views.py` `grounds()` | Einstellungen › Texte (wording) |
@@ -138,6 +138,7 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 | Applications that came to nothing: documents deleted and people made anonymous after a period | GDPR Art. 5(1)(e) | `admissions/retention.py`, `core/management/commands/prune.py` | Einstellungen › Hochschule (Löschfrist) |
 | Health data (phoniatric report) deleted once the application is decided | GDPR Art. 9 | same | Einstellungen › Unterlagenarten (Gesundheitsdaten) |
 | Files with personal data that leave are logged | GDPR Art. 5(2) | `core/models.py` `Export` | code |
+| Health data only with consent, kept with its wording; withdrawing it deletes the document | GDPR Art. 7, Art. 9(2)(a) | `core/models.py` `Consent`, `core/views.py` `revoke()` | Einstellungen › Texte (wording) |
 
 ## Official keys
 

@@ -21,7 +21,7 @@ from core import texts
 from core.access import CODENAMES, require
 from core.apps import plural
 from core.history import tables
-from core.models import Institution, Message, Term
+from core.models import Consent, Institution, Message, Term
 from core.text import matching, untimed
 from core.templatetags.marks import mark
 from core.views import preview
@@ -709,7 +709,11 @@ def upload(request, pk):
     if not kind.single and study.documents.filter(kind=kind).count() >= kind.max_files:
         messages.error(request, f'Für „{kind}“ höchstens {kind.max_files} Dateien; bitte erst eine entfernen.')
         return back
-    messages.success(request, f'„{Document.hand_in(study, kind, file)}“ hochgeladen.')
+    if kind.health and not request.POST.get('consent'):
+        messages.error(request, 'Ohne Einwilligung lässt sich der Nachweis nicht hochladen.')
+        return back
+    consent = Consent.give(study.person, 'zu meiner Bewerbung', request.user) if kind.health else None
+    messages.success(request, f'„{Document.hand_in(study, kind, file, consent)}“ hochgeladen.')
     return back
 
 

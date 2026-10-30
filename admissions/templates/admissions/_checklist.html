@@ -1,4 +1,4 @@
-<ul class="checklist">
+{% load texts %}<ul class="checklist">
   {% for item in checklist %}
   <li>
     <span class="check{% if item.documents %} done{% endif %}"></span>
@@ -23,6 +23,7 @@
         {% csrf_token %}
         <input type="hidden" name="kind" value="{{ item.kind.key }}">
         <input type="file" name="file" accept="{{ item.kind.extensions|join:',' }}" data-max="{% widthratio item.kind.size 1 1048576 %}" data-too-big="Höchstens {{ item.kind.limit }}. Bitte verkleinern." aria-label="{{ item.label }}">
+        {% if item.kind.health %}<div class="choices"><label><input type="checkbox" name="consent" value="1" required> {% if study.person == user %}{% text 'einwilligung_gesundheit' zweck='zu meiner Bewerbung' %}{% else %}Einwilligung liegt unterschrieben vor{% endif %}</label></div>{% endif %}
         <button class="btn ghost small">{% if item.documents and item.kind.single %}Ersetzen{% elif item.documents %}Weitere hochladen{% else %}Hochladen{% endif %}</button>
         <small class="muted">{{ item.kind.accepted }}</small>
       </form>
