@@ -14,11 +14,15 @@
         {% elif upload %}<form method="post" action="{% url 'admissions:discard' d.pk %}">{% csrf_token %}<button class="link" data-confirm="Wirklich entfernen?"><small>entfernen</small></button></form>{% endif %}
       </div>
       {% endfor %}
-      {% if upload or item.late %}
+      {% if upload %}{% for d in item.reusable %}
+      <form method="post" action="{% url 'admissions:reuse' study.pk %}" class="handed">{% csrf_token %}<button class="btn ghost small" name="document" value="{{ d.pk }}">Video aus der Bewerbung {{ d.study.program.title }} übernehmen</button></form>
+      {% endfor %}{% endif %}
+      {% if not item.kind.single and item.documents|length >= item.kind.max_files %}<small class="muted">Höchstens {{ item.kind.max_files }} Dateien; für eine weitere erst eine entfernen.</small>
+      {% elif upload or item.late %}
       <form method="post" enctype="multipart/form-data" action="{% url 'admissions:upload' study.pk %}" class="inline handed" data-upload>
         {% csrf_token %}
         <input type="hidden" name="kind" value="{{ item.kind.key }}">
-        <input type="file" name="file" accept="{{ item.kind.extensions|join:',' }}"{% if item.kind.max_mb %} data-max="{% widthratio item.kind.max_mb 1 1048576 %}" data-too-big="Höchstens {{ item.kind.limit }}. Bitte verkleinern."{% endif %} aria-label="{{ item.label }}">
+        <input type="file" name="file" accept="{{ item.kind.extensions|join:',' }}" data-max="{% widthratio item.kind.size 1 1048576 %}" data-too-big="Höchstens {{ item.kind.limit }}. Bitte verkleinern." aria-label="{{ item.label }}">
         <button class="btn ghost small">{% if item.documents and item.kind.single %}Ersetzen{% elif item.documents %}Weitere hochladen{% else %}Hochladen{% endif %}</button>
         <small class="muted">{{ item.kind.accepted }}</small>
       </form>

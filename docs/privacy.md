@@ -51,6 +51,8 @@ with the administration (HfM Hanns Eisler Berlin, HMTM München, HfM Würzburg).
 ### Applications
 
 - Document types say whether the jury sees them (`DocumentType.jury`, "Für die Kommission"; in the demo: video and CV).
+  An applicant may take a video over into another application in the same Hauptfach (`admissions/views.py`, `reuse()`);
+  that application's jury then sees it too.
   Everything else, such as school certificates, the parents' consent, the fee receipt, language certificates or a
   phoniatric report (health data), is for the administration only. Health data (`DocumentType.health`) opens only to
   the person and the office deciding the application, and is deleted once it is decided (`admissions/retention.py`).

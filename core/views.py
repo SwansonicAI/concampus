@@ -240,6 +240,12 @@ def denied(request, exception):
 def when(request):
     """What a date field understood, for the hint next to it."""
     text = request.GET.get('q', '')
+    if request.GET.get('nur') == 'vergangen':  # a day that has been: why it is refused
+        try:
+            day = dates.past(text)
+        except ValidationError as error:
+            return JsonResponse({'error': error.messages[0]})
+        return JsonResponse({'iso': day.isoformat(), 'text': date_format(day, 'l, j. F Y')})
     found = (dates.day(text), None) if request.GET.get('nur') == 'tag' else dates.moment(text)
     if not found or not found[0]:
         return JsonResponse({})

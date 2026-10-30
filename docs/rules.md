@@ -80,6 +80,7 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 |---|---|---|---|
 | Immatrikulation once the place is accepted, the fee paid, the insurer's report in and the HZB on record | ThürHG, § 199a SGB V | `students/models.py` `Study.missing()` | code |
 | An HZB from a school abroad is assessed; German proved where it is not in German; an APS certificate for China, India, Vietnam; both by the Immatrikulation | ThürHG, KMK | `core/models.py` `Person.abroad`, `needs_german`, `needs_aps`; `core/destatis.py` | Einstellungen › Unterlagenarten |
+| Each kind of document takes up to 5 files of 20 MB each unless set otherwise; the video one file of 1.5 GB, which may be taken over into another application in the same Hauptfach | Hochschule | `students/models.py` `DocumentType.size`, `max_files`; `admissions/views.py` `upload()`, `reuse()` | Einstellungen › Unterlagenarten |
 | Semesterbeitrag in three parts, which add up | HfM fees page | `core/models.py` `Term.parts`, `clean()` | Einstellungen › Semester |
 | Rückmeldung within its window; in the Nachfrist with the Säumnisgebühr; after it, Exmatrikulation | Immatrikulationsordnung | `students/views.py` `reregistration()` | Einstellungen › Semester, › Hochschule |
 | Urlaubssemester asked for in the Rückmeldung window, at most two in the rule, in the first semester only for illness or Mutterschutz; the office decides beyond, reminded | Immatrikulationsordnung | `students/views.py` `leave()`, `students/models.py` `LEAVE_TERMS`, `FIRST_TERM_LEAVES` | code |

@@ -308,8 +308,9 @@ class DocumentType(Tracked, Keyed):
         'Vordruck', blank=True,
         help_text='Zum Ausdrucken und Unterschreiben, etwa die Einwilligung der Eltern. Platzhalter: {name}, {geburtsdatum}, {studiengang}, {hauptfach}, {hochschule}.',
     )
-    max_mb = models.PositiveIntegerField('Höchstens (MB)', null=True, blank=True)
+    max_mb = models.PositiveIntegerField('Höchstens (MB)', null=True, blank=True, help_text='Je Datei; leer: 20 MB.')
     single = models.BooleanField('Nur eine Datei', default=False, help_text='Eine neue ersetzt die alte.')
+    max_files = models.PositiveSmallIntegerField('Höchstens Dateien', default=5, help_text='Je Bewerbung, wo nicht nur eine Datei gilt.')
     order = models.PositiveSmallIntegerField('Reihenfolge', default=0)
 
     class Meta:
@@ -325,6 +326,7 @@ class DocumentType(Tracked, Keyed):
         return cls.objects.get_or_create(key=key, defaults=cls.SYSTEM[key])[0]
 
     DEFAULT_TYPES = '.pdf, .jpg, .jpeg, .png, .heic, .webp'  # PDF and photos of a paper
+    DEFAULT_MB = 20
 
     @property
     def extensions(self):
@@ -333,17 +335,22 @@ class DocumentType(Tracked, Keyed):
     @property
     def accepted(self):
         """What an upload may be, in words."""
-        return f'{self.file_types or "PDF oder Foto"}' + (f', höchstens {self.limit}' if self.max_mb else '')
+        return f'{self.file_types or "PDF oder Foto"}, ' + ('eine Datei' if self.single else f'bis zu {self.max_files} Dateien') + f' je höchstens {self.limit}'
+
+    @property
+    def size(self):
+        """The most an upload may hold, in MB."""
+        return self.max_mb or self.DEFAULT_MB
 
     @property
     def limit(self):
-        return f'{number_format(self.max_mb / 1024, 1)} GB' if self.max_mb >= 1024 else f'{self.max_mb} MB'
+        return f'{number_format(self.size / 1024, 1)} GB' if self.size >= 1024 else f'{self.size} MB'
 
     def refuses(self, file):
         """Why a file cannot be handed in as this kind, or ''."""
         if not file.name.lower().endswith(self.extensions):
             return f'{self} bitte als {self.file_types or "PDF oder Bild"} hochladen.'
-        if self.max_mb and file.size > self.max_mb * 2 ** 20:
+        if file.size > self.size * 2 ** 20:
             return f'Die Datei ist größer als {self.limit}. Bitte verkleinern und erneut hochladen.'
         return ''
 

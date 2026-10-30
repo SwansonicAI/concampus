@@ -8,7 +8,7 @@ from django.db import models
 from django.shortcuts import get_object_or_404
 
 from core.access import CAPABILITIES, EVERYWHERE
-from core.dates import DayField
+from core.dates import DayField, PastField
 from core.models import Grant, Holiday, Institute, Institution, Membership, Office, Person, Term
 from courses.forms import AuditionForm
 from courses.models import Appointment, Area, Course, Format, Reduction
@@ -60,9 +60,14 @@ class Editor:
         return self.new(request) if self.new else self.model()
 
 
+PAST = {'birth_date', 'entrance_date', 'degree_date'}  # days that have been: digits only, never in the future
+
+
 def formfield(model_field, **kwargs):
     """Date fields that understand '12.11.' and 'morgen' but ask for a full date, as records keep one; numbers with a
     decimal comma, in a text box (a number box drops the comma in some browsers); ticks instead of multiple selects."""
+    if type(model_field) is models.DateField and model_field.name in PAST:
+        return model_field.formfield(form_class=PastField, **kwargs)
     if type(model_field) is models.DateField:
         field = model_field.formfield(form_class=DayField, **kwargs)
         field.widget.attrs['placeholder'] = 'TT.MM.JJJJ'
@@ -355,7 +360,7 @@ EDITORS = {e.key: e for e in [
     Editor(
         'unterlagen', DocumentType, 'Unterlagenarten', 'run_auditions', 'Aufnahme',
         sections=[(None, [
-            ('name', 'condition'), ('required', 'single', 'shared'), ('jury', 'health'), 'note', 'template', ('amount', 'file_types', 'max_mb', 'order'), 'subjects',
+            ('name', 'condition'), ('required', 'single', 'shared'), ('jury', 'health'), 'note', 'template', ('file_types', 'max_mb', 'max_files'), ('amount', 'order'), 'subjects',
         ])],
         columns=[('Unterlagen', 'name'), ('In der Checkliste', 'condition'), ('Pflicht', 'required')],
         search=['name'], words='checkliste bewerbung video zeugnis nachweis hochladen',

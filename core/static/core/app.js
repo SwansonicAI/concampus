@@ -8,11 +8,11 @@ const fold = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
 function init(root) {
   root.querySelectorAll('.form div[id^="id_"]').forEach(list => (list.dataset.search || list.querySelectorAll('input[type=checkbox]').length > 8) && filterable(list));
   root.querySelectorAll('datalist[data-suggest]').forEach(suggest);
-  root.querySelectorAll('.form select').forEach(select => select.options.length > 60 && findable(select));
+  root.querySelectorAll('.form select').forEach(select => (select.options.length > 60 || 'find' in select.dataset) && findable(select));
   root.querySelectorAll('select[data-leads]').forEach(lead);
   root.querySelectorAll('form:has([name=worst])').forEach(converted);
   root.querySelectorAll('select[data-describes]').forEach(describe);
-  root.querySelectorAll('[data-day], [data-moment]').forEach(dated);
+  root.querySelectorAll('[data-day], [data-moment], [data-past]').forEach(dated);
   root.querySelectorAll('form:has([data-for])').forEach(conditional);
   root.querySelectorAll('.lines').forEach(lineChart);
   root.querySelectorAll('table:not(.hours)').forEach(sortable);
@@ -244,38 +244,53 @@ function findable(select) {
   input.addEventListener('input', () => {
     const kept = select.value;  // taking options out and back loses the choice
     const words = fold(input.value).split(/\s+/).filter(Boolean);
+    const within = select.dataset.within;  // the group a leading choice keeps it to (lead)
     const fits = (option, group = '') => option.value === kept || !option.value || words.every(word => fold(`${option.text} ${group}`).includes(word));
     select.replaceChildren(...children.flatMap(([child, options]) => {
       if (child.tagName !== 'OPTGROUP') return fits(child) ? [child] : [];
-      child.replaceChildren(...options.filter(option => fits(option, child.label)));
+      child.replaceChildren(...options.filter(option => (!within || child.label === within || option.value === kept) && fits(option, child.label)));
       return child.children.length ? [child] : [];
     }));
     select.value = kept;
   });
 }
 
-// A choice that narrows the list it leads (data-leads="teacher") to its own group: the teachers of the Hauptfach applied
-// for, the modules of the Studiengang picked. Ticked entries stay, so saving loses nothing.
+// A choice that narrows the lists it leads (data-leads="audition teacher") to its own group: the Studiengänge and
+// teachers of the Hauptfach picked, the modules of the Studiengang. Ticked entries stay, so saving loses nothing. A list
+// with data-widen offers the rest for the exception; one with a find box narrows within the group as one types.
 const heading = child => child.tagName === 'OPTGROUP' ? child.label : child.querySelector(':scope > label:not(:has(input))')?.textContent.trim();
 
 function lead(select) {
-  const list = select.form.querySelector(`#id_${select.dataset.leads}`);
-  const children = [...list.children];
-  const narrow = () => {
-    const option = select.selectedOptions[0];
-    const group = option?.value && (option.dataset.group ?? option.text);
-    const kept = list.value;
-    list.replaceChildren(...children.filter(child => {
-      const label = heading(child);
-      return !group || label === undefined || label === group || child.querySelector('input:checked');
-    }));
-    if (list.tagName === 'SELECT') {  // a dropdown keeps its choice where it still can, else none
-      list.value = kept;
-      if (list.selectedIndex < 0) list.value = '';
-    }
-  };
-  select.addEventListener('change', narrow);
-  narrow();
+  for (const name of select.dataset.leads.split(' ')) {
+    const list = select.form.querySelector(`#id_${name}`);
+    const children = [...list.children];
+    const find = list.previousElementSibling?.matches('input.filter') && list.previousElementSibling;
+    const widen = list.dataset.widen && Object.assign(document.createElement('button'), {type: 'button', className: 'link', textContent: list.dataset.widen});
+    if (widen) list.after(widen);
+    const narrow = (all = false) => {
+      const option = select.selectedOptions[0];
+      const group = !all && option?.value && (option.dataset.group ?? option.text);
+      if (widen) widen.hidden = !group;
+      if (find) {
+        if (group && list.selectedOptions[0]?.parentElement.label !== group) list.value = '';
+        list.dataset.within = group || '';
+        find.dispatchEvent(new Event('input'));
+        return;
+      }
+      const kept = list.value;
+      list.replaceChildren(...children.filter(child => {
+        const label = heading(child);
+        return !group || label === undefined || label === group || child.querySelector('input:checked');
+      }));
+      if (list.tagName === 'SELECT') {  // a dropdown keeps its choice where it still can, else none
+        list.value = kept;
+        if (list.selectedIndex < 0) list.value = '';
+      }
+    };
+    widen?.addEventListener('click', () => narrow(true));
+    select.addEventListener('change', () => narrow());
+    narrow();
+  }
 }
 
 // A choice that brings a note to another field (data-describes="repertoire"): what the audition chosen asks for.
@@ -360,12 +375,16 @@ function dated(input) {
     clearTimeout(timer);
     timer = setTimeout(async () => {
       const q = input.value.trim();
-      const found = q ? await (await fetch(`/datum/?q=${encodeURIComponent(q)}${'day' in input.dataset ? '&nur=tag' : ''}`)).json() : {};
+      const only = 'day' in input.dataset ? '&nur=tag' : 'past' in input.dataset ? '&nur=vergangen' : '';
+      const found = q ? await (await fetch(`/datum/?q=${encodeURIComponent(q)}${only}`)).json() : {};
       input.dataset.iso = found.iso || '';
-      hint.textContent = q ? found.text || 'Nicht erkannt' : '';
+      hint.textContent = q ? found.text || found.error || 'Nicht erkannt' : '';
       hint.classList.toggle('bad', Boolean(q && !found.text));
     }, 120);
   };
+  if ('past' in input.dataset) {  // a day that has been: digits and their separators only
+    input.addEventListener('input', () => { input.value = input.value.replace(/[^\d./-]/g, ''); });
+  }
   input.addEventListener('input', understand);
   input.addEventListener('focus', () => { input.select(); understand(); });
   if (!('day' in input.dataset)) return;

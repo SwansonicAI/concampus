@@ -7,6 +7,7 @@ from datetime import date, datetime, time, timedelta
 from django import forms
 from django.forms.utils import from_current_timezone
 from django.utils import timezone
+from django.utils.formats import date_format
 
 from .text import fold
 
@@ -123,6 +124,40 @@ class DayField(forms.DateField):
         if found := day(value):
             return found
         raise forms.ValidationError('Datum nicht erkannt, z. B. 12.11.2026, morgen oder fr.')
+
+
+def past(text, today=None):
+    """A day that has been, as forms ask for it: digits split by dots, dashes or slashes with the year in full, or as a
+    browser sends it. Refused with the reason."""
+    today, text = today or timezone.localdate(), text.strip()
+    if found := re.fullmatch(r'(\d{4})-(\d{1,2})-(\d{1,2})', text):
+        y, m, d = (int(n) for n in found.groups())
+    elif found := re.fullmatch(r'(\d{1,2})[./-](\d{1,2})[./-](\d+)', text):
+        if len(found[3]) != 4:
+            raise forms.ValidationError('Bitte das Jahr vierstellig, z. B. 14.06.2025.')
+        d, m, y = (int(n) for n in found.groups())
+    else:
+        raise forms.ValidationError('Bitte Tag, Monat und Jahr in Ziffern, z. B. 14.06.2025.')
+    if y < 1900:
+        raise forms.ValidationError('Bitte das Jahr prüfen.')
+    if not 1 <= m <= 12:
+        raise forms.ValidationError(f'Einen {m}. Monat gibt es nicht.')
+    if not 1 <= d <= (last := monthrange(y, m)[1]):
+        raise forms.ValidationError(f'Der {date_format(date(y, m, 1), "F Y")} hat {last} Tage.')
+    if (found := date(y, m, d)) > today:
+        raise forms.ValidationError('Das Datum liegt in der Zukunft.')
+    return found
+
+
+class PastField(forms.DateField):
+    """A day that has been, such as a birth date or when a certificate was gained: digits only (past)."""
+
+    widget = forms.DateInput(format='%d.%m.%Y', attrs={'data-past': '', 'inputmode': 'numeric', 'autocomplete': 'off', 'placeholder': 'TT.MM.JJJJ'})
+
+    def to_python(self, value):
+        if value in self.empty_values or isinstance(value, date):
+            return value or None
+        return past(value)
 
 
 class ClockField(forms.TimeField):

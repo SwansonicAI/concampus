@@ -74,6 +74,7 @@ def checklist(study, types=None):
     holds for all of a person's applications, like a CV, counts once handed in with any of them. Reads
     `study.person.documents.all()`; prefetch them for many studies."""
     person, handed, borrowed, today = study.person, defaultdict(list), defaultdict(list), timezone.localdate()
+    same = {pk for pk, subject in person.studies.values_list('pk', 'subject') if subject == study.subject_id and pk != study.pk}  # the same Hauptfach elsewhere
     types = document_types() if types is None else types
     shared = {t.key for t in types if t.shared}
     for d in person.documents.all():
@@ -92,7 +93,10 @@ def checklist(study, types=None):
         Condition.APS: person.needs_aps,
     }
     return [
-        {'kind': t, 'label': t.name, 'note': t.note, 'required': t.required, 'documents': handed[t.key] or borrowed[t.key]}
+        {
+            'kind': t, 'label': t.name, 'note': t.note, 'required': t.required, 'documents': handed[t.key] or borrowed[t.key],
+            'reusable': [d for d in person.documents.all() if d.kind_id == t.key and d.study_id in same] if t.condition == Condition.VIDEO and not handed[t.key] else [],
+        }
         for t in types if applies.get(t.condition) or t.condition == Condition.SUBJECTS and study.subject in t.subjects.all()
     ]
 
@@ -702,8 +706,29 @@ def upload(request, pk):
     if refusal := kind.refuses(file):
         messages.error(request, refusal)
         return back
+    if not kind.single and study.documents.filter(kind=kind).count() >= kind.max_files:
+        messages.error(request, f'Für „{kind}“ höchstens {kind.max_files} Dateien; bitte erst eine entfernen.')
+        return back
     messages.success(request, f'„{Document.hand_in(study, kind, file)}“ hochgeladen.')
     return back
+
+
+@require_POST
+def reuse(request, pk):
+    """The video of another application in the same Hauptfach, taken over without uploading it again."""
+    study = get_object_or_404(Study, pk=pk, person=request.user, status=Study.Status.APPLIED)
+    source = get_object_or_404(
+        Document.objects.select_related('kind'), pk=request.POST.get('document'), person=request.user, study__subject=study.subject_id, kind__condition=Condition.VIDEO,
+    )
+    if not uploads_open(study):
+        messages.error(request, 'Die Frist für Unterlagen ist abgelaufen.')
+        return redirect('admissions:mine')
+    for old in study.documents.filter(kind=source.kind):
+        old.drop_file()
+        old.delete()
+    Document.objects.create(person=request.user, study=study, kind=source.kind, title=source.title, file=source.file.name, url=source.url)
+    messages.success(request, f'„{source.title}“ gilt jetzt auch für diese Bewerbung.')
+    return redirect('admissions:mine')
 
 
 def document(request, pk):

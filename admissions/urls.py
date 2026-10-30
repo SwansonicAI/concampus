@@ -16,6 +16,7 @@ urlpatterns = [
     path('bewerbungen/entscheiden/', views.decide_many, name='decide_many'),
     path('bewerbungen/erinnern/', views.remind, name='remind'),
     path('bewerbung/<int:pk>/unterlagen/', views.upload, name='upload'),
+    path('bewerbung/<int:pk>/video/', views.reuse, name='reuse'),
     path('unterlagen/<int:pk>/', views.document, name='document'),
     path('unterlagen/<int:pk>/entfernen/', views.discard, name='discard'),
     path('termin/<int:pk>/kalender.ics', views.calendar, name='calendar'),

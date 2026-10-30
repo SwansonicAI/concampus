@@ -28,7 +28,7 @@ class EditorTest(Seeded):
             'hauptfaecher': ({'name': 'Laute'}, {'name': 'Laute und Theorbe'}),
             'eignungspruefungen': ({'title': 'Videostufe Laute', 'term': Term.upcoming().pk, 'video': 'on', 'deadline': '01.12.2026', 'pass_mark': '16.1', 'max_points': '25'}, {'capacity': '2'}),
             'raeume': ({'name': 'FH 999', 'building': 'Fürstenhaus', 'function': 'uebung', 'capacity': '2'}, {'capacity': '3'}),
-            'unterlagen': ({'name': 'Repertoireliste', 'condition': 'always', 'required': 'on', 'order': '9'}, {'note': 'Werke mit Satzangaben.'}),
+            'unterlagen': ({'name': 'Repertoireliste', 'condition': 'always', 'required': 'on', 'max_files': '5', 'order': '9'}, {'note': 'Werke mit Satzangaben.'}),
             'raumfunktionen': ({'name': 'Tonstudio', 'order': '9'}, {'central': 'on'}),
             'kategorien': ({'name': 'Generalprobe', 'tone': 'teach', 'teachers': 'on', 'participants': '0', 'blocks': 'on', 'order': '9'}, {'public': 'on'}),
         }
