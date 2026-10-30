@@ -1,0 +1,43 @@
+{% extends base %}
+{% block title %}Amtliche Verzeichnisse{% endblock %}
+{% block content %}
+<p class="eyebrow"><a href="{% url 'setup:index' %}">Einstellungen</a></p>
+<h1>Amtliche Verzeichnisse</h1>
+<p class="lead">Die Schlüssel, die die amtliche Statistik verlangt: das Schlüsselverzeichnis und das Gemeindeverzeichnis des Statistischen Bundesamts. Sie werden zentral gepflegt und mit jedem Update eingespielt; die Hochschule muss nichts tun. Was endet, bleibt mit seinem Ende und seinem Nachfolger erhalten: Angaben stehen, wie sie gemacht wurden, die Statistik meldet den heute gültigen Schlüssel.</p>
+<table>
+  <thead><tr><th>Verzeichnis</th><th>Ausgabe</th><th>Eingespielt</th><th class="num">Gültig</th><th class="num">Beendet</th></tr></thead>
+  <tbody>
+    {% for name, edition, valid, ended in lists %}
+    <tr><td>{{ name }}</td><td>{{ edition.name|default:"–" }}</td><td>{{ edition.imported|date:"j.n.Y" }}</td><td class="num">{{ valid }}</td><td class="num">{{ ended }}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if gave %}
+<section>
+  <h2>Gebietsänderungen zu prüfen{% if count %} · {{ count }}{% endif %}</h2>
+  <p class="lead">{% for code, kreis, towns in gave %}{% for t in towns %}{{ t.name }} gehört seit {{ t.left|date:"j.n.Y" }} nicht mehr zu {{ kreis.name|default:code }}.{% endfor %} {% endfor %}Wer dort mit Gemeinde gemeldet ist, wurde umgestellt. Wer nur mit dem Kreis gemeldet ist, kann in der abgegebenen Gemeinde wohnen: bitte die Anschrift prüfen und die Gemeinde eintragen.</p>
+  {% if people is not None %}
+  <table data-panel>
+    <thead><tr><th>Person</th><th>Heimatwohnsitz</th><th>Semesterwohnsitz</th><th>Anschrift</th></tr></thead>
+    <tbody>
+      {% for p in people %}
+      <tr><td><a href="{% url 'setup:edit' 'personen' p.pk %}?next={{ request.get_full_path|urlencode }}">{{ p.name }}</a></td><td>{{ p.get_home_display }}</td><td>{{ p.get_residence_display|default:"–" }}</td><td><small>{{ p.address|linebreaksbr }}</small></td></tr>
+      {% empty %}<tr><td colspan="4" class="empty">Alle geprüft.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+</section>
+{% endif %}
+
+<section>
+  <h2>Was die Ausgaben geändert haben</h2>
+  {% for e in editions %}
+  <details{% if forloop.first %} open{% endif %}>
+    <summary>{{ e }} <small class="muted">· {{ e.added }} neu, {{ e.renamed }} geändert, {{ e.ended }} beendet · {{ e.source }}</small></summary>
+    <p><small>{{ e.notes|linebreaksbr }}</small></p>
+  </details>
+  {% empty %}<p class="muted">Bisher nur die ersten Ausgaben.</p>{% endfor %}
+</section>
+{% endblock %}

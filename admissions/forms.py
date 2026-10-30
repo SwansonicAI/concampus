@@ -9,6 +9,7 @@ from django.utils.formats import date_format
 
 from core import destatis
 from core.dates import PastField
+from core.keys import COUNTRIES, PLACES, TOWNS, KeyChoice, TownInput, choices, find
 from core.forms import frequent
 from core.models import Person
 from courses.models import Course
@@ -98,14 +99,15 @@ class ApplicationForm(forms.Form):
         help_text='Die erste, mit der ein Studium in Deutschland möglich war.',
     )
     entrance_date = PastField(label='Erworben am', required=False)
-    entrance_region = forms.ChoiceField(label='Erworben in', choices=[('', '–')] + destatis.places(), required=False, help_text='Kreis, im Ausland der Staat.')
+    entrance_region = KeyChoice(keys=PLACES, town='entrance_town', label='Erworben in', required=False, help_text='Wo die Schule ist; im Ausland der Staat.')
+    entrance_town = forms.CharField(required=False, widget=TownInput)
     accompanist = forms.BooleanField(label='Ich wünsche Korrepetition für die Prüfung.', required=False)
     declaration = forms.BooleanField(
         label='Ich versichere, dass meine Angaben vollständig und richtig sind.', help_text='Ersetzt den unterschriebenen Bewerbungsantrag.',
     )
     layout = [
         (None, [('subject', 'audition'), 'teacher', 'repertoire', ('nationality', 'gender')]),
-        ('Hochschulzugangsberechtigung', ['entrance', ('entrance_date', 'entrance_region')]),
+        ('Hochschulzugangsberechtigung', [('entrance', 'entrance_date'), 'entrance_region']),
         (None, ['accompanist', 'declaration']),
     ]
 
@@ -116,9 +118,9 @@ class ApplicationForm(forms.Form):
             if not getattr(person, name):
                 self.fields[name] = Person._meta.get_field(name).formfield(required=True)
         if 'nationality' in self.fields:
-            self.fields['nationality'].choices = [('', 'Bitte wählen'), *frequent('nationality', destatis.countries())]
+            self.fields['nationality'].choices = [('', 'Bitte wählen'), *frequent('nationality', choices(COUNTRIES))]
         self.fields['entrance'].choices = [('', 'Noch nicht erworben'), *frequent('entrance', destatis.ENTRANCE)]
-        self.fields['entrance_region'].choices = [('', '–'), *frequent('entrance_region', destatis.places())]
+        self.fields['entrance_region'].choices = [('', '–'), *frequent('entrance_region', choices(PLACES))]
         self.order_fields(['subject', 'audition', 'teacher', 'repertoire', 'nationality', 'gender'])
         self.fields['accompanist'].widget.attrs['data-for'] = 'audition:' + ','.join(  # only where the audition offers an accompanist
             str(pk) for pk in Course.objects.filter(kind=Course.Kind.AUDITION, accompaniment__isnull=False).values_list('pk', flat=True))
@@ -177,7 +179,7 @@ class AcceptForm(forms.ModelForm):
     class Meta:
         model = Person
         fields = [
-            'insurer', 'insurance', 'home', 'residence', 'first_university', 'first_term', 'external_terms',
+            'insurer', 'insurance', 'home', 'home_town', 'residence', 'residence_town', 'first_university', 'first_term', 'external_terms',
             'degree_university', 'degree_exam', 'degree_field', 'degree_date', 'degree_grade', 'vocational', 'internship',
         ]
         widgets = {'insurer': forms.TextInput(attrs={'list': 'insurers'})}
@@ -190,7 +192,7 @@ class AcceptForm(forms.ModelForm):
 
     layout = [
         ('Krankenversicherung', [('insurer', 'insurance')]),
-        ('Wohnsitz', [('home', 'residence')]),
+        ('Wohnsitz', ['home', 'residence']),
         ('Bisheriges Studium', [
             ('studied', 'first_university'), ('first_term', 'external_terms'), ('graduated', 'degree_university'), ('degree_exam', 'degree_field'), ('degree_date', 'degree_grade'),
             ('vocational', 'internship'),

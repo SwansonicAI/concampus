@@ -14,6 +14,7 @@ from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import NamedTuple
 
+from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from django.contrib.auth.models import Permission
 from django.core.files.base import ContentFile
@@ -30,7 +31,7 @@ from admissions.retention import forget
 from core.dates import months_before, working
 from core.text import handle, untimed
 from admissions.views import DECISIONS, grounds, invite
-from core import destatis, history, texts
+from core import destatis, history, keys, texts
 from core.models import Change, Holiday, Institute, Institution, Membership, Message, Office, Person, Term, Text
 from courses import panel as sheets
 from courses.models import Appointment, Area, Course, Ensemble, Format, Participation, Recusal, Reduction, Score, Signup
@@ -912,6 +913,7 @@ class Command(BaseCommand):
             self.mailboxes()
             self.planning()
             forget(months_before(timezone.localdate(), Institution.get().retention_months))  # as the nightly prune would have
+        self.territory()
         self.changes()
         self.stdout.write(self.style.SUCCESS(
             f'{Person.objects.count()} Personen, {Module.objects.count()} Planeinträge, {Course.objects.count()} Veranstaltungen, '
@@ -945,6 +947,8 @@ class Command(BaseCommand):
         self.current, self.next = self.calendar[self.now], self.calendar[self.now + 1]
 
     def structure(self):
+        keys.schluesselverzeichnis()
+        keys.gemeindeverzeichnis(keys.DATA / 'gemeindeverzeichnis-2025-12-31.xlsx')  # the next comes in after the people (territory)
         Institution.objects.create(
             name='Hochschule für Musik FRANZ LISZT Weimar', short_name='HfM Weimar', address='Platz der Demokratie 2/3\n99423 Weimar', place='Weimar',
             email='campus@hfm-weimar.de', student_mail='stud.hfm-weimar.de', website='https://www.hfm-weimar.de', imprint='https://www.hfm-weimar.de/footer/impressum',
@@ -1771,6 +1775,20 @@ class Command(BaseCommand):
             private = f'{p.email.split("@")[0]}@{providers[p.pk % len(providers)]}'
             p.private_email, p.email = (private, p.email) if p.studying else (private, private)
         Person.objects.bulk_update(people, ['email', 'private_email'])
+
+    def territory(self):
+        """A Gemeindeverzeichnis comes in after the people, as the quarterly one would: Hanau, kreisfrei since 1.1.2026,
+        takes along who lives there; who lives in the Main-Kinzig-Kreis without a town to tell is for the student office
+        to check. An HZB from Eisenach, part of the Wartburgkreis since 2021, is reported as the Wartburgkreis's; one from
+        Kiliansroda, merged in 2026, keeps the name it had."""
+        settled = Person.objects.filter(studies__status=Study.Status.ENROLLED, home__startswith='16', entrance_date__lt=date(2021, 6, 1)).exclude(
+            username__in=list(settings.DEMO)).distinct().order_by('pk')
+        hanau, unsure, eisenach, village = list(settled[:4])
+        Person.objects.filter(pk=hanau.pk).update(home='06435', home_town='06435014', address='Nürnberger Straße 12\n63450 Hanau')
+        Person.objects.filter(pk=unsure.pk).update(home='06435', home_town='', address='Am Markt 3\n63571 Gelnhausen')
+        Person.objects.filter(pk=eisenach.pk).update(entrance_region='16056', entrance_town='')
+        Person.objects.filter(pk=village.pk).update(entrance_region='16071', entrance_town='16071038')
+        keys.gemeindeverzeichnis(keys.DATA / 'gemeindeverzeichnis-2026-09-30.xlsx')
 
     def planning(self):
         """The next semester in planning, its courses not yet taken over; each course with its Turnus as the years show it:

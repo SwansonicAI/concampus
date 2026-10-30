@@ -293,11 +293,11 @@ EDITORS = {e.key: e for e in [
             ('Kontakt', ['address', ('phone', 'email')]),
             ('Person', [('title', 'first_name', 'given_names'), ('last_name', 'birth_name', 'gender'), ('birth_date', 'birth_place'), ('nationality', 'second_nationality')]),
             ('Krankenversicherung', [('insurer', 'insurance')]),
-            ('Hochschulzugang', ['entrance', ('entrance_date', 'entrance_region')]),
+            ('Hochschulzugang', [('entrance', 'entrance_date'), 'entrance_region', 'entrance_town']),
             ('Bisheriges Studium', [
                 'first_university', ('first_term', 'external_terms'), 'degree_university', ('degree_exam', 'degree_field'), ('degree_date', 'degree_grade'), ('vocational', 'internship'),
             ]),
-            ('Amtliche Statistik', [('home', 'residence')]),
+            ('Amtliche Statistik', ['home', 'home_town', 'residence', 'residence_town']),
         ],
     ),
     Editor(

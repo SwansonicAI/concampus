@@ -19,6 +19,7 @@ from django.utils.formats import date_format, number_format
 from django.views.decorators.http import require_POST
 
 from core import dates, destatis, texts
+from core.keys import UNIVERSITIES, KeyChoice, label
 from core.access import kept, require
 from core.apps import plural
 from core.dates import months_before, working
@@ -565,7 +566,7 @@ class RecognitionForm(forms.Form):
     foreign = forms.DecimalField(label='Oder umrechnen: erzielte Note', required=False, decimal_places=2, localize=True)
     best = forms.DecimalField(label='Beste Note dort', required=False, decimal_places=2, localize=True)
     worst = forms.DecimalField(label='Schlechteste bestandene Note dort', required=False, decimal_places=2, localize=True, help_text='Modifizierte bayerische Formel.')
-    origin = forms.ChoiceField(label='Hochschule', choices=[('', 'Bitte wählen'), *destatis.universities()], help_text='Im Ausland: das Land.')
+    origin = KeyChoice(keys=UNIVERSITIES, label='Hochschule', help_text='Im Ausland: das Land.')
     place = forms.CharField(label='Name der Hochschule', required=False, help_text='Bei einer Hochschule im Ausland, z. B. „mdw Wien“.')
     taken = forms.CharField(label='Semester dort', required=False, widget=forms.TextInput(attrs={'placeholder': 'z. B. SoSe 2024'}))
     credits = forms.DecimalField(label='ECTS dort', required=False, min_value=0, decimal_places=1, localize=True)
@@ -612,7 +613,7 @@ class RecognitionForm(forms.Form):
             grade = 1 + 3 * (best - foreign) / (best - worst)  # 1,0 for the best, 4,0 for the worst passing grade
             data['grade'] = max(Decimal('1.0'), min(Decimal('4.0'), grade.quantize(Decimal('0.1'), ROUND_DOWN)))
         if data.get('origin'):  # kept as one line of the record: Hochschule, Land, Semester, ECTS
-            name = dict(choice for _, group in destatis.universities() for choice in group)[data['origin']]
+            name = label(UNIVERSITIES, data['origin'])
             abroad = data['origin'].startswith(destatis.ABROAD)
             credits = data.get('credits') is not None and f'{number_format(data["credits"])} ECTS'
             data['note'] = ', '.join(filter(None, [data.get('place') if abroad else name, name if abroad else '', data.get('taken'), credits]))

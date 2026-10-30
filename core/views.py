@@ -29,7 +29,8 @@ from .days import busy, strip
 from .forms import ContactForm
 from .history import describe, former, restore, tables
 from .dates import months_before
-from .models import Change, Institution, Message, Office, Person, Term, Tracked, limited
+from .keys import DISTRICTS, replaced
+from .models import Change, Institution, Key, Message, Office, Person, Term, Tracked, limited
 from .text import fold, matching, words
 
 
@@ -251,6 +252,22 @@ def when(request):
         return JsonResponse({})
     day, time = found
     return JsonResponse({'iso': day.isoformat(), 'text': date_format(day, 'l, j. F Y') + (f', {time:%H:%M} Uhr' if time else '')})
+
+
+def towns(request):
+    """Gemeinden by name or postcode, for a place field (app.js placed): each with its Kreis today. One no longer on its
+    own is found too, by the name it had, as where an HZB was gained."""
+    q = request.GET.get('q', '').strip()
+    if len(q) < 2:
+        return JsonResponse([], safe=False)
+    found = Key.objects.filter(listing=Key.List.GEMEINDE)
+    hits = sorted(found.filter(postcode__startswith=q)[:12] if q.isdigit() else ranked(found, q, 'name', limit=12), key=lambda k: k.until is not None)
+    moved, kreise = replaced(DISTRICTS), dict(Key.objects.filter(listing=Key.List.KREIS).values_list('code', 'name'))
+    return JsonResponse([
+        {'text': ' · '.join(filter(None, [k.name + (f' (bis {k.until.year})' if k.until else ''), k.postcode, kreise.get(moved.get(k.within) or k.within)])),
+         'code': k.code, 'kreis': moved.get(k.within) or k.within}
+        for k in hits
+    ], safe=False)
 
 
 def search(request):

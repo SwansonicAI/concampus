@@ -417,3 +417,25 @@ class DatesTest(SimpleTestCase):
             with self.subTest(text=text):
                 found = dates.moment(text, self.TODAY)
                 self.assertEqual(found and (f'{found[0]:%d.%m.%Y}', found[1] and f'{found[1]:%H:%M}'), expected)
+
+
+class KeysTest(Seeded):
+    """Official keys change; what people told us stays, the statistics get today's key, and residents follow their town."""
+
+    def test_territorial_changes(self):
+        hanau = Person.objects.get(home_town='06415000')  # kreisfrei since 1.1.2026: moved along by the Gemeindeverzeichnis
+        self.assertEqual(hanau.home, '06415')
+        self.assertIn('Gebietsänderung zum 1.1.2026', Change.objects.filter(table='core.person', row=hanau.pk).exclude(reason='').first().reason)
+        asa = self.login('asa')
+        page = asa.get('/einstellungen/verzeichnisse/')
+        self.assertEqual([p.home for p in page.context['people']], ['06435'])  # in the Main-Kinzig-Kreis, town unknown: to check
+        eisenach = Person.objects.get(entrance_region='16056')  # kreisfrei until 30.6.2021, kept as given
+        self.assertIn('heute Wartburgkreis', eisenach.get_entrance_region_display())
+        from analytics.official import Report
+
+        record = Report(Term.current()).record(eisenach)
+        self.assertEqual((record['119U1'], record['119U2']), ('16', '063'))
+        found = asa.get('/orte/?q=Kiliansroda').json()  # merged in 2026, still found for an HZB gained there
+        self.assertEqual((found[0]['code'], found[0]['kreis']), ('16071038', '16071'))
+        r = asa.post(f'/einstellungen/personen/{eisenach.pk}/', {**{f: getattr(eisenach, f) or '' for f in ['first_name', 'last_name', 'email', 'entrance', 'home']}, 'entrance_region': '16056'})
+        self.assertNotIn('entrance_region', r.context['form'].errors if r.context else {})  # an ended key stays valid where a record holds it

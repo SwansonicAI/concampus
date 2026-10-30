@@ -115,6 +115,11 @@ class StudentsConfig(Tile, AppConfig):
 
             if n := cases(semesters(person.within(enrolled, 'view_students')), 'schwerpunkt').count():
                 found.append(task(f'Schwerpunkt nicht gewählt: {plural(n, "Person", "Personen")}', f"{reverse('students:list')}?stand=schwerpunkt"))
+        if 'manage_students' in person.roles:  # a town moved to another Kreis: who lives in the old one without a town to tell
+            from core.keys import review
+
+            if n := review()[0].count():
+                found.append(task(f'Gebietsänderung: {plural(n, "Wohnsitz", "Wohnsitze")} prüfen', reverse('setup:keys')))
         if 'manage_students' in person.roles:  # the Zeugnis issued: the study ends
             for study in person.within(enrolled.filter(issued__isnull=False), 'manage_students').select_related('person', 'program'):
                 found.append(task(f'Exmatrikulieren nach Abschluss: {study.person}, {study.program.title}', study.get_absolute_url(), study.issued))

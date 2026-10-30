@@ -14,6 +14,7 @@ from django.utils.text import slugify
 
 from . import destatis
 from .access import CAPABILITIES, CODENAMES
+from .keys import COUNTRIES, DEGREES, DISTRICTS, FIELDS, GERMAN, PLACES, TOWNS, UNIVERSITIES, Edition, Key, KeyField  # noqa: F401, the key lists' models
 
 
 class Tracked:
@@ -108,10 +109,8 @@ class Institution(Tracked, models.Model):
     privacy = models.URLField('Datenschutz', blank=True)
     accessibility = models.URLField('Barrierefreiheit', blank=True)
     matriculation_start = models.PositiveIntegerField('Erste Matrikelnummer', default=100001, help_text='Danach fortlaufend.')
-    university = models.CharField(
-        'Hochschulnummer', max_length=4, choices=destatis.german, blank=True, help_text='Für die amtliche Statistik, aus dem Schlüsselverzeichnis.',
-    )
-    region = models.CharField('Kreis', max_length=5, choices=destatis.districts, blank=True, help_text='Sitz der Hochschule, für die amtliche Statistik.')
+    university = KeyField('Hochschulnummer', max_length=4, keys=GERMAN, blank=True, help_text='Für die amtliche Statistik, aus dem Schlüsselverzeichnis.')
+    region = KeyField('Kreis', max_length=5, keys=DISTRICTS, blank=True, help_text='Sitz der Hochschule, für die amtliche Statistik.')
     report_id = models.CharField('BerichtseinheitID', max_length=8, blank=True, help_text='Vom Statistischen Landesamt vergeben, für die Lieferung.')
     accept_days = models.PositiveSmallIntegerField('Frist zur Annahme eines Studienplatzes (Tage)', default=14)
     late_fee = models.DecimalField('Säumnisgebühr', max_digits=6, decimal_places=2, default=15, help_text='Zum Semesterbeitrag, wer sich in der Nachfrist zurückmeldet.')
@@ -191,34 +190,35 @@ class Person(Tracked, AbstractUser):
     gender = models.CharField('Geschlecht', max_length=1, choices=Gender, blank=True)
     birth_date = models.DateField('Geburtsdatum', null=True, blank=True)
     birth_place = models.CharField('Geburtsort', max_length=80, blank=True)
-    nationality = models.CharField('Staatsangehörigkeit', max_length=60, choices=destatis.countries, blank=True)
-    second_nationality = models.CharField('Weitere Staatsangehörigkeit', max_length=60, choices=destatis.countries, blank=True)
+    nationality = KeyField('Staatsangehörigkeit', max_length=60, keys=COUNTRIES, blank=True)
+    second_nationality = KeyField('Weitere Staatsangehörigkeit', max_length=60, keys=COUNTRIES, blank=True)
     address = models.TextField('Anschrift', blank=True)
     phone = models.CharField(
         'Telefon', max_length=40, blank=True, validators=[RegexValidator(r'^\+?[\d ()/.-]{5,}$', 'Bitte nur Ziffern, Leerzeichen und + ( ) / - eingeben.')],
     )
     private_email = models.EmailField('E-Mail, privat', blank=True, help_text='Aus der Bewerbung; nach dem Studium gehen Nachrichten hierhin.')
-    home =models.CharField('Heimatwohnsitz', max_length=5, choices=destatis.places, blank=True, help_text='Kreis, im Ausland der Staat.')
-    residence = models.CharField('Semesterwohnsitz', max_length=5, choices=destatis.places, blank=True, help_text='Während der Unterrichtszeit; leer: wie der Heimatwohnsitz.')
+    home = KeyField('Heimatwohnsitz', max_length=5, keys=PLACES, town='home_town', blank=True, help_text='Kreis, im Ausland der Staat.')
+    home_town = KeyField('Gemeinde des Heimatwohnsitzes', max_length=8, keys=TOWNS, blank=True, help_text='Wechselt sie den Kreis, folgt der Wohnsitz ihr.')
+    residence = KeyField(
+        'Semesterwohnsitz', max_length=5, keys=PLACES, town='residence_town', blank=True, help_text='Während der Unterrichtszeit; leer: wie der Heimatwohnsitz.',
+    )
+    residence_town = KeyField('Gemeinde des Semesterwohnsitzes', max_length=8, keys=TOWNS, blank=True)
     entrance = models.CharField(
         'Hochschulzugangsberechtigung', max_length=10, choices=destatis.ENTRANCE, blank=True,
         help_text='Die erste, mit der ein Studium in Deutschland möglich war.',
     )
     entrance_date = models.DateField('Erworben am', null=True, blank=True)
-    entrance_region = models.CharField('Erworben in', max_length=5, choices=destatis.places, blank=True, help_text='Kreis, im Ausland der Staat.')
-    first_university = models.CharField(
-        'Hochschule der Ersteinschreibung', max_length=7, choices=destatis.universities, blank=True, help_text='Leer: diese Hochschule.',
-    )
+    entrance_region = KeyField('Erworben in', max_length=5, keys=PLACES, town='entrance_town', blank=True, help_text='Kreis, im Ausland der Staat.')
+    entrance_town = KeyField('Gemeinde der Hochschulzugangsberechtigung', max_length=8, keys=TOWNS, blank=True, help_text='Wie sie damals hieß.')
+    first_university = KeyField('Hochschule der Ersteinschreibung', max_length=7, keys=UNIVERSITIES, blank=True, help_text='Leer: diese Hochschule.')
     first_term = models.CharField(
         'Semester der Ersteinschreibung', max_length=12, blank=True, help_text='Z. B. WiSe 2019/20 oder SoSe 2020; leer: das erste Semester hier.',
         validators=[RegexValidator(r'^(WiSe \d{4}/\d{2}|SoSe \d{4})$', 'Z. B. WiSe 2019/20 oder SoSe 2020.')],
     )
     external_terms = models.PositiveSmallIntegerField('Semester an anderen deutschen Hochschulen', default=0, help_text='Zählen zu den Hochschulsemestern.')
-    degree_university = models.CharField(
-        'Hochschule des letzten Abschlusses', max_length=7, choices=destatis.universities, blank=True, help_text='Nur für einen Abschluss anderswo.',
-    )
-    degree_exam = models.CharField('Letzter Abschluss', max_length=2, choices=destatis.degrees, blank=True)
-    degree_field = models.CharField('Im Studienfach', max_length=3, choices=destatis.fields, blank=True)
+    degree_university = KeyField('Hochschule des letzten Abschlusses', max_length=7, keys=UNIVERSITIES, blank=True, help_text='Nur für einen Abschluss anderswo.')
+    degree_exam = KeyField('Letzter Abschluss', max_length=2, keys=DEGREES, blank=True)
+    degree_field = KeyField('Im Studienfach', max_length=3, keys=FIELDS, blank=True)
     degree_date = models.DateField('Abgeschlossen am', null=True, blank=True)
     degree_grade = models.CharField('Gesamtnote', max_length=1, choices=destatis.GRADES, blank=True)
     vocational = models.BooleanField('Berufsausbildung mit Abschluss vor dem Studium', default=False)

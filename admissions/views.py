@@ -625,7 +625,7 @@ def signup(request):
 
 def apply(request):
     person = request.user
-    entrance = ['entrance', 'entrance_date', 'entrance_region']
+    entrance = ['entrance', 'entrance_date', 'entrance_region', 'entrance_town']
     form = ApplicationForm(request.POST or None, request.FILES or None, initial={field: getattr(person, field) for field in entrance}, person=person)
     if form.is_valid():
         data, audition = form.cleaned_data, form.cleaned_data['audition']

@@ -10,6 +10,7 @@ function init(root) {
   root.querySelectorAll('datalist[data-suggest]').forEach(suggest);
   root.querySelectorAll('.form select').forEach(select => (select.options.length > 60 || 'find' in select.dataset) && findable(select));
   root.querySelectorAll('select[data-leads]').forEach(lead);
+  root.querySelectorAll('select[data-town]').forEach(placed);
   root.querySelectorAll('form:has([name=worst])').forEach(converted);
   root.querySelectorAll('select[data-describes]').forEach(describe);
   root.querySelectorAll('[data-day], [data-moment], [data-past]').forEach(dated);
@@ -244,11 +245,12 @@ function findable(select) {
   input.addEventListener('input', () => {
     const kept = select.value;  // taking options out and back loses the choice
     const words = fold(input.value).split(/\s+/).filter(Boolean);
-    const within = select.dataset.within;  // the group a leading choice keeps it to (lead)
+    const within = select.dataset.within;  // the group a leading choice keeps it to (lead), or '!' and the one it keeps out (placed)
+    const kept_in = label => !within || (within.startsWith('!') ? label !== within.slice(1) : label === within);
     const fits = (option, group = '') => option.value === kept || !option.value || words.every(word => fold(`${option.text} ${group}`).includes(word));
     select.replaceChildren(...children.flatMap(([child, options]) => {
       if (child.tagName !== 'OPTGROUP') return fits(child) ? [child] : [];
-      child.replaceChildren(...options.filter(option => (!within || child.label === within || option.value === kept) && fits(option, child.label)));
+      child.replaceChildren(...options.filter(option => (kept_in(child.label) || option.value === kept) && fits(option, child.label)));
       return child.children.length ? [child] : [];
     }));
     select.value = kept;
@@ -291,6 +293,54 @@ function lead(select) {
     select.addEventListener('change', () => narrow());
     narrow();
   }
+}
+
+// Where someone lives or gained the HZB (data-town names the town's field): first Germany or abroad; in Germany by town
+// or postcode, which sets the Kreis and keeps the town; abroad the state, typed to find. The Kreise stay to choose from,
+// for a place the search does not know.
+function placed(select) {
+  const town = select.form.elements[select.dataset.town];
+  const find = select.previousElementSibling?.matches('input.filter') ? select.previousElementSibling : null;
+  const where = document.createElement('select');
+  where.append(...[['', 'In Deutschland oder im Ausland?'], ['de', 'In Deutschland'], ['abroad', 'Im Ausland']].map(([value, text]) => new Option(text, value)));
+  const search = Object.assign(document.createElement('input'), {type: 'search', className: 'filter', placeholder: 'Ort oder Postleitzahl, z. B. Apolda'});
+  const found = Object.assign(document.createElement('datalist'), {id: `${select.id}-orte`});
+  search.setAttribute('list', found.id);
+  (find || select).before(where, search, found);
+  const show = () => {
+    search.hidden = where.value !== 'de';
+    if (find) find.hidden = where.value === 'de';
+    select.dataset.within = where.value === 'abroad' ? 'Ausland' : where.value === 'de' ? '!Ausland' : '';
+    find?.dispatchEvent(new Event('input'));
+  };
+  where.value = select.value ? (select.value.startsWith('99') ? 'abroad' : 'de') : '';
+  search.value = town?.dataset.name || '';
+  where.addEventListener('change', () => {
+    select.value = search.value = '';
+    if (town) town.value = '';
+    show();
+  });
+  let timer;
+  search.addEventListener('input', () => {
+    const picked = [...found.options].find(option => option.value === search.value);
+    if (picked) {  // a town chosen: its Kreis, and the town kept
+      select.value = picked.dataset.kreis;
+      if (town) town.value = picked.dataset.code;
+      return;
+    }
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const q = search.value.trim();
+      const hits = q.length > 1 ? await (await fetch(`/orte/?q=${encodeURIComponent(q)}`)).json() : [];
+      found.replaceChildren(...hits.map(hit => {
+        const option = new Option('', hit.text);
+        Object.assign(option.dataset, {kreis: hit.kreis, code: hit.code});
+        return option;
+      }));
+    }, 150);
+  });
+  select.addEventListener('change', () => { if (town) town.value = ''; });  // chosen from the list: no town to tell
+  show();
 }
 
 // A choice that brings a note to another field (data-describes="repertoire"): what the audition chosen asks for.

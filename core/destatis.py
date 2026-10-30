@@ -1,6 +1,8 @@
 """The official key lists of the Statistik der Studierenden und der Prüfungen: Schlüsselverzeichnis H21 of the Statistisches
 Bundesamt, valid for WS 2026/27 and SS 2027. The long lists are generated from the published one; replace them when the next
-comes out. Model fields take the long ones as functions, so migrations refer to them instead of copying them."""
+comes out: `manage.py keys` brings them into the key lists that records draw on (core.keys). The functions below are what
+earlier migrations refer to."""
+from datetime import date
 
 STATES = [  # Länder, Schlüssel 1.1
     ('08', 'Baden-Württemberg'), ('09', 'Bayern'), ('11', 'Berlin'), ('12', 'Brandenburg'), ('04', 'Bremen'), ('02', 'Hamburg'), ('06', 'Hessen'),
@@ -815,6 +817,11 @@ DOCTORAL = [  # the CSV record of the Promovierenden, version 1: EF, name, lengt
     ('29', 'Abschlusspruefung_Jahr', 4), ('30', 'Abschlusspruefung_Gesamtnote', 1), ('31', 'HZB_Jahr', 4), ('32', 'HZB_Art', 2),
     ('33U1', 'HZB_Erwerb_Bundesland', 2), ('33U2', 'HZB_Erwerb_Kreis_Staat', 3), ('34', 'landesinterne_Angaben_EF34', 3),
     ('35', 'landesinterne_Angaben_EF35', 3), ('36', 'landesinterne_Angaben_EF36', 3), ('37', 'landesinterne_Angaben_EF37', 3), ('38', 'landesinterne_Angaben_EF38', 3),
+]
+EDITION, EFFECTIVE = 'Schlüsselverzeichnis H21 (WS 2026/27 und SS 2027)', date(2026, 10, 1)  # as brought into the key lists (core.keys)
+ENDED = [  # Kreise no longer there before it, each with its last day and the Kreis that took its place (Gebietsänderungen)
+    ('03152', 'Göttingen', date(2016, 10, 31), '03159'), ('03156', 'Osterode am Harz', date(2016, 10, 31), '03159'),
+    ('16056', 'Eisenach, Stadt', date(2021, 6, 30), '16063'),
 ]
 MUSIC = {'080', '163', '164', '165', '191', '192', '193', '194', '230'}  # the Studienfächer of the Studienbereich Musik
 ABROAD = '9990'  # Hochschule im Ausland, followed by its state

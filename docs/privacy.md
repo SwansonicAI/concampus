@@ -136,6 +136,11 @@ never in the address: a note may say why someone was ill, and addresses end up i
    depends on it (Rücktritt with an attest, Nachteilsausgleich).
 5. Change this document with the code, and extend the test when a tier or role changes.
 
+- `core/models.py`, `Person.home_town`, `residence_town`, `entrance_town`: the Gemeinde, kept when someone finds their place
+  by its town or postcode; seen wherever the Kreis is. It keeps the Kreis right when a town changes Kreis (`core/keys.py`,
+  `follow()`), each change in the Verlauf with its reason. The list of residences to check after such a change, with
+  names and addresses, is for `manage_students` only (Einstellungen › Amtliche Verzeichnisse).
+
 ## Open for the Hochschule
 
 - Approval by the Datenschutzbeauftragte and the entry in the Verzeichnis von Verarbeitungstätigkeiten.

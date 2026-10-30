@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils.choices import flatten_choices
 
 from core import destatis
+from core.keys import PLACES, UNIVERSITIES, replaced
 from core.models import Institution, Person, Term
 from students.models import Study, StudyTerm
 
@@ -69,6 +70,7 @@ class Report:
 
     def __init__(self, term):
         self.term, self.institution = term, Institution.get()
+        self.moved = {**replaced(PLACES), **replaced(UNIVERSITIES)}  # codes since ended: the one valid now, or '' 
         self.before = Term.objects.filter(start__lt=term.start).order_by('-start').first()
         here = set(StudyTerm.objects.filter(term=term, withdrawn=False, study__status__in=COUNTED).values_list('study__person', flat=True))
         gone = set(  # exmatriculated after the term before: counted once more, now
@@ -112,6 +114,12 @@ class Report:
         layout, records = self.files[key]
         return table(layout, [{'': self.institution.report_id} | values for values in records])
 
+    def now(self, person, code, what):
+        """A code as given, as the report sends it: the one valid now; one that ended without a successor is to be chosen anew."""
+        if code in self.moved and not self.moved[code]:
+            self.missing[person].append(f'{what}: der Schlüssel {code} gilt nicht mehr, bitte neu wählen')
+        return self.moved.get(code, code)
+
     def need(self, person, value, what):
         """`value`, or '' with `what` noted as missing for the person."""
         if not value:
@@ -154,12 +162,13 @@ class Report:
         nations = [n for n in (person.nationality, person.second_nationality) if n in COUNTRIES]
         v['10'], v['11'] = (sorted(nations, key=lambda n: n != '000') + ['', ''])[:2]  # German first
         self.need(person, v['10'], 'Staatsangehörigkeit')
-        if home := self.need(person, person.home, 'Heimatwohnsitz'):
-            v['12U1'], v['12U2'] = (person.residence or home)[:2], (person.residence or home)[2:]
+        if home := self.need(person, self.now(person, person.home, 'Heimatwohnsitz'), 'Heimatwohnsitz'):
+            residence = self.now(person, person.residence, 'Semesterwohnsitz') or home
+            v['12U1'], v['12U2'] = residence[:2], residence[2:]
             v['13U1'], v['13U2'] = home[:2], home[2:]
         v['14'], v['23'], v['24'] = '1', 0, 0
-        if person.first_university:
-            v['17'], v['18'] = person.first_university[:4], person.first_university[4:]
+        if first := self.now(person, person.first_university, 'Hochschule der Ersteinschreibung'):
+            v['17'], v['18'] = first[:4], first[4:]
             if self.need(person, person.first_term, 'Semester der Ersteinschreibung'):
                 v['19'], v['20'] = named(person.first_term)
         elif person.external_terms:
@@ -195,7 +204,7 @@ class Report:
         if self.need(person, person.entrance_date, 'Jahr der Hochschulzugangsberechtigung'):
             v['117'] = person.entrance_date.year
         v['118'] = self.need(person, person.entrance if person.entrance in ENTRANCE else '', 'Art der Hochschulzugangsberechtigung')
-        if region := self.need(person, person.entrance_region, 'Ort der Hochschulzugangsberechtigung'):
+        if region := self.need(person, self.now(person, person.entrance_region, 'Ort der Hochschulzugangsberechtigung'), 'Ort der Hochschulzugangsberechtigung'):
             v['119U1'], v['119U2'] = region[:2], region[2:]
         v['122'], v['123'] = '1' if person.vocational else '', '1' if person.internship else ''
         for s, n in zip(sorted((s for s in studies if s.pk in self.finished), key=lambda s: s.since), (0, SECOND)):
@@ -256,7 +265,7 @@ class Report:
             else:
                 v['71'], v['73'], v['74'] = self.institution.university, self.exam(then[0], person), self.field(then[0])
         elif degree:
-            where = person.degree_university
+            where = self.now(person, person.degree_university, 'Hochschule des letzten Abschlusses')
             v['69'], v['71'], v['72'] = '3' if where.startswith(destatis.ABROAD) else '2', where[:4], where[4:]
             v['73'], v['74'] = destatis.kind(person.degree_exam) + person.degree_exam, person.degree_field
 

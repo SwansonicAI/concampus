@@ -8,6 +8,7 @@ urlpatterns = [
     path('zugang/', views.gate, name='gate'),
     path('suche/', views.search, name='search'),
     path('datum/', views.when, name='when'),
+    path('orte/', views.towns, name='towns'),
     path('konto/', views.account, name='account'),
     path('postfach/', views.inbox, name='inbox'),
     path('postfach/<int:pk>/', views.message, name='message'),

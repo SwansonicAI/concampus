@@ -139,6 +139,16 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 | Health data (phoniatric report) deleted once the application is decided | GDPR Art. 9 | same | Einstellungen › Unterlagenarten (Gesundheitsdaten) |
 | Files with personal data that leave are logged | GDPR Art. 5(2) | `core/models.py` `Export` | code |
 
+## Official keys
+
+| Rule | Source | Code | Set in |
+|---|---|---|---|
+| A record keeps a key as it was given; a key since ended stays valid on it and shows when it ended and what replaced it | Destatis key lists | `core/keys.py` `KeyField`, `label()` | – |
+| The official report sends the key valid at reporting time, following each replacement; one ended without a successor is listed to be chosen anew | Destatis, Schlüsselverzeichnis | `analytics/official.py` `now()`, `core/keys.py` `replaced()` | – |
+| Heimat- and Semesterwohnsitz follow their Gemeinde to its new Kreis, each change in the Verlauf with its reason; where the HZB was gained stays as it was | Gemeindeverzeichnis | `core/keys.py` `follow()` | – |
+| Whoever lives in a Kreis that gave up a town, the town unknown, is listed for the student office to check | – | `core/keys.py` `review()` | Einstellungen › Amtliche Verzeichnisse |
+| The lists are kept centrally: the Schlüsselverzeichnis each year, the Gemeindeverzeichnis each quarter, brought in with an update | Destatis | `manage.py keys`, `core/data` | – |
+
 ## For the Hochschule to confirm
 
 1. Whether § 41 Abs. 2a ThürVwVfG matches the federal text: Bekanntgabe the day after opening in the Postfach.
@@ -149,3 +159,5 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 5. The paper Protokoll workflow: who sends it to the Prüfungsamt, and whether a scan is kept.
 6. Whether the Hochschule tells the Ausländerbehörde of an Exmatrikulation itself, beyond the student's own duty.
 7. Whether a short-notice practice booking should be capped differently from the notice window.
+8. Which Gebietsstand the Kreis of the HZB is reported in: as it was when gained, or today's (sent now: today's). The
+   Thüringer Landesamt für Statistik knows.

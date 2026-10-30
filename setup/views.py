@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.tokens import default_token_generator
@@ -12,6 +14,7 @@ from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_en
 from django.views.decorators.http import require_POST
 
 from core.access import kept, needs, require
+from core.keys import Edition, Key, review
 from core.models import Export, Grant, Membership, Person, Text
 from core.text import matching
 from core.texts import TEXTS, Values, basics, mail, wording
@@ -56,7 +59,27 @@ def places(person):
     found = [(e.section, e.title, reverse('setup:list', args=[e.key]), e.objects(person).count()) for e in usable(person)]
     if 'manage_institution' in person.roles:
         found.append(('Verwaltung', 'Texte', reverse('setup:texts'), len(TEXTS)))
+    if person.roles & {'manage_institution', 'manage_students'}:
+        found.append(('Verwaltung', 'Amtliche Verzeichnisse', reverse('setup:keys'), len(Key.List)))
     return found
+
+
+@require('manage_institution', 'manage_students')
+def official(request):
+    """The official key lists in use, the editions each came in with and what they changed; for the student office, who
+    lives where a change of Kreis leaves in doubt."""
+    lists = []
+    for listing, name in Key.List.choices:
+        entries = Key.objects.filter(listing=listing)
+        lists.append((name, Edition.objects.filter(listing=listing).order_by('-pk').first(), entries.filter(until=None).count(), entries.exclude(until=None).count()))
+    people, gave = review()
+    for towns in gave.values():
+        for town in towns:
+            town.left = town.until + timedelta(days=1)  # the first day in its new Kreis
+    return render(request, 'setup/keys.html', {
+        'lists': lists, 'editions': Edition.objects.exclude(notes=''), 'people': people if 'manage_students' in request.user.roles else None,
+        'count': people.count(), 'gave': [(code, Key.objects.filter(listing=Key.List.KREIS, code=code).first(), towns) for code, towns in gave.items()],
+    })
 
 
 def editor(request, key):
