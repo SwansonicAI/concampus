@@ -18,6 +18,11 @@ services:
     volumes:
       - media:/app/media
     restart: unless-stopped
+  moodlesync:  # each minute: the courses changed since, to Moodle (manage.py moodle --changed)
+    build: .
+    env_file: .env
+    command: sh -c 'while true; do python manage.py moodle --changed; sleep 60; done'
+    restart: unless-stopped
   proxy:
     image: caddy:2
     ports:

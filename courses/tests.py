@@ -222,9 +222,11 @@ class MoodleTest(Seeded):
         self.assertEqual([c['name'] for c in reversed(path)], [course.term.name.replace('WiSe', 'Wintersemester').replace('SoSe', 'Sommersemester'), course.area.name, course.format.name])
         self.assertIn((mine, moodle.users[teacher.email.lower()], 3), moodle.enrolled)
         self.assertIn((mine, moodle.users[students[1].email.lower()], 5), moodle.enrolled)
+        self.assertIn(str(teacher), here['summary'])  # the Kursinfo
         made = len(moodle.courses)
+        self.assertEqual(sync(moodle, changed=True)['Kurse'], 0)  # each minute: nothing changed, nothing sent
         Participation.objects.filter(course=course, study__person=students[1]).delete()
-        sync(moodle)
+        self.assertEqual(sync(moodle, changed=True)['Kurse'], 1)
         self.assertEqual(len(moodle.courses), made)  # each course once
         self.assertNotIn((mine, moodle.users[students[1].email.lower()], 5), moodle.enrolled)
         Course.objects.filter(pk=course.pk).update(cancelled=timezone.now())

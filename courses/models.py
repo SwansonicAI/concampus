@@ -567,6 +567,7 @@ class MoodleCourse(models.Model):
     moodle_id = models.PositiveIntegerField('Kurs in Moodle')
     people = models.JSONField('Von Campus eingeschrieben', default=list, help_text='Die Nutzer-IDs in Moodle.')
     synced = models.DateTimeField('Abgeglichen', default=timezone.now)
+    state = models.CharField('Stand', max_length=64, blank=True, help_text='Prüfsumme dessen, was Campus zuletzt geschickt hat.')
 
     class Meta:
         verbose_name = 'Moodle-Kurs'

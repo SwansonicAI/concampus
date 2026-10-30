@@ -1,9 +1,9 @@
 # The demo's Moodle (docs/moodle.md), next to Campus on its server: Moodle's PHP image serving Moodle's code from
-# /opt/moodle (a checkout of its stable branch), its cron, its own Postgres. Campus's Caddy serves it at
-# moodle.concampus.de, over Campus's network, which only the web server joins. .env next to this file holds DB_PASSWORD.
+# /opt/moodle (its 4.5 branch with the theme Boost Union, as HfM's), its cron, its own Postgres. Campus's Caddy serves it
+# at moodle.concampus.de, over Campus's network, which only the web server joins. .env next to this file: DB_PASSWORD.
 services:
   moodle:
-    image: moodlehq/moodle-php-apache:8.4
+    image: moodlehq/moodle-php-apache:8.3
     env_file: .env
     volumes: &code
       - /opt/moodle:/var/www/html:ro
@@ -12,7 +12,7 @@ services:
     networks: [default, campus]
     restart: unless-stopped
   cron:
-    image: moodlehq/moodle-php-apache:8.4
+    image: moodlehq/moodle-php-apache:8.3
     env_file: .env
     user: www-data
     entrypoint: sh -c 'while true; do php admin/cli/cron.php > /dev/null; sleep 60; done'
