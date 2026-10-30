@@ -9,7 +9,7 @@ from django.contrib import messages
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Case, Exists, F, OuterRef, Q, When
-from django.http import Http404, JsonResponse
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import resolve, reverse
 from django.utils import timezone
@@ -27,11 +27,12 @@ from . import dates
 from .apps import feature, plural, tile_apps, tiles
 from .backends import address
 from .days import busy, strip
+from .dossier import dossier
 from .forms import ContactForm
 from .history import because, describe, former, restore, tables
 from .dates import months_before
 from .keys import DISTRICTS, replaced
-from .models import Change, Consent, Institution, Key, Message, Office, Person, Term, Tracked, limited
+from .models import Change, Consent, Export, Institution, Key, Message, Office, Person, Term, Tracked, limited
 from .text import fold, matching, words
 
 
@@ -79,6 +80,12 @@ def account(request):
         'form': form, 'staff': staff, 'office': 'die Personalabteilung' if staff else Office.holding('manage_students'), 'consents': request.user.consents.all(),
         'sign_ins': request.user.sign_ins.all()[:5],
     })
+
+
+def copy(request):
+    """A copy of what Campus keeps about the person (Art. 15 Abs. 3 DSGVO)."""
+    Export.log(request.user, 'Eigene Daten (Art. 15 DSGVO)', 1)
+    return FileResponse(dossier(request.user), as_attachment=True, filename=f'campus-{request.user.username}.zip')
 
 
 @require_POST

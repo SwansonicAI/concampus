@@ -1,0 +1,62 @@
+{% extends base %}
+{% block title %}Aussonderung{% endblock %}
+{% block subnav %}{% include "students/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Aussonderung</h1>
+</div>
+<p class="lead">Akten Ehemaliger werden {{ institution.file_years }} Jahre nach der letzten Exmatrikulation dem Archiv angeboten. Hat es bewertet und übernommen, was es behält, wird die Akte in der Nacht danach bis auf die Grunddaten gelöscht: Name, Geburtsdaten, Matrikelnummer, Studienzeiten und Leistungen, für Studienzeitbescheinigungen und Zweitschriften. Nach {{ institution.core_years }} Jahren werden auch sie anonymisiert.</p>
+
+{% if offering %}
+<h2>Fällig</h2>
+{% if due_total %}
+<form method="post" class="inline" style="margin-bottom: 16px">
+  {% csrf_token %}
+  <span>{% for year, n in due %}{{ n }} aus {{ year }}{% if not forloop.last %} · {% endif %}{% endfor %}</span>
+  <button class="btn" name="anbieten" value="1">{{ due_total }} Akte{{ due_total|pluralize:"n" }} dem Archiv anbieten</button>
+</form>
+{% else %}<p class="muted">Keine Akte fällig.</p>{% endif %}
+{% endif %}
+
+<h2>Beim Archiv</h2>
+{% if assessing %}
+<form method="post">
+  {% csrf_token %}
+  <div class="toolbar">
+    <div class="actions">
+      <button class="btn" name="archivwuerdig" value="ja">Übernommen: archivwürdig</button>
+      <button class="btn ghost" name="archivwuerdig" value="nein">Nicht archivwürdig</button>
+    </div>
+    <small class="muted">Archivwürdige Akten erst herunterladen und übernehmen, dann bewerten.</small>
+  </div>
+  <table data-panel>
+    <thead><tr><th><input type="checkbox" onchange="this.form.querySelectorAll('[name=person]').forEach(box => box.checked = this.checked)" aria-label="Alle ankreuzen"></th><th>Matrikelnr.</th><th>Name</th><th>Studium</th><th>Angeboten</th><th></th></tr></thead>
+    <tbody>
+      {% for p in offered %}
+      <tr>
+        <td class="mid"><input type="checkbox" name="person" value="{{ p.pk }}" aria-label="{{ p.name }}"></td>
+        <td class="mid">{{ p.matriculation|default:"–" }}</td>
+        <td class="mid">{{ p.name }}</td>
+        <td class="mid">{% for s in p.studies.all %}{{ s.program.title }} · {{ s.subject }} <small class="muted">{{ s.start_term }} bis {{ s.since|date:"j.n.Y" }}, {{ s.get_status_display }}</small>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+        <td class="mid nowrap">{{ p.disposal.offered|date:"j.n.Y" }}</td>
+        <td class="mid nowrap"><a href="{% url 'students:handover' p.pk %}">Akte (ZIP)</a></td>
+      </tr>
+      {% empty %}<tr><td colspan="6" class="empty">Keine Akte angeboten.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if offered_total > offered|length %}<p class="muted"><small>Die ersten {{ offered|length }} von {{ offered_total }}.</small></p>{% endif %}
+</form>
+{% elif offered_total %}<p>{{ offered_total }} Akte{{ offered_total|pluralize:"n" }} zur Bewertung angeboten.</p>
+{% else %}<p class="muted">Keine Akte angeboten.</p>{% endif %}
+
+<h2>Bewertet</h2>
+<table>
+  <thead><tr><th>Jahr</th><th class="num">Akten</th><th class="num">davon archivwürdig</th></tr></thead>
+  <tbody>
+    {% for row in done %}<tr><td>{{ row.assessed__year }}</td><td class="num">{{ row.n }}</td><td class="num">{{ row.kept }}</td></tr>
+    {% empty %}<tr><td colspan="3" class="empty">Noch keine.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

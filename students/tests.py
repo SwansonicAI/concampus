@@ -1,6 +1,9 @@
 from datetime import timedelta
+from io import BytesIO, StringIO
+from zipfile import ZipFile
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.test import Client
 from django.utils import timezone
 
@@ -8,6 +11,7 @@ from core.apps import tiles
 from core.models import Message, Person, Term
 from core.testing import Seeded, flashes
 from exams.views import exhausted
+from .disposal import due
 from .models import Document, Study, StudyTerm
 
 
@@ -197,3 +201,20 @@ class AlumniTest(Seeded):
         self.assertEqual(client.get(f'/studierende/{study.pk}/studienzeiten/').context['count'], study.program.semesters)
         self.assertTrue(client.get(f'/pruefungen/leistungen/{study.pk}/').context['copy'])
         self.assertContains(client.get(f'/pruefungen/leistungen/{study.pk}/diploma-supplement/'), 'Copy for information')
+
+
+class DisposalTest(Seeded):
+    def test_a_file_goes_once_the_archive_has_assessed_it_and_its_grunddaten_stay(self):
+        person = due().order_by('pk').first()
+        Message.send(person, 'Rückfrage', 'Bitte melden Sie sich.')
+        self.login('asa').post('/studierende/aussonderung/', {'anbieten': '1'})
+        call_command('prune', stdout=StringIO())
+        self.assertTrue(person.messages.exists())  # nothing goes before the archive has assessed it
+        archive = self.login('archiv')
+        copy = ZipFile(BytesIO(b''.join(archive.get(f'/studierende/aussonderung/{person.pk}/akte/').streaming_content)))
+        self.assertIn(person.last_name, copy.read('akte.json').decode())
+        archive.post('/studierende/aussonderung/', {'archivwuerdig': 'nein', 'person': [person.pk]})
+        call_command('prune', stdout=StringIO())
+        person.refresh_from_db()
+        self.assertEqual((person.messages.exists(), person.address, person.is_active), (False, '', False))
+        self.assertTrue(person.birth_date and person.matriculation and person.studies.exists())

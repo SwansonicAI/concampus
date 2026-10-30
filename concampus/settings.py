@@ -27,7 +27,7 @@ DEBUG = 'SECRET_KEY' not in os.environ
 # Accounts the login page offers without a password, to see Campus as each kind of user; only in development and on the demo server.
 DEMO = [
     'student', 'promotion', 'bewerbung', 'absolvent', 'lehre', 'korrepetition', 'asa', 'pruefungsamt', 'pruefungsausschuss', 'dekanat', 'dekanatsreferat',
-    'institut', 'veranstaltungsbuero', 'praesidium', 'campus',
+    'institut', 'veranstaltungsbuero', 'archiv', 'praesidium', 'campus',
 ] if DEBUG or os.environ.get('DEMO') else []
 DEMO_LABELS = {'korrepetition': 'Lehrauftrag · Korrepetition'}  # where neither an office nor a role says it
 # The demo's shared access code (core.views.gate), only in the server's .env; without one nobody gets into the demo.

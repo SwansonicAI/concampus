@@ -7,6 +7,7 @@ from django.core.mail import send_mail
 from django.core.validators import RegexValidator
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models, transaction
+from django.db.models.functions import Cast, Concat
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
@@ -123,6 +124,14 @@ class Institution(Tracked, models.Model):
     retention_months = models.PositiveSmallIntegerField(
         'Bewerbungen ohne Studium aufbewahren (Monate)', default=6,
         help_text='Danach werden ihre Unterlagen gelöscht und wer nur beworben war, wird anonymisiert; die Statistik zählt weiter. 0: nie.',
+    )
+    file_years = models.PositiveSmallIntegerField(
+        'Studierendenakten aufbewahren (Jahre)', default=5,
+        help_text='Nach der letzten Exmatrikulation; dann dem Archiv angeboten und, sobald es bewertet hat, bis auf die Grunddaten gelöscht.',
+    )
+    core_years = models.PositiveSmallIntegerField(
+        'Grunddaten aufbewahren (Jahre)', default=50,
+        help_text='Name, Geburtsdaten, Matrikelnummer, Studienzeiten und Leistungen, für Studienzeitbescheinigungen und Zweitschriften; danach anonymisiert.',
     )
     signup = models.BooleanField('Neue Bewerbungskonten', default=True, help_text='Ohne Haken legt niemand ein neues Bewerbungskonto an.')
     insurers = models.TextField('Krankenkassen', blank=True, help_text='Vorschläge beim Annehmen des Studienplatzes, eine je Zeile.')
@@ -304,6 +313,19 @@ class Person(Tracked, AbstractUser):
         if not self.insurance_confirmed:
             reasons.append('Versicherungsmeldung der Krankenkasse fehlt')
         return reasons + [f'Leihinstrument zurückgeben: {loan.instrument.name}' for loan in self.loans.all() if loan.overdue]
+
+    COUNTED = {'gender', 'nationality', 'entrance'}  # what the figures count people by (analytics/figures.py), kept when made anonymous
+
+    @classmethod
+    def clear(cls, pks, kept=(), **values):
+        """Empty every field of these people but `kept` and set `values`, leaving no trace in the Verlauf; they can no
+        longer sign in."""
+        empty = {f.name: f.get_default() for f in cls._meta.concrete_fields if not f.primary_key and f.name not in kept}
+        cls.objects.filter(pk__in=pks).update(**empty | {'password': '!', 'is_active': False} | values)
+
+    @classmethod
+    def anonymise(cls, pks):
+        cls.clear(pks, cls.COUNTED, username=Concat(models.Value('anonym-'), Cast('pk', models.CharField())), last_name='Anonym')
 
     @classmethod
     def history(cls, pk):

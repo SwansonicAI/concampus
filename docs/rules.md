@@ -137,6 +137,7 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 |---|---|---|---|
 | Applications that came to nothing: documents deleted and people made anonymous after a period | GDPR Art. 5(1)(e) | `admissions/retention.py`, `core/management/commands/prune.py` | Einstellungen › Hochschule (Löschfrist) |
 | Health data (phoniatric report) deleted once the application is decided | GDPR Art. 9 | same | Einstellungen › Unterlagenarten (Gesundheitsdaten) |
+| A former student's file is offered to the archive some years after the last Exmatrikulation, cut down to the Grunddaten once assessed, those anonymised years later | Thüringer Aufbewahrungsrichtlinie, ThürArchivG | `students/disposal.py` | Einstellungen › Hochschule (Aufbewahrung) |
 | Files with personal data that leave are logged | GDPR Art. 5(2) | `core/models.py` `Export` | code |
 | Sign-ins and failed tries kept 90 days; five failures for a name from one address hold it back there a quarter of an hour | GDPR Art. 32 | `core/backends.py`, `core/models.py` `SignIn` | code |
 | Health data only with consent, kept with its wording; withdrawing it deletes the document | GDPR Art. 7, Art. 9(2)(a) | `core/models.py` `Consent`, `core/views.py` `revoke()` | Einstellungen › Texte (wording) |

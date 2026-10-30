@@ -10,6 +10,7 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
         ('manage_students', 'Immatrikulieren, exmatrikulieren, Fachwechsel, Sperren und Stammdaten mit allen persönlichen Daten; Bescheide und Bescheinigungen für andere'),
         ('manage_reregistration', 'Rückmeldung verbuchen, bei fehlender Rückmeldung exmatrikulieren'),
         ('message_students', 'Nachrichten an ausgewählte Studierende senden'),
+        ('dispose_files', 'Akten Ehemaliger nach Ablauf der Aufbewahrung dem Archiv anbieten'),
     ]),
     ('Aufnahme', [
         ('view_applications', 'Alle Bewerbungen einsehen'),
@@ -50,9 +51,12 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
         ('view_statistics', 'Auswertungen aller Bereiche einsehen (Zahlen; Namen nur mit dem Recht des Bereichs)'),
         ('report_statistics', 'Amtliche Statistik der Studierenden und Prüfungen prüfen und liefern'),
     ]),
+    ('Archiv', [
+        ('assess_files', 'Angebotene Akten bewerten und archivwürdige übernehmen'),
+    ]),
 ]
 CODENAMES = [codename for _, group in CAPABILITIES for codename, _ in group]
-EVERYWHERE = {'manage_reregistration', 'manage_terms', 'manage_institution', 'manage_accounts', 'view_statistics', 'report_statistics'}  # never limited to Institute
+EVERYWHERE = {'manage_reregistration', 'manage_terms', 'manage_institution', 'manage_accounts', 'view_statistics', 'report_statistics', 'dispose_files', 'assess_files'}  # never limited to Institute
 
 
 def kept(form, person, capability):

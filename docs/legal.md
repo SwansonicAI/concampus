@@ -18,14 +18,14 @@ report, grounds of leave (illness, Mutterschutz) and a Schwerbehinderung behind 
 | Each role sees what its task needs, by default | GDPR Art. 25 | yes | Tiers and roles in `docs/privacy.md`; the jury sees only documents marked for it; nobody lists all students; form input never in the address |
 | Information when data is collected | Art. 13 | yes | Baustein „Datenschutz beim Bewerben“ at signup and application, with the deletion period and the Hochschule's notice (`admissions/templates/admissions/_privacy.html`) |
 | Consent for health data, recorded and withdrawable | Art. 9(2)(a), Art. 7 | yes | Asked with every attest or health report, recorded with its wording, when and by whom (the person, or an office from the signed paper); withdrawn under Mein Konto, which deletes the document; decisions taken stay (`core.models.Consent`) |
-| Access | Art. 15 | partly | The person sees their record, results, documents and Postfach; no complete copy with the Verlauf, the exports they were in and who received them |
+| Access | Art. 15 | yes | The person sees their record, results, documents and Postfach, and downloads a copy of everything Campus keeps about them, with their documents, under Mein Konto (`core/dossier.py`); others' data stays out |
 | Rectification | Art. 16 | yes | Address and phone in Mein Konto; name and birth data by the office on proof (`core/views.py` `account()`) |
-| Erasure | Art. 17 | partly | Applications that came to nothing: documents deleted and the person made anonymous after the Löschfrist; health data once the application is decided; room bookings after two years. Anonymising empties every field but those the figures count (`admissions/retention.py` `KEPT`). Students, alumni and staff are never deleted |
+| Erasure | Art. 17 | partly | Applications that came to nothing: documents deleted and the person made anonymous after the Löschfrist; health data once the application is decided; room bookings after two years. Former students' files once kept long enough and assessed by the archive (see below). Anonymising empties every field but those the figures count (`Person.COUNTED`). Staff are never deleted |
 | Restriction | Art. 18 | no | No way to mark a record as restricted |
 | Objection | Art. 21 | Hochschule | Decided by the office; nothing in Campus |
 | Portability | Art. 20 | n/a | Not for processing under Art. 6(1)(e) (Art. 20(3)) |
 | No decision by machine alone | Art. 22, § 35a VwVfG | yes | Rankings, the Nachrückliste and a lost Prüfungsanspruch are worked out; every Bescheid is issued by an office after its preview. Resits are registered automatically as the RPSO says |
-| Deletion concept | Art. 5(1)(e), Art. 17 | partly | Periods for applications and bookings; none for students after Exmatrikulation, staff, messages, the Verlauf or the export log |
+| Deletion concept | Art. 5(1)(e), Art. 17 | partly | Periods for applications, former students' files and their Grunddaten, bookings and sign-ins, set under Einstellungen › Hochschule; none for staff or the export log |
 | Security of processing | Art. 32 | partly | See IT security |
 | Records of processing; impact assessment | Art. 30, Art. 35 | Hochschule | `docs/privacy.md` is the input; a description of the technical and organisational measures still to write |
 | Processor agreement | Art. 28 | no | Needed once we host or maintain Campus; to draft (precedent: HIS eG's access at Jena) |
@@ -40,8 +40,8 @@ report, grounds of leave (illness, Mutterschutz) and a Schwerbehinderung behind 
 |---|---|---|---|
 | Only the data the ordinance lists | § 11 ThürHG, ThürHDatVO of 16.8.2019 | partly | Fields follow the official statistics and the Immatrikulationsordnung; not yet compared one by one with the 2019 list. HfM's website still has the 2012 text |
 | Statistics to the Thüringer Landesamt für Statistik | § 2 ThürHDatVO, HStatG | partly | Studierende, Prüfungen, Promovierende and Gasthörer:innen as eSTATISTIK.core files, with the fields the office builds its pseudonym from (`analytics/official.py`); no statistics of academic and artistic staff |
-| Student data kept five years after Exmatrikulation, parts longer | Thüringer Aufbewahrungsrichtlinie, ThürArchivG | no | Nothing ends for students |
-| Records offered to the archive before deletion | ThürArchivG 2018 | no | No offer and assessment step; needed before student records are deleted |
+| Student data kept five years after Exmatrikulation, parts longer | Thüringer Aufbewahrungsrichtlinie, ThürArchivG | yes | The file 5 years after the last Exmatrikulation, then cut down to the Grunddaten (names, birth, Matrikelnummer, semesters, results) for Studienzeitbescheinigungen and Zweitschriften; those anonymised after 50; both periods set by the Hochschule (`students/disposal.py`) |
+| Records offered to the archive before deletion | ThürArchivG 2018 | yes | The student office offers the files due (Studierende › Aussonderung); the archive downloads a copy of those worth keeping and assesses each; only then the night's prune cuts them down. Applications that came to nothing are deleted without an offer: that needs the archive's standing assessment |
 | Admission | ThürHZG, Thüringer Vergabeverordnung | partly | Eignungsprüfung by the EPO: rounds, juries, ranking, offers with a Frist, Nachrückliste; no quotas, needed only for a Studiengang with restricted admission |
 | Fees | ThürHGEG | partly | Semesterbeitrag in parts, Säumnisgebühr, Eignungsprüfungsgebühr; payments booked from bank statements (CSV, camt.053); no Langzeit- or Zweitstudiengebühren |
 | Rules set by the Hochschule's Ordnungen, not by code | EPO, RPSO, Studienpläne | partly | Studiengänge versioned by Prüfungsordnung; modules, Fristen, Unterlagenarten, fees and texts under Einstellungen; rules marked „code“ in `docs/rules.md` need a developer |
@@ -102,20 +102,19 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 |---|---|---|---|
 | Impressum for concampus.de | § 5 DDG | no | The product page has none |
 | Cyber Resilience Act | Regulation (EU) 2024/2847 | n/a | Out of scope as SaaS; in scope if a Hochschule runs Campus on its own servers: reporting from 11.9.2026, CE marking from 11.12.2027 |
-| Switching provider | Data Act | no | No complete export of a Hochschule's data; switching charges banned from 12.1.2027 |
+| Switching provider | Data Act | partly | A complete copy per person; none yet of a Hochschule's data as a whole; switching charges banned from 12.1.2027 |
 | AI Act | Regulation (EU) 2024/1689 | n/a | No AI; the planned reading of paper Protokolle touches grading: assess before building |
 | Other states | each state's laws | partly | Thuringian rules in editable texts and in code (ThürLVVO, VwVfG periods); official keys are national |
 | Barrierefreiheitsstärkungsgesetz | BFSG | n/a | Private institutions only |
 
 ## To do in Campus
 
-1. Deletion concept for every kind of record; students five years after Exmatrikulation, offered to the archive first.
-2. A complete copy of one's data.
-3. Backup of uploaded files.
-4. Statistics of academic and artistic staff.
-5. Mark a record as restricted.
-6. XHochschule data for the certificates.
-7. WCAG audit and the accessibility statement for Campus.
+1. Backup of uploaded files.
+2. Statistics of academic and artistic staff.
+3. Mark a record as restricted.
+4. XHochschule data for the certificates.
+5. WCAG audit and the accessibility statement for Campus.
+6. Periods for staff records and the export log.
 
 ## To check
 
@@ -123,8 +122,9 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 2. Whether Bescheide to a minor go to the legal representatives.
 3. Which Bescheide need a hearing first.
 4. Whether HfM levies Langzeit- or Zweitstudiengebühren under the ThürHGEG.
-5. Retention under the Thüringer Aufbewahrungsrichtlinie, and which section of the ThürArchivG covers university
-   archives.
+5. Retention under the Thüringer Aufbewahrungsrichtlinie: 5 years for the file, 50 for the Grunddaten; which section
+   of the ThürArchivG covers university archives; the archive's standing assessment of applications that came to
+   nothing.
 6. The deadlines in IT-Planungsrat decision 2025/43.
 7. Whether HfM is among the seven Thuringian universities on the MACH ERP.
 8. The answer deadline for accessibility feedback in the ThürBarrWebG.

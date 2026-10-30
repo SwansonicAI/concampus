@@ -28,6 +28,7 @@
       {% endfor %}</dd>{% endif %}
     </dl>
     <p class="muted"><small>Name, Geburtsdaten und Staatsangehörigkeit werden gegen Nachweis geändert, zuständig: {{ office|default:"die Hochschule" }}.</small></p>
+    <p><a class="more" href="{% url 'copy' %}">Meine Daten herunterladen</a><br><small class="muted">Alles, was Campus über Sie speichert, mit Ihren Unterlagen, als ZIP (Art. 15 DSGVO).</small></p>
   </div>
 </div>
 {% endblock %}

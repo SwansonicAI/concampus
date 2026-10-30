@@ -11,6 +11,7 @@ urlpatterns = [
     path('orte/', views.towns, name='towns'),
     path('konto/', views.account, name='account'),
     path('konto/bescheide/', views.delivery, name='delivery'),
+    path('konto/daten/', views.copy, name='copy'),
     path('konto/einwilligung/<int:pk>/widerruf/', views.revoke, name='revoke'),
     path('postfach/', views.inbox, name='inbox'),
     path('postfach/<int:pk>/', views.message, name='message'),

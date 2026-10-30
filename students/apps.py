@@ -61,6 +61,8 @@ class StudentsConfig(Tile, AppConfig):
                 feature('Studierende', reverse('students:list'), 'liste suchen filtern matrikel akte'),
                 feature('Studierende als CSV exportieren', f"{reverse('students:list')}?format=csv", 'export excel tabelle download'),
             ]
+        if person.roles & {'dispose_files', 'assess_files'}:
+            found.append(feature('Aussonderung', reverse('students:disposal'), 'archiv löschen löschfrist aufbewahrung akten ehemalige bewerten'))
         if 'manage_reregistration' in person.roles:
             found += [
                 feature('Rückmeldung', reverse('students:reregistration'), 'semesterbeitrag zahlung bezahlt überweisung exmatrikulieren'),
@@ -76,7 +78,7 @@ class StudentsConfig(Tile, AppConfig):
         from django.utils import timezone
 
         from core.models import Institution, Term
-        from .models import Study, StudyTerm
+        from .models import Disposal, Study, StudyTerm
 
         term, today = Term.upcoming(), timezone.localdate()
         due = term and (term.deadline if today <= term.deadline else term.closes)  # in the Nachfrist, its end
@@ -120,6 +122,13 @@ class StudentsConfig(Tile, AppConfig):
 
             if n := review()[0].count():
                 found.append(task(f'Gebietsänderung: {plural(n, "Wohnsitz", "Wohnsitze")} prüfen', reverse('setup:keys')))
+        if 'dispose_files' in person.roles:
+            from .disposal import due
+
+            if n := due().count():
+                found.append(task(f'Aussonderung: {plural(n, "Akte", "Akten")} Ehemaliger dem Archiv anbieten', reverse('students:disposal')))
+        if 'assess_files' in person.roles and (n := Disposal.objects.filter(assessed=None).count()):
+            found.append(task(f'Aussonderung: {plural(n, "angebotene Akte", "angebotene Akten")} bewerten', reverse('students:disposal')))
         if 'manage_students' in person.roles:  # the Zeugnis issued: the study ends
             for study in person.within(enrolled.filter(issued__isnull=False), 'manage_students').select_related('person', 'program'):
                 found.append(task(f'Exmatrikulieren nach Abschluss: {study.person}, {study.program.title}', study.get_absolute_url(), study.issued))

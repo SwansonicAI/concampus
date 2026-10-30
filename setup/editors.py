@@ -233,7 +233,8 @@ EDITORS = {e.key: e for e in [
         'hochschule', Institution, 'Hochschule', 'manage_institution', 'Verwaltung', single=True, deletable=False,
         sections=[
             ('Briefkopf und Website', [('name', 'short_name'), 'address', ('place', 'email', 'website'), ('imprint', 'privacy', 'accessibility')]),
-            ('Aufnahme und Immatrikulation', [('matriculation_start', 'student_mail'), ('accept_days', 'retention_months'), 'signup', 'insurers']),
+            ('Aufnahme und Immatrikulation', [('matriculation_start', 'student_mail', 'accept_days'), 'signup', 'insurers']),
+            ('Aufbewahrung', [('retention_months', 'file_years', 'core_years')]),
             ('Rückmeldung und Prüfungen', [('late_fee', 'withdraw_weeks'), 'payee', ('iban', 'bic')]),
             ('Raumbuchung', [('student_daily_hours', 'student_ahead_hours'), ('last_minute_hours', 'teacher_ahead_days')]),
             ('Deputat', ['load_since']),

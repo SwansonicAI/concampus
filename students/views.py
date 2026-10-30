@@ -1,14 +1,14 @@
 import csv
 import re
-from collections import defaultdict
+from collections import Counter, defaultdict
 from datetime import timedelta
 
 from django import forms
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import Count, F, Prefetch, Q
-from django.http import HttpResponse, JsonResponse
+from django.db.models import Count, F, Max, Prefetch, Q
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -20,6 +20,7 @@ from django.views.decorators.http import require_POST
 
 from core import dates, texts
 from core.access import CODENAMES, require
+from core.dossier import dossier
 from core.history import tables
 from core.apps import plural
 from core.models import Consent, Export, Institution, Message, Office, Person, Term
@@ -32,7 +33,8 @@ from curriculum.views import plan
 from exams.views import exhausted
 from instruments.models import Loan
 from . import payments
-from .models import EXITS, FIRST_TERM_LEAVES, LEAVE_TERMS, LEAVES, OFFICIAL, Document, DocumentType, Study, StudyTerm
+from .disposal import assess, due, offer
+from .models import EXITS, FIRST_TERM_LEAVES, LEAVE_TERMS, LEAVES, OFFICIAL, Disposal, Document, DocumentType, Study, StudyTerm
 
 class ChangeForm(forms.Form):
     program = forms.ModelChoiceField(label='Neuer Studiengang', queryset=Program.objects.all(), empty_label='Bitte wählen')
@@ -766,3 +768,35 @@ def verify(request):
     return render(request, 'students/verify.html', {
         'code': code, 'study': study, 'term': term, 'registered': bool(study and term and study.terms.filter(term=term, study__status__in=[Study.Status.ENROLLED, *Study.FORMER]).exists()),
     })
+
+
+@require('dispose_files', 'assess_files')
+def disposal(request):
+    """Aussonderung (students/disposal.py): the student office offers the files kept long enough to the archive; the
+    archive takes over a copy of those worth keeping and assesses the rest as not; the night after, each file assessed
+    is cut down to its Grunddaten."""
+    roles = request.user.roles
+    if request.method == 'POST':
+        if request.POST.get('anbieten') and 'dispose_files' in roles:
+            messages.success(request, f'{plural(offer(due(), request.user), "Akte", "Akten")} dem Archiv angeboten.')
+        elif (archival := request.POST.get('archivwuerdig')) and 'assess_files' in roles:
+            n = assess(request.POST.getlist('person'), archival == 'ja', request.user)
+            messages.success(request, f'{plural(n, "Akte", "Akten")} bewertet; heute Nacht werden sie bis auf die Grunddaten gelöscht.')
+        return redirect('students:disposal')
+    last = {p.pk: p.left for p in due().annotate(left=Max('studies__since'))}
+    done = Disposal.objects.exclude(assessed=None).values('assessed__year').annotate(n=Count('pk'), kept=Count('pk', filter=Q(archival=True))).order_by('-assessed__year')
+    offered = Person.objects.filter(disposal__isnull=False, disposal__assessed=None).select_related('disposal').prefetch_related(
+        Prefetch('studies', Study.objects.filter(status__in=Study.FORMER).select_related('program', 'subject', 'start_term')),
+    ).order_by('last_name', 'first_name')
+    return render(request, 'students/disposal.html', {
+        'due': sorted(Counter(day.year for day in last.values()).items()), 'due_total': len(last), 'offered': offered[:SHOWN], 'offered_total': offered.count(),
+        'done': done, 'institution': Institution.get(), 'assessing': 'assess_files' in roles, 'offering': 'dispose_files' in roles,
+    })
+
+
+@require('assess_files')
+def handover(request, pk):
+    """A copy of an offered file for the archive to take over."""
+    person = get_object_or_404(Person, pk=pk, disposal__reduced=None)
+    Export.log(request.user, f'Akte {person} für das Archiv', 1)
+    return FileResponse(dossier(person), as_attachment=True, filename=f'akte-{person.matriculation or person.pk}.zip')

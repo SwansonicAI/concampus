@@ -40,7 +40,8 @@ from curriculum.models import Module, Program, Rounding, Subject
 from instruments.models import Instrument, Loan
 from rooms.models import Booking, BookingCategory, Room, RoomFunction
 from rooms.views import agenda
-from students.models import Document, DocumentType, Study, StudyTerm
+from students.disposal import ended, reduce
+from students.models import Disposal, Document, DocumentType, Study, StudyTerm
 from ..plans import EARLY, HF, JENA, PIANO, PROGRAMS, RESEARCH, SECTION, SPEECH, STRINGS, TEACHING, VOCAL, WINDS, WS
 
 FEE = Decimal('341.30')  # Semesterbeitrag WiSe 2026/27: Studierendenwerk 95,00 + Deutschlandsemesterticket 226,80 + Studierendenrat 19,50
@@ -513,8 +514,9 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
     'Akademische und Studentische Angelegenheiten (ASA)': [
         'view_students', 'manage_students', 'manage_reregistration', 'message_students',  # outcomes of exams, not grades: those are the Prüfungsamt's
         'view_applications', 'decide_applications', 'run_auditions',  # halls for the auditions too
-        'view_curriculum', 'book_any_room', 'view_bookings', 'manage_terms', 'view_statistics', 'report_statistics',
+        'view_curriculum', 'book_any_room', 'view_bookings', 'manage_terms', 'view_statistics', 'report_statistics', 'dispose_files',
     ],
+    'Hochschularchiv': ['assess_files'],
     'Prüfungsamt': ['view_students', 'view_files', 'manage_exams', 'decide_results', 'view_curriculum', 'book_any_room', 'view_bookings'],
     'Dekanat': ['view_teaching_load', 'manage_teaching_load', 'publish_term', 'view_curriculum', 'view_statistics'],  # the dean approves; the Referat does the work
     'Dekanatsreferat': ['manage_courses', 'plan_teaching', 'view_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings'],
@@ -913,6 +915,7 @@ class Command(BaseCommand):
             self.mailboxes()
             self.planning()
             forget(months_before(timezone.localdate(), Institution.get().retention_months))  # as the nightly prune would have
+            self.archive()
         self.territory()
         self.changes()
         self.stdout.write(self.style.SUCCESS(
@@ -1775,6 +1778,23 @@ class Command(BaseCommand):
             private = f'{p.email.split("@")[0]}@{providers[p.pk % len(providers)]}'
             p.private_email, p.email = (private, p.email) if p.studying else (private, private)
         Person.objects.bulk_update(people, ['email', 'private_email'])
+
+    def archive(self):
+        """The files of Ehemalige, once kept long enough, offered to the archive each March and assessed within a fortnight,
+        one in twenty-five taken over; the night after, the rest of each file went, as the nightly prune does. Who left in
+        2021 is due now."""
+        archivist = self.person('archiv', 'Ulrike', 'Sommer', 'Dr.')  # last: a draw for the phone shifts nothing after it
+        archivist.groups.add(Office.objects.get(name='Hochschularchiv'))
+        years, asa = Institution.get().file_years, Person.objects.get(username='asa')
+        made = []
+        for p in ended(years).annotate(left=models.Max('studies__since')):
+            if (offered := date(p.left.year + years + 1, 3, 2)) <= timezone.localdate():
+                made.append(Disposal(person=p, offered=offered, offered_by=asa, archival=p.pk % 25 == 0, assessed=offered + timedelta(days=14), assessed_by=archivist))
+        Disposal.objects.bulk_create(made)
+        reduce()
+        for d in made:
+            d.reduced = d.assessed + timedelta(days=1)
+        Disposal.objects.bulk_update(made, ['reduced'], batch_size=2000)
 
     def territory(self):
         """A Gemeindeverzeichnis comes in after the people, as the quarterly one would: Hanau, kreisfrei since 1.1.2026,

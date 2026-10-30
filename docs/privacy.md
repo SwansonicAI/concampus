@@ -113,6 +113,19 @@ the accounts' security alone (Art. 32), and deleted after 90 days (`core.models.
 sees their last five under Mein Konto; `manage_accounts` sees all under Einstellungen › Anmeldungen. It is no record of
 anyone's work: the Personalrat agrees to it in the Dienstvereinbarung.
 
+### A copy, and the end of a file
+
+Under Mein Konto everyone downloads a copy of what Campus keeps about them, with their documents (Art. 15 Abs. 3;
+`core/dossier.py`); a booking or course shows without who else took part. The copy is logged as an export.
+
+A former student's file is kept `file_years` (5) after the last Exmatrikulation, then offered to the archive by
+`dispose_files` (Studierende › Aussonderung). The archive (`assess_files`) sees the offered names with their studies,
+downloads a copy of those it keeps, and assesses each; nothing goes before that (ThürArchivG). The night after, the
+file is cut down to the Grunddaten: names, birth date and place, Matrikelnummer, the studies with their semesters and
+results. Documents, messages, the Verlauf, contact and personal administration data, consents, sign-ins, loans,
+bookings, notes, Gutachten, grounds of leave and a Nachteilsausgleich go. After `core_years` (50) the Grunddaten are
+made anonymous (`students/disposal.py`, `manage.py prune`).
+
 ## Where the code enforces it
 
 - `students/views.py`, `study()`: `personal` (the person or `manage_students`) and `identity` (also `decide_results`);

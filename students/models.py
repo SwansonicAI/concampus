@@ -399,6 +399,13 @@ class Document(Tracked, models.Model):
                 old.delete()
         return cls.objects.create(person=study.person, study=study, kind=kind, title=file.name[:120], file=file, consent=consent)
 
+    @classmethod
+    def purge(cls, documents):
+        """Delete these documents with their files, but a file another document keeps too, like the demo's placeholder."""
+        for d in documents.exclude(file='').exclude(file__in=cls.objects.exclude(pk__in=documents).values('file')):
+            d.file.delete(save=False)
+        return documents.delete()[0]
+
     def drop_file(self):
         """Delete the file, unless another document keeps it too, like the demo's placeholder."""
         if self.file and not Document.objects.filter(file=self.file.name).exclude(pk=self.pk).exists():
@@ -414,3 +421,24 @@ class Document(Tracked, models.Model):
     def playable(self):
         """A video the browser plays right here: an upload, or a link straight to a video file."""
         return (self.file.name if self.file else self.url).lower().split('?')[0].endswith(self.VIDEO_FILES)
+
+
+class Disposal(models.Model):
+    """The Aussonderung of a former student's file once kept long enough (students/disposal.py): offered to the archive,
+    assessed there, then cut down to the Grunddaten. Nothing goes before the archive has assessed it (ThürArchivG)."""
+
+    person = models.OneToOneField(Person, models.CASCADE, related_name='disposal', verbose_name='Person')
+    offered = models.DateField('Angeboten am', default=timezone.localdate)
+    offered_by = models.ForeignKey(Person, models.SET_NULL, null=True, related_name='+', verbose_name='Angeboten von')
+    archival = models.BooleanField('Archivwürdig', null=True)
+    assessed = models.DateField('Bewertet am', null=True, blank=True)
+    assessed_by = models.ForeignKey(Person, models.SET_NULL, null=True, related_name='+', verbose_name='Bewertet von')
+    reduced = models.DateField('Auf die Grunddaten gekürzt am', null=True, blank=True)
+
+    class Meta:
+        ordering = ['-offered']
+        verbose_name = 'Aussonderung'
+        verbose_name_plural = 'Aussonderungen'
+
+    def __str__(self):
+        return str(self.person)
