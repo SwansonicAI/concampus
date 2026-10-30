@@ -44,6 +44,8 @@ still ask for an M10.
 - **dakota** (ITSG): the program that sends and fetches the reports; dakota.ag is the version with the
   Kommunikationsserver. ITSG offers it as a module for software makers. HIS supplies it to HISinOne Hochschulen within
   their fees.
+- **Without dakota**: straight to the Kommunikationsserver over eXTra, the transport standard dakota itself uses, with
+  an ITSG certificate.
 - **How others run it**: OTH Regensburg runs dakota on a Windows VM that talks to HISinOne over https; a job sends and
   fetches on weekday mornings and mails a log, without passwords, to the administrator. A file with the wrong sequence
   number or an unknown response ID never reaches the database, so errors must be fixed at once or they multiply. dakota
@@ -77,6 +79,7 @@ The likeliest way: Campus connects to the dakota HfM already runs, instead of on
    Hochschulen, one Absendernummer and certificate each.
 8. A test against the procedure's test system before going live.
 9. Who sees the reports: the student office alone, as the insurance now (`docs/privacy.md`); how long they are kept.
+10. Current students' insurer and status taken over from HISinOne, for their M30.
 
 ## To check
 
@@ -85,7 +88,8 @@ The likeliest way: Campus connects to the dakota HfM already runs, instead of on
    how many reports a semester, who matches those that match no one.
 2. The current Grundsätze, Verfahrensbeschreibung and Anlagen: each report's fields, Storno, deadlines. gkv-datenaustausch.de
    did not answer during this research.
-3. dakota for a software maker: licence, platform, whether it runs on Linux, one installation for several Hochschulen.
+3. dakota for a software maker: licence, platform, whether it runs on Linux, one installation for several Hochschulen;
+   or eXTra without dakota.
 4. Whether HfM asks for an M10 from students over 30, Promovierende and Jungstudierende.
 5. How long the reports are kept.
 

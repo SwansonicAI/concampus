@@ -1,7 +1,8 @@
 # Legal requirements
 
 What the law asks of a campus management system at a Thuringian Hochschule, what Campus does about it and what is
-missing. Who sees what is in `docs/privacy.md`; each rule Campus applies is in `docs/rules.md`.
+missing. Who sees what is in `docs/privacy.md`; each rule Campus applies is in `docs/rules.md`; what replacing
+HISinOne takes, and in which order, in `docs/roadmap.md`.
 
 Status: **yes**, **partly**, **no**; **Hochschule** where the duty is the Hochschule's own and Campus only feeds it;
 **n/a** where it does not apply. The legal points come from research of October 2026; those still to be checked
@@ -87,7 +88,7 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 | XHochschule documents | XBildung, IT-Planungsrat 2025/43 | partly | Immatrikulations-, Studienzeit- and Exmatrikulationsbescheinigung, Leistungsübersicht, Zeugnis, Urkunde, Diploma Supplement in English and German, as printable pages; the Immatrikulationsbescheinigung checkable by its Prüfcode, also as the version of § 9 BAföG, which stands in for Formblatt 2. No XHochschule data, no eIDAS seal |
 | Statistics delivery | HStatG | yes | eSTATISTIK.core files |
 | Reports with the health insurers, electronic only since 2022 | § 199a SGB V, Gemeinsame Grundsätze of the GKV-Spitzenverband and the HRK; Absendernummer under § 18n SGB IV | partly | Campus keeps the insurer, the status and the day the insurer's report came, and enrols and accepts a Rückmeldung only with it; the office enters that day by hand. No connection to the insurers' data exchange: their reports (M10 status, M11 change of insurer, M12 and M13 arrears and their payment) are not received, the Hochschule's (M20 Einschreibung, M30 Exmatrikulation) not sent. Needs HfM's Absendernummer, an ITSG certificate and dakota; what it takes is in `docs/smv.md` |
-| Erasmus Without Paper | European Commission | no | No mobility |
+| Erasmus Without Paper | European Commission | no | No mobility: no inter-institutional agreements, no online learning agreements |
 | Finance system | – | no | Payments come in from bank statements; nothing is booked to the Hochschule's ERP |
 
 ## Staff
@@ -103,6 +104,7 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 |---|---|---|---|
 | Procurement | GWB, VgV; below the threshold UVgO through the ThürVgG | Hochschule | HfM buys Campus through a procedure fitting its value, counted over the contract's term (48 months if open-ended): EU-wide from €216,000 net (2026–27), a Direktauftrag up to €30,000. A tender asks for the accessibility conformance report and the security concept |
 | Contract terms | EVB-IT Cloud (IT-Planungsrat 2022/01) | no | Public buyers of software as a service contract on them: service levels, BSI C5, the data at the contract's end. Our terms to fit them |
+| Continuity if ConCampus fails | the tender, the contract | no | Code, deployment and access deposited with an escrow agent, released to HfM on set conditions (`docs/escrow.md`) |
 | Impressum for concampus.de | § 5 DDG | no | The product page has none |
 | Cyber Resilience Act | Regulation (EU) 2024/2847 | n/a | Out of scope as SaaS; in scope if a Hochschule runs Campus on its own servers: reporting from 11.9.2026, CE marking from 11.12.2027 |
 | Switching provider | Data Act | partly | A complete copy per person; none yet of a Hochschule's data as a whole; switching charges banned from 12.1.2027 |
@@ -139,6 +141,7 @@ Outside the code:
     Hochschule's records of processing and impact assessment.
 14. An Impressum for concampus.de.
 15. Terms of service that fit EVB-IT Cloud.
+16. Escrow (`docs/escrow.md`).
 
 ## To check
 
