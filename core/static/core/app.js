@@ -411,6 +411,18 @@ document.addEventListener('click', event => {
 });
 document.addEventListener('keydown', event => event.key === 'Escape' && document.querySelectorAll('button[data-armed]').forEach(disarm));
 
+// In a course's grade sheet a grade decides „bestanden“ (the server does the same): the choice follows it and waits.
+document.addEventListener('change', ({target}) => {
+  const sheet = target.closest('form[data-pass]');
+  if (!sheet || !target.name?.startsWith('grade-')) return;
+  const passed = sheet.querySelector(`[name="passed-${target.name.slice(6)}"]`);
+  if (!passed) return;
+  const value = parseFloat(target.value.replace(',', '.'));
+  const mark = parseFloat(sheet.dataset.pass);
+  passed.disabled = !Number.isNaN(value);
+  if (!Number.isNaN(value)) passed.value = ('points' in sheet.dataset ? value >= mark : value <= mark) ? '1' : '0';
+});
+
 // A box that ticks a group (data-all="2") ticks every box of that group (data-part="2"); without a value, every box.
 document.addEventListener('change', ({target}) => {
   if (!target.matches('[data-all]')) return;

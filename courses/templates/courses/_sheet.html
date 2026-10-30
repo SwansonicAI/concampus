@@ -1,6 +1,7 @@
 {% load l10n marks %}{% scale as steps %}
-<form method="post" class="scroll"{% if panel %} data-wide{% endif %}>
+<form method="post" class="sheet"{% if panel %} data-wide{% endif %} data-pass="{% if course.points %}{{ course.pass_mark|unlocalize }}{% else %}4{% endif %}"{% if course.points %} data-points{% endif %}>
   {% csrf_token %}
+  <div class="scroll">
   <table>
     <thead>
       <tr>
@@ -43,12 +44,12 @@
           {% with by=p.copied|of:e.pk %}{% if by %}<br><small class="muted" title="Nach Protokoll übertragen von {{ by }}">übertragen: {{ by.last_name }}</small>{% endif %}{% endwith %}
         </td>
         {% endfor %}
-        <td class="num mid">{% if p.blind %}<span class="muted">·</span>{% else %}<b>{% if p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</b>{% if p.grade is None and p.mean is not None and not p.third %}<span class="muted" title="Noch nicht alle Wertungen">{{ p.mean }}…</span>{% endif %}{% if p.override is not None %} <small class="muted" title="Von Hand festgelegt: {{ p.reason }}">✎</small>{% endif %}{% endif %}</td>
+        <td class="num mid">{% if p.blind %}<span class="muted">·</span>{% else %}<b>{% if p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</b>{% if p.grade is None and p.mean is not None and not p.third %}<small class="muted">vorläufig {{ p.mean }} ({{ p.given }} von {{ p.places }} Wertungen)</small>{% endif %}{% if p.override is not None %} <small class="muted" title="Von Hand festgelegt: {{ p.reason }}">✎</small>{% endif %}{% endif %}</td>
         <td class="mid">{% if p.passed %}<span class="badge yes">bestanden</span>{% elif p.passed is False %}<span class="badge no">nicht bestanden</span>{% elif p.remark %}<span class="badge wait">entschuldigt</span>{% elif p.third and not p.blind %}<span class="badge wait" title="Die Gutachten liegen mehr als 1,0 auseinander oder eines lautet nicht ausreichend (RPSO § 15 Abs. 2)">drittes Gutachten nötig</span>{% else %}<span class="muted">offen</span>{% endif %}{% if p.remark %} <small class="muted" title="{{ p.get_remark_display }}">{{ p.remark|upper }}</small>{% endif %}{% if p.locked %} <small class="muted" title="Alle haben gewertet; ändern kann jetzt nur das zuständige Amt">gesperrt</small>{% endif %}</td>
         {% if correct and not course.released %}<td class="num mid"><input class="cell" type="text" inputmode="decimal" name="grade-{{ p.pk }}" value="{{ p.override|mark }}" aria-label="Abweichendes Ergebnis"><br><input class="cell" name="reason-{{ p.pk }}" value="{{ p.reason }}" maxlength="200" placeholder="Begründung" aria-label="Begründung der abweichenden Note"></td>{% endif %}
         {% if decide and not course.released and remarks %}<td class="mid"><select class="cell" name="remark-{{ p.pk }}" aria-label="Vermerk"><option value="">–</option>{% for code, label in remarks %}<option value="{{ code }}" title="{{ label }}"{% if p.remark == code %} selected{% endif %}>{{ code|upper }}</option>{% endfor %}</select></td>{% endif %}
         {% else %}
-        <td class="mid muted nowrap">{{ p.module.code|default:"" }}</td>
+        <td class="mid muted">{% if p.module %}<small>{{ p.module.code }} {{ p.module.title }}<br>{{ p.module.program.title }}</small>{% endif %}</td>
         <td class="mid muted" data-value="{{ p.created|date:'c' }}">{{ p.created|date:"j.n. H:i" }}</td>
         <td class="num mid">{% if decide and not course.released and course.points %}<input class="cell{% if p.error %} bad{% endif %}" type="text" inputmode="decimal" name="grade-{{ p.pk }}" value="{{ p.grade|mark }}" aria-label="Punkte">{% elif decide and not course.released %}<select class="cell{% if p.error %} bad{% endif %}" name="grade-{{ p.pk }}" aria-label="Note"><option value="">–</option>{% for s in steps %}<option{% if p.grade|mark == s %} selected{% endif %}>{{ s }}</option>{% endfor %}{% if p.grade is not None and p.grade|mark not in steps %}<option selected>{{ p.grade|mark }}</option>{% endif %}</select>{% elif p.grade is not None %}{{ p.grade|floatformat:1 }}{% endif %}</td>
         <td class="mid">
@@ -67,8 +68,9 @@
       {% endfor %}
     </tbody>
   </table>
+  </div>
   {% if rows and not course.released %}{% if decide or columns %}
-  <div class="actions" style="margin-top: 20px">
+  <div class="actions sticky" style="margin-top: 20px">
     {% if decide or course.kind != 'thesis' %}<button class="btn">Speichern</button>{% endif %}
     <small class="muted">{% if panel %}{% if remarks and decide %}Vermerk: RT, Rücktritt mit triftigem Grund, zählt nicht als Versuch; NE, nicht erschienen, und TV, Täuschungsversuch, gelten als nicht bestanden. {% endif %}{% if course.kind == 'thesis' %}Die Note ist das Mittel der beiden Gutachten; liegen sie mehr als 1,0 auseinander oder lautet eines nicht ausreichend, entscheidet ein drittes mit, dann zählt das Mittel der beiden besseren (RPSO § 15 Abs. 2).{% else %}Das Ergebnis ist der Mittelwert, sobald alle gewertet haben; wer befangen ist, zählt nicht mit.{% endif %} {{ rule }} {% if not decide %}Die Wertungen der anderen sehen Sie, sobald alle gewertet haben; dann ist Ihre gesperrt. {% endif %}Bestanden folgt aus {% if course.points %}der Grenze von {{ course.pass_mark }} Punkten{% else %}der Note bis 4,0{% endif %}.{% else %}Eine Note bestimmt „bestanden“ selbst; ohne Note gilt die Auswahl.{% endif %}</small>
   </div>

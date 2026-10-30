@@ -13,7 +13,7 @@
     <form method="post" action="{% url 'exams:release' course.pk %}">
       {% csrf_token %}
       {% if course.released %}{% if correct %}<button class="btn ghost" data-confirm="Wieder öffnen? Prüfende und Amt können dann ändern. Bei erneuter Freigabe erhält nur Nachricht, wessen Ergebnis sich geändert hat; die Widerspruchsfrist der anderen bleibt.">Wieder öffnen</button>{% endif %}
-      {% else %}<button class="btn" data-confirm="{{ releasing }}"{% if missing %} title="Noch {{ missing }} ohne Ergebnis" disabled{% elif not rows %} title="Niemand ist angemeldet" disabled{% endif %}>Ergebnisse freigeben</button>{% endif %}
+      {% else %}<button class="btn" data-confirm="{{ releasing }}"{% if missing %} title="Noch {{ missing }} ohne Ergebnis" disabled{% elif not rows %} title="Niemand ist angemeldet" disabled{% endif %}>Ergebnisse freigeben</button>{% if missing %} <small class="muted">Noch {{ missing }} ohne Ergebnis</small>{% elif not rows %} <small class="muted">Niemand ist angemeldet</small>{% endif %}{% endif %}
     </form>
     {% endif %}
   </div>
@@ -43,7 +43,7 @@
     {% if course.assessor %}<dt>Beisitz</dt><dd>{{ course.assessor }}</dd>{% endif %}
     {% if course.kind == 'exam' and decide or course.protocol_received %}<dt>Protokoll</dt><dd>{% if course.protocol_received %}eingegangen am {{ course.protocol_received|date:"j.n.Y" }}{% if course.protocol %}, <a href="{% url 'exams:protocol' course.pk %}">Scan</a>{% else %}, auf Papier{% endif %}{% else %}<span class="muted">noch nicht eingegangen</span>{% endif %}
       {% if books and not course.released %}<form method="post" enctype="multipart/form-data" action="{% url 'exams:protocol' course.pk %}" class="inline">{% csrf_token %}<input name="received" data-day autocomplete="off" size="11" value="{% now 'd.m.Y' %}" aria-label="Eingegangen am"><input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png" aria-label="Scan, wenn vorhanden"><button class="btn ghost small">Eingang verbuchen</button></form>
-      <small class="muted">Auf Papier oder als Scan; erst danach lassen sich die Wertungen der Prüfenden eintragen.</small>{% endif %}</dd>{% endif %}
+      <small class="muted">Auf Papier oder als Scan. Die Prüfenden tragen ihre Wertungen selbst ein, wann sie wollen; das Amt überträgt sie aus dem Protokoll erst, wenn es verbucht ist.</small>{% endif %}</dd>{% endif %}
     {% if course.kind == 'exam' and books and not course.released and rows %}<dt>Rücktritt</dt><dd><form method="post" enctype="multipart/form-data" action="{% url 'exams:attest' course.pk %}" class="inline">{% csrf_token %}<select name="participation" required aria-label="Wer tritt zurück"><option value="">Wer?</option>{% for p in rows %}{% if p.passed is None and p.remark != 'rt' %}<option value="{{ p.pk }}">{{ p.study.person.name }}</option>{% endif %}{% endfor %}</select><input name="received" data-day autocomplete="off" size="14" placeholder="Attest auf Papier am" aria-label="Attest auf Papier eingegangen am"><input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png" aria-label="oder als Scan"><div class="choices"><label><input type="checkbox" name="consent" value="1" required> Einwilligung liegt unterschrieben vor</label></div><button class="btn ghost small">Mit Attest verbuchen</button></form>
       <small class="muted">Der Grund ist unverzüglich nachzuweisen, bei Krankheit mit Attest (RPSO § 20); RT zählt nicht als Versuch.</small></dd>{% endif %}
     <dt>Anmeldeschluss</dt><dd>{{ course.deadline|date:"j. F Y"|default:"–" }}</dd>
@@ -80,7 +80,7 @@
         <div><label for="id_note">Note</label><select id="id_note" name="score-{{ p.pk }}-{{ e.pk }}"><option value="">Bitte wählen</option>{% for s in steps %}<option{% if value|mark == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></div>
         <div><label for="id_report">Gutachten</label><textarea id="id_report" name="report-{{ p.pk }}-{{ e.pk }}" rows="14">{{ p.reports|of:e.pk|default:"" }}</textarea></div>
         <div class="actions"><button class="btn" data-confirm="Gutachten mit Note abgeben? Sobald alle Gutachten vorliegen, sind sie gesperrt.">Gutachten abgeben</button><button class="btn ghost" name="entwurf" value="1">Entwurf speichern</button>{% if not handed %}<small class="muted">Die Arbeit ist noch nicht abgegeben.</small>{% endif %}</div>
-        <small class="muted">Ein Entwurf wird ohne Note gespeichert und ist nur für Sie zu sehen.</small>
+        <small class="muted">Ein Entwurf hält nur das Gutachten fest, nur für Sie zu sehen: eine gespeicherte Note zählte schon als Ihre Wertung. Die Note wählen Sie mit der Abgabe.</small>
       </form>
       {% elif p.blind and e != user %}<p class="muted">Zu sehen, sobald alle Gutachten vorliegen.</p>
       {% elif value is None %}<p class="muted">Noch nicht eingereicht.</p>
@@ -102,7 +102,7 @@
   {% if dropping %}<form id="austragen" method="post" action="{% url 'courses:drop' course.pk %}">{% csrf_token %}</form>{% endif %}
   {% if rows and course.kind == 'exam' %}
   <div class="inline" style="margin-top: 16px">
-    <a class="more" href="{% url 'exams:roster' course.pk %}?format=csv">Als CSV</a>
+    <a class="more" href="{% url 'exams:roster' course.pk %}?format=csv">Liste herunterladen (CSV)</a>
     {% if course.released %}<a class="more" href="{% url 'exams:roster' course.pk %}?aushang">Aushang nach Matrikelnummer</a>{% endif %}
     {% if importing and user not in staff and not course.protocol_received %}<small class="muted">Noten aus einer Datei übertragen Sie, sobald das unterschriebene Protokoll verbucht ist.</small>
     {% elif importing %}

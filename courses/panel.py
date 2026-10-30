@@ -85,7 +85,7 @@ def sheet(course):
     `attempt`, which try this is, and `last`, whether the Prüfungsordnung allows no further one."""
     staff = list(course.staff.all())
     rows = list(
-        course.participations.select_related('study__person', 'study__program', 'study__subject', 'module')
+        course.participations.select_related('study__person', 'study__program', 'study__subject', 'module__program')
         .prefetch_related('scores__entered_by', 'recusals__substitute')
     )
     panel = course.kind in Course.PANEL
@@ -103,7 +103,7 @@ def sheet(course):
         p.missing = [e for e, v in p.marks if v is None and e.pk not in p.recused]
         given = [v for e, v in p.marks if v is not None and e.pk not in p.recused]
         complete = panel and given and not p.missing and not p.vacant
-        p.mean = mean(given, rounding(p))
+        p.mean, p.given, p.places = mean(given, rounding(p)), len(given), len(given) + len(p.missing)
         p.third = complete and disputed(p, given)
         p.auto = result(p, given) if complete else None
         p.override = p.grade if p.grade is not None and p.grade != p.auto and not p.remark else None

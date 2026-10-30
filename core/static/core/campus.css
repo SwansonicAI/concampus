@@ -129,6 +129,7 @@ main.page { min-height: 70vh; padding-top: 32px; padding-bottom: 96px; }
 .menu[open] summary::after { transform: rotate(180deg); }
 .more { font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.actions.sticky { position: sticky; bottom: 0; z-index: 2; padding: 12px 0; border-top: 1px solid var(--line); background: #fff; }
 input, select, textarea {
   max-width: 100%;
   padding: 8px 10px;

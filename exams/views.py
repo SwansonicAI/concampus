@@ -131,7 +131,7 @@ def index(request):
     term = Term.pick(request.GET.get('semester'))
     context = {'term': term, 'terms': Term.objects.filter(courses__kind=Course.Kind.EXAM).distinct().order_by('-start')}
     exams = (
-        Course.objects.filter(term=term, kind__in=[Course.Kind.EXAM, Course.Kind.THESIS]).select_related('subject').prefetch_related('staff')
+        Course.objects.filter(term=term, kind__in=[Course.Kind.EXAM, Course.Kind.THESIS]).select_related('subject').prefetch_related('staff', 'modules__program')
         .annotate(date=Min('bookings__start'), size=Count('participations', distinct=True), candidate=Min('participations__study__person__last_name'))
         .annotate(graded=Count('participations', filter=Q(participations__passed__isnull=False), distinct=True))
         .order_by(Coalesce('date', Cast('deadline', DateTimeField())).asc(nulls_last=True), 'title')  # a thesis by when it is due
@@ -152,6 +152,7 @@ def index(request):
         candidate = [f'participations__study__person__{name}' for name in ('first_name', 'last_name', 'matriculation')]
         exams = list(matching(exams, q, 'title', 'subject__name', 'staff__last_name', *candidate))
         for c in exams:
+            c.programs = sorted({m.program.title for m in c.modules.all()})
             c.state = 'freigegeben' if c.released else 'bewertung' if c.graded or c.date and c.date <= timezone.now() else 'offen'  # held: marks are due
         context.update(
             exams=[c for c in exams if stand in ('', 'kommission', 'ohne-termin') or c.state == stand], q=q, stand=stand, program=program, programs=Program.planned(),

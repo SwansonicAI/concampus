@@ -18,17 +18,18 @@
   </div>
 </form>
 <table data-panel>
-  <thead><tr><th>Datum</th><th>Prüfung</th><th>Kommission</th><th class="num">Anmeldungen</th><th>Stand</th></tr></thead>
+  <thead><tr><th>Datum</th><th>Prüfung</th><th>Studiengang</th><th>Kommission</th><th class="num">Anmeldungen</th><th>Stand</th></tr></thead>
   <tbody>
     {% for c in exams %}
     <tr>
       <td>{% if c.kind == 'thesis' %}Abgabe {{ c.deadline|date:"j.n.Y" }}{% else %}{{ c.date|date:"D j.n.Y"|default:"–" }}{% endif %}</td>
       <td><a href="{% url 'exams:exam' c.pk %}"><b>{{ c.title }}</b></a>{% if c.kind == 'thesis' %}<br><small class="muted">Abschlussarbeit {{ c.candidate }}</small>{% elif c.subject and c.subject.name not in c.title %}<br><small class="muted">{{ c.subject }}</small>{% endif %}</td>
+      <td><small>{{ c.programs|join:", "|default:"–" }}</small></td>
       <td>{% for s in c.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if c.assessor %}<br><small class="muted">Beisitz {{ c.assessor.last_name }}</small>{% endif %}</td>
       <td class="num">{{ c.size }}</td>
-      <td>{% if c.released %}<span class="badge green">freigegeben</span>{% elif c.graded %}<span class="badge wait">{{ c.graded }} von {{ c.size }} bewertet</span>{% else %}<span class="badge open">offen</span>{% endif %}</td>
+      <td>{% if c.released %}<span class="badge green">freigegeben</span>{% elif c.state == 'bewertung' %}<span class="badge wait">in Bewertung{% if c.graded %}: {{ c.graded }} von {{ c.size }}{% endif %}</span>{% else %}<span class="badge open">offen</span>{% endif %}</td>
     </tr>
-    {% empty %}<tr><td colspan="5" class="empty">Keine Prüfungen.</td></tr>
+    {% empty %}<tr><td colspan="6" class="empty">Keine Prüfungen.</td></tr>
     {% endfor %}
   </tbody>
 </table>

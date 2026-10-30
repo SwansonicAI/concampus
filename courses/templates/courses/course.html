@@ -229,7 +229,7 @@
 <section>
   <h2>Teilnehmende</h2>
   {% include "courses/_sheet.html" with panel=False decide=True columns=None %}
-  {% if unmarked > 1 %}<form method="post" class="actions" style="margin-top: 8px">{% csrf_token %}<button class="btn ghost small" name="alle_bestanden" value="1" data-confirm="Alle {{ unmarked }} ohne Ergebnis als bestanden eintragen?">Alle {{ unmarked }} ohne Ergebnis: bestanden</button></form>{% endif %}
+  {% if unmarked > 1 %}<form method="post" class="actions" style="margin-top: 8px">{% csrf_token %}<button class="btn ghost small" name="alle_bestanden" value="1" data-confirm="Alle {{ unmarked }} ohne Ergebnis als bestanden eintragen, aus allen Studiengängen und für alle Lehrenden der Veranstaltung?">Alle {{ unmarked }} ohne Ergebnis: bestanden</button></form>{% endif %}
   {% include "courses/_add.html" %}
 </section>
 {% endif %}

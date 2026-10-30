@@ -153,6 +153,12 @@ def catalogue(request):
     })
 
 
+def over(course):
+    """Whether a course's teaching is over: its last date past, or without dates its semester's lectures."""
+    last = course.bookings.aggregate(Max('end'))['end__max']
+    return last < timezone.now() if last else course.term.lectures_end < timezone.localdate()
+
+
 def accompanied(course):
     """The auditions of a Korrepetition course's participants this term, where someone of its staff plays with them."""
     return Participation.objects.filter(
@@ -244,7 +250,7 @@ def course(request, pk):
         'count': len(rows),
         'staffed': staffed,
         'eligible': eligible, 'completed': counting and not eligible and not own,
-        'unmarked': sum(1 for p in rows if p.passed is None and not p.remark) if staffed and course.kind == Course.Kind.COURSE and not course.modules.filter(exam=True).exists() else 0,
+        'unmarked': sum(1 for p in rows if p.passed is None and not p.remark) if staffed and course.kind == Course.Kind.COURSE and over(course) and not course.modules.filter(exam=True).exists() else 0,
         'counts_for': besides_focus(course, eligible[0]) if eligible and not own else '',
         'clashing': clashes(person, course.bookings.filter(start__gte=timezone.now(), participants=None)[:8]) if eligible and not own else [],
         'running': running, 'cancelling': office and not course.term.planning and not course.cancelled and running,
