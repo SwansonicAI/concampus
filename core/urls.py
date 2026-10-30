@@ -13,6 +13,7 @@ urlpatterns = [
     path('konto/', views.account, name='account'),
     path('konto/bescheide/', views.delivery, name='delivery'),
     path('konto/daten/', views.copy, name='copy'),
+    path('konto/adresse/<str:token>/', views.confirm_email, name='confirm_email'),
     path('konto/einwilligung/<int:pk>/widerruf/', views.revoke, name='revoke'),
     path('postfach/', views.inbox, name='inbox'),
     path('postfach/<int:pk>/', views.message, name='message'),

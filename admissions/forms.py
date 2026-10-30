@@ -11,7 +11,7 @@ from core import destatis
 from core.dates import PastField
 from core.keys import COUNTRIES, PLACES, TOWNS, KeyChoice, TownInput, choices, find
 from core.forms import frequent
-from core.models import Person
+from core.models import Institution, Person
 from courses.models import Course
 
 
@@ -84,6 +84,39 @@ class Hauptfach(forms.Select):
         return option
 
 
+def classes():
+    """{Hauptfach: pks of who teaches it}, from the lessons running now: whom an applicant may wish for as teacher."""
+    found = defaultdict(set)
+    current = Course.objects.filter(kind=Course.Kind.LESSON, subject__isnull=False, staff__isnull=False, term__end__gte=timezone.localdate())
+    for subject, pk in current.values_list('subject__name', 'staff'):
+        found[subject].add(pk)
+    return found
+
+
+class DetailsForm(forms.Form):
+    """What an application says besides its documents, changed until its deadline."""
+
+    repertoire = forms.CharField(
+        label='Prüfungsprogramm', widget=forms.Textarea(attrs={'rows': 5}),
+        help_text='Ein Werk je Zeile, mit Komponist:in, Satz und Dauer; beim Video die Zeit, zu der es beginnt, z. B. „6:40 N. Paganini: Caprice Nr. 24 a-Moll (5 Min.)“.',
+    )
+    teacher = forms.ModelChoiceField(label='Wunschlehrer:in', queryset=Person.objects.none(), required=False)
+    accompanist = forms.BooleanField(label='Ich wünsche Korrepetition für die Prüfung.', required=False)
+
+    def __init__(self, *args, study, accompaniment, **kwargs):
+        super().__init__(*args, **kwargs)
+        found = classes()
+        people = Person.objects.in_bulk({pk for pks in found.values() for pk in pks})
+        own = found.get(study.subject.name, set())
+        self.fields['teacher'].queryset = Person.objects.filter(pk__in=people)
+        self.fields['teacher'].choices = [('', 'Keine Angabe')] + [
+            (group, [(p.pk, str(p)) for p in sorted((p for pk, p in people.items() if (pk in own) == mine), key=lambda p: p.name)])
+            for group, mine in [(f'Hauptfach {study.subject}', True), ('Weitere', False)]
+        ]
+        if not accompaniment:
+            del self.fields['accompanist']
+
+
 class ApplicationForm(forms.Form):
     subject = forms.ChoiceField(label='Hauptfach', required=False, widget=forms.Select(attrs={'data-leads': 'audition teacher', 'data-find': ''}))
     audition = IntakeField(label='Studiengang', queryset=None, widget=Hauptfach(attrs={'data-describes': 'repertoire'}))
@@ -136,6 +169,9 @@ class ApplicationForm(forms.Form):
             .order_by('near', 'program__degree', 'program__name', 'subject__name')
         )
         offered, own = {course.subject_id: course.subject for course in auditions}, set(studies.values_list('subject', flat=True))
+        self.closed = sorted(  # Hauptfächer with an Eignungsprüfung in another term, but none open now
+            set(Course.objects.filter(kind=Course.Kind.AUDITION, program__isnull=False, subject__isnull=False).exclude(subject__in=offered).values_list('subject__name', flat=True))
+        )
         institutes = defaultdict(list)  # the Hauptfächer one can apply for, by Institut; one's own first
         for s in sorted(offered.values(), key=lambda s: s.name):
             institutes[str(s.institute or 'Weitere')].append((s.pk, s.name))
@@ -145,17 +181,34 @@ class ApplicationForm(forms.Form):
             self.fields['subject'].initial = mine[0][0]
         if person.home:  # where the HZB was most likely gained
             self.fields['entrance_region'].choices.insert(1, ('Ihr Heimatwohnsitz', [(person.home, person.get_home_display())]))
-        classes = defaultdict(set)  # who teaches each Hauptfach one can apply for, grouped so applicants find their instrument
-        current = Course.objects.filter(kind=Course.Kind.LESSON, subject__isnull=False, staff__isnull=False, term__end__gte=timezone.localdate())  # every Hauptfach, for the exception
-        for subject, pk in current.values_list('subject__name', 'staff'):
-            classes[subject].add(pk)
-        teachers = self.fields['teacher'].queryset = Person.objects.filter(pk__in={pk for pks in classes.values() for pk in pks})
+        taught = classes()  # who teaches each Hauptfach, every one for the exception, grouped so applicants find their instrument
+        teachers = self.fields['teacher'].queryset = Person.objects.filter(pk__in={pk for pks in taught.values() for pk in pks})
         people = teachers.in_bulk()
         self.fields['teacher'].choices = [('', 'Keine Angabe')] + [
-            (subject, [(p.pk, str(p)) for p in sorted((people[pk] for pk in pks), key=lambda p: p.name)]) for subject, pks in sorted(classes.items())
+            (subject, [(p.pk, str(p)) for p in sorted((people[pk] for pk in pks), key=lambda p: p.name)]) for subject, pks in sorted(taught.items())
         ]
 
 
+
+
+class EntranceForm(forms.ModelForm):
+    """The Hochschulzugangsberechtigung, handed in once gained, by the Immatrikulation at the latest, as pupils apply
+    before their Abitur."""
+
+    entrance_date = PastField(label='Erworben am')
+
+    class Meta:
+        model = Person
+        fields = ['entrance', 'entrance_date', 'entrance_region', 'entrance_town']
+        help_texts = {'entrance_region': 'Wo die Schule ist; im Ausland der Staat.'}
+
+    layout = [(None, [('entrance', 'entrance_date'), 'entrance_region'])]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['entrance'].required = self.fields['entrance_region'].required = True
+        self.fields['entrance'].choices = [('', 'Bitte wählen'), *frequent('entrance', destatis.ENTRANCE)]
+        self.fields['entrance_region'].choices = [('', '–'), *frequent('entrance_region', choices(PLACES))]
 
 
 class AcceptForm(forms.ModelForm):
@@ -208,6 +261,15 @@ class AcceptForm(forms.ModelForm):
             self.fields[choice].initial = code and ('abroad' if code.startswith(destatis.ABROAD) else 'de')
             for name in [place, *more]:
                 self.fields[name].widget.attrs['data-for'] = f'{choice}:de,abroad'
+        self.fields['degree_exam'].widget.attrs['data-for'] = 'graduated:de'  # abroad it is always the one for abroad
+        for name in ('degree_exam', 'degree_field'):  # the answers given most here first: music
+            self.fields[name].choices = [('', '–'), *frequent(name, self.fields[name].choices)]
+        own = self.instance.pk and self.instance.studies.filter(status='graduated').select_related('program', 'subject').order_by('-since').first()
+        if own and not self.instance.degree_exam:  # a degree here, as for a Master after the Bachelor: on record already
+            self.initial |= {
+                'graduated': 'de', 'degree_university': Institution.get().university, 'degree_exam': own.program.exam,
+                'degree_field': own.program.field or own.subject.field, 'degree_date': own.since,
+            }
 
     def clean(self):
         data = super().clean()
@@ -217,4 +279,6 @@ class AcceptForm(forms.ModelForm):
                     data[name] = Person._meta.get_field(name).get_default()
             elif not data.get(place):
                 self.add_error(place, 'Bitte die Hochschule wählen, im Ausland den Staat.')
+        if data.get('graduated') == 'abroad':
+            data['degree_exam'] = destatis.DEGREE_ABROAD
         return data

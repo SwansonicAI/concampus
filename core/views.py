@@ -4,6 +4,7 @@ from urllib.parse import urlsplit
 from django.apps import apps
 from django.conf import settings
 from django.contrib.auth import login
+from django.core import signing
 from django.contrib.auth.decorators import login_not_required
 from django.contrib import messages
 from django.core.cache import cache
@@ -25,12 +26,12 @@ from curriculum.models import Module, Program
 from rooms.models import Booking, BookingCategory, Room
 from rooms.views import agenda, moves
 from students.models import Document, Study
-from . import dates
+from . import dates, texts
 from .apps import feature, plural, tile_apps, tiles
 from .backends import address
 from .days import busy, strip
 from .dossier import dossier
-from .forms import ContactForm, FeedbackForm
+from .forms import ContactForm, EmailForm, FeedbackForm
 from .history import because, describe, former, restore, tables
 from .dates import months_before
 from .keys import DISTRICTS, replaced
@@ -72,16 +73,44 @@ def inbox(request):
 
 def account(request):
     """Mein Konto: address and phone number, kept up by the person; name and birth data only the office changes, on proof."""
-    form = ContactForm(request.POST or None, instance=request.user)
+    person = request.user
+    changing = person.roles == {'applicant'}  # an applicant's address is their own; a student's is the Hochschule's
+    posted = request.POST if request.method == 'POST' else None
+    email = EmailForm(posted if 'neue_adresse' in request.POST else None, person=person) if changing else None
+    form = ContactForm(None if email and email.is_bound else posted, instance=person)
+    if email and email.is_valid():
+        address, token = email.cleaned_data['email'], signing.dumps({'person': person.pk, 'email': email.cleaned_data['email']}, salt='email')
+        subject, body = texts.render('email_bestaetigen', vorname=person.first_name, nachname=person.last_name, link=request.build_absolute_uri(reverse('confirm_email', args=[token])))
+        send_mail(subject, body, Institution.get().email or None, [address], fail_silently=True)
+        messages.success(request, f'Bestätigungslink an {address} gesendet; bis Sie ihn öffnen, gilt die bisherige Adresse.')
+        return redirect('account')
     if form.is_valid():
         form.save()
         messages.success(request, 'Kontaktdaten gespeichert.')
         return redirect('account')
-    staff = not request.user.roles & {'student', 'applicant', 'alumni'}  # employees: their personnel file is HR's
+    staff = not person.roles & {'student', 'applicant', 'alumni'}  # employees: their personnel file is HR's
     return render(request, 'core/account.html', {
-        'form': form, 'staff': staff, 'office': 'die Personalabteilung' if staff else Office.holding('manage_students'), 'consents': request.user.consents.all(),
-        'sign_ins': request.user.sign_ins.all()[:5],
+        'form': form, 'email_form': email, 'staff': staff, 'office': 'die Personalabteilung' if staff else Office.holding('manage_students'),
+        'consents': person.consents.all(), 'sign_ins': person.sign_ins.all()[:5],
     })
+
+
+@login_not_required
+def confirm_email(request, token):
+    """A new sign-in address, opened from the link sent to it: within three days, and still nobody else's."""
+    try:
+        data = signing.loads(token, salt='email', max_age=3 * 86400)
+    except signing.BadSignature:
+        messages.error(request, 'Der Link ist abgelaufen oder ungültig. Bitte die Änderung unter „Mein Konto“ neu anstoßen.')
+        return redirect('account' if request.user.is_authenticated else 'login')
+    person = get_object_or_404(Person, pk=data['person'], is_active=True)
+    if Person.objects.filter(email__iexact=data['email']).exclude(pk=person.pk).exists():
+        messages.error(request, 'Diese Adresse gehört inzwischen zu einem anderen Konto.')
+    else:
+        person.email = data['email']
+        person.save(update_fields=['email'])
+        messages.success(request, f'Ihre E-Mail-Adresse ist jetzt {person.email}.')
+    return redirect('account' if request.user.is_authenticated else 'login')
 
 
 def copy(request):
@@ -404,18 +433,19 @@ def found(person, q, limit):
         for p in matching(taught.select_related('study__person', 'course'), q, 'study__person__first_name', 'study__person__last_name', starts=True)[:limit * 5]:
             first.setdefault(p.study.person_id, p)
         groups.append(('In Ihrem Unterricht', [hit(p.study.person.name, p.course.get_absolute_url(), p.course.title) for p in list(first.values())[:limit]]))
-    if roles - {'applicant', 'alumni'}:  # whom to ask: who teaches or holds an office, and the offices
+    inside = bool(roles - {'applicant', 'alumni'})
+    if inside:  # whom to ask: who teaches or holds an office
         staff = Person.objects.filter(Q(teaching__isnull=False) | Q(groups__isnull=False), is_active=True).distinct().select_related('institute')
         groups.append(('Personen', [
             hit(f'{p.title} {p.first_name} {p.last_name}'.strip(), f'mailto:{p.email}', ' · '.join(filter(None, [p.institute and str(p.institute), p.email])))
             for p in ranked(staff, q, 'first_name', 'last_name', limit=limit)
         ]))
-        offices = []
-        for o in ranked(Office.objects.prefetch_related('user_set', 'institutes', 'programs'), q, 'name', limit=limit, names='amt'):
-            members = [p for p in o.user_set.all() if p.is_active]
-            mail = o.email or ','.join(p.email for p in members)
+    offices = []  # and the offices: for applicants and alumni by their shared address only, without who works there
+    for o in ranked(Office.objects.prefetch_related('user_set', 'institutes', 'programs'), q, 'name', limit=limit, names='amt'):
+        members = [p for p in o.user_set.all() if p.is_active] if inside or not o.email else []
+        if mail := o.email or ','.join(p.email for p in members):
             offices.append(hit(o.name + limited(o), f'mailto:{mail}', ' · '.join(filter(None, [o.email, ', '.join(f'{p.first_name} {p.last_name}' for p in members)]))))
-        groups.append(('Ämter', offices))
+    groups.append(('Ämter', offices))
     teaching = [Course.Kind.COURSE, Course.Kind.LESSON]
     courses = matching(Course.objects.filter(term__end__gte=timezone.localdate(), term__in=Term.shown(person)).select_related('term'), q, 'title', 'staff__last_name', 'subject__name', starts=True)
     own = Exists(Module.objects.filter(courses=OuterRef('pk'), program__studies__person=person, program__studies__status=Study.Status.ENROLLED))  # one's own Studiengang's first

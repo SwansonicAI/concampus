@@ -31,8 +31,11 @@ class AdmissionsConfig(Tile, AppConfig):
         if 'juror' in person.roles:
             juries = person.teaching.filter(kind=Course.Kind.AUDITION, released=None).count()
             return f'{plural(juries, "Eignungsprüfung", "Eignungsprüfungen")} als Kommission'
-        latest = person.studies.filter(status__in=Study.APPLICATION).first()
-        return latest.get_status_display() if latest else 'Jetzt bewerben'
+        from core.models import Institution
+        from .views import standing
+
+        days = Institution.get().accept_days
+        return max((standing(s, days) for s in person.studies.filter(status__in=Study.APPLICATION)), default=(0, 'Jetzt bewerben'))[1]  # the furthest one
 
     def features(self, person):
         roles, found = person.roles, []
@@ -42,7 +45,7 @@ class AdmissionsConfig(Tile, AppConfig):
             found.append(feature('Meine Kommissionen', reverse('admissions:juries'), 'eignungsprüfung aufnahmeprüfung jury bewerten'))
         if 'applicant' in roles or not roles:
             found += [
-                feature('Meine Bewerbung', reverse('admissions:mine'), 'status einladung termin ergebnis video unterlagen hochladen'),
+                feature('Meine Bewerbung', reverse('admissions:mine'), 'status einladung termin ergebnis video unterlagen hochladen studienplatz annehmen ablehnen semesterbeitrag immatrikulation krankenkasse zurückziehen'),
                 feature('Neue Bewerbung', reverse('admissions:apply'), 'bewerben studiengang'),
             ]
         elif roles & {'student', 'alumni'}:
@@ -102,6 +105,9 @@ class AdmissionsConfig(Tile, AppConfig):
         for study in person.studies.filter(status=Study.Status.ADMITTED, terms=None):
             if accept_by(study, days) >= timezone.localdate():
                 found.append(task(f'Studienplatz {study.subject} annehmen oder ablehnen', reverse('admissions:mine'), accept_by(study, days)))
+        for study in person.studies.filter(status=Study.Status.ADMITTED, terms__isnull=False).select_related('start_term', 'person').distinct():  # accepted, not yet enrolled
+            if yours := study.steps()[0]:
+                found.append(task(f'Zur Immatrikulation {study.subject}: {", ".join(yours)}', reverse('admissions:mine'), study.fee_due if any(s.startswith('Semesterbeitrag') for s in yours) else None))
         for p in person.studies.filter(status=Study.Status.APPLIED).values_list('participations__course__title', 'participations__slot'):
             if p[1] and p[1] > timezone.now():
                 found.append(task(f'{p[0]} am {date_format(timezone.localtime(p[1]), "j.n.Y, G:i")} Uhr', reverse('admissions:mine')))  # an appointment, not a deadline

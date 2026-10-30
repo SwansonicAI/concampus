@@ -160,6 +160,13 @@ class Study(Tracked, models.Model):
         late, as from the Nachrückliste: the days to accept it, then as many again to pay."""
         return max(self.start_term.deadline, self.since + timedelta(days=2 * Institution.get().accept_days))
 
+    WAITING = ('Versicherungsmeldung', 'Hochschulzugangsberechtigung aus dem Ausland')  # what waits on the insurer or the Hochschule
+
+    def steps(self):
+        """missing(), split for the applicant: (what they do, what waits on others)."""
+        missing = self.missing()
+        return [m for m in missing if not m.startswith(self.WAITING)], [m for m in missing if m.startswith(self.WAITING)]
+
     def missing(self):
         """What still blocks the enrolment of an admitted applicant."""
         reasons = self.person.missing()

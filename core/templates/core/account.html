@@ -13,7 +13,8 @@
     <dl class="facts">
       <dt>Name</dt><dd>{{ user }}</dd>
       <dt>Benutzername</dt><dd>{{ user.username }}</dd>
-      <dt>E-Mail</dt><dd>{{ user.email|default:"–" }}<br><small class="muted">Jede Nachricht im Postfach, auch jeder Bescheid, geht zusätzlich an diese Adresse.</small></dd>
+      <dt>E-Mail</dt><dd>{{ user.email|default:"–" }}<br><small class="muted">Jede Nachricht im Postfach, auch jeder Bescheid, geht zusätzlich an diese Adresse.</small>
+        {% if email_form %}<details{% if email_form.errors %} open{% endif %}><summary><small>ändern</small></summary><form method="post" class="form" style="margin-top: 8px">{% csrf_token %}{{ email_form }}<div class="actions"><button class="btn ghost small" name="neue_adresse" value="1">Bestätigungslink senden</button></div></form></details>{% endif %}</dd>
       {% if user.matriculation %}<dt>Matrikelnr.</dt><dd>{{ user.matriculation }}</dd>{% endif %}
       {% if user.birth_date %}<dt>Geboren</dt><dd>{{ user.birth_date|date:"j. F Y" }}{% if user.birth_place %} in {{ user.birth_place }}{% endif %}</dd>{% endif %}
       {% if not staff %}<dt>Bescheide</dt><dd>{% if user.electronic %}elektronisch, eingewilligt am {{ user.electronic|date:"j.n.Y" }}{% else %}per Post{% endif %}

@@ -289,3 +289,16 @@ class RetentionTest(Seeded):
         self.assertEqual((person.last_name, person.email, person.phone, person.home_town, person.is_active, person.gender), ('Anonym', '', '', '', False, gender))
         self.assertTrue(Study.objects.filter(pk=study.pk).exists())
         self.assertFalse(Message.objects.filter(person=person).exists())
+
+
+class EnrolmentItemsTest(Seeded):
+    def test_what_the_immatrikulation_needs_is_handed_in_after_the_offer(self):
+        study = Study.objects.filter(status='admitted').select_related('person').first()
+        Person.objects.filter(pk=study.person_id).update(entrance='')  # a pupil, admitted before the Abitur
+        client = Client()
+        client.force_login(study.person)
+        self.assertIn('Hochschulzugangsberechtigung nicht erfasst', Study.objects.get(pk=study.pk).missing())
+        client.post(f'/aufnahme/meine/{study.pk}/hochschulzugang/', {'entrance': '39', 'entrance_date': '30.06.2026', 'entrance_region': '99442'})
+        self.assertIn('Sprachnachweis Deutsch fehlt', Study.objects.get(pk=study.pk).missing())  # from abroad: German to prove
+        client.post(f'/aufnahme/bewerbung/{study.pk}/unterlagen/', upload('deutsch.pdf', 'language'))
+        self.assertEqual([m for m in Study.objects.get(pk=study.pk).missing() if 'Sprachnachweis' in m or 'Hochschulzugang' in m], ['Hochschulzugangsberechtigung aus dem Ausland nicht geprüft'])

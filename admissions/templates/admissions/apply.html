@@ -6,12 +6,20 @@
 <h1>Bewerbung</h1>
 <p class="lead">Die Eignungsprüfung findet vor Ort statt: Hauptfach, Klavier, Musiktheorie und Gehörbildung. In manchen Hauptfächern geht ihr eine Videostufe voraus; wer sie besteht, wird eingeladen.</p>
 <div class="cols">
+  {% if form.fields.audition.queryset %}
   <form method="post" enctype="multipart/form-data" class="form">
     {% csrf_token %}
     {{ form }}
+    {% if form.closed %}<p class="muted"><small>Derzeit keine Bewerbung offen für {{ form.closed|join:", " }}.{% if institution.website %} Die nächsten Termine stehen auf der <a href="{{ institution.website }}">Website der Hochschule</a>.{% endif %}</small></p>{% endif %}
     <div class="actions"><button class="btn">Bewerbung absenden</button></div>
     {% include "admissions/_privacy.html" %}
   </form>
+  {% else %}
+  <div>
+    <p>Zurzeit ist für keinen Studiengang eine Bewerbung offen.{% if institution.website %} Wann die nächsten Fristen beginnen, steht auf der <a href="{{ institution.website }}">Website der Hochschule</a>.{% endif %}</p>
+    <p class="muted"><small>Ihr Konto bleibt bestehen; sobald eine Eignungsprüfung ausgeschrieben ist, bewerben Sie sich hier.</small></p>
+  </div>
+  {% endif %}
   <div class="panel">
     <h3>Gut zu wissen</h3>
     {% text 'bewerbung_hinweise' as hints %}{{ hints|linebreaks }}

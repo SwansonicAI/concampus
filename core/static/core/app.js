@@ -554,15 +554,25 @@ document.addEventListener('input', ({target}) => {
   group.forEach(field => field.setCustomValidity(''));
 });
 
-// Uploads show their progress, since videos are large; then the page goes where the form leads.
+// Uploads show their progress, since videos are large, in the side panel too; then the page goes where the form
+// leads. A failed or broken upload says so and can be tried again.
 document.addEventListener('submit', event => {
   const form = event.target;
-  if (!form.matches('[data-upload]') || form.closest('.drawer') || !form.checkValidity()) return;
+  if (!form.matches('[data-upload]') || !form.checkValidity()) return;
   event.preventDefault();
   const button = form.querySelector('button');
+  const label = button.textContent;
   const request = new XMLHttpRequest();
+  const failed = () => {
+    button.disabled = false;
+    button.textContent = label;
+    const note = form.querySelector('.upload-failed') || form.appendChild(Object.assign(document.createElement('small'), {className: 'fail upload-failed'}));
+    note.textContent = 'Hochladen fehlgeschlagen. Bitte die Verbindung prüfen und erneut hochladen.';
+  };
   request.upload.addEventListener('progress', e => { button.textContent = `${Math.floor(e.loaded / e.total * 100)} % hochgeladen`; });
-  request.addEventListener('load', () => location.assign(request.getResponseHeader('X-Location') || location.href));
+  request.addEventListener('load', () => request.status < 400 ? location.assign(request.getResponseHeader('X-Location') || location.href) : failed());
+  request.addEventListener('error', failed);
+  request.addEventListener('abort', failed);
   request.open('POST', form.action);
   request.setRequestHeader('X-Panel', '1');  // answered with where it leads instead of following, so the message is still there
   request.send(new FormData(form));
@@ -644,7 +654,7 @@ if (drawer) {
   });
   document.addEventListener('submit', event => {
     const form = event.target;
-    if (!drawer.contains(form)) return;
+    if (!drawer.contains(form) || form.matches('[data-upload]')) return;  // uploads go their own way, with progress
     event.preventDefault();
     const url = new URL(form.getAttribute('action') || page.href, page.href);
     const data = new FormData(form, event.submitter);

@@ -602,6 +602,7 @@ FIELDS = [  # Studienfächer, 4
     ('181', 'Wirtschaftspädagogik'), ('042', 'Wirtschaftsrecht'), ('184', 'Wirtschaftswissenschaften'),
     ('275', 'Wissenschaftsgeschichte/Technikgeschichte'), ('185', 'Zahnmedizin'),
 ]
+DEGREE_ABROAD = '96'  # a degree gained abroad, whatever it was
 DEGREES = [  # Abschlussprüfungen, 5, without the kind of study before them
     ('96', 'Abschlussprüfung im Ausland'), ('17', 'Abschlussprüfung ohne akad. Grad'), ('94', 'Abschlusszeugnis/Zertifikat'),
     ('05', 'Akad. geprüfter Übersetzer'), ('81', 'Akademiebrief (KH)'), ('93', 'Bachelor (U) - Lehrer'), ('84', 'Bachelor an Fachhochschulen'),

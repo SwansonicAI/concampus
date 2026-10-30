@@ -5,5 +5,5 @@
 <h1>{{ letter.subject }}</h1>
 <p class="lead">{{ letter.created|date:"l, j. F Y, H:i" }} Uhr{% if letter.reference %} · Aktenzeichen {{ letter.reference }}{% endif %}</p>
 <div class="document">{{ letter.body|linebreaks }}</div>
-{% if letter.link %}<p><a class="btn" href="{{ letter.link }}">{{ place }} öffnen</a></p>{% endif %}
+<p class="actions">{% if letter.link %}<a class="btn" href="{{ letter.link }}">{{ place }} öffnen</a>{% endif %}<a class="more" href="{% url 'letter' letter.pk %}" target="_blank">Als Brief drucken</a></p>
 {% endblock %}

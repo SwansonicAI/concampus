@@ -110,6 +110,12 @@ TEXTS = {
         'erloschen. Über die Exmatrikulation erhalten Sie einen gesonderten Bescheid.',
         STUDY + ('pruefung', 'modul', 'versuch'), appeal=True,
     ),
+    'email_bestaetigen': Spec(
+        NACHRICHT, 'Neue E-Mail-Adresse bestätigen', 'E-Mail-Adresse bestätigen',
+        'Bitte bestätigen Sie Ihre neue E-Mail-Adresse für Campus mit diesem Link: {link}\n\nEr gilt drei Tage. Haben Sie die '
+        'Änderung nicht veranlasst, beachten Sie diese Nachricht nicht; es bleibt bei der bisherigen Adresse.',
+        ('link',),
+    ),
     'willkommen': Spec(NACHRICHT, 'Konto angelegt', 'Willkommen', 'Ihr Konto ist angelegt. Sie können sich jetzt für die Eignungsprüfung bewerben.'),
     'bewerbung': Spec(
         NACHRICHT, 'Bewerbung eingegangen', 'Bewerbung eingegangen',

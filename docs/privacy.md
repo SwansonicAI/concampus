@@ -148,7 +148,10 @@ deleted a year after it was answered.
 - `core/views.py`, `found()`: a rejection older than the retention period is no longer found. Teachers find the
   applications they rate and the students of their courses and ensembles, by name and course only, not their file.
   Everyone signed in but applicants and alumni finds who teaches or holds an office, with Institut and work e-mail, and
-  the offices with their shared address and members.
+  the offices with their shared address and members; applicants and alumni find the offices by their shared address
+  only, without who works there.
+- `core/views.py`, `account()`, `confirm_email()`: an applicant's new e-mail address is taken on only once confirmed from
+  a link sent to it; until then the old one holds.
 - `students/views.py`, `verify()`: whoever holds an Immatrikulationsbescheinigung's Prüfcode sees what it says (name,
   Studiengang, semester) and whether the study has ended since; without the code, nothing.
 - `core/models.py`, `Tracked.keepers()`, `seen_by()`: a record's Verlauf and undoing its changes belong to the offices

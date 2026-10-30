@@ -1,5 +1,6 @@
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
+from django.db import models
 from django.db.models import Count
 from django.forms.renderers import DjangoTemplates
 from django.http import QueryDict
@@ -61,6 +62,22 @@ class FeedbackForm(forms.ModelForm):
         widgets = {'text': forms.Textarea(attrs={'rows': 5})}
 
     layout = [(None, [('name', 'email'), 'page', 'text'])]
+
+
+class EmailForm(forms.Form):
+    """A new sign-in address, taken on once confirmed from it."""
+
+    email = forms.EmailField(label='Neue E-Mail-Adresse')
+
+    def __init__(self, *args, person, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.person = person
+
+    def clean_email(self):
+        email = self.cleaned_data['email']
+        if Person.objects.filter(models.Q(email__iexact=email) | models.Q(username__iexact=email)).exclude(pk=self.person.pk).exists():
+            raise forms.ValidationError('Diese Adresse gehört schon zu einem anderen Konto.')
+        return email
 
 
 class ContactForm(forms.ModelForm):

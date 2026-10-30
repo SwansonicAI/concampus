@@ -3,7 +3,7 @@
   <li>
     <span class="check{% if item.documents %} done{% endif %}"></span>
     <div>
-      <b>{{ item.label }}</b>{% if not item.required %} <small class="muted">freiwillig</small>{% elif not item.documents %} <small class="fail">fehlt</small>{% endif %}
+      <b>{{ item.label }}</b>{% if item.enrolment and not item.documents %} <small class="muted">bis zur Immatrikulation</small>{% elif not item.required %} <small class="muted">freiwillig</small>{% elif not item.documents %} <small class="fail">fehlt</small>{% endif %}
       {% if item.note %}{% if upload or item.late %}<br><small class="muted">{{ item.note }}</small>{% endif %}{% endif %}
       {% if item.kind.template and not item.documents and study.person == user %}<br><a class="more" href="{% url 'admissions:blank' study.pk item.kind.key %}"><small>Vordruck zum Ausdrucken</small></a>{% endif %}
       {% if item.kind.amount and not item.documents %}{% include "students/_transfer.html" with amount=item.kind.amount reference="Eignungsprüfung, "|add:study.person.name|add:", "|add:study.subject.name %}{% endif %}

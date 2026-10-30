@@ -7,7 +7,7 @@
 {% for s in studies %}
 <section>
   <h2>{{ s.program.title }} · {{ s.subject }}</h2>
-  <p class="lead">Studienbeginn {{ s.start_term }} · {% if s.invited %}<span class="badge open">Eingeladen</span>{% else %}<span class="badge {{ s.status }}">{{ s.get_status_display }}</span>{% endif %}</p>
+  <p class="lead">Studienbeginn {{ s.start_term }} · <span class="badge {% if s.invited %}open{% else %}{{ s.status }}{% endif %}">{{ s.standing }}</span></p>
   <table>
     <thead><tr><th>Stufe</th><th>Termin</th><th>Ergebnis</th></tr></thead>
     <tbody>
@@ -20,10 +20,22 @@
       {% endfor %}
     </tbody>
   </table>
+  {% if s.applied %}
+  <dl class="facts" style="margin-top: 16px">
+    <dt>Prüfungsprogramm</dt><dd>{{ s.applied.note|linebreaksbr|default:"–" }}</dd>
+    <dt>Wunschlehrer:in</dt><dd>{{ s.teacher|default:"keine Angabe" }}</dd>
+    {% if s.applied.course.accompaniment_id %}<dt>Korrepetition</dt><dd>{% if s.accompanied %}gewünscht{% else %}nicht gewünscht{% endif %}</dd>{% endif %}
+  </dl>
+  {% if s.details %}<details><summary>Angaben ändern, bis {{ s.deadline|date:"j. F Y" }}</summary>
+    <form method="post" action="{% url 'admissions:details' s.pk %}" class="form" style="margin-top: 8px">{% csrf_token %}{{ s.details }}<div class="actions"><button class="btn ghost">Speichern</button></div></form>
+  </details>{% endif %}
+  {% endif %}
+  {% if s.status == 'applied' or s.status == 'waitlisted' %}<form method="post" action="{% url 'admissions:retract' s.pk %}" style="margin-top: 12px">{% csrf_token %}<button class="link" data-confirm="Bewerbung {{ s.program.title }} · {{ s.subject }} zurückziehen? {% if s.ahead %}Ihre Termine werden für andere frei. {% endif %}Das lässt sich nicht rückgängig machen; Sie können sich neu bewerben, solange die Frist läuft."><small>Bewerbung zurückziehen</small></button></form>{% endif %}
   {% if s.after %}<p class="muted" style="margin-top: 12px">Wenn Sie bestehen, folgen:{% for line in s.after %}<br>{{ line }}{% endfor %}</p>{% endif %}
   {% if s.checklist %}
-  <h3 style="margin-top: 28px">Video und Unterlagen{% if s.open %} · bis {{ s.deadline|date:"j. F Y" }} änderbar{% endif %}</h3>
-  {% if s.late %}<p class="muted">Was noch fehlt, reichen Sie bitte nach, bevor über Ihre Bewerbung entschieden wird.</p>{% endif %}
+  {% if s.status == 'admitted' %}<h3 style="margin-top: 28px">Unterlagen für die Immatrikulation</h3>
+  {% else %}<h3 style="margin-top: 28px">Video und Unterlagen{% if s.open %} · bis {{ s.deadline|date:"j. F Y" }} änderbar{% endif %}</h3>
+  {% if s.late %}<p class="muted">Was noch fehlt, reichen Sie bitte nach, bevor über Ihre Bewerbung entschieden wird.</p>{% endif %}{% endif %}
   {% include "admissions/_checklist.html" with checklist=s.checklist study=s upload=s.open %}
   {% endif %}
   {% if s.status == 'admitted' %}
@@ -32,7 +44,17 @@
     <h3>Studienplatz angenommen</h3>
     <p>Bitte überweisen Sie den Semesterbeitrag von {{ s.start_term.fee }} € bis zum {{ s.fee_due|date:"j. F Y" }}.</p>
     {% include "students/_transfer.html" with amount=s.start_term.fee reference="Semesterbeitrag "|add:s.start_term.name|add:", "|add:s.person.name %}
-    {% if s.waiting %}<p>Für die Immatrikulation fehlt noch: {{ s.waiting|join:" · " }}.</p>{% endif %}
+    {% if s.yours %}<p>Ihre Schritte bis zur Immatrikulation: {{ s.yours|join:" · " }}.</p>{% endif %}
+    {% if s.theirs %}<p class="muted">Wartet auf Krankenkasse oder Hochschule: {{ s.theirs|join:" · " }}.</p>{% endif %}
+    {% if entrance %}
+    <form method="post" action="{% url 'admissions:entrance' s.pk %}" class="form" style="margin-top: 16px">
+      {% csrf_token %}
+      <h3>Hochschulzugangsberechtigung</h3>
+      <p class="muted"><small>Sobald Sie sie haben, spätestens zur Immatrikulation.</small></p>
+      {{ entrance }}
+      <div class="actions"><button class="btn ghost">Eintragen</button></div>
+    </form>
+    {% endif %}
     {% elif s.lapsed %}
     <h3>Frist zur Annahme verstrichen</h3>
     <p>Sie hätten den Studienplatz bis zum {{ s.accept_by|date:"j. F Y" }} annehmen können. Bitte wenden Sie sich an die Hochschule.</p>
@@ -45,7 +67,7 @@
       <datalist id="insurers">{% for name in insurers %}<option value="{{ name }}">{% endfor %}</datalist>
       <div class="actions">
         <button class="btn" name="decision" value="yes">Studienplatz annehmen</button>
-        <button class="btn danger" name="decision" value="no" formnovalidate data-confirm="Studienplatz wirklich ablehnen?">Ablehnen</button>
+        <button class="btn danger" name="decision" value="no" formnovalidate data-confirm="Studienplatz {{ s.program.title }} · {{ s.subject }} endgültig ablehnen? Der Platz geht an die Nachrückliste; das lässt sich nicht rückgängig machen.">Ablehnen</button>
       </div>
     </form>
     {% endif %}

@@ -6,7 +6,7 @@ code and, where it matters, on pages rendered from the seeded data or by a reque
 serious were checked again. One line each: role and page, pattern, what happens, the fix. Grouped by what to fix first:
 what costs most when it goes wrong, then what many people meet often.
 
-Status: group A fixed on 30 October 2026, except where an item says otherwise.
+Status: groups A and B fixed on 30 October 2026, except where an item says otherwise.
 
 ## A. Grades, Bescheide and money
 
@@ -91,7 +91,8 @@ Status: group A fixed on 30 October 2026, except where an item says otherwise.
 13. [applicant] Postfach, a Bescheid – #6 – the invitation says „für ein Visum vorlegen“; the printable letter is linked
     only from Meine Bewerbung – „Als Brief drucken“ on every message filed as a Bescheid.
 14. [applicant] invitation – #13 – the place is „Festsaal (Fürstenhaus)“ with no street or map, also in the letter for
-    visas – the building's address and a map link in the invitation, the page and the calendar entry.
+    visas – the building's address and a map link in the invitation, the page and the calendar entry. Open: rooms keep
+    only a building's name; its address needs a place of its own in the data, filled from the Hochschule's.
 15. [applicant] Mein Konto – #13 – the e-mail, which signs in and receives every Bescheid, can be changed by nobody and
     is never confirmed – change it with a confirmation link.
 16. [applicant] search – #13 – nothing found for ASA, Studienplatz, annehmen, Semesterbeitrag, Immatrikulation,

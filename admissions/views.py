@@ -18,6 +18,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from core import texts
+from core.forms import again, sent
 from core.access import CODENAMES, require
 from core.apps import plural
 from core.history import tables
@@ -31,7 +32,7 @@ from courses.models import Course, Participation
 from rooms.views import ics
 from curriculum.models import Subject
 from students.models import Document, DocumentType, Study, StudyTerm
-from .forms import AcceptForm, ApplicationForm, SignupForm
+from .forms import AcceptForm, ApplicationForm, DetailsForm, EntranceForm, SignupForm
 
 CARDS = 40  # per column of the board before „alle anzeigen“
 BOARD = [Study.Status.APPLIED, Study.Status.ADMITTED, Study.Status.WAITLISTED, Study.Status.REJECTED, Study.Status.ENROLLED]
@@ -95,6 +96,7 @@ def checklist(study, types=None):
     return [
         {
             'kind': t, 'label': t.name, 'note': t.note, 'required': t.required, 'documents': handed[t.key] or borrowed[t.key],
+            'enrolment': t.condition in DocumentType.ENROLMENT,  # due by the Immatrikulation, not with the application
             'reusable': [d for d in person.documents.all() if d.kind_id == t.key and d.study_id in same] if t.condition == Condition.VIDEO and not handed[t.key] else [],
         }
         for t in types if applies.get(t.condition) or t.condition == Condition.SUBJECTS and study.subject in t.subjects.all()
@@ -115,7 +117,7 @@ def uploads_open(study):
 def owed(items):
     """Of a checklist, what can still be handed in once uploads are closed, until the application is decided: required
     documents still missing, but not a video, judged by then."""
-    return [item for item in items if item['required'] and not item['documents'] and item['kind'].condition != Condition.VIDEO]
+    return [item for item in items if (item['required'] or item['enrolment']) and not item['documents'] and item['kind'].condition != Condition.VIDEO]
 
 
 def accept_by(study, days):
@@ -126,6 +128,20 @@ def accept_by(study, days):
 def lapsed(study, days):
     """An offer not accepted in time; needs `accepted` from `ranked`."""
     return study.status == Study.Status.ADMITTED and not study.accepted and accept_by(study, days) < timezone.localdate()
+
+
+def standing(study, days):
+    """(how far an application got, its state in the applicant's words): an offer lapsed counts for little, one accepted
+    most; invited while an appointment lies ahead."""
+    if study.status == Study.Status.ADMITTED:
+        if study.terms.filter(term=study.start_term).exists():
+            return 6, 'Studienplatz angenommen'
+        return (1, 'Annahmefrist verstrichen') if accept_by(study, days) < timezone.localdate() else (5, 'Studienplatz angeboten')
+    if study.status == Study.Status.WAITLISTED:
+        return 4, 'Nachrückliste'
+    if study.status == Study.Status.APPLIED:
+        return (3, 'Eingeladen') if study.participations.filter(slot__gt=timezone.now(), course__released=None).exists() else (2, 'Beworben')
+    return 0, study.get_status_display()
 
 
 def ranked(studies):
@@ -666,9 +682,12 @@ def mine(request):
     for study in studies:
         study.stages = stages().filter(study=study)
         study.accepted = study.terms.filter(term=study.start_term).exists()
-        study.accept_by, study.lapsed = accept_by(study, days), lapsed(study, days)
-        study.waiting = study.missing() if study.status == Study.Status.ADMITTED and study.accepted else []
-        study.checklist = checklist(study, types) if study.status == Study.Status.APPLIED else []
+        study.accept_by, study.lapsed, study.standing = accept_by(study, days), lapsed(study, days), standing(study, days)[1]
+        study.yours, study.theirs = study.steps() if study.status == Study.Status.ADMITTED and study.accepted else ([], [])
+        study.checklist = (
+            checklist(study, types) if study.status == Study.Status.APPLIED
+            else [item for item in checklist(study, types) if item['enrolment']] if study.status == Study.Status.ADMITTED else []
+        )
         study.open = uploads_open(study)
         study.late = [] if study.open else owed(study.checklist)
         for item in study.late:
@@ -680,16 +699,72 @@ def mine(request):
         ahead = [p for p in study.stages if p.slot and p.slot > timezone.now() and not p.course.released]
         study.invited, study.ahead = bool(ahead), ahead
         study.after = after(ahead[-1].course) if ahead else []
+        if applied := next((p for p in study.stages if p.course.program_id), None):  # what the application says, changed until the deadline
+            joined = study.participations.filter(course=applied.course.accompaniment_id).exists()
+            study.applied, study.accompanied = applied, joined
+            study.details = study.open and DetailsForm(
+                initial={'repertoire': applied.note, 'teacher': study.teacher_id, 'accompanist': joined}, study=study, accompaniment=applied.course.accompaniment_id,
+            )
     return render(request, 'admissions/mine.html', {
-        'studies': studies, 'documents': person.documents.exclude(message=None), 'accept': AcceptForm(instance=person),
+        'studies': studies, 'documents': person.documents.exclude(message=None), 'accept': AcceptForm(sent(request, 'accept'), instance=person),
+        'entrance': EntranceForm(sent(request, 'entrance'), instance=person) if not person.entrance else None,
         'insurers': Institution.get().insurers.splitlines(), 'bank': Institution.get(),
     })
 
 
 @require_POST
+def retract(request, pk):
+    """Withdraw an application, while it runs or from the Nachrückliste: its appointments are freed."""
+    study = get_object_or_404(Study, pk=pk, person=request.user, status__in=[Study.Status.APPLIED, Study.Status.WAITLISTED])
+    with transaction.atomic():
+        study.participations.filter(course__released=None).delete()
+        study.set_status(Study.Status.LEFT)
+    messages.success(request, f'Bewerbung {study.program.title} · {study.subject} zurückgezogen.')
+    return redirect('admissions:mine')
+
+
+@require_POST
+def details(request, pk):
+    """Change the Prüfungsprogramm, the Wunschlehrer:in or the wish for Korrepetition, until the application's deadline."""
+    study = get_object_or_404(Study.objects.select_related('subject'), pk=pk, person=request.user, status=Study.Status.APPLIED)
+    applied = get_object_or_404(stages().filter(study=study, course__program__isnull=False)[:1])
+    form = DetailsForm(request.POST, study=study, accompaniment=applied.course.accompaniment_id)
+    if not uploads_open(study):
+        messages.error(request, 'Die Frist für Änderungen ist abgelaufen.')
+    elif not form.is_valid():
+        messages.error(request, ' '.join(e for errors in form.errors.values() for e in errors))
+    else:
+        data = form.cleaned_data
+        with transaction.atomic():
+            applied.note = data['repertoire']
+            applied.save(update_fields=['note'])
+            study.teacher = data['teacher']
+            study.save(update_fields=['teacher'])
+            if applied.course.accompaniment_id and data['accompanist']:
+                Participation.objects.get_or_create(course_id=applied.course.accompaniment_id, study=study)
+            elif applied.course.accompaniment_id:
+                Participation.objects.filter(course_id=applied.course.accompaniment_id, study=study).delete()
+        messages.success(request, 'Angaben gespeichert.')
+    return redirect('admissions:mine')
+
+
+@require_POST
+def entrance(request, pk):
+    """The Hochschulzugangsberechtigung of whoever was admitted without one yet."""
+    get_object_or_404(Study, pk=pk, person=request.user, status=Study.Status.ADMITTED)
+    form = EntranceForm(request.POST, instance=request.user)
+    if not form.is_valid():
+        messages.error(request, 'Bitte die markierten Angaben berichtigen.')
+        return again(request, reverse('admissions:mine'), 'entrance')
+    form.save()
+    messages.success(request, 'Hochschulzugangsberechtigung eingetragen.')
+    return redirect('admissions:mine')
+
+
+@require_POST
 def upload(request, pk):
     """Hand in a document or a video for an application, until its deadline; the office running auditions at any time."""
-    study = get_object_or_404(Study.objects.select_related('person'), pk=pk, status=Study.Status.APPLIED)
+    study = get_object_or_404(Study.objects.select_related('person'), pk=pk, status__in=[Study.Status.APPLIED, Study.Status.ADMITTED])
     office = request.user.may('run_auditions', study)
     if not (office or study.person == request.user):
         raise PermissionDenied
@@ -828,9 +903,9 @@ def accept(request, pk):
         messages.error(request, 'Die Frist zur Annahme ist abgelaufen.')
         return redirect('admissions:mine')
     form = AcceptForm(request.POST, instance=request.user)
-    if not form.is_valid():
-        messages.error(request, ' '.join(e for errors in form.errors.values() for e in errors))
-        return redirect('admissions:mine')
+    if not form.is_valid():  # back with what was typed, each error at its field
+        messages.error(request, 'Noch nicht angenommen. Bitte die markierten Angaben berichtigen.')
+        return again(request, reverse('admissions:mine'), 'accept')
     person = form.save()
     StudyTerm.objects.get_or_create(study=study, term=study.start_term)
     texts.send('studienplatz_angenommen', person, beitrag=number_format(study.start_term.fee, 2), frist=f'{study.fee_due:%d.%m.%Y}')

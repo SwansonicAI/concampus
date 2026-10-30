@@ -461,3 +461,12 @@ class AccessibilityTest(Seeded):
         self.assertIn('Wir antworten bis zum', flashes(r)[0])
         self.assertEqual(mail.outbox[0].to, [Institution.get().email])
         self.assertContains(self.login('campus').get('/'), 'Barrierefreiheit: 1 Rückmeldung beantworten')
+
+
+class AccountTest(Seeded):
+    def test_an_applicant_changes_the_address_once_confirmed_from_it(self):
+        jonas = Person.objects.get(username='bewerbung')
+        self.login('bewerbung').post('/konto/', {'neue_adresse': '1', 'email': 'jonas.neu@example.org'})
+        self.assertEqual((Person.objects.get(pk=jonas.pk).email, mail.outbox[-1].to), (jonas.email, ['jonas.neu@example.org']))  # not before confirming
+        Client().get(re.search(r'/konto/adresse/\S+/', mail.outbox[-1].body)[0])
+        self.assertEqual(Person.objects.get(pk=jonas.pk).email, 'jonas.neu@example.org')
