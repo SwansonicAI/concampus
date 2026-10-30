@@ -7,7 +7,20 @@ from django.http import QueryDict
 from django.shortcuts import redirect
 
 from .backends import TRIES, held
-from .models import Feedback, Person
+from .models import Feedback, Message, Person
+
+
+class ComposeForm(forms.Form):
+    subject = forms.CharField(label='Betreff', max_length=200)
+    body = forms.CharField(label='Text', widget=forms.Textarea, help_text='{vorname} und {nachname} werden für jede Person eingesetzt.')
+
+    def send(self, people, sender, link=''):
+        """The message to each person, by name, into their Postfach and by e-mail."""
+        for person in people:
+            subject, body = self.cleaned_data['subject'], self.cleaned_data['body']
+            for placeholder, value in {'{vorname}': person.first_name, '{nachname}': person.last_name}.items():
+                subject, body = subject.replace(placeholder, value), body.replace(placeholder, value)
+            Message.send(person, subject, body, link, sender=sender)
 
 
 def frequent(field, choices, n=8):

@@ -5,7 +5,7 @@
   <table>
     <thead>
       <tr>
-        <th>#</th>
+        <th>{% if panel %}#{% else %}<input type="checkbox" form="auswahl" aria-label="Alle ankreuzen" onchange="this.closest('table').querySelectorAll('[name=study]').forEach(box => box.checked = this.checked)">{% endif %}</th>
         <th>Name</th>
         {% if panel %}
         {% if timed %}<th>Termin</th>{% endif %}
@@ -26,8 +26,8 @@
     <tbody>
       {% for p in rows %}
       <tr class="{% if p.waiting %}wait{% endif %}">
-        <td class="mid muted">{{ forloop.counter }}</td>
-        <td class="mid">{% if p.study_id in reachable %}<a href="{{ p.study.get_absolute_url }}">{{ p.study.person.name }}</a>{% else %}{{ p.study.person.name }}{% endif %}<br><small class="muted">{{ p.study.subject }} · {{ p.study.program.degree }}{% if p.waiting %} · <b>Warteliste</b>{% endif %}{% if p.attempt > 1 %} · <b>{{ p.attempt }}. Versuch{% if p.last %}, letzter{% endif %}</b>{% elif p.attempt %} · 1. Versuch{% endif %}{% if p.study.compensation %} · <b title="Nachteilsausgleich">NTA: {{ p.study.compensation }}</b>{% endif %}{% if dropping and p.mean is None and p.grade is None %} · <button class="link" form="austragen" name="participation" value="{{ p.pk }}" data-confirm="Austragen?">austragen</button>{% endif %}{% if review %} · <a href="{% url 'admissions:review' course.pk %}?bewerbung={{ p.pk }}">Video</a>{% endif %}</small>{% if p.error %}<br><small class="fail">{{ p.error }}</small>{% endif %}</td>
+        <td class="mid muted">{% if panel %}{{ forloop.counter }}{% else %}<input type="checkbox" form="auswahl" name="study" value="{{ p.study_id }}" aria-label="{{ p.study.person.name }}">{% endif %}</td>
+        <td class="mid">{% if p.study_id in reachable %}<a href="{{ p.study.get_absolute_url }}">{{ p.study.person.name }}</a>{% else %}{{ p.study.person.name }}{% endif %}<br><small class="muted">{{ p.study.subject }} · {{ p.study.program.degree }}{% if p.waiting %} · <b>Warteliste, Platz {{ p.waiting }}</b>{% endif %}{% if p.attempt > 1 %} · <b>{{ p.attempt }}. Versuch{% if p.last %}, letzter{% endif %}</b>{% elif p.attempt %} · 1. Versuch{% endif %}{% if p.study.compensation %} · <b title="Nachteilsausgleich">NTA: {{ p.study.compensation }}</b>{% endif %}{% if dropping and panel and p.mean is None and p.grade is None %} · <button class="link" form="austragen" name="participation" value="{{ p.pk }}" data-confirm="{{ p.study.person.name }} austragen? Die Person erhält eine Nachricht.">austragen</button>{% endif %}{% if review %} · <a href="{% url 'admissions:review' course.pk %}?bewerbung={{ p.pk }}">Video</a>{% endif %}</small>{% if p.error %}<br><small class="fail">{{ p.error }}</small>{% endif %}</td>
         {% if panel %}
         {% if timed %}<td class="mid" data-value="{{ p.slot|date:'c' }}">{{ p.slot|date:"j.n. H:i"|default:"–" }}</td>{% endif %}
         {% if noted %}<td class="mid"><small>{{ p.note|programme|linebreaksbr }}</small></td>{% endif %}

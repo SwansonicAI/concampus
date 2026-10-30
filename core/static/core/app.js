@@ -423,6 +423,18 @@ document.addEventListener('change', ({target}) => {
   if (!Number.isNaN(value)) passed.value = ('points' in sheet.dataset ? value >= mark : value <= mark) ? '1' : '0';
 });
 
+// A button for the rows ticked in a list (data-ticked="Nachricht an {n} Angekreuzte") says how many it reaches;
+// with none ticked, its own words.
+document.addEventListener('change', ({target}) => {
+  const form = target.form;
+  if (!form?.id) return;
+  const n = document.querySelectorAll(`[form="${form.id}"][name=study]:checked`).length;
+  for (const button of document.querySelectorAll(`button[form="${form.id}"][data-ticked]`)) {
+    button.dataset.plain ??= button.textContent;
+    button.textContent = n ? button.dataset.ticked.replace('{n}', n) : button.dataset.plain;
+  }
+});
+
 // A box that ticks a group (data-all="2") ticks every box of that group (data-part="2"); without a value, every box.
 document.addEventListener('change', ({target}) => {
   if (!target.matches('[data-all]')) return;

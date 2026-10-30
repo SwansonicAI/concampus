@@ -1,4 +1,4 @@
-<form method="post" action="{% url 'courses:add' course.pk %}" class="inline" style="margin-top: 20px">
+<form method="post" action="{% url 'courses:add' course.pk %}" class="inline" style="margin-bottom: 20px">
   {% csrf_token %}
   {% for field in adding %}<label>{{ field.label }}{{ field }}</label>{% endfor %}
   <button class="btn ghost">Eintragen</button>

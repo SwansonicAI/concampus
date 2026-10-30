@@ -196,6 +196,13 @@ class Course(Tracked, models.Model):
         """Registration has yet to open."""
         return self.opens is not None and timezone.localdate() < self.opens
 
+    def waitlist(self):
+        """The participations past the places, in the order they registered, where places go by that order; elsewhere
+        the teachers choose or assign, and nobody waits."""
+        if self.allocation != self.Allocation.ORDER or self.capacity is None:
+            return []
+        return list(self.participations.order_by('created', 'pk').values_list('pk', flat=True)[self.capacity:])
+
     @property
     def withdraw_by(self):
         """The last day to withdraw from an exam: some weeks before the term's Prüfungszeitraum, else the Anmeldeschluss."""

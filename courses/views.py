@@ -1,3 +1,4 @@
+import csv
 import re
 import uuid
 from collections import Counter, defaultdict
@@ -9,6 +10,7 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Count, Exists, F, Max, Min, OuterRef, Prefetch, Q, Subquery
+from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -21,8 +23,8 @@ from core import history, texts
 from core.access import CODENAMES, kept, require
 from core.apps import plural
 from core.dates import day as understood
-from core.forms import again, sent
-from core.models import Holiday, Institute, Institution, Office, Person, Term
+from core.forms import ComposeForm, again, sent
+from core.models import Export, Holiday, Institute, Institution, Office, Person, Term
 from core.text import fold, matching
 from core.views import without_term
 from curriculum.models import Module, Program
@@ -86,9 +88,32 @@ def teaches(person, course):
 
 
 def ahead():
-    """Subquery: participations of the same course registered earlier (waitlist position)."""
-    earlier = Participation.objects.filter(course=OuterRef('course'), created__lt=OuterRef('created'))
+    """Subquery: participations of the same course registered earlier, or at the same moment and entered earlier."""
+    earlier = Participation.objects.filter(Q(created__lt=OuterRef('created')) | Q(created=OuterRef('created'), pk__lt=OuterRef('pk')), course=OuterRef('course'))
     return Subquery(earlier.values('course').annotate(n=Count('pk')).values('n')[:1])
+
+
+def queued(participation):
+    """Where a participation annotated with ahead() stands on its course's waitlist, from 1; None with a place."""
+    course, before = participation.course, participation.ahead or 0
+    if course.allocation == Course.Allocation.ORDER and course.capacity is not None and before >= course.capacity:
+        return before - course.capacity + 1
+    return None
+
+
+def admit(course, before):
+    """Tell who has moved up from the waitlist, `before` being Course.waitlist() then, that they have a place."""
+    for p in course.participations.filter(pk__in=set(before) - set(course.waitlist())).select_related('study__person'):
+        texts.send('nachgerueckt', p.study.person, course.get_absolute_url(), veranstaltung=course.title, semester=course.term)
+
+
+def seen(course, person, rows):
+    """The participations of a course its teacher sees: a coach of an ensemble course, not its office, those of their own
+    ensembles' members."""
+    if course.allocation != Course.Allocation.ENSEMBLE or person.may('manage_courses', course):
+        return rows
+    coached = set(Study.objects.filter(ensembles__course=course, ensembles__coach=person).values_list('pk', flat=True))
+    return [p for p in rows if p.study_id in coached]
 
 
 def index(request):
@@ -136,7 +161,8 @@ def catalogue(request):
     done = request.GET.get('bestandene') == '1'
     if studies and not done:  # a student sees what is still to pass first; the passed on asking
         courses = courses.exclude(counting=True, owed=False)
-    mine = set(Participation.objects.filter(study__in=studies, course__term=term).values_list('course', flat=True))
+    mine = {p.course_id: queued(p) or 0 for p in Participation.objects.filter(study__in=studies, course__term=term).select_related('course').annotate(ahead=ahead())}
+    asked = set(Signup.objects.filter(study__in=studies, course__term=term).values_list('course', flat=True))
     return render(request, 'courses/catalogue.html', {
         'term': term,
         'terms': Term.shown(person).filter(courses__kind__in=TEACHING).distinct().order_by('-start').filter(**since(request.user)), 'open': open_,
@@ -149,7 +175,7 @@ def catalogue(request):
         'form': form,
         'q': q,
         'office': 'manage_courses' in person.roles,
-        'scoped': scoped, 'reach': reach, 'student': studies.exists(), 'done': done, 'mine': mine,
+        'scoped': scoped, 'reach': reach, 'student': studies.exists(), 'done': done, 'mine': mine, 'asked': asked,
     })
 
 
@@ -174,10 +200,7 @@ def course(request, pk):
 
     def sheet():  # a coach of an ensemble course sees and grades the members of their own ensembles
         staff, rows = panel.sheet(course)
-        if course.allocation == Course.Allocation.ENSEMBLE and staffed and not office:
-            coached = set(Study.objects.filter(ensembles__course=course, ensembles__coach=person).values_list('pk', flat=True))
-            rows = [p for p in rows if p.study_id in coached]
-        return staff, rows
+        return staff, seen(course, person, rows) if staffed else rows
 
     staff, rows = sheet()
     refused = None
@@ -205,13 +228,16 @@ def course(request, pk):
             messages.success(request, 'Ergebnisse gespeichert.')
             return redirect(course)
     rows.sort(key=lambda p: (p.created, p.pk))
-    for n, p in enumerate(rows):
-        p.waiting = course.capacity is not None and n >= course.capacity
+    waitlist = course.waitlist()
+    for p in rows:
+        p.waiting = waitlist.index(p.pk) + 1 if p.pk in waitlist else None
     if refused:
         panel.retype(rows, request.POST, refused)
     own = [p for p in rows if p.study.person_id == person.pk]
     counting = list(person.studies.filter(status=Study.Status.ENROLLED, program__modules__courses=course).distinct())
-    eligible = [s for s in counting if owed_module(course, s)]  # a module of it still to pass
+    for s in counting:
+        s.owed = owed_module(course, s)
+    eligible = [s for s in counting if s.owed]  # a module of it still to pass
     upcoming = course.bookings.filter(start__gte=timezone.now())
     if course.allocation == Course.Allocation.ENSEMBLE and staffed and not person.may('manage_courses', course):  # a coach: the course's own dates and their ensembles'
         upcoming = upcoming.filter(Q(ensemble=None) | Q(ensemble__coach=person))
@@ -247,7 +273,9 @@ def course(request, pk):
         'own': own,
         'wished': course.signups.filter(study__person=person).first(),
         'signups': course.signups.select_related('study__person', 'study__program', 'study__subject') if staffed else [],
-        'count': len(rows),
+        'count': len(rows), 'placed': len(rows) - len(waitlist), 'waitlist': waitlist,
+        'free': course.capacity - len(rows) + len(waitlist) if course.capacity is not None else None,
+        'dropping': staffed and course.kind == Course.Kind.COURSE and course.allocation != Course.Allocation.ENSEMBLE,
         'staffed': staffed,
         'eligible': eligible, 'completed': counting and not eligible and not own,
         'unmarked': sum(1 for p in rows if p.passed is None and not p.remark) if staffed and course.kind == Course.Kind.COURSE and over(course) and not course.modules.filter(exam=True).exists() else 0,
@@ -292,10 +320,12 @@ def edit(request, pk=None):
         raise PermissionDenied(f'Das {course.term} ist vorbei. Korrekturen trägt {Office.holding("manage_courses") or "das zuständige Amt"} ein, mit Grund.')
     planning = person.may('plan_teaching', course) if pk else 'plan_teaching' in person.roles
     form = CourseForm(request.POST or None, instance=course, initial=initial, person=person, planning=planning, over=over) if office else TeachingForm(request.POST or None, instance=course, person=person)
+    before = course.waitlist() if pk else []  # before the form changes the places
     if form.is_valid():
         with history.because(form.cleaned_data.get('correction', '')):
             saved = kept(form, person, 'manage_courses') if office else form.save()
         if saved:
+            admit(saved, before)
             messages.success(request, 'Gespeichert. Jetzt Termine planen und Teilnehmende eintragen.' if not pk else 'Gespeichert.')
             return redirect(saved)
     back = course.get_absolute_url() if pk else reverse('courses:catalogue')
@@ -344,15 +374,67 @@ def add(request, pk):
 
 @require_POST
 def drop(request, pk):
-    """Take someone out of an exam the office entered them in by mistake, while no mark is given; the Verlauf keeps it."""
-    course = get_object_or_404(Course, pk=pk, kind=Course.Kind.EXAM, released=None)
-    if not request.user.may('manage_exams', course):
+    """Take someone out while no mark is given: of an exam the office entered them in by mistake, of a course its
+    teachers, say someone who never came. They hear of it, the waitlist moves up, the Verlauf keeps it."""
+    course = get_object_or_404(Course.objects.exclude(allocation=Course.Allocation.ENSEMBLE), pk=pk, kind__in=[Course.Kind.EXAM, Course.Kind.COURSE], released=None)
+    exam = course.kind == Course.Kind.EXAM
+    if not (request.user.may('manage_exams', course) if exam else teaches(request.user, course)):
         raise PermissionDenied
-    participation = get_object_or_404(course.participations.select_related('study__person'), pk=request.POST.get('participation'), scores=None, grade=None)
-    participation.delete()
-    texts.send('ausgetragen', participation.study.person, reverse('exams:index'), veranstaltung=course.title, semester=course.term)
-    messages.success(request, f'{participation.study.person} ausgetragen.')
+    rows = course.participations.select_related('study__person').filter(scores=None, grade=None)
+    if exam:
+        chosen = [get_object_or_404(rows, pk=request.POST.get('participation'))]
+    else:
+        chosen = [p for p in seen(course, request.user, list(rows.filter(passed=None, study__in=request.POST.getlist('study'))))]
+        if not chosen:
+            messages.error(request, 'Niemand ausgetragen. Bitte ankreuzen, wen; wer ein Ergebnis hat, bleibt.')
+            return redirect(course)
+    before = course.waitlist()
+    for participation in chosen:
+        participation.delete()
+        texts.send('ausgetragen', participation.study.person, reverse('exams:index') if exam else course.get_absolute_url(), veranstaltung=course.title, semester=course.term)
+    admit(course, before)
+    messages.success(request, f'{", ".join(str(p.study.person) for p in chosen)} ausgetragen.')
     return redirect(course)
+
+
+def roster(request, pk):
+    """A course's participants as CSV, to print or keep, as its teachers see them."""
+    course = get_object_or_404(Course.objects.select_related('term'), pk=pk, kind__in=TEACHING)
+    if not teaches(request.user, course):
+        raise PermissionDenied
+    rows = seen(course, request.user, list(course.participations.select_related('study__person', 'study__program', 'study__subject', 'module').annotate(ahead=ahead())))
+    response = HttpResponse(content_type='text/csv; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="teilnehmende-{course.pk}.csv"'
+    response.write('\ufeff')
+    writer = csv.writer(response, delimiter=';')
+    writer.writerow(['Matrikelnummer', 'Nachname', 'Vorname', 'Studiengang', 'Hauptfach', 'Modul', 'Angemeldet', 'Warteliste', 'Note', 'Bestanden'])
+    Export.log(request.user, f'Teilnehmende {course.title}, {course.term}', len(rows))
+    for p in sorted(rows, key=lambda p: (p.study.person.last_name, p.study.person.first_name)):
+        writer.writerow([
+            p.study.person.matriculation, p.study.person.last_name, p.study.person.first_name, p.study.program.title, p.study.subject,
+            p.module.code if p.module else '', f'{timezone.localtime(p.created):%d.%m.%Y %H:%M}', queued(p) or '',
+            str(p.grade if p.grade is not None else '').replace('.', ','), {True: 'ja', False: 'nein'}.get(p.passed, ''),
+        ])
+    return response
+
+
+def write(request, pk):
+    """A message from a course's teachers to its participants, the waitlist included: the ticked, else all."""
+    course = get_object_or_404(Course.objects.select_related('term'), pk=pk, kind__in=TEACHING)
+    if not teaches(request.user, course):
+        raise PermissionDenied
+    chosen = set(request.POST.getlist('study'))
+    rows = seen(course, request.user, list(course.participations.select_related('study__person')))
+    studies = list({p.study_id: p.study for p in rows if not chosen or str(p.study_id) in chosen}.values())
+    people = sorted({s.person for s in studies}, key=lambda p: p.name)
+    form = ComposeForm(request.POST if 'subject' in request.POST else None)
+    if people and form.is_valid():
+        form.send(people, str(request.user), course.get_absolute_url())
+        messages.success(request, f'Nachricht an {plural(len(people), "Person", "Personen")} gesendet.')
+        return redirect(course)
+    return render(request, 'students/compose.html', {
+        'form': form, 'people': people, 'studies': studies, 'back': course.get_absolute_url(), 'sender': request.user, 'course': course, 'menu': 'courses/_nav.html',
+    })
 
 
 @require_POST
@@ -382,9 +464,8 @@ def register(request, pk):
         messages.success(request, f'{"Nachmeldung angefragt" if late else "Angefragt"}. Die Lehrenden entscheiden; die Antwort kommt in Ihr Postfach.{besides}')
     else:
         participation, _ = Participation.objects.get_or_create(course=course, study=study, module=module)
-        place = course.participations.filter(created__lt=participation.created).count() + 1
-        if course.capacity and place > course.capacity:
-            messages.success(request, f'Sie stehen auf Platz {place - course.capacity} der Warteliste.{besides}')
+        if participation.pk in (waitlist := course.waitlist()):
+            messages.success(request, f'Sie stehen auf Platz {waitlist.index(participation.pk) + 1} der Warteliste. Wird ein Platz frei, rücken Sie nach und erhalten eine Nachricht.{besides}')
         else:
             messages.success(request, f'Sie sind angemeldet.{besides}')
     return redirect(course)
@@ -552,12 +633,18 @@ def choose(request, pk):
     return redirect(course)
 
 
+def back(request, course):
+    """Where a form that came with `next` leads back to, else the course."""
+    to = request.POST.get('next', '')
+    return redirect(to if url_has_allowed_host_and_scheme(to, {request.get_host()}) else course.get_absolute_url())
+
+
 @require_POST
 def retract(request, pk):
     signup = get_object_or_404(Signup, pk=pk, study__person=request.user)
     signup.delete()
     messages.success(request, 'Anfrage zurückgezogen.')
-    return redirect(signup.course)
+    return back(request, signup.course)
 
 
 @require_POST
@@ -594,15 +681,17 @@ def date(request, pk):
 
 @require_POST
 def withdraw(request, pk):
-    participation = get_object_or_404(Participation, pk=pk, study__person=request.user, course__kind__in=TEACHING)
+    participation = get_object_or_404(Participation.objects.select_related('course__term'), pk=pk, study__person=request.user, course__kind__in=TEACHING, passed=None)
     if participation.course.leavable:
+        before = participation.course.waitlist()
         participation.delete()
+        admit(participation.course, before)
         messages.success(request, 'Sie sind abgemeldet.')
     elif participation.course.is_open:
         messages.error(request, 'Abmelden geht hier über die Lehrenden.')
     else:
         messages.error(request, 'Der Abmeldeschluss ist vorbei.')
-    return redirect(participation.course)
+    return back(request, participation.course)
 
 
 @require_POST
@@ -721,7 +810,7 @@ def mine(request):
     if 'teacher' in person.roles:
         teaching = person.teaching.filter(term=term, kind__in=TEACHING)
         taught_here = list(teaching.annotate(
-            size=Count('participations', distinct=True), mine=Count('ensembles__members', filter=Q(ensembles__coach=person), distinct=True),
+            size=Count('participations', distinct=True), asked=Count('signups', distinct=True), mine=Count('ensembles__members', filter=Q(ensembles__coach=person), distinct=True),
             coached=Count('ensembles', filter=Q(ensembles__coach=person), distinct=True),
         ).select_related('subject', 'format', 'term').prefetch_related('participations__module', 'origin__participations__module'))
         for c in taught_here:  # as the Deputat counts it: a lesson class by its students' minutes
@@ -741,7 +830,7 @@ def mine(request):
         for b in agenda(person).filter(course__term=term, start__gte=timezone.now()).select_related('room').order_by('start'):
             coming.setdefault(b.course_id, b)
         for p in registrations:
-            p.next = coming.get(p.course_id)
+            p.next, p.queue = coming.get(p.course_id), queued(p)
         context['registrations'] = registrations
         context['requests'] = Signup.objects.filter(study__person=person, course__term=term).select_related('course', 'module')  # the teachers still decide
     return render(request, 'courses/mine.html', context)
@@ -1180,8 +1269,7 @@ def reply(request, pk):
         course.cancelled, course.cancel_reason = (timezone.now(), reason) if answer == 'entfaellt' else (None, '')
         course.save(update_fields=['confirmed', 'cancelled', 'cancel_reason'])
         messages.success(request, {'findet': f'{course.title}: findet so statt.', 'entfaellt': f'{course.title}: entfällt.'}.get(answer, f'{course.title}: Antwort zurückgenommen.'))
-    back = request.POST.get('next', '')
-    return redirect(back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else course.get_absolute_url())
+    return back(request, course)
 
 
 @require_POST

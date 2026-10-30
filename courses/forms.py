@@ -370,5 +370,5 @@ class EnsembleForm(forms.Form):
 class AddForm(forms.Form):
     who = forms.CharField(
         label='Teilnehmende eintragen', max_length=120,
-        widget=forms.TextInput(attrs={'list': 'enrolled', 'placeholder': 'Name oder Matrikelnummer', 'autocomplete': 'off'}),
+        widget=forms.TextInput(attrs={'list': 'enrolled', 'placeholder': 'Name oder Matrikelnummer', 'autocomplete': 'off', 'size': 32}),
     )

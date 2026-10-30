@@ -4,7 +4,7 @@ from django.db.models import Count
 from django.test import Client
 from django.utils import timezone
 
-from core.models import Holiday, Person, Term
+from core.models import Holiday, Message, Person, Term
 from curriculum.models import Program
 from rooms.models import Room
 from core.testing import Seeded, flashes
@@ -51,6 +51,30 @@ class PlacesTest(Seeded):
         lesson = Course.objects.filter(term__name='WiSe 2026/27', allocation='staff', modules__program=study.program).exclude(participations__study=study).first()
         r = self.login('student').post(f'/lehre/{lesson.pk}/anmelden/', {'study': study.pk}, follow=True)
         self.assertEqual(flashes(r), ['Die Lehrenden teilen die Plätze ein.'])
+
+
+class WaitlistTest(Seeded):
+    def test_the_waitlist_moves_up_and_teachers_write_to_their_participants(self):
+        course = Course.objects.filter(term__name='WiSe 2026/27', kind='course', allocation='order').annotate(n=Count('participations')).filter(n__gte=4).first()
+        rows = list(course.participations.order_by('created', 'pk').select_related('study__person'))
+        course.capacity, course.deadline = len(rows) - 2, timezone.localdate() + timedelta(days=7)
+        course.save()
+        self.assertEqual(course.waitlist(), [p.pk for p in rows[-2:]])
+
+        def moved(p):
+            return Message.objects.filter(person=p.study.person, subject=f'Platz frei: {course.title}').exists()
+
+        student = Client()
+        student.force_login(rows[0].study.person)
+        student.post(f'/lehre/teilnahme/{rows[0].pk}/abmelden/')
+        self.assertEqual((moved(rows[-2]), moved(rows[-1])), (True, False))
+        teacher = Client()
+        teacher.force_login(course.staff.first())
+        teacher.post(f'/lehre/{course.pk}/austragen/', {'study': [rows[1].study_id]})
+        self.assertEqual((course.participations.filter(pk=rows[1].pk).exists(), moved(rows[-1]), course.waitlist()), (False, True, []))
+        teacher.post(f'/lehre/{course.pk}/nachricht/', {'study': [rows[2].study_id], 'subject': 'Raum', 'body': 'Hallo {vorname}'})
+        self.assertEqual(list(Message.objects.filter(subject='Raum').values_list('person', 'body')), [(rows[2].study.person_id, f'Hallo {rows[2].study.person.first_name}')])
+        self.assertEqual(self.login('student').get(f'/lehre/{course.pk}/nachricht/').status_code, 403)
 
 
 class EnsembleTest(Seeded):

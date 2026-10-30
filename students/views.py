@@ -25,9 +25,10 @@ from lxml.etree import DocumentInvalid
 from core import dates, texts
 from core.access import CODENAMES, require
 from core.dossier import dossier
+from core.forms import ComposeForm
 from core.history import tables
 from core.apps import plural
-from core.models import Consent, Export, Institution, Message, Office, Person, Term
+from core.models import Consent, Export, Institution, Office, Person, Term
 from core.text import fold, handle, matching
 from core.views import SHOWN, preview, without_term
 from courses.models import Participation
@@ -74,11 +75,6 @@ class PaymentForm(forms.Form):
     paid = dates.ReceivedField(label='Eingegangen am')
     amount = forms.DecimalField(label='Betrag', min_value=0, decimal_places=2, localize=True)
     reference = forms.CharField(label='Beleg oder Verwendungszweck', max_length=140)
-
-
-class ComposeForm(forms.Form):
-    subject = forms.CharField(label='Betreff', max_length=200)
-    body = forms.CharField(label='Text', widget=forms.Textarea, help_text='{vorname} und {nachname} werden für jede Person eingesetzt.')
 
 
 def own(person):
@@ -246,12 +242,7 @@ def compose(request):
     form = ComposeForm(request.POST or None)
     sender = ', '.join(Office.objects.filter(user=request.user, permissions__codename='message_students').values_list('name', flat=True)) or str(request.user)
     if people and form.is_valid():
-        for person in people:
-            named = {'{vorname}': person.first_name, '{nachname}': person.last_name}
-            subject, body = form.cleaned_data['subject'], form.cleaned_data['body']
-            for placeholder, value in named.items():
-                subject, body = subject.replace(placeholder, value), body.replace(placeholder, value)
-            Message.send(person, subject, body, sender=sender)
+        form.send(people, sender)
         messages.success(request, f'Nachricht an {plural(len(people), "Person", "Personen")} gesendet.')
         return redirect(back or 'students:list')
     return render(request, 'students/compose.html', {'form': form, 'people': people, 'studies': studies, 'back': back, 'sender': sender})

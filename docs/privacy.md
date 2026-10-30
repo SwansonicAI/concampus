@@ -38,6 +38,7 @@ not mean seeing every field on it.
 | The person | own account | all | all |
 | Hauptfachlehrer:in | `Study.teacher` | 1, 2 of their class | – |
 | Examiner | staff of an exam | names, programme and results of that exam | – |
+| Teacher of a course | staff of a course | of its participants and requests: name, Hauptfach, Studiengang, module, result, a request's Fachsemester and note; the list with Matrikelnummer as CSV | – |
 | Jury | staff of an audition | – | name, Studiengang, Hauptfach, Wunschlehrer:in, Prüfungsprogramm, documents marked for the jury |
 | Institut office | `view_students`, `view_files`, `view_applications`, `run_auditions` | 1, 2 | all |
 | Prüfungsamt | `decide_results`, `view_students` for the list | 1, 2, 3 | – |
@@ -181,8 +182,11 @@ deleted a year after it was answered.
   document types marked for it. `document()`: who may open a file.
 - `core/views.py`, `people()`: birth dates in search results only for `manage_students`, `decide_results`,
   `view_applications`. `letter()`: filed Bescheide for `manage_students` and `decide_results`.
+- `courses/views.py`, `roster()`, `write()`: a course's teachers take its participants' list as CSV, and write to the
+  participants, all or the ticked, through ConCampus: into each Postfach and to the address there, which the teacher
+  does not see. A coach of an ensemble course reaches the members of their own ensembles only (`seen()`).
 - `students/views.py`, `roster()`: gender and nationality in the export only for `manage_students`. Every file with
-  personal data that leaves (student list, Notenliste, amtliche Statistik) is logged with who, when, what and how many
+  personal data that leaves (student list, Notenliste, Teilnehmendenliste, amtliche Statistik) is logged with who, when, what and how many
   rows (`core.models.Export`), shown to `manage_accounts` under Einstellungen › Exporte, and kept two years. So is the
   complete copy for a change of provider (`manage.py transfer --everything`, `docs/transfer.md`), run on the server only.
 - `students/views.py`, `study()`: grades, Gesamtnote and Leistungsübersicht for the person, `view_files` and the

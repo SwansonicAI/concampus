@@ -21,13 +21,75 @@
   </div>
 </form>
 {% endif %}
+{% if completed %}<p class="muted">Die Module dieser Veranstaltung haben Sie bereits bestanden.</p>{% endif %}
+{% if eligible or own or wished %}
+<div class="panel" style="margin-bottom: 32px">
+  <h3>Meine Anmeldung</h3>
+  {% if wished %}
+  <form method="post" action="{% url 'courses:retract' wished.pk %}" class="actions">
+    {% csrf_token %}
+    <span><span class="badge wait">angefragt</span> am {{ wished.created|date:"j. F Y" }}. Die Lehrenden entscheiden; die Antwort kommt in Ihr Postfach.</span>
+    <button class="btn ghost small">Zurückziehen</button>
+  </form>
+  {% endif %}
+  {% for p in own %}
+  <form method="post" action="{% url 'courses:withdraw' p.pk %}" class="actions">
+    {% csrf_token %}
+    <span>{% if p.passed %}<span class="badge yes">bestanden{% if p.grade %} ({{ p.grade|floatformat:1 }}){% endif %}</span>{% elif p.waiting %}<span class="badge wait">Warteliste, Platz {{ p.waiting }}</span>{% else %}<span class="badge open">angemeldet</span>{% endif %} seit {{ p.created|date:"j. F Y" }}{% if p.module %}, für {{ p.module.code }} {{ p.module.title }}{% endif %}</span>
+    {% if course.leavable and p.passed is None %}<button class="btn ghost small" data-confirm="Wirklich abmelden?">Abmelden</button>{% elif course.allocation == 'staff' or course.allocation == 'ensemble' %}<small class="muted">Abmelden über die Lehrenden</small>{% endif %}
+  </form>
+  {% if p.waiting %}<p class="muted" style="margin: 8px 0 0"><small>Wird ein Platz frei, rücken Sie nach und erhalten eine Nachricht.{% if course.leavable and course.deadline %} Abmelden bis {{ course.deadline|date:"j. F" }}.{% endif %}</small></p>
+  {% elif course.leavable and course.deadline and p.passed is None %}<p class="muted" style="margin: 8px 0 0"><small>Abmelden bis {{ course.deadline|date:"j. F" }}.</small></p>{% endif %}
+  {% empty %}
+  {% if wished %}
+  {% elif course.allocation == 'staff' %}<p class="muted" style="margin: 0">Die Lehrenden teilen die Plätze ein; Sie müssen sich nicht anmelden.</p>
+  {% elif course.allocation == 'ensemble' and course.is_open %}
+  <form method="post" action="{% url 'courses:ensemble' course.pk %}" class="form">
+    {% csrf_token %}
+    <div><label>Mein Studium<select name="study">{% for s in eligible %}<option value="{{ s.pk }}">{{ s.subject }} · {{ s.program }}</option>{% endfor %}</select></label></div>
+    {{ grouping }}
+    <div class="actions"><button class="btn">Ensemble anmelden</button></div>
+  </form>
+  {% elif course.is_open %}
+  <form method="post" action="{% url 'courses:register' course.pk %}">
+    {% csrf_token %}
+    <p class="muted" style="margin: 0 0 12px"><small>
+      {% if eligible|length == 1 %}Zählt für {{ eligible.0.owed.code }} {{ eligible.0.owed.title }}.{{ counts_for }}<br>{% endif %}
+      {% if course.allocation == 'choice' %}Die Lehrenden wählen aus den Anfragen{% if course.capacity %}, {{ course.capacity }} Plätze{% endif %}; die Antwort kommt in Ihr Postfach.
+      {% elif free is None %}Ohne Platzgrenze.
+      {% elif free > 0 %}Noch {{ free }} von {{ course.capacity }} Plätzen frei, vergeben in der Reihenfolge der Anmeldung.
+      {% else %}<b>Ausgebucht.</b> Sie kämen auf Platz {{ waitlist|length|add:1 }} der Warteliste und rücken nach, sobald ein Platz frei wird.{% endif %}
+      {% if course.deadline %}{% if course.allocation == 'choice' %}Anfragen{% else %}An- und abmelden{% endif %} bis {{ course.deadline|date:"j. F" }}.{% endif %}
+    </small></p>
+    {% if clashing %}<p class="fail" style="margin: 0 0 12px"><small>Überschneidet sich mit Ihrem Stundenplan: {% for b in clashing %}{{ b.start|date:"D j.n., H:i" }}{% if not forloop.last %}, {% endif %}{% endfor %}.</small></p>{% endif %}
+    <div class="inline">
+      {% if eligible|length > 1 %}<select name="study" aria-label="Für welches Studium">{% for s in eligible %}<option value="{{ s.pk }}">{{ s.subject }} · {{ s.program }}: {{ s.owed.code }}</option>{% endfor %}</select>
+      {% else %}<input type="hidden" name="study" value="{{ eligible.0.pk }}">{% endif %}
+      {% if course.allocation == 'choice' %}<input name="note" size="40" placeholder="Nachricht an die Lehrenden (freiwillig)" aria-label="Nachricht an die Lehrenden">{% endif %}
+      <button class="btn">{% if course.allocation == 'choice' %}Platz anfragen{% elif free is not None and free <= 0 %}Auf die Warteliste{% else %}Anmelden{% endif %}</button>
+    </div>
+  </form>
+  {% elif course.upcoming %}<p class="muted" style="margin: 0">Anmeldung ab {{ course.opens|date:"j. F Y" }}.</p>
+  {% elif running and eligible %}
+  <p class="muted" style="margin: 0 0 12px"><small>Der Anmeldeschluss war am {{ course.deadline|date:"j. F" }}. Die Lehrenden können Sie noch aufnehmen; die Antwort kommt in Ihr Postfach.</small></p>
+  <form method="post" action="{% url 'courses:register' course.pk %}" class="inline">
+    {% csrf_token %}
+    {% if eligible|length > 1 %}<select name="study" aria-label="Für welches Studium">{% for s in eligible %}<option value="{{ s.pk }}">{{ s.subject }} · {{ s.program }}: {{ s.owed.code }}</option>{% endfor %}</select>
+    {% else %}<input type="hidden" name="study" value="{{ eligible.0.pk }}">{% endif %}
+    <input name="note" size="40" placeholder="Nachricht an die Lehrenden (freiwillig)" aria-label="Nachricht an die Lehrenden">
+    <button class="btn ghost">Nachmeldung anfragen</button>
+  </form>
+  {% else %}<p class="muted" style="margin: 0">Anmeldeschluss vorbei.</p>{% endif %}
+  {% endfor %}
+</div>
+{% endif %}
 
 <div class="cols">
   <div>
     <dl class="facts">
       <dt>Lehrende</dt><dd>{% for s in staff %}{% if s.email %}<a href="mailto:{{ s.email }}">{{ s }}</a>{% else %}{{ s }}{% endif %}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
       <dt>Umfang</dt><dd>{% if lengths %}{% for sws, n in lengths %}{{ sws|mark }} SWS × {{ n }}{% if not forloop.last %}, {% endif %}{% endfor %}<br><small class="muted">je Teilnahme nach ihrem Studienplan</small>{% else %}{{ course.hours|default_if_none:"–" }} SWS{% endif %}</dd>
-      <dt>Teilnahmen</dt><dd>{{ count }}{% if course.capacity %} von {{ course.capacity }} Plätzen{% endif %}</dd>
+      <dt>Teilnahmen</dt><dd>{{ placed }}{% if course.capacity %} von {{ course.capacity }} Plätzen{% endif %}{% if waitlist %}, {{ waitlist|length }} auf der Warteliste{% endif %}</dd>
       <dt>Platzvergabe</dt><dd>{{ course.get_allocation_display|capfirst }}</dd>
       {% if course.allocation != 'staff' %}<dt>Anmeldung</dt><dd>{% if course.opens %}vom {{ course.opens|date:"j. F" }} {% endif %}{% if course.deadline %}bis {{ course.deadline|date:"j. F Y" }}{% elif not course.opens %}–{% endif %}</dd>{% endif %}
       <dt>Anrechenbar für</dt><dd>{% for title, programs in modules %}{{ title }}<br><small>{% for program, codes in programs %}<a href="{{ program.get_absolute_url }}">{{ program.title }}</a> <span class="muted">{{ codes|join:", " }}</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}</small><br>{% empty %}–{% endfor %}</dd>
@@ -49,6 +111,7 @@
       {% empty %}<tr><td class="empty">Noch keine Termine.</td></tr>{% endfor %}
     </table>
     {% if staffed and bookings %}<p class="muted"><small>Ein Datum anklicken, um den Termin abzusagen oder zu verlegen.</small></p>{% elif bookings and course.kind == 'lesson' %}<p class="muted"><small>Können Sie zu einem Termin nicht kommen, melden Sie sich ab; {{ staff.0|default:"die Lehrperson" }} erfährt es. Einen Grund müssen Sie nicht nennen.</small></p>{% endif %}
+    {% if bookings and plan or bookings and date %}<details class="tail" style="margin-top: 16px"{% if plan.is_bound or date.is_bound %} open{% endif %}><summary>Termine buchen</summary>{% endif %}
     {% if plan %}
     <form method="post" action="{% url 'courses:plan' course.pk %}" class="panel" style="margin-top: 24px">
       {% csrf_token %}
@@ -56,14 +119,6 @@
       <div class="inline">{% for field in plan %}<label>{{ field.label }}{{ field }}</label>{% endfor %}</div>
       <p class="muted" style="margin: 12px 0"><small>Bucht den Raum jede Woche {% if from > course.term.lectures_start %}ab heute{% else %}ab {{ from|date:"j.n." }}{% endif %} bis zum Ende der Unterrichtszeit am {{ course.term.lectures_end|date:"j.n.Y" }}, ohne die unterrichtsfreien Tage, nur wenn alle Termine frei sind.</small></p>
       <button class="btn">Termine buchen</button>
-    </form>
-    {% endif %}
-    {% if cancelling %}
-    <form method="post" action="{% url 'courses:cancel' course.pk %}" class="panel" style="margin-top: 24px">
-      {% csrf_token %}
-      <h3>Entfällt</h3>
-      <div class="inline"><label>Grund<input name="grund" required maxlength="200" placeholder="z. B. Erkrankung der Lehrperson"></label><button class="btn danger small" data-confirm="Absagen und alle {{ count }} benachrichtigen?">Absagen</button></div>
-      <p class="muted" style="margin: 12px 0 0"><small>Sagt die kommenden Termine ab, hebt Anmeldungen ohne Ergebnis und Anfragen auf und benachrichtigt alle mit dem Grund. Die Veranstaltung bleibt im Verzeichnis, als „entfällt“.</small></p>
     </form>
     {% endif %}
     {% if date %}
@@ -75,58 +130,17 @@
       <button class="btn ghost">Termin buchen</button>
     </form>
     {% endif %}
+    {% if bookings and plan or bookings and date %}</details>{% endif %}
+    {% if cancelling %}
+    <form method="post" action="{% url 'courses:cancel' course.pk %}" class="panel" style="margin-top: 24px">
+      {% csrf_token %}
+      <h3>Entfällt</h3>
+      <div class="inline"><label>Grund<input name="grund" required maxlength="200" placeholder="z. B. Erkrankung der Lehrperson"></label><button class="btn danger small" data-confirm="Absagen und alle {{ count }} benachrichtigen?">Absagen</button></div>
+      <p class="muted" style="margin: 12px 0 0"><small>Sagt die kommenden Termine ab, hebt Anmeldungen ohne Ergebnis und Anfragen auf und benachrichtigt alle mit dem Grund. Die Veranstaltung bleibt im Verzeichnis, als „entfällt“.</small></p>
+    </form>
+    {% endif %}
   </div>
 </div>
-
-{% if completed %}<p class="muted">Die Module dieser Veranstaltung haben Sie bereits bestanden.</p>{% endif %}
-{% if eligible or own or wished %}
-<section>
-  <h2>Meine Anmeldung</h2>
-  {% if wished %}
-  <form method="post" action="{% url 'courses:retract' wished.pk %}" class="actions">
-    {% csrf_token %}
-    <span>Angefragt am {{ wished.created|date:"j. F Y" }} · <span class="badge wait">Die Lehrenden entscheiden</span></span>
-    <button class="btn ghost small">Zurückziehen</button>
-  </form>
-  {% endif %}
-  {% for p in own %}
-  <form method="post" action="{% url 'courses:withdraw' p.pk %}" class="actions">
-    {% csrf_token %}
-    <span>Angemeldet seit {{ p.created|date:"j. F Y" }}{% if p.module %} für {{ p.module.code }}{% endif %}{% if p.waiting %} · <span class="badge wait">Warteliste</span>{% endif %}{% if p.passed %} · <span class="badge yes">bestanden{% if p.grade %} ({{ p.grade|floatformat:1 }}){% endif %}</span>{% endif %}</span>
-    {% if course.leavable %}<button class="btn ghost small" data-confirm="Wirklich abmelden?">Abmelden</button>{% elif course.allocation == 'staff' or course.allocation == 'ensemble' %}<small class="muted">Abmelden über die Lehrenden</small>{% endif %}
-  </form>
-  {% empty %}
-  {% if wished %}
-  {% elif course.allocation == 'staff' %}<p class="empty">Die Lehrenden teilen die Plätze ein.</p>
-  {% elif course.allocation == 'ensemble' and course.is_open %}
-  <form method="post" action="{% url 'courses:ensemble' course.pk %}" class="form">
-    {% csrf_token %}
-    <div><label>Mein Studium<select name="study">{% for s in eligible %}<option value="{{ s.pk }}">{{ s.subject }} · {{ s.program }}</option>{% endfor %}</select></label></div>
-    {{ grouping }}
-    <div class="actions"><button class="btn">Ensemble anmelden</button></div>
-  </form>
-  {% elif course.is_open %}
-  <form method="post" action="{% url 'courses:register' course.pk %}" class="actions">
-    {% csrf_token %}
-    {% if clashing %}<p class="fail"><small>Überschneidet sich mit Ihrem Stundenplan: {% for b in clashing %}{{ b.start|date:"D j.n., H:i" }}{% if not forloop.last %}, {% endif %}{% endfor %}.</small></p>{% endif %}
-    {% if counts_for %}<p class="muted"><small>{{ counts_for }}</small></p>{% endif %}
-    <select name="study" aria-label="Für welches Studium">{% for s in eligible %}<option value="{{ s.pk }}">{{ s.subject }} · {{ s.program }}</option>{% endfor %}</select>
-    {% if course.allocation == 'choice' %}<input name="note" placeholder="Nachricht an die Lehrenden (freiwillig)" aria-label="Nachricht an die Lehrenden">{% endif %}
-    <button class="btn">{% if course.allocation == 'choice' %}Platz anfragen{% else %}Anmelden{% endif %}</button>
-  </form>
-  {% elif course.upcoming %}<p class="empty">Anmeldung ab {{ course.opens|date:"j. F Y" }}.</p>
-  {% elif running and eligible %}
-  <p class="muted"><small>Der Anmeldeschluss war am {{ course.deadline|date:"j. F" }}. Die Lehrenden können Sie noch aufnehmen; die Antwort kommt in Ihr Postfach.</small></p>
-  <form method="post" action="{% url 'courses:register' course.pk %}" class="actions">
-    {% csrf_token %}
-    <select name="study" aria-label="Für welches Studium">{% for s in eligible %}<option value="{{ s.pk }}">{{ s.subject }} · {{ s.program }}</option>{% endfor %}</select>
-    <input name="note" placeholder="Nachricht an die Lehrenden (freiwillig)" aria-label="Nachricht an die Lehrenden">
-    <button class="btn ghost">Nachmeldung anfragen</button>
-  </form>
-  {% else %}<p class="empty">Anmeldeschluss vorbei.</p>{% endif %}
-  {% endfor %}
-</section>
-{% endif %}
 
 {% if ensembles %}
 <section>
@@ -162,18 +176,19 @@
 {% endif %}
 
 {% if signups %}
-<section>
+<section id="anfragen">
   <h2>Anfragen</h2>
+  <p class="lead">{{ signups|length }} offen{% if course.capacity %} · {% if free > 0 %}noch {{ free }} von {{ course.capacity }} Plätzen frei{% else %}alle {{ course.capacity }} Plätze vergeben{% endif %}{% endif %}. Wer zugelassen oder abgesagt wird, erhält eine Nachricht.</p>
   <table>
     <thead><tr><th>Name</th><th>Studium</th><th>Nachricht</th><th>Angefragt</th><th></th></tr></thead>
     <tbody>
       {% for s in signups %}
       <tr>
         <td>{% if s.study_id in reachable %}<a href="{{ s.study.get_absolute_url }}">{{ s.study.person.name }}</a>{% else %}{{ s.study.person.name }}{% endif %}</td>
-        <td><small>{{ s.study.subject }} · {{ s.study.program.degree }}</small></td>
+        <td><small>{{ s.study.subject }} · {{ s.study.program.degree }} · {{ s.study.semester }}. FS</small></td>
         <td><small>{{ s.note|linebreaksbr }}</small></td>
         <td data-value="{{ s.created|date:'c' }}">{{ s.created|date:"j.n. H:i" }}</td>
-        <td class="num"><form method="post" action="{% url 'courses:choose' s.pk %}" class="actions">{% csrf_token %}<button class="btn small" name="decision" value="yes">Zulassen</button><button class="btn ghost small" name="decision" value="no" data-confirm="Anfrage von {{ s.study.person.name }} absagen? Die Person erhält die Absage als Nachricht.">Absagen</button></form></td>
+        <td class="num"><form method="post" action="{% url 'courses:choose' s.pk %}" class="actions">{% csrf_token %}<button class="btn small" name="decision" value="yes"{% if course.capacity and free <= 0 %} data-confirm="Alle Plätze sind vergeben. {{ s.study.person.name }} trotzdem zulassen?"{% endif %}>Zulassen</button><button class="btn ghost small" name="decision" value="no" data-confirm="Anfrage von {{ s.study.person.name }} absagen? Die Person erhält die Absage als Nachricht.">Absagen</button></form></td>
       </tr>
       {% endfor %}
     </tbody>
@@ -226,11 +241,19 @@
   </form>
 </section>
 {% elif staffed %}
-<section>
-  <h2>Teilnehmende</h2>
+<section id="teilnehmende">
+  <div class="head">
+    <h2>Teilnehmende</h2>
+    {% if rows %}<div class="actions">
+      <button class="btn ghost small" form="auswahl" data-ticked="Nachricht an {n} Angekreuzte">Nachricht an alle {{ count }}</button>
+      {% if dropping %}<button class="btn ghost small" form="auswahl" formaction="{% url 'courses:drop' course.pk %}" data-ticked="{n} austragen" data-confirm="Die Angekreuzten austragen? Sie erhalten eine Nachricht; wer ein Ergebnis hat, bleibt.">Austragen</button>{% endif %}
+      <a class="btn ghost small" href="{% url 'courses:roster' course.pk %}">Liste herunterladen (CSV)</a>
+    </div>{% endif %}
+  </div>
+  <form id="auswahl" method="post" action="{% url 'courses:write' course.pk %}">{% csrf_token %}</form>
+  {% include "courses/_add.html" %}
   {% include "courses/_sheet.html" with panel=False decide=True columns=None %}
   {% if unmarked > 1 %}<form method="post" class="actions" style="margin-top: 8px">{% csrf_token %}<button class="btn ghost small" name="alle_bestanden" value="1" data-confirm="Alle {{ unmarked }} ohne Ergebnis als bestanden eintragen, aus allen Studiengängen und für alle Lehrenden der Veranstaltung?">Alle {{ unmarked }} ohne Ergebnis: bestanden</button></form>{% endif %}
-  {% include "courses/_add.html" %}
 </section>
 {% endif %}
 {% endblock %}

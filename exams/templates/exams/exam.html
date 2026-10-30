@@ -97,6 +97,7 @@
     {% if waiting %}<form method="post" action="{% url 'exams:remind' course.pk %}" class="actions">{% csrf_token %}<small class="fail">Wertung fehlt: {% for e, n in waiting %}{{ e.last_name }} ({{ n }}){% if not forloop.last %}, {% endif %}{% endfor %}</small><button class="btn ghost small">Erinnern</button></form>{% endif %}
   </div>
   {% if not decide and course.kind != 'thesis' %}<p class="lead">Sie tragen Ihre eigene Wertung ein. Das Ergebnis ergibt sich aus den Wertungen der ganzen Kommission.</p>{% endif %}
+  {% if office and not course.released and course.kind != 'thesis' %}{% include "courses/_add.html" %}{% endif %}
   {% include "courses/_sheet.html" with decide=decide %}
   {% include "courses/_recuse.html" %}
   {% if dropping %}<form id="austragen" method="post" action="{% url 'courses:drop' course.pk %}">{% csrf_token %}</form>{% endif %}
@@ -116,6 +117,5 @@
     {% endif %}
   </div>
   {% endif %}
-  {% if office and not course.released and course.kind != 'thesis' %}{% include "courses/_add.html" %}{% endif %}
 </section>
 {% endblock %}
