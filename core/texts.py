@@ -194,6 +194,10 @@ TEXTS = {
         'Sie haben {instrument} ausgeliehen; die Rückgabe war bis zum {frist} vereinbart. Bitte bringen Sie es bald zurück oder melden Sie sich, '
         'wenn Sie es länger brauchen. Solange es überfällig ist, ist keine Rückmeldung möglich.', ('instrument', 'frist'),
     ),
+    'leihe_verlaengert': Spec(
+        NACHRICHT, 'Leihe verlängert', 'Leihinstrument: {instrument}',
+        'Die Leihe von {instrument} ist bis zum {frist} verlängert; der Leihvertrag gilt weiter.', ('instrument', 'frist'),
+    ),
     'leihe': Spec(
         NACHRICHT, 'Instrument ausgeliehen', 'Leihinstrument: {instrument}',
         'Sie haben {instrument} ausgeliehen. Bitte geben Sie es bis zum {frist} zurück; danach ist keine Rückmeldung möglich, bis es zurück ist.',

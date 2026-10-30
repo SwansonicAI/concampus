@@ -15,6 +15,7 @@ urlpatterns = [
     path('<int:pk>/', views.exam, name='exam'),
     path('<int:pk>/bearbeiten/', views.edit, name='edit'),
     path('<int:pk>/termine/', views.plan, name='plan'),
+    path('<int:pk>/tag/', views.book, name='book'),
     path('<int:pk>/freigabe/', views.release, name='release'),
     path('<int:pk>/erinnern/', views.remind, name='remind'),
     path('<int:pk>/liste/', views.roster, name='roster'),

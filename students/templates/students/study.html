@@ -108,12 +108,13 @@
     <div class="panel" style="margin-top: 28px">
       <h3>Verwaltung</h3>
       {% if study.status == 'admitted' %}
-      <form method="post" action="{% url 'students:enrol' study.pk %}">{% csrf_token %}<button class="btn">Immatrikulieren</button> <small class="muted">Erst die Vorschau, dann versenden.</small></form>
+      {% if enrolling %}<p>Vor der Immatrikulation fehlt: {{ enrolling|join:" · " }}. <a class="more" href="{% url 'admissions:application' study.pk %}">Die Schritte dazu in der Bewerbung</a></p>{% endif %}
+      <form method="post" action="{% url 'students:enrol' study.pk %}">{% csrf_token %}<button class="btn"{% if enrolling %} disabled{% endif %}>Immatrikulieren</button> <small class="muted">Erst die Vorschau, dann versenden.</small></form>
       {% elif study.status == 'enrolled' %}
       {% if leaving %}<p><small class="muted">Vor der Exmatrikulation offen:</small><br>{% for what, who in leaving %}<small>{{ what }}{% if who %} <span class="muted">· {{ who }}</span>{% endif %}</small>{% if not forloop.last %}<br>{% endif %}{% endfor %}</p>{% endif %}
       <form method="post" action="{% url 'students:exmatriculate' study.pk %}" class="inline">
         {% csrf_token %}
-        <label>Exmatrikulation<select name="reason" required><option value="">Grund wählen</option>{% for code, name in exits %}<option value="{{ code }}"{% if exhausted and code == '8' %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+        <label>Exmatrikulation<select name="reason" required><option value="">Grund wählen</option>{% for code, name in exits %}<option value="{{ code }}"{% if exhausted and code == '8' or study.issued and code == '1' %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
         <label>Letzter Tag<input name="zum" data-day autocomplete="off" placeholder="TT.MM.JJJJ" size="11" required value="{{ leaving_day|date:'d.m.Y' }}"></label>
         <button class="btn danger">Exmatrikulieren</button>
       </form>
@@ -143,7 +144,7 @@
       {% for t in terms %}
       <tr>
         <td data-value="{{ t.term.start|date:'c' }}">{{ t.term }}</td>
-        <td>{% if t.withdrawn %}exmatrikuliert vor Beginn{% elif t.leave %}Urlaubssemester{% if t.leave_reason and personal %} <small class="muted">· {{ t.get_leave_reason_display }}</small>{% endif %}{% else %}immatrikuliert{% endif %}</td>
+        <td>{% if t.withdrawn %}exmatrikuliert vor Beginn{% elif t.leave %}Urlaubssemester{% if t.leave_reason and personal %} <small class="muted">· {{ t.get_leave_reason_display }}</small>{% endif %}{% elif study.status == 'admitted' %}Platz angenommen{% else %}immatrikuliert{% endif %}</td>
         {% if own or office %}
         <td class="num">{{ t.due }} €</td>
         <td>{% if t.term_id == study.start_term_id %}zur Immatrikulation{% else %}{{ t.term.deadline|date:"j.n.Y" }}{% endif %}</td>

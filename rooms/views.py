@@ -272,20 +272,22 @@ def mine(request):
 
 @require(*ROOMS)
 def events(request):
-    """What the Hochschule puts on, a month at a time: concerts, class evenings, master classes, lectures."""
-    today = timezone.localdate()
+    """What the Hochschule puts on, a month at a time: concerts, class evenings, master classes, lectures; at first what
+    is coming, from today through the next month."""
+    today, coming = timezone.localdate(), False
     try:
         first = datetime.strptime(request.GET.get('monat', ''), '%Y-%m').date()
     except ValueError:
-        first = today.replace(day=1)
+        first, coming = today.replace(day=1), True
     following = (first + timedelta(days=32)).replace(day=1)
+    until = (following + timedelta(days=32)).replace(day=1) if coming else following
     picked, q = request.GET.get('kategorie', ''), request.GET.get('q', '').strip()
-    found = Booking.objects.filter(category__public=True, requested=False, start__date__gte=first, start__date__lt=following).select_related('room', 'person', 'course', 'category')
+    found = Booking.objects.filter(category__public=True, requested=False, start__date__gte=today if coming else first, start__date__lt=until).select_related('room', 'person', 'course', 'category')
     if picked:
         found = found.filter(category=picked)
     return render(request, 'rooms/events.html', {
         'events': matching(found, q, 'title', 'programme', 'room__name', 'room__building') if q else found, 'picked': picked, 'q': q,
-        'categories': BookingCategory.objects.filter(public=True), 'month': first,
+        'categories': BookingCategory.objects.filter(public=True), 'month': first, 'coming': coming and until,
         'prev': (first - timedelta(days=1)).replace(day=1), 'next': following, 'office': 'manage_bookings' in request.user.roles,
         'feed': request.build_absolute_uri(reverse('rooms:programme')),
     })

@@ -12,7 +12,10 @@ class LoanTest(Seeded):
         office, student = self.login('veranstaltungsbuero'), Person.objects.get(username='student')
         free = Instrument.objects.filter(available=True).exclude(pk__in=Loan.objects.filter(returned=None).values('instrument')).first()
         office.post(f'/instrumente/{free.pk}/verleihen/', {'who': student.matriculation, 'due': f'{timezone.localdate() - timedelta(days=1):%d.%m.%Y}'})
+        self.assertFalse(Loan.objects.filter(instrument=free, returned=None).exists())  # due already: refused
+        office.post(f'/instrumente/{free.pk}/verleihen/', {'who': student.matriculation, 'due': f'{timezone.localdate() + timedelta(days=1):%d.%m.%Y}'})
         loan = Loan.objects.get(instrument=free, returned=None)
+        Loan.objects.filter(pk=loan.pk).update(due=timezone.localdate() - timedelta(days=1))  # a day later, overdue
         self.assertIn(f'Leihinstrument zurückgeben: {free.name}', student.missing())
         office.post(f'/instrumente/leihe/{loan.pk}/rueckgabe/')
         self.assertNotIn(f'Leihinstrument zurückgeben: {free.name}', Person.objects.get(pk=student.pk).missing())

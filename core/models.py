@@ -555,6 +555,12 @@ class Term(Tracked, models.Model):
             raise ValidationError({'exams_end': 'Der Prüfungszeitraum endet nach seinem Beginn.'})
         if self.parts and self.fee is not None and sum(amount for _, amount in self.parts) != self.fee:
             raise ValidationError({'fee_council': 'Die Teile ergeben zusammen nicht den Semesterbeitrag.'})
+        if self.start and self.end and (other := Term.objects.exclude(pk=self.pk).filter(start__lte=self.end, end__gte=self.start).first()):
+            raise ValidationError({'start': f'Überschneidet sich mit dem {other} ({other.start:%d.%m.%Y}–{other.end:%d.%m.%Y}).'})
+        if self.start and self.end and self.lectures_start and self.lectures_end and not self.start <= self.lectures_start < self.lectures_end <= self.end:
+            raise ValidationError({'lectures_start': 'Der Unterricht liegt im Semester.'})
+        if self.deadline and self.start and self.deadline >= self.start:
+            raise ValidationError({'deadline': 'Zurückgemeldet wird vor Beginn des Semesters.'})
 
     @classmethod
     def shown(cls, person):

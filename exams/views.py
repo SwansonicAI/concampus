@@ -2,7 +2,7 @@ import csv
 import io
 import re
 from collections import Counter, defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import ROUND_DOWN, Decimal
 
 from django import forms
@@ -26,13 +26,15 @@ from core.dates import months_before, working
 from core.models import Consent, Export, Message, Office, Term
 from core.templatetags.marks import mark
 from core.text import matching
+from core.forms import again, sent
 from core.views import without_term
 from courses import panel
-from courses.forms import AddForm, ExamForm, SlotForm, ThesisForm, substitutes
+from courses.forms import AddForm, DateForm, ExamForm, SlotForm, ThesisForm, substitutes
 from courses.views import credited
 from courses.models import Course, Participation, attempts
 from curriculum.models import Module, Program
 from curriculum.views import plan as study_plan
+from rooms.models import Booking, BookingCategory
 from students.models import Document, DocumentType, Study
 
 EXAMS = [Course.Kind.EXAM, Course.Kind.RECOGNITION, Course.Kind.THESIS]
@@ -137,6 +139,8 @@ def index(request):
     office = bool(person.roles & {'manage_exams', 'decide_results', 'correct_scores'})
     if office or 'teacher' in person.roles:
         program, stand, q = (request.GET.get(key, '').strip() for key in ('studiengang', 'stand', 'q'))
+        if stand == 'ohne-termin':  # not yet given a day: one to book before registration opens
+            exams = exams.filter(kind=Course.Kind.EXAM, bookings=None, released=None)
         if stand == 'kommission':
             exams = exams.filter(pk__in=Course.short_panels(Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], term=term)))
         exams = exams.filter(pk__in=person.within(Course.objects.all(), 'manage_exams', 'decide_results', 'correct_scores').values('pk')) if office else exams.filter(staff=person)
@@ -150,7 +154,7 @@ def index(request):
         for c in exams:
             c.state = 'freigegeben' if c.released else 'bewertung' if c.graded or c.date and c.date <= timezone.now() else 'offen'  # held: marks are due
         context.update(
-            exams=[c for c in exams if stand in ('', 'kommission') or c.state == stand], q=q, stand=stand, program=program, programs=Program.planned(),
+            exams=[c for c in exams if stand in ('', 'kommission', 'ohne-termin') or c.state == stand], q=q, stand=stand, program=program, programs=Program.planned(),
             examining=office and 'teacher' in person.roles, own=own,
             states=[(key, label, sum(c.state == key for c in exams)) for key, label in STATES],
         )
@@ -230,11 +234,12 @@ def exam(request, pk):
         'columns': [e.pk for e in columns],
         'panel': course.kind in Course.PANEL,
         'office': office,
-        'decide': decide or correct, 'correct': correct, 'rule': panel.rule(rows), 'composer': office,
+        'decide': decide or correct, 'correct': correct, 'books': decide, 'rule': panel.rule(rows), 'composer': office,  # the Protokoll and a Rücktritt: who enters results
         'recusable': [] if course.released else panel.recusable(rows, person),
         'candidates': substitutes(course) if office and any(p.vacant for p in rows) else [],
         'history': bool(Course.seen_by(person, course.pk)),
-        'slots': SlotForm(request.GET or None, person=person, course=course) if office and not held else None,
+        'slots': SlotForm(sent(request, 'slots') or request.GET or None, person=person, course=course) if office and not held else None,
+        'booking': DateForm(sent(request, 'tag'), person=person) if office and not course.released and course.kind == Course.Kind.EXAM else None,
         'modules': credited(course),
         'bookings': course.bookings.select_related('room'),
         'missing': sum(1 for p in rows if panel.due(p)),
@@ -448,15 +453,42 @@ def plan(request, pk):
     course = get_object_or_404(request.user.within(Course.objects.all(), 'manage_exams'), pk=pk, kind=Course.Kind.EXAM)
     form = SlotForm(request.POST, person=request.user, course=course)
     rows = list(course.participations.filter(slot=None).select_related('study__person').order_by('created'))
-    if not form.is_valid() or not rows:
-        messages.error(request, 'Bitte Beginn, Dauer und Raum angeben; alle Teilnehmenden haben schon Termine.' if rows else 'Alle Teilnehmenden haben schon Termine.')
+    if not rows:
+        messages.error(request, 'Niemand ohne Termin angemeldet. Tag und Raum der Prüfung bucht „Tag und Raum buchen“.')
         return redirect(course)
+    if not form.is_valid():  # back with what was typed, and what is wrong with it
+        messages.error(request, ' '.join(f'{form.fields[name].label}: {" ".join(errors)}' for name, errors in form.errors.items()))
+        return again(request, course, 'slots')
     try:
         panel.schedule(course, rows, form.cleaned_data['start'], form.cleaned_data['minutes'], form.cleaned_data['room'], request.user, form.cleaned_data['pause'])
     except ValidationError as error:
         messages.error(request, ' '.join(error.messages))
     else:
         messages.success(request, f'{len(rows)} Termine vergeben und Einladungen versandt.')
+    return redirect(course)
+
+
+@require('manage_exams')
+@require_POST
+def book(request, pk):
+    """Book the exam's day and room, before anyone has registered: its candidates get their times later."""
+    course = get_object_or_404(request.user.within(Course.objects.all(), 'manage_exams'), pk=pk, kind=Course.Kind.EXAM, released=None)
+    form = DateForm(request.POST, person=request.user)
+    if not form.is_valid():
+        messages.error(request, ' '.join(e for errors in form.errors.values() for e in errors))
+        return again(request, course, 'tag')
+    data = form.cleaned_data
+    booking = Booking(
+        room=data['room'], start=timezone.make_aware(datetime.combine(data['day'], data['begin'])), end=timezone.make_aware(datetime.combine(data['day'], data['until'])),
+        person=request.user, course=course, category=BookingCategory.system('pruefung'),
+    )
+    try:
+        booking.full_clean()
+    except ValidationError as error:
+        messages.error(request, ' '.join(error.messages))
+        return again(request, course, 'tag')
+    booking.save()
+    messages.success(request, f'{course.title}: {date_format(booking.start, "j.n.Y")} in {booking.room} gebucht.')
     return redirect(course)
 
 

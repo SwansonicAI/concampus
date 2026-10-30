@@ -1,4 +1,5 @@
 """Every list staff keep up themselves, described once: which model, which fields, who may edit it."""
+import re
 from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Callable
@@ -13,7 +14,7 @@ from django.utils.formats import date_format
 from django.utils.html import format_html, format_html_join
 
 from core.access import CAPABILITIES, EVERYWHERE
-from core.dates import DayField, PastField
+from core.dates import DayField, PastField, months_before
 from core.models import Grant, Holiday, Institute, Institution, Membership, Office, Person, Term
 from courses.forms import AuditionForm
 from courses.models import Appointment, Area, Course, Format, Reduction
@@ -107,7 +108,10 @@ class OfficeForm(forms.ModelForm):
             self.initial['capabilities'] = list(self.instance.permissions.values_list('codename', flat=True))
             members = ', '.join(str(p) for p in self.instance.user_set.order_by('last_name'))
             waiting = '; '.join(', '.join(g.labels) for g in self.instance.grants.all())
-            self.note = f'Mitglieder: {members or "noch niemand"}. Wer dazugehört, wird bei den Konten eingetragen.' + (f' Wartet auf Bestätigung: {waiting}.' if waiting else '')
+            self.note = format_html(
+                'Mitglieder: {}. Wer dazugehört, wird bei der Person unter <a href="{}">Konten</a> eingetragen.{}', members or 'noch niemand',
+                reverse('setup:list', args=['konten']), f' Wartet auf Bestätigung: {waiting}.' if waiting else '',
+            )
 
     def clean(self):
         data = super().clean()
@@ -126,6 +130,16 @@ class OfficeForm(forms.ModelForm):
             Grant.objects.create(office=office, rights=added, by=self.by)
         self.pending = bool(added)
         return office
+
+
+def depending(person):
+    """What hangs on a person's account, said in words: their class, courses still running, bookings to come."""
+    counts = [
+        (Study.objects.filter(teacher=person, status=Study.Status.ENROLLED).count(), 'Studierende der Klasse', 'Studierende der Klasse'),
+        (person.teaching.filter(term__end__gte=timezone.localdate(), cancelled=None).count(), 'Veranstaltung', 'Veranstaltungen'),
+        (Booking.objects.filter(person=person, start__gte=timezone.now()).count(), 'künftige Buchung', 'künftige Buchungen'),
+    ]
+    return ', '.join(f'{n} {one if n == 1 else many}' for n, one, many in counts if n)
 
 
 class AccountForm(forms.ModelForm):
@@ -149,6 +163,15 @@ class AccountForm(forms.ModelForm):
         self.fields['groups'].queryset = Office.objects.all()
         if self.instance.pk and (waiting := Membership.objects.filter(person=self.instance, confirmed_by=None).select_related('office')):
             self.note = 'Wartet auf Bestätigung: ' + ', '.join(f'{m.office}' + (f' bis {m.until:%d.%m.%Y}' if m.until else '') for m in waiting) + '.'
+        self.depends = depending(self.instance) if self.instance.pk else ''
+        if self.depends:
+            self.fields['anyway'] = forms.BooleanField(label='Trotzdem deaktivieren', required=False, help_text=f'Hängt an der Person: {self.depends}. Erst neu zuordnen.')
+
+    def clean(self):
+        data = super().clean()
+        if self.instance.is_active and data.get('is_active') is False and self.depends and not data.get('anyway'):
+            raise forms.ValidationError(f'Am Konto hängen {self.depends}: wer deaktiviert ist, kann sich nicht anmelden. Bitte erst neu zuordnen, oder „Trotzdem deaktivieren“ ankreuzen.')
+        return data
 
     def clean_email(self):
         email = self.cleaned_data['email']
@@ -245,6 +268,20 @@ class HolidayForm(forms.ModelForm):
             )
 
 
+def new_term(request):
+    """A new semester proposed as the same one a year before, a year on, with the latest fees; in planning, unseen by
+    students until it is published."""
+    latest = list(Term.objects.order_by('-start')[:2])
+    if len(latest) < 2:
+        return Term(planning=True)
+    model, fees = latest[1], latest[0]  # the semester a year before the next one, and the one with the latest fees
+    dates = {f.name: months_before(value, -12) for f in Term._meta.fields if isinstance(f, models.DateField) and (value := getattr(model, f.name))}
+    return Term(
+        name=re.sub(r'\d+', lambda m: str(int(m.group()) + 1).zfill(len(m.group())), model.name), planning=True, **dates,
+        fee=fees.fee, fee_union=fees.fee_union, fee_ticket=fees.fee_ticket, fee_council=fees.fee_council,
+    )
+
+
 def new_module(request):
     program = get_object_or_404(Program, pk=request.GET.get('studiengang'))
     return Module(program=program, parent=program.modules.filter(pk=request.GET.get('unter') or None).first())
@@ -295,7 +332,7 @@ EDITORS = {e.key: e for e in [
         ],
         columns=[('Semester', 'name'), ('Beginn', 'start'), ('Ende', 'end'), ('Rückmeldefrist', 'deadline'), ('Beitrag', 'fee')],
         search=['name'], words='unterrichtszeit vorlesungszeit rückmeldefrist semesterbeitrag termine',
-        queryset=lambda: Term.objects.order_by('-start'),
+        queryset=lambda: Term.objects.order_by('-start'), new=new_term,
     ),
     Editor(
         'pruefungszeitraeume', Term, 'Prüfungszeiträume', 'manage_exams', 'Studium und Lehre',

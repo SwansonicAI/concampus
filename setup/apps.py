@@ -48,5 +48,5 @@ class SetupConfig(Tile, AppConfig):
                 found.append(task(f'Barrierefreiheit: {plural(len(open_), "Rückmeldung", "Rückmeldungen")} beantworten', reverse('setup:feedback'), open_[0].due))
         if 'manage_accounts' in person.roles:  # an office nobody holds: what it decides goes nowhere
             for office in Office.objects.filter(user=None).order_by('name'):
-                found.append(task(f'Amt ohne Mitglieder: {office.name}', reverse('setup:edit', args=['aemter', office.pk])))
+                found.append(task(f'Amt ohne Mitglieder: {office.name}', reverse('setup:list', args=['konten'])))
         return found

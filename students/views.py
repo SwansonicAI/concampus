@@ -164,6 +164,16 @@ def cases(studies, case):
     return studies
 
 
+def narrowed(choices, request, program, subject=None):
+    """A filter's choices as far as the Studiengang and Hauptfach already chosen allow: Hauptfächer of the Studiengang,
+    teachers of its students in the Hauptfach."""
+    if (chosen := request.GET.get('studiengang', '')).isdigit():
+        choices = choices.filter(**{program: chosen})
+    if subject and (chosen := request.GET.get('fach', '')).isdigit():
+        choices = choices.filter(**{subject: chosen})
+    return choices.distinct()
+
+
 def listed(request):
     """(the studies the list shows as filtered, all of them and not only the rows on the page; its status; the studies
     the person may list at that status)."""
@@ -204,9 +214,9 @@ def roster(request):
     return render(request, 'students/roster.html', {
         'studies': shown, 'count': len(shown) if len(shown) < SHOWN else studies.count(), 'q': q, 'status': status, 'statuses': STATES,
         'sort': sort, 'columns': [(title, key, 'ascending' if sort == key else 'descending' if sort == f'-{key}' else '') for title, key, _ in COLUMNS],
-        'programs': request.user.within(Program.objects.ordered(), 'view_students'), 'subjects': request.user.within(Subject.objects.all(), 'view_students'),
+        'programs': request.user.within(Program.objects.ordered(), 'view_students'), 'subjects': narrowed(request.user.within(Subject.objects.all(), 'view_students'), request, 'programs'),
         'terms': Term.objects.filter(intake__isnull=False).distinct().order_by('-start'), 'semesters': range(1, 13),
-        'classes': Person.objects.filter(class_studies__in=scoped).distinct().order_by('last_name', 'first_name'),
+        'classes': Person.objects.filter(class_studies__in=narrowed(scoped, request, 'program', 'subject')).distinct().order_by('last_name', 'first_name'),
         'cases': CASES,
         **{key: request.GET.get(key, '') for key in ['studiengang', 'fach', 'klasse', 'fs', 'beginn', 'stand']},
     })
@@ -283,6 +293,7 @@ def study(request, pk):
         'grades': own or files or study.teacher_id == person.pk,  # the student office sees outcomes: Prüfungsanspruch, Abschluss
         'certify': own or office,  # Bescheinigungen
         'unpaying': 'manage_reregistration' in person.roles,
+        'enrolling': study.missing() if office and study.status == Study.Status.ADMITTED else [],
         'rows': plan(tree, study.program.semesters),
         'semesters': range(1, study.program.semesters + 1),
         'taking': set(study.participations.filter(course__term=Term.current()).values_list('module_id', flat=True)),

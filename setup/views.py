@@ -61,8 +61,13 @@ def feedback(request):
 
 @require('manage_accounts')
 def sign_ins(request):
-    """Sign-ins and failed tries, newest first, the last thousand: to see an account being guessed at or used by another."""
-    return render(request, 'setup/sign_ins.html', {'sign_ins': SignIn.objects.select_related('person')[:1000], 'keep': SignIn.KEEP.days})
+    """Sign-ins and failed tries, newest first, the last thousand: to see an account being guessed at or used by another;
+    by name or address, failures alone on asking."""
+    q, failed = request.GET.get('q', '').strip(), request.GET.get('nur') == 'fehlversuche'
+    found = SignIn.objects.select_related('person').filter(success=False) if failed else SignIn.objects.select_related('person')
+    if q:
+        found = matching(found, q, 'username', 'person__first_name', 'person__last_name', 'ip')
+    return render(request, 'setup/sign_ins.html', {'sign_ins': found[:1000], 'keep': SignIn.KEEP.days, 'q': q, 'failed': failed})
 
 
 def usable(person):
@@ -155,6 +160,11 @@ def edit(request, key, pk=None):
     form.by = request.user  # who gives a right, which a second person confirms
     if e.sections:
         form.layout = e.sections
+    field = form.fields.get('institute') or form.fields.get('institutes')
+    if field and (ours := request.user.ours(e.capability)):  # an office for some Institute: only those, its own preset
+        field.queryset = field.queryset.filter(pk__in=ours)
+        if not obj.pk:
+            form.initial |= {'institutes': list(ours)} if 'institutes' in form.fields else {'institute': next(iter(ours))}
     if form.is_valid() and (saved := kept(form, request.user, e.capability)):
         obj = saved
         messages.success(request, f'„{obj}“ gespeichert.' + (' Neue Rechte und Mitgliedschaften gelten, sobald eine zweite Person sie unter „Freigaben“ bestätigt.' if getattr(form, 'pending', False) else ''))

@@ -114,7 +114,7 @@ class ExamsConfig(Tile, AppConfig):
             if soon := list(undated.filter(Q(opens=None) | Q(opens__lte=timezone.localdate() + timedelta(days=14))).values_list('opens', flat=True)):  # registration open or near
                 first = min(filter(None, soon), default=None)
                 when = f' vor der Anmeldung ab {date_format(first, "j.n.")}' if first and first > timezone.localdate() else ''
-                found.append(task(f'{plural(len(soon), "Prüfung", "Prüfungen")} ohne Termin{when}', reverse('exams:index'), first))
+                found.append(task(f'{plural(len(soon), "Prüfung", "Prüfungen")} ohne Termin{when}', f"{reverse('exams:index')}?stand=ohne-termin", first))
 
             handed = Document.objects.filter(kind='abschlussarbeit', study__participations__course=OuterRef('pk'), created__gte=F('study__participations__created'))
             late = Course.objects.filter(kind=Course.Kind.THESIS, released=None, deadline__lt=timezone.localdate()).exclude(Exists(handed))

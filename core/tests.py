@@ -212,7 +212,7 @@ class ReachTest(Seeded):
         self.assertEqual(client.get(f'/einstellungen/raeume/{foreign.pk}/').status_code, 404)
         piano = Institute.objects.get(name='Klavier')
         r = client.post('/einstellungen/raeume/neu/', {'name': 'X 1', 'building': 'X', 'function': own.function_id, 'institutes': [piano.pk], 'capacity': 2})
-        self.assertTrue(r.context['form'].non_field_errors())
+        self.assertIn('institutes', r.context['form'].errors)  # only its own Institut is offered
         self.assertFalse(Room.objects.filter(name='X 1').exists())
 
     def test_rights_for_the_whole_hochschule_cannot_be_limited(self):

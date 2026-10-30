@@ -3,6 +3,12 @@
 {% block content %}
 <h1>Anmeldungen</h1>
 <p class="lead">Anmeldungen und Fehlversuche, für die Sicherheit der Konten: wer, wann, von welcher Adresse. Gelöscht nach {{ keep }} Tagen.</p>
+<form class="toolbar">
+  <div class="inline">
+    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name, Benutzername oder Adresse"></label>
+    <label>Zeigen<select name="nur" onchange="this.form.requestSubmit()"><option value="">alle</option><option value="fehlversuche"{% if failed %} selected{% endif %}>nur Fehlversuche</option></select></label>
+  </div>
+</form>
 <table>
   <thead><tr><th>Am</th><th>Angegeben</th><th>Person</th><th>Adresse</th><th>Ergebnis</th></tr></thead>
   <tbody>

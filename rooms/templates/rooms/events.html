@@ -12,7 +12,7 @@
     {% if office %}<a class="btn" href="{% url 'rooms:new' %}?kategorie=konzert">Veranstaltung anlegen</a>{% endif %}
   </div>
 </div>
-<p class="lead">Programm {{ month|date:"F Y" }}</p>
+<p class="lead">{% if coming %}Was kommt: ab heute bis Ende {{ next|date:"F" }}{% else %}Programm {{ month|date:"F Y" }}{% endif %}</p>
 <form class="toolbar no-print">
   <div class="inline">
     <input type="hidden" name="monat" value="{{ month|date:'Y-m' }}">

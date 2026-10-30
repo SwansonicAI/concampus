@@ -1,4 +1,5 @@
 from django import forms
+from django.utils import timezone
 
 from core.dates import DayField
 from core.models import Person
@@ -14,6 +15,12 @@ class LendForm(forms.Form):
     due = DayField(label='Rückgabe bis')
     note = forms.CharField(label='Notiz', max_length=200, required=False, help_text='Z. B. mitgegebenes Zubehör.')
     condition = forms.CharField(label='Zustand bei Ausgabe', max_length=200, required=False)
+
+    def clean_due(self):
+        """After today: a loan due already would hold up the borrower's Rückmeldung at once."""
+        if (due := self.cleaned_data['due']) <= timezone.localdate():
+            raise forms.ValidationError('Die Rückgabe muss nach heute liegen.')
+        return due
 
     def clean_who(self):
         """One student or teacher, found by name, e-mail or Matrikelnummer."""

@@ -9,6 +9,7 @@ from django.views.decorators.http import require_POST
 
 from core import texts
 from core.access import require
+from core.dates import day as understood
 from core.models import Institute, Office, Term
 from core.text import matching
 from .forms import LendForm
@@ -74,6 +75,22 @@ def lend(request, pk):
         texts.send('leihe', loan.person, reverse('instruments:mine'), instrument=instrument.name, frist=f'{loan.due:%d.%m.%Y}')
         messages.success(request, f'{instrument.name} an {loan.person} verliehen, zurück bis {date_format(loan.due, "j.n.Y")}.')
     return redirect('instruments:instrument', pk=instrument.pk)
+
+
+@require('manage_instruments')
+@require_POST
+def extend(request, pk):
+    """Lend on to a later day, as into the next semester: the same loan and Leihvertrag; the borrower hears."""
+    loan = get_object_or_404(request.user.within(Loan.objects.filter(returned=None), 'manage_instruments').select_related('instrument', 'person'), pk=pk)
+    due = understood(request.POST.get('due', ''))
+    if due is None or due <= timezone.localdate():
+        messages.error(request, 'Bitte einen Tag nach heute angeben, bis zu dem verlängert wird.')
+    else:
+        loan.due, loan.reminded = due, None
+        loan.save(update_fields=['due', 'reminded'])
+        texts.send('leihe_verlaengert', loan.person, reverse('instruments:mine'), instrument=loan.instrument.name, frist=f'{due:%d.%m.%Y}')
+        messages.success(request, f'Leihe von {loan.instrument.name} bis {date_format(due, "j.n.Y")} verlängert; {loan.person} ist benachrichtigt.')
+    return redirect('instruments:instrument', pk=loan.instrument_id)
 
 
 @require('manage_instruments')
