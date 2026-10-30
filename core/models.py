@@ -108,7 +108,7 @@ class Institution(Tracked, models.Model):
     website = models.URLField('Website', blank=True)
     imprint = models.URLField('Impressum', blank=True)
     privacy = models.URLField('Datenschutz', blank=True)
-    accessibility = models.URLField('Barrierefreiheit', blank=True)
+    accessibility = models.URLField('Barrierefreiheit der Website', blank=True, help_text='Die Erklärung der Website; Campus hat eine eigene, unter Texte.')
     matriculation_start = models.PositiveIntegerField('Erste Matrikelnummer', default=100001, help_text='Danach fortlaufend.')
     university = KeyField('Hochschulnummer', max_length=4, keys=GERMAN, blank=True, help_text='Für die amtliche Statistik, aus dem Schlüsselverzeichnis.')
     region = KeyField('Kreis', max_length=5, keys=DISTRICTS, blank=True, help_text='Sitz der Hochschule, für die amtliche Statistik.')
@@ -766,6 +766,30 @@ class SignIn(models.Model):
         ordering = ['-at']
         verbose_name = 'Anmeldung'
         verbose_name_plural = 'Anmeldungen'
+
+
+class Feedback(models.Model):
+    """A barrier in Campus reported through the form under its accessibility statement (ThürBarrWebG): answered by
+    `manage_institution` within `ANSWER`, deleted `KEEP` after the answer."""
+
+    ANSWER, KEEP = timedelta(days=30), timedelta(days=365)
+
+    name = models.CharField('Name', max_length=120, blank=True)
+    email = models.EmailField('E-Mail', help_text='Für die Antwort.')
+    page = models.CharField('Seite', max_length=300, blank=True, help_text='Wo die Barriere ist, wenn auf einer bestimmten Seite.')
+    text = models.TextField('Was ist nicht zugänglich?')
+    received = models.DateTimeField('Eingegangen', default=timezone.now)
+    answered = models.DateField('Beantwortet am', null=True, blank=True)
+    answered_by = models.ForeignKey(Person, models.SET_NULL, null=True, related_name='+', verbose_name='Beantwortet von')
+
+    class Meta:
+        ordering = ['-received']
+        verbose_name = 'Rückmeldung zur Barrierefreiheit'
+        verbose_name_plural = 'Rückmeldungen zur Barrierefreiheit'
+
+    @property
+    def due(self):
+        return timezone.localdate(self.received + self.ANSWER)
 
 
 class Consent(models.Model):

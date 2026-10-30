@@ -11,6 +11,7 @@ urlpatterns = [
     path('freigaben/', views.approvals, name='approvals'),
     path('exporte/', views.exports, name='exports'),
     path('anmeldungen/', views.sign_ins, name='sign_ins'),
+    path('barrierefreiheit/', views.feedback, name='feedback'),
     path('verzeichnisse/', views.official, name='keys'),
     path('<str:key>/', views.listing, name='list'),
     path('<str:key>/neu/', views.edit, name='new'),

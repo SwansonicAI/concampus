@@ -18,7 +18,7 @@ from . import dates
 from .access import CODENAMES
 from .apps import tile_apps, tiles
 from .history import acting, restore
-from .models import Change, Institute, Message, Office, Person, Term, Text
+from .models import Change, Institute, Institution, Message, Office, Person, Term, Text
 from .testing import Empty, Seeded, flashes
 from .texts import TEXTS, render, send
 from .views import found
@@ -452,3 +452,12 @@ class KeysTest(Seeded):
         self.assertEqual((found[0]['code'], found[0]['kreis']), ('16071038', '16071'))
         r = asa.post(f'/einstellungen/personen/{eisenach.pk}/', {**{f: getattr(eisenach, f) or '' for f in ['first_name', 'last_name', 'email', 'entrance', 'home']}, 'entrance_region': '16056'})
         self.assertNotIn('entrance_region', r.context['form'].errors if r.context else {})  # an ended key stays valid where a record holds it
+
+
+class AccessibilityTest(Seeded):
+    def test_a_barrier_reported_without_signing_in_reaches_the_office_with_its_deadline(self):
+        with self.captureOnCommitCallbacks(execute=True):
+            r = Client().post('/barrierefreiheit/', {'email': 'gast@example.org', 'page': '/raeume/', 'text': 'Der Wochenplan liest sich mit dem Screenreader nicht.'}, follow=True)
+        self.assertIn('Wir antworten bis zum', flashes(r)[0])
+        self.assertEqual(mail.outbox[0].to, [Institution.get().email])
+        self.assertContains(self.login('campus').get('/'), 'Barrierefreiheit: 1 Rückmeldung beantworten')

@@ -126,6 +126,12 @@ results. Documents, messages, the Verlauf, contact and personal administration d
 bookings, notes, Gutachten, grounds of leave and a Nachteilsausgleich go. After `core_years` (50) the Grunddaten are
 made anonymous (`students/disposal.py`, `manage.py prune`).
 
+### Reports of barriers
+
+Who reports a barrier under the accessibility statement leaves an e-mail address, a name if they like, the page and
+their message (`core.models.Feedback`). `manage_institution` sees them under Einstellungen › Barrierefreiheit; each is
+deleted a year after it was answered.
+
 ## Where the code enforces it
 
 - `students/views.py`, `study()`: `personal` (the person or `manage_students`) and `identity` (also `decide_results`);

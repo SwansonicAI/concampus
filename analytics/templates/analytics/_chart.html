@@ -5,7 +5,7 @@
   <div class="scroll">
     <table class="heat hours">
       <thead><tr><th></th>{% for h in c.grid.hours %}<th class="num">{{ h }}</th>{% endfor %}</tr></thead>
-      <tbody>{% for day in c.grid.days %}<tr><td>{{ day.label }}</td>{% for cell in day.cells %}<td class="num{% if cell.shade > 55 %} dark{% endif %}" style="--v: {{ cell.shade|unlocalize }}%" title="{{ cell.tip }}">{{ cell.share }}</td>{% endfor %}</tr>{% endfor %}</tbody>
+      <tbody>{% for day in c.grid.days %}<tr><td>{{ day.label }}</td>{% for cell in day.cells %}<td class="num" style="--v: {{ cell.shade|unlocalize }}%" title="{{ cell.tip }}">{{ cell.share }}</td>{% endfor %}</tr>{% endfor %}</tbody>
     </table>
   </div>
   {% elif c.lines %}
@@ -16,7 +16,7 @@
         {% for line in c.lines %}
         <tr>
           <td>{% if line.drill %}<a href="{{ line.drill }}" title="Weiter aufteilen">{{ line.label }}</a>{% else %}{{ line.label }}{% endif %}</td>
-          {% for cell in line.cells %}<td class="num{% if cell.shade > 55 %} dark{% endif %}" style="--v: {{ cell.shade|unlocalize }}%">{% if cell.records %}<a href="{{ cell.records }}" data-panel>{{ cell.shown }}</a>{% else %}{{ cell.shown }}{% endif %}</td>{% endfor %}
+          {% for cell in line.cells %}<td class="num" style="--v: {{ cell.shade|unlocalize }}%">{% if cell.records %}<a href="{{ cell.records }}" data-panel>{{ cell.shown }}</a>{% else %}{{ cell.shown }}{% endif %}</td>{% endfor %}
           <td class="num"><b>{{ line.total }}</b></td>
         </tr>
         {% endfor %}

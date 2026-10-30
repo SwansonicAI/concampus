@@ -63,9 +63,9 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 
 | Requirement | Source | Status | In Campus, or missing |
 |---|---|---|---|
-| WCAG 2.1 AA (EN 301 549) | ThürBarrWebG, ThürBITVO, § 3 BITV 2.0 | partly | German page language, labelled fields, German browser messages, ARIA where needed; never audited; printed documents are web pages, not tagged PDF |
-| Accessibility statement for Campus | ThürBarrWebG | partly | Footer link to the Hochschule's page; the statement for Campus itself not written |
-| Feedback answered within the deadline | ThürBarrWebG | partly | „Hilfe und Rückmeldung“ mails the Hochschule; the deadline is not tracked |
+| WCAG 2.1 AA (EN 301 549) | ThürBarrWebG, ThürBITVO, § 3 BITV 2.0 | partly | 48 pages of every role checked automatically against WCAG 2.1 AA (axe-core 4.10) on 30.10.2026, every finding fixed: contrast, unnamed fields, links told apart by colour alone; a skip link. No manual test (BITV-Test) yet; printed documents are web pages, not tagged PDF |
+| Accessibility statement for Campus | ThürBarrWebG | yes | Under „Barrierefreiheit“ in the footer of every page, signed in or not: state, exceptions, how it was made, the enforcement body; worded under Einstellungen › Texte |
+| Feedback answered within the deadline | ThürBarrWebG | yes | A form under the statement, without signing in; the report goes to the Hochschule's address and to `manage_institution` as a to-do with its deadline (30 days), answered by e-mail and marked under Einstellungen › Barrierefreiheit |
 | Accessibility criteria in a tender | § 121(2) GWB | no | Needs a conformance report from an audit |
 
 ## IT security
@@ -86,6 +86,7 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 |---|---|---|---|
 | XHochschule documents | XBildung, IT-Planungsrat 2025/43 | partly | Immatrikulations-, Studienzeit- and Exmatrikulationsbescheinigung, Leistungsübersicht, Zeugnis, Urkunde, Diploma Supplement in English and German, as printable pages; the Immatrikulationsbescheinigung checkable by its Prüfcode. No XHochschule data, no BAföG § 9 version, no eIDAS seal |
 | Statistics delivery | HStatG | yes | eSTATISTIK.core files |
+| Reports with the health insurers, electronic only since 2022 | § 199a SGB V, Gemeinsame Grundsätze of the GKV-Spitzenverband and the HRK; Absendernummer under § 18n SGB IV | partly | Campus keeps the insurer, the status and the day the insurer's report came, and enrols and accepts a Rückmeldung only with it; the office enters that day by hand. No connection to the insurers' data exchange: their reports (M10 status, M11 change of insurer) are not received, the Hochschule's (M20 Einschreibung, M30 Exmatrikulation) not sent. Needs HfM's Absendernummer |
 | Erasmus Without Paper | European Commission | no | No mobility |
 | Finance system | – | no | Payments come in from bank statements; nothing is booked to the Hochschule's ERP |
 
@@ -113,8 +114,9 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 2. Statistics of academic and artistic staff.
 3. Mark a record as restricted.
 4. XHochschule data for the certificates.
-5. WCAG audit and the accessibility statement for Campus.
-6. Periods for staff records and the export log.
+5. Electronic reports with the health insurers (§ 199a SGB V): receive M10 and M11, send M20 and M30.
+6. A manual accessibility test (BITV-Test) by a third party.
+7. Periods for staff records and the export log.
 
 ## To check
 
@@ -127,4 +129,5 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
    nothing.
 6. The deadlines in IT-Planungsrat decision 2025/43.
 7. Whether HfM is among the seven Thuringian universities on the MACH ERP.
-8. The answer deadline for accessibility feedback in the ThürBarrWebG.
+8. The answer deadline for accessibility feedback in the ThürBarrWebG; Campus uses 30 days.
+9. HfM's Absendernummer for the Studierendenmeldeverfahren, and the current Gemeinsame Grundsätze.

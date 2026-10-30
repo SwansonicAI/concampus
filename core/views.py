@@ -8,6 +8,8 @@ from django.contrib.auth.decorators import login_not_required
 from django.contrib import messages
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.core.mail import send_mail
+from django.db import transaction
 from django.db.models import Case, Exists, F, OuterRef, Q, When
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -28,11 +30,11 @@ from .apps import feature, plural, tile_apps, tiles
 from .backends import address
 from .days import busy, strip
 from .dossier import dossier
-from .forms import ContactForm
+from .forms import ContactForm, FeedbackForm
 from .history import because, describe, former, restore, tables
 from .dates import months_before
 from .keys import DISTRICTS, replaced
-from .models import Change, Consent, Export, Institution, Key, Message, Office, Person, Term, Tracked, limited
+from .models import Change, Consent, Export, Feedback, Institution, Key, Message, Office, Person, Term, Tracked, limited
 from .text import fold, matching, words
 
 
@@ -141,6 +143,21 @@ def ticket():
 
 def admitted(request):
     return bool(settings.DEMO_CODE) and constant_time_compare(request.COOKIES.get('demo', ''), ticket())
+
+
+@login_not_required
+def accessibility(request):
+    """Erklärung zur Barrierefreiheit (ThürBarrWebG), with the form to report a barrier; signed in, name and address
+    come filled in."""
+    person = request.user if request.user.is_authenticated else None
+    form = FeedbackForm(request.POST or None, initial={'page': request.GET.get('seite', '')} | ({'name': str(person), 'email': person.email} if person else {}))
+    if form.is_valid():
+        feedback = form.save()
+        if to := Institution.get().email:
+            transaction.on_commit(lambda: send_mail('Barriere in Campus gemeldet', f'{feedback.text}\n\n{feedback.page}\n{feedback.name} <{feedback.email}>', None, [to], fail_silently=True))
+        messages.success(request, f'Danke. Wir antworten bis zum {date_format(feedback.due, "j. F Y")}.')
+        return redirect('accessibility')
+    return render(request, 'core/accessibility.html', {'form': form, 'answer': Feedback.ANSWER.days})
 
 
 @login_not_required

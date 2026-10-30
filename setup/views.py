@@ -4,18 +4,19 @@ from django import forms
 from django.contrib import messages
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import PermissionDenied
-from django.db.models import ProtectedError, RestrictedError
+from django.db.models import F, ProtectedError, RestrictedError
 from django.forms import modelform_factory
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.encoding import force_bytes
 from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_encode
 from django.views.decorators.http import require_POST
 
 from core.access import kept, needs, require
 from core.keys import Edition, Key, review
-from core.models import Export, Grant, Membership, Person, SignIn, Text
+from core.models import Export, Feedback, Grant, Membership, Person, SignIn, Text
 from core.text import matching
 from core.texts import TEXTS, Values, basics, mail, wording
 from core.views import SHOWN
@@ -47,6 +48,15 @@ def approvals(request):
 def exports(request):
     """Lists with personal data taken out as files, newest first: for whoever answers for access, the last thousand."""
     return render(request, 'setup/exports.html', {'exports': Export.objects.select_related('person')[:1000]})
+
+
+@require('manage_institution')
+def feedback(request):
+    """Barriers reported under the accessibility statement, open ones first, each with the day it must be answered by."""
+    if request.method == 'POST':
+        Feedback.objects.filter(pk=request.POST.get('beantwortet'), answered=None).update(answered=timezone.localdate(), answered_by=request.user)
+        return redirect('setup:feedback')
+    return render(request, 'setup/feedback.html', {'reports': Feedback.objects.order_by(F('answered').desc(nulls_first=True), 'received')[:300]})
 
 
 @require('manage_accounts')

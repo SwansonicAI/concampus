@@ -38,6 +38,8 @@ class LessonForm(PlanForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['time'].required = self.fields['room'].required = False
+        for field in self.fields.values():  # a table row: the column heading is the only label in sight
+            field.widget.attrs.setdefault('aria-label', field.label)
 
     def clean(self):
         data = super().clean()

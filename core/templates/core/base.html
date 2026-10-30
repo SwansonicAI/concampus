@@ -8,6 +8,7 @@
 <script src="{% static 'core/app.js' %}" defer></script>
 </head>
 <body>
+<a class="skip" href="#inhalt">Zum Inhalt</a>
 <header class="appbar">
   <div class="wrap appbar-row">
     <a class="product" href="{% url 'home' %}">
@@ -38,7 +39,7 @@
     {% endif %}
   </div>
 </header>
-<main class="wrap page">
+<main class="wrap page" id="inhalt">
   {% block subnav %}{% endblock %}
   {% for message in messages %}<p class="flash {{ message.tags }}">{{ message }}</p>{% endfor %}
   {% block content %}{% endblock %}
@@ -50,7 +51,7 @@
     {% if institution.website %}<a href="{{ institution.website }}">Website der Hochschule</a>{% endif %}
     {% if institution.imprint %}<a href="{{ institution.imprint }}">Impressum</a>{% endif %}
     {% if institution.privacy %}<a href="{{ institution.privacy }}">Datenschutz</a>{% endif %}
-    {% if institution.accessibility %}<a href="{{ institution.accessibility }}">Barrierefreiheit</a>{% endif %}
+    <a href="{% url 'accessibility' %}?seite={{ request.path|urlencode }}">Barrierefreiheit</a>
   </div>
 </footer>
 {% if user.is_authenticated %}

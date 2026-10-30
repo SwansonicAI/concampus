@@ -41,6 +41,11 @@ class SetupConfig(Tile, AppConfig):
 
             if n := Grant.objects.exclude(by=person).count() + Membership.objects.filter(confirmed_by=None).exclude(by=person).exclude(person=person).count():
                 found.append(task(f'{plural(n, "Rechteänderung", "Rechteänderungen")} bestätigen', reverse('setup:approvals')))
+        if 'manage_institution' in person.roles:
+            from core.models import Feedback
+
+            if open_ := list(Feedback.objects.filter(answered=None).order_by('received')):
+                found.append(task(f'Barrierefreiheit: {plural(len(open_), "Rückmeldung", "Rückmeldungen")} beantworten', reverse('setup:feedback'), open_[0].due))
         if 'manage_accounts' in person.roles:  # an office nobody holds: what it decides goes nowhere
             for office in Office.objects.filter(user=None).order_by('name'):
                 found.append(task(f'Amt ohne Mitglieder: {office.name}', reverse('setup:edit', args=['aemter', office.pk])))

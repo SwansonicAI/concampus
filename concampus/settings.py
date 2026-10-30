@@ -45,7 +45,6 @@ CSRF_FAILURE_VIEW = 'core.views.stale'
 # Application definition
 
 INSTALLED_APPS = [
-    'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
@@ -61,6 +60,7 @@ INSTALLED_APPS = [
     'instruments',
     'analytics',
     'setup',
+    'django.contrib.admin',  # last: its registration templates must not stand in for Campus's own
 ]
 
 MIDDLEWARE = [

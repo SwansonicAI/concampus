@@ -548,6 +548,26 @@ TEXTS = {
         'www.hrk.de; E-Mail: post@hrk.de\n\n- „Hochschulkompass“ der Hochschulrektorenkonferenz, enthält '
         'umfassende Informationen zu Hochschulen, Studiengängen etc. (www.hochschulkompass.de)',
     ),
+    'barrierefreiheit_stand': Spec(
+        BAUSTEIN, 'Barrierefreiheit: Stand und Ausnahmen', '',
+        'Campus ist mit den Anforderungen der WCAG 2.1, Stufe AA, die § 3 der BITV 2.0 nach der ThürBITVO vorgibt, teilweise vereinbar. '
+        'Nicht barrierefrei sind:\n\n'
+        '– Bescheinigungen, Bescheide, Zeugnisse und Urkunden: Sie werden als Seite gedruckt oder über den Browser als PDF gespeichert; '
+        'ein getaggtes PDF (PDF/UA) gibt es nicht. Auf Anfrage erhalten Sie sie in zugänglicher Form.\n'
+        '– Videos, die Bewerbende hochladen, haben keine Untertitel; sie stammen nicht von der {hochschule}.',
+    ),
+    'barrierefreiheit_erstellung': Spec(
+        BAUSTEIN, 'Barrierefreiheit: Erstellung der Erklärung', '',
+        'Diese Erklärung beruht auf einer Selbstbewertung vom 30. Oktober 2026: 48 Seiten aller Rollen, von der Anmeldung bis zu den '
+        'Auswertungen, wurden automatisch gegen die Regeln der WCAG 2.1, Stufe AA, geprüft (axe-core 4.10) und die Befunde behoben. '
+        'Eine Prüfung durch Dritte (BITV-Test) steht aus.',
+    ),
+    'barrierefreiheit_durchsetzung': Spec(
+        BAUSTEIN, 'Barrierefreiheit: Durchsetzungsverfahren', '',
+        'Antworten wir nicht oder nicht zufriedenstellend, können Sie sich an die Durchsetzungsstelle nach dem ThürBarrWebG wenden:\n\n'
+        'Der Beauftragte der Thüringer Landesregierung für Menschen mit Behinderungen\nWerner-Seelenbinder-Straße 6\n99096 Erfurt\n'
+        'Telefon 0361 573 811 741\nE-Mail vz_bmb@tmasgff.thueringen.de',
+    ),
     'anmeldung': Spec(BAUSTEIN, 'Begrüßung auf der Anmeldeseite', '', 'Campus ist die Verwaltung von Studium, Lehre, Prüfungen, Aufnahme und Räumen der {hochschule}.'),
     'datenschutz_bewerbung': Spec(
         BAUSTEIN, 'Datenschutz beim Bewerben', '',

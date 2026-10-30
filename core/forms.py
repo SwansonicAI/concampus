@@ -6,7 +6,7 @@ from django.http import QueryDict
 from django.shortcuts import redirect
 
 from .backends import TRIES, held
-from .models import Person
+from .models import Feedback, Person
 
 
 def frequent(field, choices, n=8):
@@ -52,6 +52,15 @@ class SignInForm(AuthenticationForm):
                 f'Nach {TRIES} Fehlversuchen ist die Anmeldung von hier eine Viertelstunde gesperrt. Ein neues Passwort setzen Sie über „Passwort vergessen?“.',
             )
         return super().clean()
+
+
+class FeedbackForm(forms.ModelForm):
+    class Meta:
+        model = Feedback
+        fields = ['name', 'email', 'page', 'text']
+        widgets = {'text': forms.Textarea(attrs={'rows': 5})}
+
+    layout = [(None, [('name', 'email'), 'page', 'text'])]
 
 
 class ContactForm(forms.ModelForm):

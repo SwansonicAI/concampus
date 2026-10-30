@@ -152,6 +152,13 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 | Whoever lives in a Kreis that gave up a town, the town unknown, is listed for the student office to check | – | `core/keys.py` `review()` | Einstellungen › Amtliche Verzeichnisse |
 | The lists are kept centrally: the Schlüsselverzeichnis each year, the Gemeindeverzeichnis each quarter, brought in with an update | Destatis | `manage.py keys`, `core/data` | – |
 
+## Accessibility
+
+| Rule | Source | Code | Set in |
+|---|---|---|---|
+| Campus has its own accessibility statement, reached from every page | ThürBarrWebG | `core/views.py` `accessibility()` | Einstellungen › Texte (Bausteine „Barrierefreiheit“) |
+| A reported barrier is answered within 30 days, then marked; deleted a year later | ThürBarrWebG (deadline to confirm) | `core/models.py` `Feedback` | code |
+
 ## For the Hochschule to confirm
 
 1. Whether § 41 Abs. 2a ThürVwVfG matches the federal text: Bekanntgabe the day after opening in the Postfach.

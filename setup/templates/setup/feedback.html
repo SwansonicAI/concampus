@@ -1,0 +1,22 @@
+{% extends base %}
+{% block title %}Barrierefreiheit{% endblock %}
+{% block content %}
+<h1>Barrierefreiheit</h1>
+<p class="lead">Barrieren, die unter der <a href="{% url 'accessibility' %}">Erklärung zur Barrierefreiheit</a> gemeldet wurden. Die Antwort geht per E-Mail; hier wird sie vermerkt. Ein Jahr danach wird die Meldung gelöscht.</p>
+<table>
+  <thead><tr><th>Eingegangen</th><th>Von</th><th>Seite</th><th>Nachricht</th><th>Antwort</th></tr></thead>
+  <tbody>
+    {% for f in reports %}
+    <tr>
+      <td class="nowrap">{{ f.received|date:"j.n.Y, H:i" }}</td>
+      <td>{{ f.name|default:"–" }}<br><a href="mailto:{{ f.email }}?subject=Ihre%20Meldung%20zur%20Barrierefreiheit%20von%20Campus">{{ f.email }}</a></td>
+      <td>{{ f.page|default:"–" }}</td>
+      <td>{{ f.text|linebreaksbr }}</td>
+      <td class="nowrap">{% if f.answered %}<span class="badge yes">beantwortet {{ f.answered|date:"j.n.Y" }}</span>{% else %}<span class="badge wait">bis {{ f.due|date:"j.n.Y" }}</span>
+        <form method="post">{% csrf_token %}<button class="link" name="beantwortet" value="{{ f.pk }}"><small>als beantwortet vermerken</small></button></form>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty">Keine Meldungen.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

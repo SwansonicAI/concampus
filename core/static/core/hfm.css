@@ -7,7 +7,7 @@
   --line: #d6d6d6;
   --soft: #f2f2f2;
   --red: #c4262e;
-  --amber: #a86400;
+  --amber: #9a5c00;
   --blue: #1f5fae;
   --wide: 1360px;
   --radius: 4px;  /* controls, pills and small boxes; layout surfaces stay square */
@@ -25,6 +25,9 @@ body {
 }
 a { color: var(--green); text-decoration: none; }
 a:hover { text-decoration: underline; }
+.lead a, .muted a { text-decoration: underline; }  /* in grey text the green alone does not tell a link (WCAG 1.4.1) */
+.skip { position: absolute; left: -9999px; }
+.skip:focus { left: 16px; top: 8px; z-index: 20; padding: 8px 12px; background: #fff; }
 p { margin: 0 0 1em; }
 small { font-size: 13px; }
 .muted { color: var(--muted); }
@@ -166,6 +169,7 @@ select.cell { padding: 4px 6px; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
 .toolbar form { display: flex; flex-wrap: wrap; gap: 10px; }
 .panel { padding: 24px; background: var(--soft); }
+.panel a, .flash a { color: var(--green-dark); }  /* on grey the brand green falls short of 4.5:1 */
 .panel h3 { color: var(--ink); }
 
 /* Feedback */
@@ -262,7 +266,7 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .svpp tr.module.complete td:first-child { box-shadow: inset 4px 0 var(--green); }
 .svpp tr.part td { border-bottom: 1px solid #ececec; }
 .svpp td.num { width: 44px; }
-.svpp td.done { background: #e5f3e5; color: var(--green); font-weight: 700; }
+.svpp td.done { background: #e5f3e5; color: var(--green-dark); font-weight: 700; }
 .svpp td.now { outline: 2px solid var(--green); outline-offset: -3px; font-weight: 700; }
 .svpp td.late { outline: 2px solid var(--amber); outline-offset: -3px; }
 .tag-exam { padding: 0 5px; border: 1px solid var(--amber); color: var(--amber); font-size: 11px; font-weight: 700; text-transform: uppercase; }
@@ -497,7 +501,6 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
   padding: 4px 8px; background: var(--ink); color: #fff; font-size: 12px; white-space: nowrap; pointer-events: none;
 }
 .heat td[style] { background: color-mix(in srgb, var(--green) var(--v), #fff); }
-.heat td.dark, .heat td.dark > a { color: #fff; }
 .heat.hours td { padding: 6px 4px; min-width: 34px; font-size: 12px; text-align: center; }
 .heat.hours th { padding: 6px 4px; text-align: center; }
 .filters-on { margin: -8px 0 20px; }

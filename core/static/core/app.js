@@ -304,6 +304,8 @@ function placed(select) {
   const where = document.createElement('select');
   where.append(...[['', 'In Deutschland oder im Ausland?'], ['de', 'In Deutschland'], ['abroad', 'Im Ausland']].map(([value, text]) => new Option(text, value)));
   const search = Object.assign(document.createElement('input'), {type: 'search', className: 'filter', placeholder: 'Ort oder Postleitzahl, z. B. Apolda'});
+  where.setAttribute('aria-label', 'In Deutschland oder im Ausland');
+  search.setAttribute('aria-label', 'Ort oder Postleitzahl');
   const found = Object.assign(document.createElement('datalist'), {id: `${select.id}-orte`});
   search.setAttribute('list', found.id);
   (find || select).before(where, search, found);
