@@ -7,6 +7,7 @@ from django.core.management import call_command
 from django.db.models import Count
 from django.test import Client
 from django.utils import timezone
+from lxml import etree
 
 from core.apps import tiles
 from core.models import Message, Person, Term
@@ -14,6 +15,7 @@ from core.testing import Seeded, flashes
 from exams.views import exhausted
 from .disposal import due
 from .models import Document, InsuranceReport, Study, StudyTerm
+from . import xhochschule
 from .smv import receive
 
 
@@ -243,3 +245,25 @@ class DisposalTest(Seeded):
         person.refresh_from_db()
         self.assertEqual((person.messages.exists(), person.address, person.is_active), (False, '', False))
         self.assertTrue(person.birth_date and person.matriculation and person.studies.exists())
+
+
+class XHochschuleTest(Seeded):
+    def test_bescheinigungen_go_out_as_xhochschule_files(self):
+        """Each Bescheinigung also as an XHochschule 1.2 file, valid against the standard's schemas, a leave with its ground;
+        where the record lacks what the standard asks, the page says so instead."""
+        asa = self.login('asa')
+        enrolled = Study.objects.filter(status='enrolled').first()
+        former = Study.objects.filter(status__in=Study.FORMER, terms__leave=True).exclude(exit_reason='').first()
+        for url, root in [
+            (f'/studierende/{enrolled.pk}/bescheinigung/?xml', 'immatrikulationsbescheinigung'),
+            (f'/studierende/{enrolled.pk}/bescheinigung/?bafoeg&xml', 'immatrikulationsbescheinigungBAfoeGP9'),
+            (f'/studierende/{former.pk}/exmatrikulation/?xml', 'exmatrikulationsbescheinigung'),
+            (f'/studierende/{former.pk}/studienzeiten/?xml', 'rentenbescheinigung'),
+        ]:
+            with self.subTest(root):
+                document = etree.fromstring(asa.get(url).content)
+                self.assertEqual(document.tag, f'{{{xhochschule.XHS}}}{root}')
+                xhochschule.schema().assertValid(document)
+        self.assertIn(b'beurlaubungsgrund', asa.get(f'/studierende/{former.pk}/studienzeiten/?xml').content)
+        Person.objects.filter(pk=enrolled.person_id).update(birth_place='')  # BAföG asks for it
+        self.assertIn('Als XHochschule-Datei noch nicht möglich', flashes(asa.get(f'/studierende/{enrolled.pk}/bescheinigung/?bafoeg&xml', follow=True))[0])

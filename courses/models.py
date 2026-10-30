@@ -557,3 +557,20 @@ class Appointment(Tracked, models.Model):
         for a in cls.objects.filter(year__in=years).prefetch_related('subjects'):
             found[a.year] |= {(a.person_id, s.pk) for s in a.subjects.all()} | ({(a.person_id, None)} if a.general else set())
         return found
+
+
+class MoodleCourse(models.Model):
+    """A Lehrveranstaltung as it stands in the Hochschule's Moodle (courses/moodle.py): its course there, and whom Campus
+    enrolled in it, so that Campus takes out only whom it put in."""
+
+    course = models.OneToOneField(Course, models.CASCADE, related_name='moodle', verbose_name='Veranstaltung')
+    moodle_id = models.PositiveIntegerField('Kurs in Moodle')
+    people = models.JSONField('Von Campus eingeschrieben', default=list, help_text='Die Nutzer-IDs in Moodle.')
+    synced = models.DateTimeField('Abgeglichen', default=timezone.now)
+
+    class Meta:
+        verbose_name = 'Moodle-Kurs'
+        verbose_name_plural = 'Moodle-Kurse'
+
+    def __str__(self):
+        return f'{self.course} in Moodle ({self.moodle_id})'

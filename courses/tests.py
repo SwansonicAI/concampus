@@ -1,5 +1,6 @@
 from datetime import timedelta
 
+from django.db.models import Count
 from django.test import Client
 from django.utils import timezone
 
@@ -7,7 +8,8 @@ from core.models import Holiday, Person, Term
 from rooms.models import Room
 from core.testing import Seeded, flashes
 from students.models import Study
-from .models import Course, Ensemble, Participation, Signup
+from .models import Course, Ensemble, MoodleCourse, Participation, Signup
+from .moodle import flat, sync
 from .views import deputat, loads
 
 
@@ -163,3 +165,67 @@ class PlanTest(Seeded):
         self.assertEqual(first.category_id, 'abgesagt')
         self.assertTrue(course.bookings.filter(participants=mei, start=first.start + timedelta(days=1)).exists())
         self.assertTrue(mei.messages.filter(subject=f'Verlegt: {course.title}').exists())
+
+
+class FakeMoodle:
+    """Moodle's web services as far as Campus calls them, kept in memory; users for these e-mail addresses only."""
+
+    def __init__(self, emails):
+        self.users = {e.lower(): n for n, e in enumerate(emails, 100)}
+        self.categories, self.courses, self.enrolled = [], {}, set()
+
+    def __call__(self, function, **p):
+        if function == 'core_course_get_categories':
+            return [c for c in self.categories if c['idnumber'] == p['criteria'][0]['value']]
+        if function == 'core_course_create_categories':
+            made = [{'id': len(self.categories) + n + 1, **c} for n, c in enumerate(p['categories'])]
+            self.categories += made
+            return made
+        if function == 'core_course_create_courses':
+            for c in p['courses']:
+                self.courses[len(self.courses) + 1] = dict(c)
+            return [{'id': len(self.courses)}]
+        if function == 'core_course_update_courses':
+            for c in p['courses']:
+                self.courses[c['id']].update(c)
+            return {'warnings': []}
+        if function == 'core_user_get_users_by_field':
+            return [{'id': self.users[v], 'email': v} for v in p['values'] if v in self.users]
+        if function == 'enrol_manual_enrol_users':
+            self.enrolled |= {(e['courseid'], e['userid'], e['roleid']) for e in p['enrolments']}
+            return None
+        if function == 'enrol_manual_unenrol_users':
+            out = {(e['courseid'], e['userid']) for e in p['enrolments']}
+            self.enrolled = {e for e in self.enrolled if e[:2] not in out}
+            return None
+        raise AssertionError(function)
+
+
+class MoodleTest(Seeded):
+    def test_courses_and_their_people_follow_campus(self):
+        """A semester's courses go to Moodle under semester, Fachgebiet and Lehrform, with their teachers and participants;
+        whoever has no Moodle account yet waits, whoever leaves is taken out, a course called off is hidden."""
+        course = Course.objects.filter(kind='course', term=Term.current(), cancelled=None, area__isnull=False, format__isnull=False, staff__isnull=False).annotate(n=Count('participations')).filter(n__gte=3).first()
+        students = [p.study.person for p in course.participations.select_related('study__person')]
+        teacher = course.staff.first()
+        moodle = FakeMoodle([teacher.email, *(p.email for p in students[1:])])  # the first student has not signed in to Moodle yet
+        self.assertGreaterEqual(sync(moodle)['ohne Moodle-Konto'], 1)
+        mine = MoodleCourse.objects.get(course=course).moodle_id
+        here = moodle.courses[mine]
+        self.assertEqual((here['idnumber'], here['visible']), (f'campus-course-{course.pk}', True))
+        names = {c['id']: c for c in moodle.categories}
+        path = [names[here['categoryid']]]
+        while path[-1]['parent']:
+            path.append(names[path[-1]['parent']])
+        self.assertEqual([c['name'] for c in reversed(path)], [course.term.name.replace('WiSe', 'Wintersemester').replace('SoSe', 'Sommersemester'), course.area.name, course.format.name])
+        self.assertIn((mine, moodle.users[teacher.email.lower()], 3), moodle.enrolled)
+        self.assertIn((mine, moodle.users[students[1].email.lower()], 5), moodle.enrolled)
+        made = len(moodle.courses)
+        Participation.objects.filter(course=course, study__person=students[1]).delete()
+        sync(moodle)
+        self.assertEqual(len(moodle.courses), made)  # each course once
+        self.assertNotIn((mine, moodle.users[students[1].email.lower()], 5), moodle.enrolled)
+        Course.objects.filter(pk=course.pk).update(cancelled=timezone.now())
+        sync(moodle)
+        self.assertFalse(moodle.courses[mine]['visible'])
+        self.assertEqual(flat({'courses': [{'fullname': 'X', 'visible': True}]}), {'courses[0][fullname]': 'X', 'courses[0][visible]': 1})

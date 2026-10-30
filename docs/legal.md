@@ -85,7 +85,7 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 
 | Requirement | Source | Status | In Campus, or missing |
 |---|---|---|---|
-| XHochschule documents | XBildung, IT-Planungsrat 2025/43 | partly | Immatrikulations-, Studienzeit- and Exmatrikulationsbescheinigung, Leistungsübersicht, Zeugnis, Urkunde, Diploma Supplement in English and German, as printable pages; the Immatrikulationsbescheinigung checkable by its Prüfcode, also as the version of § 9 BAföG, which stands in for Formblatt 2. No XHochschule data, no eIDAS seal |
+| XHochschule documents | XBildung, IT-Planungsrat 2025/43 | partly | Immatrikulations-, Studienzeit- and Exmatrikulationsbescheinigung, Leistungsübersicht, Zeugnis, Urkunde, Diploma Supplement in English and German, as printable pages; the Immatrikulationsbescheinigung checkable by its Prüfcode, also as the version of § 9 BAföG, which stands in for Formblatt 2. Immatrikulations-, BAföG-, Exmatrikulations- and Studienzeitbescheinigung also as XHochschule 1.2 files, each checked against the standard's schemas before it goes out (`students/xhochschule.py`); its further rules (Schematron, XSLT 2) not run. Leistungsübersicht, Zeugnis and Diploma Supplement not yet as data; no eIDAS seal |
 | Statistics delivery | HStatG | yes | eSTATISTIK.core files |
 | Reports with the health insurers, electronic only since 2022 | § 199a SGB V, Gemeinsame Grundsätze of the GKV-Spitzenverband and the HRK; Absendernummer under § 18n SGB IV | partly | Inside Campus: the insurers' reports (M10 to M13) booked to their person, by hand where none or several match; enrolment only with the status, the Rückmeldung held back by arrears; the Hochschule's reports (M20, M30, Storno) made when someone begins or stops studying here; the Absendernummer shown to applicants. Not yet: the files to and from dakota, which wait for the GKV's XML schemata; HfM's Absendernummer and certificate (`docs/smv.md`) |
 | Erasmus Without Paper | European Commission | no | No mobility: no inter-institutional agreements, no online learning agreements |
@@ -119,7 +119,7 @@ Every requirement above that is not „yes“ is here.
 In Campus:
 
 1. Electronic reports with the health insurers (§ 199a SGB V): the files to and from dakota (`docs/smv.md`).
-2. XHochschule data for the certificates, with an eIDAS seal.
+2. XHochschule data for the Leistungsübersicht, Zeugnis and Diploma Supplement; an eIDAS seal on all.
 3. Statistics of academic and artistic staff.
 4. Mark a record as restricted (Art. 18).
 5. A hearing step before Bescheide that need one (§ 28 VwVfG), once the Hochschule has named them.

@@ -18,7 +18,9 @@ from django.contrib.auth.decorators import login_not_required
 from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.html import format_html
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.text import slugify
 from django.views.decorators.http import require_POST
+from lxml.etree import DocumentInvalid
 
 from core import dates, texts
 from core.access import CODENAMES, require
@@ -34,7 +36,7 @@ from curriculum.models import Module, Program, Subject
 from curriculum.views import plan
 from exams.views import exhausted
 from instruments.models import Loan
-from . import payments, smv
+from . import payments, smv, xhochschule
 from .disposal import assess, due, offer
 from .models import EXITS, FIRST_TERM_LEAVES, LEAVE_TERMS, LEAVES, OFFICIAL, Disposal, Document, DocumentType, InsuranceReport, Study, StudyTerm
 
@@ -852,11 +854,13 @@ def periods(request, pk):
         semester = s.prior_terms
         for registration in s.terms.filter(term__start__lte=today, withdrawn=False).select_related('term'):
             semester += not registration.leave
-            rows.append((registration.term, s, registration.leave, semester))
+            rows.append((registration.term, s, registration, semester))
     rows.sort(key=lambda row: row[0].start)
+    if 'xml' in request.GET:
+        return data(request, lambda: xhochschule.periods(study, rows, first_enrolment(person)), f'studienzeitbescheinigung-{person.matriculation}')
     return render(request, 'students/periods.html', {
         'study': study, 'person': person, 'studies': studies, 'rows': rows, 'count': len({row[0] for row in rows}),
-        'leave': len({term for term, _, leave, _ in rows if leave}), 'today': today, 'sender': texts.block('absender_bescheinigungen'),
+        'leave': len({term for term, _, registration, _ in rows if registration.leave}), 'today': today, 'sender': texts.block('absender_bescheinigungen'),
     })
 
 
@@ -865,6 +869,8 @@ def exmatriculation(request, pk):
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term'), pk=pk, status__in=Study.FORMER)
     if not (study.person == request.user or request.user.may('manage_students', study)):
         raise PermissionDenied
+    if 'xml' in request.GET:
+        return data(request, lambda: xhochschule.exmatriculation(study, first_enrolment(study.person)), f'exmatrikulationsbescheinigung-{study.person.matriculation}')
     return render(request, 'students/exmatriculation.html', {
         'study': study, 'today': timezone.localdate(), 'sender': texts.block('absender_bescheinigungen'),
         'reason': study.exit_reason == '1' or request.GET.get('grund'),  # often handed on: the ground only where asked for
@@ -879,15 +885,37 @@ def certificate(request, pk):
         raise PermissionDenied
     term, coming = Term.current(), Term.upcoming()  # the coming semester too, once its Rückmeldung is paid: for a BAföG Folgeantrag
     ahead = coming and request.GET.get('semester') == str(coming.pk) and study.terms.filter(term=coming, paid__isnull=False).first()
-    term = coming if ahead else term
-    first = StudyTerm.objects.filter(study__person=study.person_id, withdrawn=False).order_by('term__start').select_related('term').first()
+    term, first = coming if ahead else term, first_enrolment(study.person)
+    registration, fs, code = study.terms.filter(term=term).first(), study.semester + (bool(ahead) and not ahead.leave), f'{study.pk}-{term.pk}-{signature(study.pk, term.pk)}'
+    check = request.build_absolute_uri(reverse('students:verify'))
+    if 'xml' in request.GET:
+        return data(
+            request, lambda: xhochschule.enrolment(study, term, registration, fs, first, (code, f'{check}?code={code}'), 'bafoeg' in request.GET),
+            f'immatrikulationsbescheinigung-{study.person.matriculation}-{slugify(term.name)}',
+        )
     return render(request, 'students/certificate.html', {
-        'study': study, 'term': term, 'registration': study.terms.filter(term=term).first(), 'today': timezone.localdate(),
-        'fs': study.semester + (bool(ahead) and not ahead.leave), 'hs': study.university_semester + bool(ahead),
-        'bafoeg': 'bafoeg' in request.GET, 'first': study.person.first_term or (first and first.term),
-        'sender': texts.block('absender_bescheinigungen'), 'code': f'{study.pk}-{term.pk}-{signature(study.pk, term.pk)}',
-        'check': request.build_absolute_uri(reverse('students:verify')),
+        'study': study, 'term': term, 'registration': registration, 'today': timezone.localdate(), 'fs': fs, 'hs': study.university_semester + bool(ahead),
+        'bafoeg': 'bafoeg' in request.GET, 'first': first, 'sender': texts.block('absender_bescheinigungen'), 'code': code, 'check': check,
     })
+
+
+def first_enrolment(person):
+    """The semester of the first enrolment anywhere: as the record names one elsewhere, else the first registered here."""
+    first = StudyTerm.objects.filter(study__person=person, withdrawn=False).order_by('term__start').select_related('term').first()
+    return person.first_term or (first and first.term)
+
+
+def data(request, build, name):
+    """A Bescheinigung as an XHochschule file to download; where the record lacks what the standard asks, back to the page
+    with what is missing."""
+    try:
+        content = build()
+    except DocumentInvalid as error:
+        messages.error(request, f'Als XHochschule-Datei noch nicht möglich, in der Akte fehlt etwas: {error}')
+        return redirect(request.path)
+    response = HttpResponse(content, content_type='application/xml')
+    response['Content-Disposition'] = f'attachment; filename="{name}.xml"'
+    return response
 
 
 def signature(study, term):

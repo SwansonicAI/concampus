@@ -179,6 +179,12 @@ SAML = {
     'id': os.environ.get('SAML_ID_ATTRIBUTE', 'urn:oid:1.3.6.1.4.1.5923.1.1.1.6'),  # eduPersonPrincipalName
     'mail': os.environ.get('SAML_MAIL_ATTRIBUTE', 'urn:oid:0.9.2342.19200300.100.1.3'),
 }
+# The Hochschule's Moodle (courses/moodle.py): its address and a web-service token; without them, off. The category the
+# semesters go under (0: the top), and Moodle's ids of the roles participants and teachers get.
+MOODLE = {
+    'url': os.environ.get('MOODLE_URL', ''), 'token': os.environ.get('MOODLE_TOKEN', ''), 'category': int(os.environ.get('MOODLE_CATEGORY', 0)),
+    'student': int(os.environ.get('MOODLE_STUDENT_ROLE', 5)), 'teacher': int(os.environ.get('MOODLE_TEACHER_ROLE', 3)),
+}
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'campus@localhost')  # where the Hochschule has no address of its own (Einstellungen › Hochschule)
 
 

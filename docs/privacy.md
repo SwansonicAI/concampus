@@ -130,6 +130,13 @@ results. Documents, messages, the Verlauf, contact and personal administration d
 bookings, notes, Gutachten, grounds of leave and a Nachteilsausgleich go. After `core_years` (50) the Grunddaten are
 made anonymous (`students/disposal.py`, `manage.py prune`).
 
+### Moodle and XHochschule files
+
+Each night Campus gives the Hochschule's Moodle the e-mail addresses of the teachers and participants of its courses, to
+find their accounts there, and enrols them; Moodle already holds their names (`docs/moodle.md`). A Bescheinigung as an
+XHochschule file carries what the printed one does; the Studienzeitbescheinigung also each leave's ground, as the
+standard asks of it, Erkrankung among them: it goes to whoever downloads it, the person or the student office.
+
 ### Reports with the health insurers
 
 An insurer's report names the person (names, birth date), their insurer and its Betriebsnummer, and the status, a new

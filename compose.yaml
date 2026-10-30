@@ -1,6 +1,7 @@
 # The server: the app behind Caddy, which fetches the HTTPS certificate for DOMAIN.
 # .env next to this file holds DOMAIN, SECRET_KEY, DATABASE_URL, EMAIL_URL, DEFAULT_FROM_EMAIL and, on the demo server, DEMO=1;
-# for the Hochschule's login SAML_IDP_METADATA, SAML_SP_KEY and SAML_SP_CERT (concampus/settings.py).
+# for the Hochschule's login SAML_IDP_METADATA, SAML_SP_KEY and SAML_SP_CERT; for its Moodle MOODLE_URL and MOODLE_TOKEN
+# (concampus/settings.py).
 services:
   app:
     build: .
@@ -10,10 +11,10 @@ services:
     volumes:
       - media:/app/media
     restart: unless-stopped
-  prune:  # nightly: deletion periods (manage.py prune)
+  prune:  # nightly: deletion periods (manage.py prune), then Moodle (manage.py moodle)
     build: .
     env_file: .env
-    command: sh -c 'while true; do python manage.py prune; sleep 86400; done'
+    command: sh -c 'while true; do python manage.py prune; python manage.py moodle; sleep 86400; done'
     volumes:
       - media:/app/media
     restart: unless-stopped

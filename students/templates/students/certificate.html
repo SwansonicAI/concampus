@@ -2,7 +2,7 @@
 {% block title %}Immatrikulationsbescheinigung{% if bafoeg %} nach § 9 BAföG{% endif %}{% endblock %}
 {% block content %}
 <div class="document">
-  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="btn ghost" href="{{ request.get_full_path }}{% if request.GET %}&amp;{% else %}?{% endif %}xml">Als XHochschule-Datei</a><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
   {% include "core/_letterhead.html" with office=sender %}
   <h1>Immatrikulations&shy;bescheinigung{% if bafoeg %} nach § 9 BAföG{% endif %}</h1>
   <p>Hiermit wird bescheinigt, dass</p>

@@ -2,7 +2,7 @@
 {% block title %}Exmatrikulationsbescheinigung{% endblock %}
 {% block content %}
 <div class="document">
-  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button>{% if study.exit_reason and study.exit_reason != '1' %}<a class="btn ghost" href="?{% if not reason %}grund=1{% endif %}">{% if reason %}Ohne Grund{% else %}Mit Grund{% endif %}</a>{% endif %}<a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button>{% if study.exit_reason and study.exit_reason != '1' %}<a class="btn ghost" href="?{% if not reason %}grund=1{% endif %}">{% if reason %}Ohne Grund{% else %}Mit Grund{% endif %}</a>{% endif %}<a class="btn ghost" href="?xml">Als XHochschule-Datei</a><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
   {% include "core/_letterhead.html" with office=sender %}
   <h1>Exmatrikulations&shy;bescheinigung</h1>
   <p>Hiermit wird bescheinigt, dass</p>

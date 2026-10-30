@@ -2,7 +2,7 @@
 {% block title %}Studienzeitbescheinigung{% endblock %}
 {% block content %}
 <div class="document">
-  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="btn ghost" href="?xml">Als XHochschule-Datei</a><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
   {% include "core/_letterhead.html" with office=sender %}
   <h1>Studienzeit&shy;bescheinigung</h1>
   <p>Hiermit werden die Studienzeiten an der {{ institution.name }} bescheinigt für</p>
@@ -15,12 +15,12 @@
     <table>
       <thead><tr><th>Semester</th><th>Zeitraum</th><th>Studiengang und Hauptfach</th><th class="num">Fachsemester</th></tr></thead>
       <tbody>
-        {% for term, s, leave, semester in rows %}
+        {% for term, s, registration, semester in rows %}
         <tr>
           <td class="nowrap">{{ term }}</td>
           <td class="nowrap">{{ term.start|date:"d.m.Y" }} bis {{ term.end|date:"d.m.Y" }}</td>
           <td>{{ s.program.title }}, {{ s.subject }}</td>
-          <td class="num">{% if leave %}Urlaubssemester{% else %}{{ semester }}{% endif %}</td>
+          <td class="num">{% if registration.leave %}Urlaubssemester{% else %}{{ semester }}{% endif %}</td>
         </tr>
         {% empty %}<tr><td colspan="4" class="empty">Keine Semester.</td></tr>
         {% endfor %}

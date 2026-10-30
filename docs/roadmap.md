@@ -16,9 +16,9 @@ health insurers in `docs/smv.md`.
 | Sign-in with the Bauhaus account (Shibboleth, DFN-AAI) | partly | Built (`core/sso.py`): Campus as a SAML service provider, tested with a signed answer as a Shibboleth IdP gives it; applicants keep their passwords, having no Bauhaus account. Still to do: register Campus with the Bauhaus-Universität's IdP and agree on the attributes it releases |
 | Health insurers (§ 199a SGB V) | no | `docs/smv.md` |
 | Official statistics | yes | Files for Studierende, Prüfungen, Promovierende and Gasthörer:innen; not yet delivered for real. Staff statistics: from MACH, to check |
-| Moodle | no | Courses carry Moodle's Fachgebiete; Campus neither creates them in Moodle nor enrols participants |
+| Moodle | partly | Campus creates each semester's courses in Moodle and enrols teachers and participants nightly (`docs/moodle.md`); HfM's Moodle still to connect |
 | Erasmus Without Paper | no | No mobility: no inter-institutional agreements, no online learning agreements |
-| XHochschule | partly | Certificates as pages; no data, no seal |
+| XHochschule | partly | Immatrikulations-, BAföG-, Exmatrikulations- and Studienzeitbescheinigung also as XHochschule 1.2 files, checked against the standard's schemas; Leistungsübersicht, Zeugnis and Diploma Supplement still as pages only; no seal |
 | Migration | partly | Campus loads people, studies, semesters, results, insurance and Studienpläne from one document (`docs/transfer.md`); HISinOne's export is still to be mapped onto it |
 
 Manual today and at launch, no interface: thoska card, library, MACH ERP, Studierendenwerk, marks from FSU Jena (taken
@@ -54,8 +54,9 @@ Most of it can be built before HfM's systems are open to us; what needs them wai
    Hochschule's Studienpläne come in the same way.
 4. Done: **single sign-on** through SAML (`core/sso.py`), tested with signed answers; the Bauhaus IdP's registration
    and attributes later.
-5. **Moodle**: courses and participants through its web services, against a Moodle of our own.
-6. **XHochschule data** for the certificates; the seal once HfM has a trust service.
+5. Done: **Moodle**: courses and participants through its web services (`docs/moodle.md`).
+6. Done for the Bescheinigungen: **XHochschule data** (`students/xhochschule.py`); the Leistungsübersicht, Zeugnis and
+   Diploma Supplement next, the seal once HfM has a trust service.
 7. **Erasmus Without Paper**: a mobility part, the largest; with HfM's international office.
 
 Alongside, at the desk: our fields against the ThürHDatVO 2019; the escrow (`docs/escrow.md`).
