@@ -13,7 +13,7 @@
     <tbody>
       {% for r in rows %}
       {% if r.kind == 'or' %}
-      <tr class="or"><td colspan="{% if progress %}{{ semesters|length|add:5 }}{% else %}{{ semesters|length|add:4 }}{% endif %}" style="padding-left: calc(10px + {{ r.depth }} * 16px)"><div class="either">oder</div></td></tr>
+      <tr class="or"><td colspan="{% if progress %}{{ semesters|length|add:5 }}{% else %}{{ semesters|length|add:4 }}{% endif %}" style="padding-left: calc(10px + {{ r.depth }} * 16px)"><div class="either">oder statt „{{ r.instead }}“</div></td></tr>
       {% elif r.kind == 'part' %}
       <tr class="part{% if r.exam %} exam{% endif %}{% if progress and r.off %} off{% endif %}">
         <td style="padding-left: calc(10px + {{ r.depth }} * 16px)">
@@ -36,7 +36,8 @@
           {% if edit %}<a href="{% url 'setup:edit' 'module' r.node.pk %}?next={{ request.path|urlencode }}">{% if r.node.code %}<span class="code">{{ r.node.code }}</span>{% endif %}<span class="name">{{ r.node.title }}</span></a>
           <a class="muted" href="{% url 'setup:new' 'module' %}?studiengang={{ r.node.program_id }}&unter={{ r.node.pk }}&next={{ request.path|urlencode }}" title="Ein Modul darunter anlegen"><small>+ Untermodul</small></a>
           {% else %}{% if r.node.code %}<span class="code">{{ r.node.code }}</span>{% endif %}<span class="name">{{ r.node.title }}</span>{% endif %}
-          {% if r.node.offered > r.node.credits %}<span class="choice">· Wahl: {{ r.node.credits }} von {{ r.node.offered }} CP</span>{% endif %}
+          {% if r.options %}<span class="choice">· {% if r.options == 2 %}eine der beiden wählen{% else %}eine davon wählen{% endif %}</span>
+          {% elif r.node.offered > r.node.credits %}<span class="choice">· Wahl: {{ r.node.credits }} von {{ r.node.offered }} CP</span>{% endif %}
           {% if r.node.description %}<small class="about">{{ r.node.description }}</small>{% endif %}
           {% if r.node.pk in findable %}<a class="find" href="{% url 'courses:catalogue' %}?modul={{ r.node.pk }}">Veranstaltungen finden</a>{% endif %}
         </td>

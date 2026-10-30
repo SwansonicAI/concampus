@@ -21,7 +21,7 @@ def plan(tree, semesters, choices=(), taking=(), late=()):
     (Program.choices()) stands „oder“. For a student each cell has its `state`: passed, taken this term (`taking`), an
     exam overdue (`late`), or waived for the Hauptfach („off“)."""
     rows, area = [], {o.pk: o.choice.pk for o in choices}
-    begun = set()  # the choices whose first Schwerpunkt is listed
+    begun = {}  # each choice's Schwerpunkt listed last
 
     def state(items):
         for i in items:
@@ -35,9 +35,12 @@ def plan(tree, semesters, choices=(), taking=(), late=()):
         leaves = [n for n in node.nodes if not n.nodes]
         if node.pk in area:
             if area[node.pk] in begun:
-                rows.append({'kind': 'or', 'depth': depth})
-            begun.add(area[node.pk])
-        rows.append({'kind': 'module' if leaves else 'group', 'node': node, 'depth': depth, 'choosing': node.pk in area or node.pk in area.values()})
+                rows.append({'kind': 'or', 'depth': depth, 'instead': begun[area[node.pk]]})
+            begun[area[node.pk]] = node.title
+        rows.append({
+            'kind': 'module' if leaves else 'group', 'node': node, 'depth': depth, 'choosing': node.pk in area or node.pk in area.values(),
+            'options': list(area.values()).count(node.pk),  # of a choice: how many Schwerpunkte it has, one to be studied
+        })
         parts = {}
         for leaf in leaves:
             parts.setdefault(leaf.title, []).append(leaf)
