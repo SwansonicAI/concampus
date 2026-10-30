@@ -108,15 +108,37 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 | Other states | each state's laws | partly | Thuringian rules in editable texts and in code (ThürLVVO, VwVfG periods); official keys are national |
 | Barrierefreiheitsstärkungsgesetz | BFSG | n/a | Private institutions only |
 
-## To do in Campus
+## To do
 
-1. Backup of uploaded files.
-2. Statistics of academic and artistic staff.
-3. Mark a record as restricted.
-4. XHochschule data for the certificates.
-5. Electronic reports with the health insurers (§ 199a SGB V): receive M10 and M11, send M20 and M30.
-6. A manual accessibility test (BITV-Test) by a third party.
+Every requirement above that is not „yes“ is here.
+
+Before the pitch:
+
+1. The Immatrikulationsbescheinigung as the BAföG § 9 version.
+
+In Campus, after the pitch:
+
+2. Electronic reports with the health insurers (§ 199a SGB V): receive M10 and M11, send M20 and M30.
+3. XHochschule data for the certificates, with an eIDAS seal.
+4. Statistics of academic and artistic staff.
+5. Mark a record as restricted (Art. 18).
+6. A hearing step before Bescheide that need one (§ 28 VwVfG), once the Hochschule has named them.
 7. Periods for staff records and the export log.
+8. A complete export of a Hochschule's data, for switching provider (Data Act).
+9. Erasmus Without Paper and booking fees to the Hochschule's finance system, if wanted.
+
+In production:
+
+10. A second factor at sign-in, through single sign-on (Shibboleth) with the Hochschule's identity provider.
+11. Backup of uploaded files; an EU host, BSI C5 where a cloud is used.
+
+Outside the code:
+
+12. A security concept after BSI IT-Grundschutz (Profil für Hochschulen).
+13. A manual accessibility test (BITV-Test) by a third party, and the conformance report a tender asks for.
+14. The processor agreement (Art. 28) and the description of technical and organisational measures for the
+    Hochschule's records of processing and impact assessment.
+15. An Impressum for concampus.de.
 
 ## To check
 
