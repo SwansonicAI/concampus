@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import sso, views
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -12,6 +12,9 @@ urlpatterns = [
     path('datum/', views.when, name='when'),
     path('orte/', views.towns, name='towns'),
     path('konto/', views.account, name='account'),
+    path('konto/sso/', sso.begin, name='sso'),
+    path('konto/sso/acs/', sso.acs, name='sso_acs'),
+    path('konto/sso/metadata/', sso.metadata, name='sso_metadata'),
     path('konto/bescheide/', views.delivery, name='delivery'),
     path('konto/daten/', views.copy, name='copy'),
     path('konto/adresse/<str:token>/', views.confirm_email, name='confirm_email'),

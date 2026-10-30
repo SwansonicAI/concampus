@@ -13,13 +13,13 @@ health insurers in `docs/smv.md`.
 | Applications (APP), uploads in Gecko CAMPUS | yes | Eignungsprüfung with rounds, juries, video round, ranking, offers, Nachrückliste; uploads in Campus itself |
 | Office reports, exported by hand | partly | Lists as CSV, Auswertungen, the official statistics; which reports HfM pulls today is not known |
 | Bauhaus accounts | no | Enrolment and Exmatrikulation are not sent to the Bauhaus-Universität's computing centre, which opens and closes student accounts, perhaps the semester ticket too; format unknown. Campus makes its own student addresses (`students/views.py` `matriculate()`): once Bauhaus makes the accounts, the address comes from there |
-| Sign-in with the Bauhaus account (Shibboleth, DFN-AAI) | no | Campus's own passwords; applicants keep them, having no Bauhaus account |
+| Sign-in with the Bauhaus account (Shibboleth, DFN-AAI) | partly | Built (`core/sso.py`): Campus as a SAML service provider, tested with a signed answer as a Shibboleth IdP gives it; applicants keep their passwords, having no Bauhaus account. Still to do: register Campus with the Bauhaus-Universität's IdP and agree on the attributes it releases |
 | Health insurers (§ 199a SGB V) | no | `docs/smv.md` |
 | Official statistics | yes | Files for Studierende, Prüfungen, Promovierende and Gasthörer:innen; not yet delivered for real. Staff statistics: from MACH, to check |
 | Moodle | no | Courses carry Moodle's Fachgebiete; Campus neither creates them in Moodle nor enrols participants |
 | Erasmus Without Paper | no | No mobility: no inter-institutional agreements, no online learning agreements |
 | XHochschule | partly | Certificates as pages; no data, no seal |
-| Migration | no | No import of students, applicants and exams with their history, nor of current students' insurance, which their M30 needs |
+| Migration | partly | Campus loads people, studies, semesters, results, insurance and Studienpläne from one document (`docs/transfer.md`); HISinOne's export is still to be mapped onto it |
 
 Manual today and at launch, no interface: thoska card, library, MACH ERP, Studierendenwerk, marks from FSU Jena (taken
 in as Anerkennung).
@@ -49,10 +49,11 @@ Most of it can be built before HfM's systems are open to us; what needs them wai
 2. Done: **one list of status changes** (`students.models.Event`): whoever begins or stops studying here, for the
    health insurers now and Bauhaus and Moodle later; a Beurlaubung joins it once one of them needs it. On it **the
    health insurers inside Campus** (`docs/smv.md`); the files to and from dakota wait for the GKV's schemata.
-3. **An import format**: people, studies, semesters, results by Prüfungsordnung, insurance, Studienpläne; tested by a
-   round trip of the seed. HfM's export then only needs mapping, and the next Hochschule's Studienpläne come in the
-   same way.
-4. **Single sign-on** through SAML, against a test identity provider; Bauhaus's attributes later.
+3. Done: **an import format** (`docs/transfer.md`): people, studies, semesters, results by Prüfungsordnung, insurance,
+   Studienpläne; the whole demo goes out and back in unchanged. HfM's export then only needs mapping, and the next
+   Hochschule's Studienpläne come in the same way.
+4. Done: **single sign-on** through SAML (`core/sso.py`), tested with signed answers; the Bauhaus IdP's registration
+   and attributes later.
 5. **Moodle**: courses and participants through its web services, against a Moodle of our own.
 6. **XHochschule data** for the certificates; the seal once HfM has a trust service.
 7. **Erasmus Without Paper**: a mobility part, the largest; with HfM's international office.

@@ -1,5 +1,6 @@
 # The server: the app behind Caddy, which fetches the HTTPS certificate for DOMAIN.
-# .env next to this file holds DOMAIN, SECRET_KEY, DATABASE_URL, EMAIL_URL, DEFAULT_FROM_EMAIL and, on the demo server, DEMO=1.
+# .env next to this file holds DOMAIN, SECRET_KEY, DATABASE_URL, EMAIL_URL, DEFAULT_FROM_EMAIL and, on the demo server, DEMO=1;
+# for the Hochschule's login SAML_IDP_METADATA, SAML_SP_KEY and SAML_SP_CERT (concampus/settings.py).
 services:
   app:
     build: .

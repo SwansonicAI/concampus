@@ -75,7 +75,7 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 |---|---|---|---|
 | BSI IT-Grundschutz, Profil für Hochschulen | de facto, through Art. 32 GDPR | no | No security concept |
 | Encrypted connections | Art. 32 | yes | HTTPS through Caddy, HSTS, secure cookies, CSRF protection |
-| Login | Art. 32 | partly | Hashed passwords with rules; five failures for a name from one address hold it back there a quarter of an hour (`core/backends.py` `held()`); signed out after two hours idle and when the browser closes. No second factor: in production it comes with single sign-on (Shibboleth) from the Hochschule's identity provider |
+| Login | Art. 32 | partly | Hashed passwords with rules; five failures for a name from one address hold it back there a quarter of an hour (`core/backends.py` `held()`); signed out after two hours idle and when the browser closes. Sign-in through the Hochschule's identity provider (SAML, as Shibboleth and the DFN-AAI use it; `core/sso.py`), which brings its second factor where it asks for one; not yet registered with an IdP |
 | Rights | Art. 32 | yes | New rights and members confirmed by a second administrator, offices held until a date, exports logged |
 | Security log | Art. 32 | yes | Sign-ins and failed tries with the address, kept 90 days; each person sees their last five under Mein Konto, `manage_accounts` all under Einstellungen › Anmeldungen |
 | Backups | Art. 32 | partly | Database: Neon's restore window; uploaded files on the server disk without backup |
@@ -129,7 +129,7 @@ In Campus:
 
 In production:
 
-9. A second factor at sign-in, through single sign-on (Shibboleth) with the Hochschule's identity provider.
+9. Campus registered with the Hochschule's identity provider (DFN-AAI), whose second factor then counts for Campus.
 10. Backup of uploaded files; an EU host, BSI C5 where a cloud is used.
 
 Outside the code:

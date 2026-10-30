@@ -172,6 +172,13 @@ LOGOUT_REDIRECT_URL = 'login'
 
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
+# Sign-in through the Hochschule's identity provider (core/sso.py): its SAML metadata, an https address or a file; without
+# it, off. The key and certificate, as files, that Campus signs its requests with and has assertions encrypted to.
+SAML = {
+    'idp': os.environ.get('SAML_IDP_METADATA', ''), 'key': os.environ.get('SAML_SP_KEY', ''), 'cert': os.environ.get('SAML_SP_CERT', ''),
+    'id': os.environ.get('SAML_ID_ATTRIBUTE', 'urn:oid:1.3.6.1.4.1.5923.1.1.1.6'),  # eduPersonPrincipalName
+    'mail': os.environ.get('SAML_MAIL_ATTRIBUTE', 'urn:oid:0.9.2342.19200300.100.1.3'),
+}
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'campus@localhost')  # where the Hochschule has no address of its own (Einstellungen › Hochschule)
 
 

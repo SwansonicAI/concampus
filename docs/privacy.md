@@ -109,6 +109,9 @@ documents given under it are deleted, the consent stays marked as withdrawn, and
 
 ### Sign-ins
 
+Signing in through the Hochschule's login, Campus keeps only the id the login gives the person (`Person.sso_id`); at the
+first sign-in it finds them by the e-mail address the login sends, which it does not keep (`core/sso.py`).
+
 Each sign-in and failed try is kept with the name given, the person it stands for and the address it came from, for
 the accounts' security alone (Art. 32), and deleted after 90 days (`core.models.SignIn`, `manage.py prune`). The person
 sees their last five under Mein Konto; `manage_accounts` sees all under Einstellungen › Anmeldungen. It is no record of

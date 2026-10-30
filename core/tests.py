@@ -1,27 +1,35 @@
+import base64
+import json
 import re
+import tempfile
 from datetime import date, timedelta
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
+from django.conf import settings
 from django.contrib.auth.models import Permission
+from django.core.serializers.json import DjangoJSONEncoder
 from django.core import mail
 from django.core.exceptions import ValidationError
 from django.db.models import Count
 from django.test import Client, SimpleTestCase
 from django.urls import reverse
 from django.utils import timezone
+from onelogin.saml2.utils import OneLogin_Saml2_Utils as Utils
 
 from courses.models import Course, Score
 from curriculum.models import Program
 from rooms.models import Booking, Room
 from students.models import Document, Study
-from . import dates
+from . import dates, sso
 from .access import CODENAMES
 from .apps import tile_apps, tiles
 from .history import acting, restore
 from .models import Change, Institute, Institution, Message, Office, Person, Term, Text
 from .testing import Empty, Seeded, flashes
+from .transfer import FORMAT, dump, load
 from .texts import TEXTS, render, send
-from .views import found
+from .views import found, ticket
 
 PANEL = {'X-Panel': '1'}
 
@@ -469,3 +477,93 @@ class AccountTest(Seeded):
         self.assertEqual((Person.objects.get(pk=jonas.pk).email, mail.outbox[-1].to), (jonas.email, ['jonas.neu@example.org']))  # not before confirming
         Client().get(re.search(r'/konto/adresse/\S+/', mail.outbox[-1].body)[0])
         self.assertEqual(Person.objects.get(pk=jonas.pk).email, 'jonas.neu@example.org')
+
+
+class TransferTest(Seeded):
+    def test_people_and_a_plan_come_back_as_they_left(self):
+        """A Studiengang's students written out, deleted and loaded again read back as they were written, and so does its
+        plan under a new PO-Version; a record that does not fit loads nothing and says where it is."""
+        program = Program.objects.annotate(n=Count('studies')).filter(n__gte=5).order_by('n').first()
+        names = list(Person.objects.filter(studies__program=program, groups=None, teaching=None, institute=None).values_list('username', flat=True).distinct())
+        def plain(document):  # as it reads back from a file
+            return json.loads(json.dumps(document, cls=DjangoJSONEncoder))
+
+        written = plain(dump(Person.objects.filter(username__in=names), Program.objects.filter(pk=program.pk)))
+        self.assertTrue(any(s.get('results') for p in written['people'] for s in p['studies']))
+        Person.objects.filter(username__in=names).delete()
+        load(written)
+        self.assertEqual(plain(dump(Person.objects.filter(username__in=names), Program.objects.none()))['people'], written['people'])
+        later = written['programs'][0] | {'version': program.version + 50}
+        load({'format': FORMAT, 'programs': [later]})
+        self.assertEqual(plain(dump(Person.objects.none(), Program.objects.filter(name=program.name, version=program.version + 50)))['programs'], [later])
+        wrong = written['people'][0] | {'studies': [written['people'][0]['studies'][0] | {'program': ['X', 'Y', 1]}], 'last_name': 'Geändert'}
+        with self.assertRaisesMessage(ValueError, 'people[0].studies[0]: Studiengang X, Y, 1 gibt es nicht'):
+            load({'format': FORMAT, 'people': [wrong]})
+        self.assertFalse(Person.objects.filter(last_name='Geändert').exists())
+
+
+class SsoTest(Seeded):
+    """Sign-in through the Hochschule's login: a signed answer, as a Shibboleth identity provider gives it."""
+
+    def setUp(self):
+        folder = Path(__file__).parent / 'testdata'
+        self.key, cert = (folder / 'idp.key').read_text(), (folder / 'idp.crt').read_text()
+        body = ''.join(line for line in cert.splitlines() if '-----' not in line)
+        metadata = Path(tempfile.mkdtemp()) / 'idp.xml'
+        metadata.write_text(
+            '<EntityDescriptor xmlns="urn:oasis:names:tc:SAML:2.0:metadata" xmlns:ds="http://www.w3.org/2000/09/xmldsig#" entityID="https://idp.test/idp">'
+            '<IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol"><KeyDescriptor use="signing"><ds:KeyInfo><ds:X509Data>'
+            f'<ds:X509Certificate>{body}</ds:X509Certificate></ds:X509Data></ds:KeyInfo></KeyDescriptor>'
+            '<SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://idp.test/sso"/></IDPSSODescriptor></EntityDescriptor>',
+        )
+        self.cert = cert
+        self.enterContext(self.settings(SAML=settings.SAML | {'idp': str(metadata)}, ALLOWED_HOSTS=['campus.test']))  # python3-saml wants a dotted host
+        sso.provider.cache_clear()
+        self.addCleanup(sso.provider.cache_clear)
+
+    def answer(self, request, uid, mail):
+        """The identity provider's signed answer to `request` (a redirect to it), vouching for `uid` with `mail`."""
+        asked = re.search(rb'ID="([^"]+)"', Utils.decode_base64_and_inflate(parse_qs(urlsplit(request['Location']).query)['SAMLRequest'][0])).group(1).decode()
+        now, at = Utils.now(), Utils.parse_time_to_SAML
+        acs, sp, idp = 'http://campus.test/konto/sso/acs/', 'http://campus.test/konto/sso/metadata/', 'https://idp.test/idp'
+        xml = (
+            f'<samlp:Response xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_r{now}" '
+            f'Version="2.0" IssueInstant="{at(now)}" Destination="{acs}" InResponseTo="{asked}"><saml:Issuer>{idp}</saml:Issuer>'
+            '<samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status>'
+            f'<saml:Assertion ID="_a{now}" Version="2.0" IssueInstant="{at(now)}"><saml:Issuer>{idp}</saml:Issuer>'
+            '<saml:Subject><saml:NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:transient">_n</saml:NameID>'
+            f'<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData InResponseTo="{asked}" '
+            f'NotOnOrAfter="{at(now + 300)}" Recipient="{acs}"/></saml:SubjectConfirmation></saml:Subject>'
+            f'<saml:Conditions NotBefore="{at(now - 60)}" NotOnOrAfter="{at(now + 300)}"><saml:AudienceRestriction><saml:Audience>{sp}</saml:Audience>'
+            f'</saml:AudienceRestriction></saml:Conditions><saml:AuthnStatement AuthnInstant="{at(now)}" SessionIndex="_s"><saml:AuthnContext>'
+            '<saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport</saml:AuthnContextClassRef></saml:AuthnContext>'
+            '</saml:AuthnStatement><saml:AttributeStatement>'
+            f'<saml:Attribute Name="{settings.SAML["id"]}"><saml:AttributeValue>{uid}</saml:AttributeValue></saml:Attribute>'
+            f'<saml:Attribute Name="{settings.SAML["mail"]}"><saml:AttributeValue>{mail}</saml:AttributeValue></saml:Attribute>'
+            '</saml:AttributeStatement></saml:Assertion></samlp:Response>'
+        )
+        return base64.b64encode(Utils.add_sign(xml, self.key, self.cert)).decode()
+
+    def test_the_hochschule_vouches_for_whom_campus_knows(self):
+        person = Person.objects.filter(studies__status='enrolled').first()
+        client = Client(HTTP_HOST='campus.test')
+        client.cookies['demo'] = ticket()
+        self.assertIn('Mit dem Hochschulkonto anmelden', client.get('/konto/login/').text)
+        asked = client.get('/konto/sso/', {'next': '/studierende/'})
+        self.assertTrue(asked['Location'].startswith('https://idp.test/sso?SAMLRequest='))
+        r = client.post('/konto/sso/acs/', {'SAMLResponse': self.answer(asked, 'k7@uni-weimar.de', person.email.upper()), 'RelayState': '/studierende/'})
+        self.assertEqual((r['Location'], client.session['_auth_user_id']), ('/studierende/', str(person.pk)))
+        self.assertEqual(Person.objects.get(pk=person.pk).sso_id, 'k7@uni-weimar.de')  # from now on known by it
+        stranger = Client(HTTP_HOST='campus.test')
+        stranger.cookies['demo'] = ticket()
+        asked = stranger.get('/konto/sso/')
+        stranger.post('/konto/sso/acs/', {'SAMLResponse': self.answer(asked, 'x9@uni-weimar.de', 'x9@uni-weimar.de')})
+        self.assertNotIn('_auth_user_id', stranger.session)
+        asked = stranger.get('/konto/sso/')  # an answer changed after signing, to someone Campus knows
+        forged = base64.b64encode(base64.b64decode(self.answer(asked, 'x9@uni-weimar.de', 'x9@uni-weimar.de')).replace(b'x9@', b'k7@')).decode()
+        stranger.post('/konto/sso/acs/', {'SAMLResponse': forged})
+        self.assertNotIn('_auth_user_id', stranger.session)
+        unasked = Client(HTTP_HOST='campus.test')  # a true answer, but to a request this browser did not make
+        unasked.post('/konto/sso/acs/', {'SAMLResponse': self.answer(stranger.get('/konto/sso/'), 'k7@uni-weimar.de', '')})
+        self.assertNotIn('_auth_user_id', unasked.session)
+        self.assertIn('AssertionConsumerService', client.get('/konto/sso/metadata/').text)

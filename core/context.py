@@ -14,6 +14,7 @@ def platform(request):
     if request.headers.get('X-Panel'):
         return context | {'base': 'core/panel.html'}
     context['base'] = 'core/base.html'
+    context['sso'] = bool(settings.SAML['idp'])
     if settings.DEMO and not request.user.is_authenticated and admitted(request):
         context['demo'] = demo_people  # called only where a page lists them
     if request.user.is_authenticated:

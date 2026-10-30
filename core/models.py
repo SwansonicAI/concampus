@@ -304,6 +304,10 @@ class Person(Tracked, AbstractUser):
         help_text='Bei einer Hochschulzugangsberechtigung aus dem Ausland: bewertet nach anabin oder durch die Zeugnisanerkennungsstelle.',
     )
     matriculation = models.CharField('Matrikelnummer', max_length=12, unique=True, null=True, blank=True)
+    sso_id = models.CharField(
+        'Kennung im Hochschulkonto', max_length=255, unique=True, null=True, blank=True,
+        help_text='Wie der Login der Hochschule die Person nennt (eduPersonPrincipalName); bei der ersten Anmeldung über ihn gesetzt.',
+    )
     hold = models.CharField('Sperre', max_length=200, blank=True, help_text='Grund der Sperre; leer heißt keine Sperre.')
     institute = models.ForeignKey(
         Institute, models.SET_NULL, null=True, blank=True, related_name='staff', verbose_name='Institut',
