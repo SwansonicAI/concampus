@@ -27,6 +27,7 @@ urlpatterns = [
     path('<int:pk>/exmatrikulieren/', views.exmatriculate, name='exmatriculate'),
     path('<int:pk>/fachwechsel/', views.change, name='change'),
     path('<int:pk>/sperre/', views.hold, name='hold'),
+    path('<int:pk>/einschraenkung/', views.restrict, name='restrict'),
     path('<int:pk>/bescheinigung/', views.certificate, name='certificate'),
     path('<int:pk>/exmatrikulation/', views.exmatriculation, name='exmatriculation'),
     path('<int:pk>/studienzeiten/', views.periods, name='periods'),

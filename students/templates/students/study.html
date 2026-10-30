@@ -21,7 +21,7 @@
   {% if office %}<a href="{% url 'setup:edit' 'personen' study.person.pk %}?next={{ request.path|urlencode }}" data-panel>Stammdaten</a>{% endif %}
   {% if history %}<a href="{% url 'history' 'core.person' study.person.pk %}" data-panel>Verlauf</a>{% endif %}
 </p>
-<p class="lead">{% if study.person.matriculation %}Matrikelnr. {{ study.person.matriculation }} · {% endif %}{{ study.program }} · {{ study.subject }}{% if study.focus %} · Schwerpunkt {{ study.focus.title }}{% endif %} · <span class="badge {{ study.status }}">{{ study.state }}</span>{% if study.person.hold and personal %} <span class="badge hold">Sperre: {{ study.person.hold }}</span>{% endif %}</p>
+<p class="lead">{% if study.person.matriculation %}Matrikelnr. {{ study.person.matriculation }} · {% endif %}{{ study.program }} · {{ study.subject }}{% if study.focus %} · Schwerpunkt {{ study.focus.title }}{% endif %} · <span class="badge {{ study.status }}">{{ study.state }}</span>{% if study.person.hold and personal %} <span class="badge hold">Sperre: {{ study.person.hold }}</span>{% endif %}{% if study.person.restriction and personal %} <span class="badge hold">Verarbeitung eingeschränkt seit {{ study.person.restricted|date:'d.m.Y' }}</span>{% endif %}</p>
 {% for m in exhausted %}<div class="flash error">Prüfungsanspruch erloschen: {{ m.code }} {{ m.title }} endgültig nicht bestanden{% if grades %}, {% for p in m.failures %}{{ p.course.term }} {{ p.grade|floatformat:1|default:"nicht bestanden" }}{% if p.remark %} ({{ p.remark|upper }}){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}{% else %} im {{ m.failures|length }}. Versuch{% endif %}.<br><small>Widerspruch bis {{ m.appeal|date:"j.n.Y" }}{% if m.appeal < today %}, abgelaufen{% else %}; erst danach exmatrikulieren{% endif %}.</small></div>{% endfor %}
 
 <div class="stats">
@@ -132,6 +132,12 @@
         <button class="btn ghost">{% if study.person.hold %}Ändern{% else %}Sperren{% endif %}</button>
         {% if study.person.hold %}<button class="btn ghost" name="hold" value="">Sperre aufheben</button>{% endif %}
       </form>
+      <form method="post" action="{% url 'students:restrict' study.pk %}" class="inline" style="margin-top: 16px">
+        {% csrf_token %}
+        <label>Verarbeitung einschränken (Art. 18 DSGVO)<select name="restriction"><option value="">nicht eingeschränkt</option>{% for code, name in study.person.Restriction.choices %}<option value="{{ code }}"{% if code == study.person.restriction %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+        <button class="btn ghost">Speichern</button>
+      </form>
+      <p class="muted"><small>Auf Antrag der Person. Solange eingeschränkt, die Daten nur speichern; anderes nur mit ihrer Einwilligung, für Rechtsansprüche oder aus wichtigem öffentlichem Interesse. ConCampus löscht nichts von ihr. Vor dem Aufheben die Person unterrichten.</small></p>
     </div>
     {% endif %}
   </section>

@@ -246,6 +246,19 @@ class DisposalTest(Seeded):
         self.assertEqual((person.messages.exists(), person.address, person.is_active), (False, '', False))
         self.assertTrue(person.birth_date and person.matriculation and person.studies.exists())
 
+    def test_a_restricted_file_stays_and_a_former_teacher_keeps_only_the_name(self):
+        """A restriction of processing (Art. 18 DSGVO) holds back every deletion; whoever left the staff keeps, after the
+        Hochschule's period, only the name that stands on what they taught."""
+        person = due().order_by('pk').first()
+        self.login('asa').post(f'/studierende/{person.studies.first().pk}/einschraenkung/', {'restriction': 'rechtsanspruch'})
+        self.assertFalse(due().filter(pk=person.pk).exists())
+        teacher = Person.objects.filter(employment='lehrauftrag', teaching__isnull=False, studies=None).distinct().first()
+        Person.objects.filter(pk=teacher.pk).update(is_active=False, left=timezone.localdate() - timedelta(days=6 * 366))
+        call_command('prune', stdout=StringIO())
+        teacher.refresh_from_db()
+        self.assertEqual((teacher.email, teacher.institute, teacher.employment), ('', None, ''))
+        self.assertTrue(teacher.last_name and teacher.teaching.exists())
+
 
 class XHochschuleTest(Seeded):
     def test_bescheinigungen_go_out_as_xhochschule_files(self):

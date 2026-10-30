@@ -147,18 +147,18 @@ def depending(person):
 class AccountForm(forms.ModelForm):
     class Meta:
         model = Person
-        fields = ['title', 'first_name', 'last_name', 'email', 'username', 'institute', 'employment', 'obligation', 'groups', 'is_active']
+        fields = ['title', 'first_name', 'last_name', 'email', 'username', 'institute', 'employment', 'obligation', 'groups', 'is_active', 'restriction']
         localized_fields = ['obligation']
         labels = {'groups': 'Ämter', 'is_active': 'Aktiv', 'username': 'Benutzername'}
         help_texts = {
             'groups': 'Was jemand darf, ergibt sich aus den Rechten der Ämter. Ein neues Amt gilt, sobald eine zweite Person es unter „Freigaben“ bestätigt; befristet unter „Vertretungen und Amtszeiten“.',
             'institute': 'Für Lehrende: das Institut, dessen Räume sie buchen.',
-            'is_active': 'Ohne Haken ist keine Anmeldung möglich.',
+            'is_active': 'Ohne Haken ist keine Anmeldung möglich; ab dem Tag läuft die Frist für die Daten früherer Beschäftigter (Einstellungen › Hochschule).',
             'username': 'Wie beim Hochschulkonto.',
         }
         widgets = {'groups': forms.CheckboxSelectMultiple}
 
-    layout = [(None, [('title', 'first_name', 'last_name'), ('email', 'username'), ('institute', 'employment', 'obligation'), 'groups', 'is_active'])]
+    layout = [(None, [('title', 'first_name', 'last_name'), ('email', 'username'), ('institute', 'employment', 'obligation'), 'groups', 'is_active', 'restriction'])]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -186,6 +186,10 @@ class AccountForm(forms.ModelForm):
         person = super().save(commit=False)
         if not person.pk:
             person.set_unusable_password()  # signs in with the Hochschule's login
+        if 'is_active' in self.changed_data:  # the day someone leaves starts the period for their data (core/departure.py)
+            person.left = None if person.is_active else timezone.localdate()
+        if 'restriction' in self.changed_data:
+            person.restricted = timezone.localdate() if person.restriction else None
         person.save()
         chosen, held = set(self.cleaned_data['groups']), set(Office.objects.filter(user=person))
         self.cleaned_data['groups'] = list(chosen & held)
@@ -296,7 +300,7 @@ EDITORS = {e.key: e for e in [
             ('Briefkopf und Website', [('name', 'short_name'), 'address', ('place', 'email', 'website'), ('imprint', 'privacy', 'accessibility')]),
             ('Erscheinungsbild', ['wordmark', ('logo', 'accent', 'radius')]),
             ('Aufnahme und Immatrikulation', [('matriculation_start', 'student_mail', 'accept_days'), 'signup', 'sender_number', 'insurers']),
-            ('Aufbewahrung', [('retention_months', 'file_years', 'core_years')]),
+            ('Aufbewahrung', [('retention_months', 'file_years'), ('core_years', 'staff_years')]),
             ('Rückmeldung und Prüfungen', [('late_fee', 'withdraw_weeks'), 'payee', ('iban', 'bic')]),
             ('Raumbuchung', [('student_daily_hours', 'student_ahead_hours'), ('last_minute_hours', 'teacher_ahead_days')]),
             ('Deputat', ['load_since']),

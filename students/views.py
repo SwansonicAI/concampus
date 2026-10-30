@@ -738,6 +738,19 @@ def hold(request, pk):
     return redirect(study.get_absolute_url())
 
 
+@require('manage_students')
+@require_POST
+def restrict(request, pk):
+    """Restriction of processing on the person's request (Art. 18 DSGVO): set with its ground, or lifted once they have been told."""
+    study = get_object_or_404(request.user.within(Study.objects.select_related('person'), 'manage_students'), pk=pk)
+    person, ground = study.person, request.POST.get('restriction', '')
+    person.restriction = ground if ground in Person.Restriction.values else ''
+    person.restricted = (person.restricted or timezone.localdate()) if person.restriction else None
+    person.save(update_fields=['restriction', 'restricted'])
+    messages.success(request, 'Verarbeitung eingeschränkt.' if person.restriction else 'Einschränkung aufgehoben.')
+    return redirect(study.get_absolute_url())
+
+
 def book(term, enrolled, paid):
     """Book the Semesterbeitrag {person: (day, amount, Beleg)} for all their studies and tell each where their Rückmeldung
     stands."""
@@ -953,7 +966,7 @@ def disposal(request):
             n = assess(request.POST.getlist('person'), archival == 'ja', request.user)
             messages.success(request, f'{plural(n, "Akte", "Akten")} bewertet; heute Nacht werden sie bis auf die Grunddaten gelöscht.')
         return redirect('students:disposal')
-    last = {p.pk: p.left for p in due().annotate(left=Max('studies__since'))}
+    last = {p.pk: p.last for p in due().annotate(last=Max('studies__since'))}
     done = Disposal.objects.exclude(assessed=None).values('assessed__year').annotate(n=Count('pk'), kept=Count('pk', filter=Q(archival=True))).order_by('-assessed__year')
     offered = Person.objects.filter(disposal__isnull=False, disposal__assessed=None).select_related('disposal').prefetch_related(
         Prefetch('studies', Study.objects.filter(status__in=Study.FORMER).select_related('program', 'subject', 'start_term')),

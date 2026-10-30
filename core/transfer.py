@@ -3,9 +3,14 @@ Studienplan, and people with their studies, semesters and results. Records are n
 Matrikelnummer, a Semester's name, a Studiengang's Abschluss, name and PO-Version, a module's Kürzel or its place in the
 plan, never by database ids, so that a former system maps onto it. Loading updates what is there and adds what is not;
 it removes nothing, and loads all or nothing."""
+import json
+import shutil
+import zipfile
 from datetime import datetime, time
 
+from django.apps import apps
 from django.core.exceptions import ValidationError
+from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models, transaction
 from django.utils import timezone
 
@@ -98,6 +103,42 @@ def dump(people=None, programs=None):
         'programs': plans,
         'people': [record(p, institute=p.institute and p.institute.name, studies=per_person.get(p.pk, [])) for p in people],
     }
+
+
+def describe(field):
+    """A field in words, for whoever reads a complete copy without ConCampus."""
+    found = {'name': str(field.verbose_name), 'type': field.get_internal_type()}
+    if field.is_relation:
+        found['refers to'] = field.related_model._meta.label_lower
+    if field.choices:
+        found['values'] = {str(k): str(v) for k, v in field.flatchoices}
+    if field.help_text:
+        found['note'] = str(field.help_text)
+    return found
+
+
+def everything(out):
+    """All of a Hochschule's ConCampus in one ZIP, for a change of provider (Data Act): each table as JSON, its rows as
+    they stand, references by id; `tables.json` saying what each table and field is; every file handed in or uploaded
+    under `files/`, by the name its row gives. Passwords and sessions stay behind. Returns how many rows."""
+    tables, total = {}, 0
+    with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as archive:
+        for model in apps.get_models(include_auto_created=True):
+            meta = model._meta
+            if meta.app_label == 'sessions':
+                continue
+            fields = [f for f in meta.concrete_fields if f.name != 'password']
+            rows = list(model._base_manager.order_by('pk').values(*(f.attname for f in fields)))
+            archive.writestr(f'{meta.label_lower}.json', json.dumps(rows, cls=DjangoJSONEncoder, ensure_ascii=False))
+            tables[meta.label_lower] = {'name': str(meta.verbose_name_plural), 'fields': {f.attname: describe(f) for f in fields}}
+            total += len(rows)
+            for field in (f for f in fields if isinstance(f, models.FileField)):
+                for name in sorted({r[field.attname] for r in rows if r[field.attname]}):
+                    if field.storage.exists(name):
+                        with field.storage.open(name) as source, archive.open(f'files/{name}', 'w', force_zip64=True) as target:
+                            shutil.copyfileobj(source, target)
+        archive.writestr('tables.json', json.dumps(tables, ensure_ascii=False, indent=1))
+    return total
 
 
 class Loader:

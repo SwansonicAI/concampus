@@ -20,11 +20,11 @@ CORE = {  # the Grunddaten: who it was, and through the studies kept with them, 
 
 def ended(years):
     """People whose every study here ended at least `years` ago, with nothing else tying them here: no study open, no
-    office, no teaching."""
+    office, no teaching, no restriction of processing (Art. 18 DSGVO)."""
     cutoff = months_before(timezone.localdate(), years * 12)
     later = Study.objects.filter(person=OuterRef('pk')).filter(~Q(status__in=[*Study.FORMER, Study.Status.REJECTED]) | Q(since__gte=cutoff))
     return (
-        Person.objects.filter(studies__status__in=Study.FORMER, studies__terms__isnull=False, groups=None, teaching=None, institute=None, is_superuser=False)
+        Person.objects.filter(studies__status__in=Study.FORMER, studies__terms__isnull=False, groups=None, teaching=None, institute=None, is_superuser=False, restriction='')
         .exclude(Exists(later)).distinct()
     )
 
@@ -49,7 +49,7 @@ def reduce():
     sign-ins, loans and bookings, stays abroad, notes and Gutachten, grounds of leave, a Nachteilsausgleich. Returns how many."""
     from mobility.models import Mobility  # an app that builds on this one
 
-    ids = list(Person.objects.filter(disposal__assessed__isnull=False, disposal__reduced=None).values_list('pk', flat=True))
+    ids = list(Person.objects.filter(disposal__assessed__isnull=False, disposal__reduced=None, restriction='').values_list('pk', flat=True))
     with quietly():
         Mobility.objects.filter(study__person__in=ids).delete()  # the results recognised from a stay abroad stay
         Document.purge(Document.objects.filter(person__in=ids))

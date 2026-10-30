@@ -19,14 +19,14 @@ def ended(cutoff):
 
 def forget(cutoff):
     """Delete health data once its application is decided, the documents of applications that ended before `cutoff`, and
-    make anonymous everyone who has nothing else here: no other study, no teaching, no office. Returns (documents deleted,
-    people made anonymous)."""
+    make anonymous everyone who has nothing else here: no other study, no teaching, no office; nothing of someone whose
+    processing is restricted (Art. 18 DSGVO). Returns (documents deleted, people made anonymous)."""
     gone = ended(cutoff)
-    documents = Document.objects.filter(Q(study__in=gone) | Q(kind__health=True) & ~Q(study__status=Study.Status.APPLIED))
+    documents = Document.objects.filter(Q(study__in=gone) | Q(kind__health=True) & ~Q(study__status=Study.Status.APPLIED)).filter(person__restriction='')
     deleted = Document.purge(documents)
     people = (
         Person.objects.filter(studies__in=gone).exclude(studies__in=Study.objects.exclude(pk__in=gone))
-        .filter(groups=None, teaching=None, institute=None, is_superuser=False).exclude(username__startswith='anonym-').distinct()
+        .filter(groups=None, teaching=None, institute=None, is_superuser=False, restriction='').exclude(username__startswith='anonym-').distinct()
     )
     ids = list(people.values_list('pk', flat=True))
     Message.objects.filter(person__in=ids).delete()

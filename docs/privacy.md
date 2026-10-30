@@ -93,6 +93,18 @@ to the teacher for their own row, and to `view_teaching_load` within the Institu
 way, their reason as the function (Dekan:in, Studiendekan:in …); `manage_teaching_load` enters them. A reduction for a
 Schwerbehinderung is health data (Art. 9): its reason shows only as that, never the condition.
 
+When `manage_accounts` deactivates an account, the day is kept (`Person.left`). After the period set under Einstellungen
+› Hochschule (`staff_years`, five years) the record is cut down to the name, which stays on the courses taught and the
+exams examined: contact data, Beschäftigung, Lehrverpflichtung, offices, Ermäßigungen, Postfach, bookings, loans and
+Verlauf go; after the period of the Grunddaten it is made anonymous (`core/departure.py`, `manage.py prune`).
+
+### Restriction of processing
+
+On a person's request (Art. 18 DSGVO) `manage_students` marks a study's person, `manage_accounts` a staff account, as
+restricted, with its ground (`Person.restriction`, since `Person.restricted`). Those who see the person's file see the
+mark; ConCampus then deletes nothing of them (`students/disposal.py`, `admissions/retention.py`, `core/departure.py`).
+Whatever else waits is the office's to decide; before lifting it, the office tells the person.
+
 ### Forms
 
 When a form is refused, what was typed is kept in the session to fill it in again (`core/forms.py`, `again()`, `sent()`),
@@ -171,7 +183,8 @@ deleted a year after it was answered.
   `view_applications`. `letter()`: filed Bescheide for `manage_students` and `decide_results`.
 - `students/views.py`, `roster()`: gender and nationality in the export only for `manage_students`. Every file with
   personal data that leaves (student list, Notenliste, amtliche Statistik) is logged with who, when, what and how many
-  rows (`core.models.Export`), shown to `manage_accounts` under Einstellungen › Exporte.
+  rows (`core.models.Export`), shown to `manage_accounts` under Einstellungen › Exporte, and kept two years. So is the
+  complete copy for a change of provider (`manage.py transfer --everything`, `docs/transfer.md`), run on the server only.
 - `students/views.py`, `study()`: grades, Gesamtnote and Leistungsübersicht for the person, `view_files` and the
   Hauptfachlehrer:in; the student office sees outcomes only. The Schwerpunkt is recorded by `decide_results`.
 - `core/views.py`, `found()`: a rejection older than the retention period is no longer found. Teachers find the

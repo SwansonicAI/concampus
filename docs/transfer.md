@@ -64,7 +64,15 @@ A result comes in as an exam of its semester, released and told on its day (`on`
 semester as a second date. Passwords never travel: people loaded sign in through the Hochschule's login or set a
 password by e-mail.
 
-## Not carried
+## A complete copy
+
+For a change of provider (Data Act) `manage.py transfer FILE.zip --everything` writes all of a Hochschule's ConCampus
+into one ZIP: each table as `<app>.<table>.json`, its rows as they stand with references by id; `tables.json` saying
+for each table and field what it is, its type, what it refers to, its values; every file handed in or uploaded under
+`files/`, by the name its row gives. Passwords and sessions stay behind. It is logged as an export (`core.models.Export`).
+Unlike the document above it is not for loading into another ConCampus, but for reading by whatever comes next.
+
+## Not carried by the document
 
 Offices and rights, courses and room bookings, documents and messages, the Verlauf, applications' auditions, the
 reports with the health insurers (`docs/smv.md`), stays abroad (`docs/mobility.md`): each is set up anew or stays where

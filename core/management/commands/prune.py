@@ -2,15 +2,16 @@ from django.core.management.base import BaseCommand
 from django.utils import timezone
 
 from admissions.retention import forget
+from core import departure
 from core.dates import months_before
 from core.history import tracked
-from core.models import Change, Feedback, Institution, SignIn
+from core.models import Change, Export, Feedback, Institution, SignIn
 from students.disposal import expire, reduce
 from students.models import InsuranceReport
 
 
 class Command(BaseCommand):
-    help = 'Delete what is kept longer than allowed: changes past Tracked.keep, sign-ins past SignIn.KEEP, applications that came to nothing past the Hochschule\'s period, and student files the archive has assessed. Run nightly.'
+    help = 'Delete what is kept longer than allowed: changes past Tracked.keep, sign-ins past SignIn.KEEP, the export log past Export.KEEP, applications that came to nothing past the Hochschule\'s period, student files the archive has assessed, and former staff past theirs. Run nightly.'
 
     def handle(self, *args, **options):
         now = timezone.now()
@@ -21,8 +22,10 @@ class Command(BaseCommand):
         self.stdout.write(f'{deleted} Änderungen gelöscht.')
         self.stdout.write(f'{SignIn.objects.filter(at__lt=now - SignIn.KEEP).delete()[0]} Anmeldungen gelöscht.')
         self.stdout.write(f'{Feedback.objects.filter(answered__lt=timezone.localdate() - Feedback.KEEP).delete()[0]} Rückmeldungen zur Barrierefreiheit gelöscht.')
+        self.stdout.write(f'{Export.objects.filter(created__lt=now - Export.KEEP).delete()[0]} Einträge im Exportprotokoll gelöscht.')
         if months := Institution.get().retention_months:
             documents, people = forget(cutoff := months_before(timezone.localdate(), months))
             dropped = InsuranceReport.objects.filter(person=None, created__date__lt=cutoff).delete()[0]  # about nobody here
             self.stdout.write(f'{documents} Unterlagen gelöscht, {people} Personen anonymisiert, {dropped} Meldungen der Krankenkassen ohne Person gelöscht.')
         self.stdout.write(f'{reduce()} Studierendenakten auf die Grunddaten gekürzt, {expire()} Grunddaten anonymisiert.')
+        self.stdout.write(f'{departure.reduce()} frühere Beschäftigte auf den Namen gekürzt, {departure.expire()} anonymisiert.')

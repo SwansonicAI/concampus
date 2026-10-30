@@ -3,8 +3,10 @@ import json
 import re
 import tempfile
 from datetime import date, timedelta
+from io import BytesIO
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
+from zipfile import ZipFile
 
 from django.conf import settings
 from django.contrib.auth.models import Permission
@@ -27,7 +29,7 @@ from .apps import tile_apps, tiles
 from .history import acting, restore
 from .models import Change, Institute, Institution, Message, Office, Person, Term, Text
 from .testing import Empty, Seeded, flashes
-from .transfer import FORMAT, dump, load
+from .transfer import FORMAT, dump, everything, load
 from .texts import TEXTS, render, send
 from .views import found, ticket
 
@@ -500,6 +502,17 @@ class TransferTest(Seeded):
         with self.assertRaisesMessage(ValueError, 'people[0].studies[0]: Studiengang X, Y, 1 gibt es nicht'):
             load({'format': FORMAT, 'people': [wrong]})
         self.assertFalse(Person.objects.filter(last_name='Geändert').exists())
+
+    def test_a_complete_copy_holds_every_table_but_no_password(self):
+        """For a change of provider: every table, with what each field is, and no password."""
+        out = BytesIO()
+        rows = everything(out)
+        copy = ZipFile(out)
+        people = json.loads(copy.read('core.person.json'))
+        self.assertEqual(len(people), Person.objects.count())
+        self.assertNotIn('password', people[0])
+        self.assertEqual(json.loads(copy.read('tables.json'))['core.person']['fields']['institute_id']['refers to'], 'core.institute')
+        self.assertGreater(rows, len(people))
 
 
 class SsoTest(Seeded):

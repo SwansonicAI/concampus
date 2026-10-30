@@ -161,7 +161,9 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 | Applications that came to nothing: documents deleted and people made anonymous after a period | GDPR Art. 5(1)(e) | `admissions/retention.py`, `core/management/commands/prune.py` | Einstellungen › Hochschule (Löschfrist) |
 | Health data (phoniatric report) deleted once the application is decided | GDPR Art. 9 | same | Einstellungen › Unterlagenarten (Gesundheitsdaten) |
 | A former student's file is offered to the archive some years after the last Exmatrikulation, cut down to the Grunddaten once assessed, those anonymised years later | Thüringer Aufbewahrungsrichtlinie, ThürArchivG | `students/disposal.py` | Einstellungen › Hochschule (Aufbewahrung) |
-| Files with personal data that leave are logged | GDPR Art. 5(2) | `core/models.py` `Export` | code |
+| Files with personal data that leave are logged, the log kept two years | GDPR Art. 5(2) | `core/models.py` `Export` | code |
+| Former staff: the day the account is deactivated is kept; some years later the record is cut down to the name, which stays on what they taught and examined, then made anonymous after the period of the Grunddaten | GDPR Art. 5(1)(e) | `core/departure.py`, `setup/editors.py` `AccountForm` | Einstellungen › Hochschule (Aufbewahrung) |
+| While processing is restricted, nothing of the person is deleted | GDPR Art. 18 | `Person.restriction`; `students/disposal.py`, `admissions/retention.py`, `core/departure.py` | the office, on request |
 | Sign-ins and failed tries kept 90 days; five failures for a name from one address hold it back there a quarter of an hour | GDPR Art. 32 | `core/backends.py`, `core/models.py` `SignIn` | code |
 | Health data only with consent, kept with its wording; withdrawing it deletes the document | GDPR Art. 7, Art. 9(2)(a) | `core/models.py` `Consent`, `core/views.py` `revoke()` | Einstellungen › Texte (wording) |
 | Reports with the health insurers go with the file; those about nobody here after the period for applications | GDPR Art. 5(1)(e) | `students/disposal.py`, `core/management/commands/prune.py` | Einstellungen › Hochschule (Löschfrist) |

@@ -21,12 +21,12 @@ report, grounds of leave (illness, Mutterschutz) and a Schwerbehinderung behind 
 | Consent for health data, recorded and withdrawable | Art. 9(2)(a), Art. 7 | yes | Asked with every attest or health report, recorded with its wording, when and by whom (the person, or an office from the signed paper); withdrawn under Mein Konto, which deletes the document; decisions taken stay (`core.models.Consent`) |
 | Access | Art. 15 | yes | The person sees their record, results, documents and Postfach, and downloads a copy of everything ConCampus keeps about them, with their documents, under Mein Konto (`core/dossier.py`); others' data stays out |
 | Rectification | Art. 16 | yes | Address and phone in Mein Konto; name and birth data by the office on proof (`core/views.py` `account()`) |
-| Erasure | Art. 17 | partly | Applications that came to nothing: documents deleted and the person made anonymous after the Löschfrist; health data once the application is decided; room bookings after two years. Former students' files once kept long enough and assessed by the archive (see below). Anonymising empties every field but those the figures count (`Person.COUNTED`). Staff are never deleted |
-| Restriction | Art. 18 | no | No way to mark a record as restricted |
+| Erasure | Art. 17 | partly | Applications that came to nothing: documents deleted and the person made anonymous after the Löschfrist; health data once the application is decided; room bookings after two years. Former students' files once kept long enough and assessed by the archive (see below). Anonymising empties every field but those the figures count (`Person.COUNTED`). Former staff cut down to the name some years after their account is deactivated, then made anonymous (`core/departure.py`) |
+| Restriction | Art. 18 | yes | The office marks the person with the ground of Art. 18(1), on the study's page or the account; the mark shows on the file and ConCampus deletes nothing of them while it holds; the office tells the person before lifting it |
 | Objection | Art. 21 | Hochschule | Decided by the office; nothing in ConCampus |
 | Portability | Art. 20 | n/a | Not for processing under Art. 6(1)(e) (Art. 20(3)) |
 | No decision by machine alone | Art. 22, § 35a VwVfG | yes | Rankings, the Nachrückliste and a lost Prüfungsanspruch are worked out; every Bescheid is issued by an office after its preview. Resits are registered automatically as the RPSO says |
-| Deletion concept | Art. 5(1)(e), Art. 17 | partly | Periods for applications, former students' files and their Grunddaten, bookings and sign-ins, set under Einstellungen › Hochschule; none for staff or the export log |
+| Deletion concept | Art. 5(1)(e), Art. 17 | yes | Periods for applications, former students' files and their Grunddaten, former staff, set under Einstellungen › Hochschule; bookings two years, sign-ins 90 days, the export log two years; the Verlauf per kind of record (`docs/rules.md`) |
 | Security of processing | Art. 32 | partly | See IT security |
 | Records of processing; impact assessment | Art. 30, Art. 35 | Hochschule | `docs/privacy.md` is the input; a description of the technical and organisational measures still to write |
 | Processor agreement | Art. 28 | no | Needed once we host or maintain ConCampus; to draft (precedent: HIS eG's access at Jena) |
@@ -107,7 +107,7 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 | Continuity if ConCampus fails | the tender, the contract | no | Code, deployment and access deposited with an escrow agent, released to HfM on set conditions (`docs/escrow.md`) |
 | Impressum for concampus.de | § 5 DDG | no | The product page has none |
 | Cyber Resilience Act | Regulation (EU) 2024/2847 | n/a | Out of scope as SaaS; in scope if a Hochschule runs ConCampus on its own servers: reporting from 11.9.2026, CE marking from 11.12.2027 |
-| Switching provider | Data Act | partly | A complete copy per person; none yet of a Hochschule's data as a whole; switching charges banned from 12.1.2027 |
+| Switching provider | Data Act | yes | A complete copy per person; of the whole Hochschule every table with what each field is, and every file, as one ZIP (`manage.py transfer --everything`, `docs/transfer.md`); switching charges banned from 12.1.2027 |
 | AI Act | Regulation (EU) 2024/1689 | n/a | No AI; the planned reading of paper Protokolle touches grading: assess before building |
 | Other states | each state's laws | partly | Thuringian rules in editable texts and in code (ThürLVVO, VwVfG periods); official keys are national |
 | Barrierefreiheitsstärkungsgesetz | BFSG | n/a | Private institutions only |
@@ -121,27 +121,24 @@ In ConCampus:
 1. Electronic reports with the health insurers (§ 199a SGB V): the files to and from dakota (`docs/smv.md`).
 2. XHochschule data for the Leistungsübersicht, Zeugnis and Diploma Supplement; an eIDAS seal on all.
 3. Statistics of academic and artistic staff.
-4. Mark a record as restricted (Art. 18).
-5. A hearing step before Bescheide that need one (§ 28 VwVfG), once the Hochschule has named them.
-6. Periods for staff records and the export log.
-7. A complete export of a Hochschule's data, for switching provider (Data Act).
-8. The connection to Erasmus Without Paper, and students coming here (`docs/mobility.md`); booking fees to the
+4. A hearing step before Bescheide that need one (§ 28 VwVfG), once the Hochschule has named them.
+5. The connection to Erasmus Without Paper, and students coming here (`docs/mobility.md`); booking fees to the
    Hochschule's finance system, if wanted.
 
 In production:
 
-9. ConCampus registered with the Hochschule's identity provider (DFN-AAI), whose second factor then counts for ConCampus.
-10. Backup of uploaded files; an EU host, BSI C5 where a cloud is used.
+6. ConCampus registered with the Hochschule's identity provider (DFN-AAI), whose second factor then counts for ConCampus.
+7. Backup of uploaded files; an EU host, BSI C5 where a cloud is used.
 
 Outside the code:
 
-11. A security concept after BSI IT-Grundschutz (Profil für Hochschulen).
-12. A manual accessibility test (BITV-Test) by a third party, and the conformance report a tender asks for.
-13. The processor agreement (Art. 28) and the description of technical and organisational measures for the
+8. A security concept after BSI IT-Grundschutz (Profil für Hochschulen).
+9. A manual accessibility test (BITV-Test) by a third party, and the conformance report a tender asks for.
+10. The processor agreement (Art. 28) and the description of technical and organisational measures for the
     Hochschule's records of processing and impact assessment.
-14. An Impressum for concampus.de.
-15. Terms of service that fit EVB-IT Cloud.
-16. Escrow (`docs/escrow.md`).
+11. An Impressum for concampus.de.
+12. Terms of service that fit EVB-IT Cloud.
+13. Escrow (`docs/escrow.md`).
 
 ## To check
 
@@ -149,9 +146,9 @@ Outside the code:
 2. Whether Bescheide to a minor go to the legal representatives.
 3. Which Bescheide need a hearing first.
 4. Whether HfM levies Langzeit- or Zweitstudiengebühren under the ThürHGEG.
-5. Retention under the Thüringer Aufbewahrungsrichtlinie: 5 years for the file, 50 for the Grunddaten; which section
-   of the ThürArchivG covers university archives; the archive's standing assessment of applications that came to
-   nothing.
+5. Retention under the Thüringer Aufbewahrungsrichtlinie: 5 years for the file, 50 for the Grunddaten, 5 for former
+   staff, 2 for the export log; which section of the ThürArchivG covers university archives; the archive's standing
+   assessment of applications that came to nothing.
 6. The deadlines in IT-Planungsrat decision 2025/43.
 7. Whether HfM is among the seven Thuringian universities on the MACH ERP.
 8. The answer deadline for accessibility feedback in the ThürBarrWebG; ConCampus uses 30 days.

@@ -157,7 +157,11 @@ class Institution(Tracked, models.Model):
     )
     core_years = models.PositiveSmallIntegerField(
         'Grunddaten aufbewahren (Jahre)', default=50,
-        help_text='Name, Geburtsdaten, Matrikelnummer, Studienzeiten und Leistungen, für Studienzeitbescheinigungen und Zweitschriften; danach anonymisiert.',
+        help_text='Name, Geburtsdaten, Matrikelnummer, Studienzeiten und Leistungen, für Studienzeitbescheinigungen und Zweitschriften; danach anonymisiert. Ebenso der Name früherer Beschäftigter.',
+    )
+    staff_years = models.PositiveSmallIntegerField(
+        'Daten früherer Beschäftigter aufbewahren (Jahre)', default=5,
+        help_text='Nach dem Deaktivieren des Kontos; dann bis auf den Namen gelöscht, der an Veranstaltungen und Prüfungen stehen bleibt.',
     )
     signup = models.BooleanField('Neue Bewerbungskonten', default=True, help_text='Ohne Haken legt niemand ein neues Bewerbungskonto an.')
     sender_number = models.CharField(
@@ -309,6 +313,20 @@ class Person(Tracked, AbstractUser):
         help_text='Wie der Login der Hochschule die Person nennt (eduPersonPrincipalName); bei der ersten Anmeldung über ihn gesetzt.',
     )
     hold = models.CharField('Sperre', max_length=200, blank=True, help_text='Grund der Sperre; leer heißt keine Sperre.')
+
+    class Restriction(models.TextChoices):  # the grounds of Art. 18 Abs. 1 DSGVO
+        ACCURACY = 'richtigkeit', 'Richtigkeit bestritten, bis sie geprüft ist (lit. a)'
+        UNLAWFUL = 'statt_loeschung', 'Unrechtmäßig verarbeitet, die Person will Einschränkung statt Löschung (lit. b)'
+        CLAIMS = 'rechtsanspruch', 'Nicht mehr gebraucht, die Person braucht sie für Rechtsansprüche (lit. c)'
+        OBJECTION = 'widerspruch', 'Widerspruch eingelegt, bis er geprüft ist (lit. d)'
+
+    restriction = models.CharField(
+        'Verarbeitung eingeschränkt', max_length=16, choices=Restriction, blank=True,
+        help_text='Art. 18 DSGVO: die Daten nur noch speichern, anderes nur mit Einwilligung, für Rechtsansprüche oder aus wichtigem '
+                  'öffentlichem Interesse; ConCampus löscht nichts von der Person, solange sie gilt. Vor dem Aufheben die Person unterrichten.',
+    )
+    restricted = models.DateField('Eingeschränkt seit', null=True, blank=True)
+    left = models.DateField('Ausgeschieden am', null=True, blank=True, help_text='Für Beschäftigte: der Tag, an dem ihr Konto deaktiviert wurde.')
     institute = models.ForeignKey(
         Institute, models.SET_NULL, null=True, blank=True, related_name='staff', verbose_name='Institut',
         help_text='Für Lehrende. Studierende gehören zum Institut ihres Hauptfachs.',
@@ -808,7 +826,10 @@ class Membership(Tracked, models.Model):
 
 
 class Export(models.Model):
-    """A list with personal data taken out as a file: who, when, what and how many rows (docs/privacy.md)."""
+    """A list with personal data taken out as a file: who, when, what and how many rows (docs/privacy.md); kept for
+    `KEEP`, long enough to trace where a list went."""
+
+    KEEP = timedelta(days=730)
 
     person = models.ForeignKey(Person, models.SET_NULL, null=True, related_name='+', verbose_name='Von')
     what = models.CharField('Was', max_length=300)

@@ -1812,8 +1812,8 @@ class Command(BaseCommand):
         archivist.groups.add(Office.objects.get(name='Hochschularchiv'))
         years, asa = Institution.get().file_years, Person.objects.get(username='asa')
         made = []
-        for p in ended(years).annotate(left=models.Max('studies__since')):
-            if (offered := date(p.left.year + years + 1, 3, 2)) <= timezone.localdate():
+        for p in ended(years).annotate(last=models.Max('studies__since')):
+            if (offered := date(p.last.year + years + 1, 3, 2)) <= timezone.localdate():
                 made.append(Disposal(person=p, offered=offered, offered_by=asa, archival=p.pk % 25 == 0, assessed=offered + timedelta(days=14), assessed_by=archivist))
         Disposal.objects.bulk_create(made)
         reduce()
