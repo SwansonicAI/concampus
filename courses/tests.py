@@ -1,10 +1,11 @@
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.db.models import Count
 from django.test import Client
 from django.utils import timezone
 
 from core.models import Holiday, Person, Term
+from curriculum.models import Program
 from rooms.models import Room
 from core.testing import Seeded, flashes
 from students.models import Study
@@ -165,6 +166,28 @@ class PlanTest(Seeded):
         self.assertEqual(first.category_id, 'abgesagt')
         self.assertTrue(course.bookings.filter(participants=mei, start=first.start + timedelta(days=1)).exists())
         self.assertTrue(mei.messages.filter(subject=f'Verlegt: {course.title}').exists())
+
+
+class IntakeTest(Seeded):
+    def test_an_intake_comes_again_a_year_on_in_the_po_version_then_in_force(self):
+        """A Studiengang copied as a new PO-Version from next winter; last winter's Eignungsprüfungen into that winter in
+        one go: each stage with its jury and the stage it follows, its Fristen a year on, in the new PO-Version."""
+        winter = Term.objects.get(name='WiSe 2026/27')
+        coming = Term.objects.create(
+            name='WiSe 2027/28', start=date(2027, 10, 1), end=date(2028, 3, 31), lectures_start=date(2027, 10, 11), lectures_end=date(2028, 2, 5),
+            reregistration_start=date(2027, 7, 1), deadline=date(2027, 8, 31), fee=100,
+        )
+        intake = Course.objects.filter(term=winter, kind='audition', program__isnull=False).exclude(following=None).exclude(staff=None).first()
+        self.login('dekanatsreferat').post(f'/studiengaenge/{intake.program.pk}/kopieren/', {'gilt_ab': coming.pk})
+        version = Program.objects.get(degree=intake.program.degree, name=intake.program.name, starts=coming)
+        self.assertEqual(version.modules.count(), intake.program.modules.count())
+        self.assertEqual(Program.current(winter)[0].starts, None)  # who starts before then starts in the old one
+        self.login('asa').post('/lehre/eignungspruefungen/uebernehmen/')
+        copy = Course.objects.get(term=coming, title=intake.title)
+        self.assertEqual((copy.program, set(copy.staff.all()), copy.origin), (version, set(intake.staff.all()), intake))
+        self.assertEqual({c.title for c in copy.following.all()}, {c.title for c in intake.following.all()})
+        if intake.deadline:
+            self.assertEqual((copy.deadline - intake.deadline).days % 7, 0)  # on the same weekday
 
 
 class FakeMoodle:

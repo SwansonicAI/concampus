@@ -6,7 +6,7 @@ code and, where it matters, on pages rendered from the seeded data or by a reque
 serious were checked again. One line each: role and page, pattern, what happens, the fix. Grouped by what to fix first:
 what costs most when it goes wrong, then what many people meet often.
 
-Status: every group fixed on 30 October 2026, except where an item says „Open“: F 5, F 7 and F 13 among them.
+Status: every group fixed on 30 October 2026, except where an item says „Open“: F 5 among them.
 
 ## A. Grades, Bescheide and money
 
@@ -49,8 +49,8 @@ Status: every group fixed on 30 October 2026, except where an item says „Open�
     before, confirm, notify.
 13. [dekanatsreferat] Module and Studiengang – #6 – changing credits, weights, rounding or attempts changes the grades of
     116 enrolled students and the Zeugnisse of 272 graduates without a word – name who is affected; „als neue
-    PO-Version kopieren“. Done: who is affected. Open: copying needs a „gilt ab“ semester on the Studiengang first,
-    since the newest version is what applicants start in at once.
+    PO-Version kopieren“. Done: who is affected; „Als neue PO-Version kopieren“ on the Studiengang's page, with the
+    semester it applies from (`Program.starts`): until then one starts in the version before.
 14. [Prüfungsausschuss] Anerkennung – #8 – a recognised module leaves the choices and its correction page is linked from
     nowhere; the message prints „1.7“ – link each entry to its correction; the grade as „1,7“.
 15. [Prüfungsamt] Noten aus Datei – #8 – „Wertungen von“ has no empty choice, so a file goes into the first examiner's
@@ -91,8 +91,9 @@ Status: every group fixed on 30 October 2026, except where an item says „Open�
 13. [applicant] Postfach, a Bescheid – #6 – the invitation says „für ein Visum vorlegen“; the printable letter is linked
     only from Meine Bewerbung – „Als Brief drucken“ on every message filed as a Bescheid.
 14. [applicant] invitation – #13 – the place is „Festsaal (Fürstenhaus)“ with no street or map, also in the letter for
-    visas – the building's address and a map link in the invitation, the page and the calendar entry. Open: rooms keep
-    only a building's name; its address needs a place of its own in the data, filled from the Hochschule's.
+    visas – the building's address and a map link in the invitation, the page and the calendar entry. Done: Gebäude with
+    their address (Einstellungen › Gebäude), in the invitation with a link to the map, on the page and in the calendar
+    entry; the demo's from the Hochschule's page of venues, the rest to fill in.
 15. [applicant] Mein Konto – #13 – the e-mail, which signs in and receives every Bescheid, can be changed by nobody and
     is never confirmed – change it with a confirmation link.
 16. [applicant] search – #13 – nothing found for ASA, Studienplatz, annehmen, Semesterbeitrag, Immatrikulation,
@@ -157,7 +158,8 @@ Status: every group fixed on 30 October 2026, except where an item says „Open�
     request – confirm naming the message.
 12. [Korrepetitor] Zu begleiten – #1/#2 – no room, not which accompanist plays, two slots at the same time unflagged; the
     Einzeltermin offers all 244 applicants in one list – room and player columns, overlaps flagged, find by typing.
-    Done: rooms, overlaps; a list that long is found by typing already. Open: which accompanist plays, not yet recorded.
+    Done: rooms, overlaps; a list that long is found by typing already; who accompanies each, chosen there, „zeitgleich“
+    only for the same accompanist.
 13. [teacher] start page, „Termine planen“ – #4 – fires for a Praktikum that never has room dates and cannot be cleared –
     skip Lehrformen without dates, or „ohne feste Termine“.
 14. [teacher] Meine Buchungen – #1 – twelve lesson series read „Hauptfach Violine · Klasse Wendt“ with no student –
@@ -201,7 +203,8 @@ Status: every group fixed on 30 October 2026, except where an item says „Open�
 6. [ASA] Studienakte of an admitted applicant – #6 – „Immatrikulieren“ without what is missing, refused after the click;
    the term called „immatrikuliert“ – the missing items with their actions; the button once complete.
 7. [ASA] Versandte Bescheide – #10/#9 – „per Post“ only a badge: no filter, no printing them all, no „gedruckt“; each
-   audition's invitation a kind of its own – the filter, print all, mark printed; kinds by template. Open.
+   audition's invitation a kind of its own – the filter, print all, mark printed; kinds by template. Done: by the text it came from and by
+   delivery; those by post print as one batch and are marked printed after.
 8. [ASA] Exmatrikulation after the Zeugnis – #1 – the reason left blank, though the to-do says why – „Abschluss des
    Studiums“ preselected.
 9. [ASA] Studium bearbeiten – #4 – Hauptfachlehrer:in only among who taught that Hauptfach, so a new teacher cannot be
@@ -213,7 +216,8 @@ Status: every group fixed on 30 October 2026, except where an item says „Open�
 12. [dekanat] Ermäßigungen – #10 – per semester, re-entered each time; SoSe 2027 has none yet – „bis Semester“, or carried
     over in the Semesterwechsel; the coming semester by default.
 13. [institut] Eignungsprüfungen – #10 – 15 stages per intake re-created by hand each year – „wie im Vorjahr anlegen“,
-    dates shifted. Open: an intake's stages, juries and links copied together.
+    dates shifted. Done: „Aus dem Vorjahr übernehmen“ copies each intake a year on, its stages with their
+    juries and links, the Fristen by whole weeks, in the PO-Version then in force; rooms and times are planned anew.
 14. [veranstaltungsbuero, institut] Leihinstrument – #5/#10 – a past return date is accepted and blocks the Rückmeldung
     at once; no „Verlängern“ – refuse past dates; extend.
 15. [campus] Konten – #6 – a teacher made inactive without a word about 13 class students, 23 courses and 230 bookings –

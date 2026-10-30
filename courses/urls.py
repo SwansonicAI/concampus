@@ -11,6 +11,7 @@ urlpatterns = [
     path('deputat/', views.load, name='load'),
     path('semesterwechsel/', views.rollover, name='rollover'),
     path('pruefende/uebernehmen/', views.appoint_again, name='appoint_again'),
+    path('eignungspruefungen/uebernehmen/', views.auditions_again, name='auditions_again'),
     path('neu/', views.edit, name='new'),
     path('<int:pk>/', views.course, name='course'),
     path('<int:pk>/bearbeiten/', views.edit, name='edit'),

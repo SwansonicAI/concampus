@@ -209,16 +209,21 @@
 {% if playing is not None and staffed %}
 <section>
   <h2>Zu begleiten</h2>
-  <p class="lead">Wer bei der Eignungsprüfung Korrepetition wünscht, wann und was. Proben nach Absprache vor dem Termin.</p>
+  <p class="lead">Wer bei der Eignungsprüfung Korrepetition wünscht, wann und was, und wer begleitet. Proben nach Absprache vor dem Termin.</p>
+  <form method="post">
+  {% csrf_token %}
   <table>
-    <thead><tr><th>Termin</th><th>Raum</th><th>Name</th><th>Hauptfach</th><th>Programm</th></tr></thead>
+    <thead><tr><th>Termin</th><th>Raum</th><th>Name</th><th>Hauptfach</th><th>Programm</th><th>Begleitung</th></tr></thead>
     <tbody>
       {% for p in playing %}
-      <tr><td class="nowrap" data-value="{{ p.slot|date:'c' }}">{{ p.slot|date:"D j.n., H:i"|default:"noch offen" }}{% if p.together %}<br><span class="badge wait">zeitgleich mit {{ p.together }}</span>{% endif %}</td><td>{{ p.room|default:"–" }}</td><td>{{ p.study.person.name }}</td><td>{{ p.study.subject }}</td><td><small>{{ p.note|programme|linebreaksbr }}</small></td></tr>
-      {% empty %}<tr><td colspan="5" class="empty">Noch niemand.</td></tr>
+      <tr><td class="nowrap" data-value="{{ p.slot|date:'c' }}">{{ p.slot|date:"D j.n., H:i"|default:"noch offen" }}{% if p.together %}<br><span class="badge wait">zeitgleich mit {{ p.together }}</span>{% endif %}</td><td>{{ p.room|default:"–" }}</td><td>{{ p.study.person.name }}</td><td>{{ p.study.subject }}</td><td><small>{{ p.note|programme|linebreaksbr }}</small></td>
+        <td><input type="hidden" name="teilnahme" value="{{ p.pk }}"><select name="begleitung-{{ p.pk }}" aria-label="Begleitung für {{ p.study.person.name }}"><option value="">noch offen</option>{% for t in players %}<option value="{{ t.pk }}"{% if t.pk == p.accompanist_id %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></td></tr>
+      {% empty %}<tr><td colspan="6" class="empty">Noch niemand.</td></tr>
       {% endfor %}
     </tbody>
   </table>
+  {% if playing %}<div class="actions" style="margin-top: 16px"><button class="btn" name="begleitung" value="1">Begleitung speichern</button></div>{% endif %}
+  </form>
 </section>
 {% elif staffed %}
 <section>

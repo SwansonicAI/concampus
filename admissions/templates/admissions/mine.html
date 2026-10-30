@@ -14,7 +14,7 @@
       {% for p in s.stages %}
       <tr>
         <td>{{ p.course.title }}</td>
-        <td>{% if p.slot %}{{ p.slot|date:"l, j. F Y, H:i" }}{% if p.room %}, {{ p.room }} ({{ p.room.building }}){% endif %}{% if p in s.ahead %}<br><a class="more" href="{% url 'admissions:calendar' p.pk %}">In den Kalender</a>{% endif %}{% elif p.course.video %}online{% else %}wird mitgeteilt{% endif %}</td>
+        <td>{% if p.slot %}{{ p.slot|date:"l, j. F Y, H:i" }}{% if p.room %}, {{ p.room.place }}{% with site=p.room.site %}{% if site.map %} <a class="more" href="{{ site.map }}">Lageplan</a>{% endif %}{% endwith %}{% endif %}{% if p in s.ahead %}<br><a class="more" href="{% url 'admissions:calendar' p.pk %}">In den Kalender</a>{% endif %}{% elif p.course.video %}online{% else %}wird mitgeteilt{% endif %}</td>
         <td>{% if p.course.released %}{% if p.passed %}<span class="badge yes">bestanden</span>{% else %}<span class="badge no">nicht bestanden</span>{% if p.course.video and p.grade is not None %} <small class="muted">{{ p.grade|mark }} Punkte</small>{% endif %}{% endif %}{% else %}<span class="muted">ausstehend</span>{% endif %}</td>
       </tr>
       {% endfor %}

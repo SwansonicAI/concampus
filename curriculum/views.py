@@ -1,9 +1,14 @@
 from collections import defaultdict
 
-from django.db.models import Count
-from django.shortcuts import get_object_or_404, render
+from django.contrib import messages
+from django.db.models import Count, Max
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.views.decorators.http import require_POST
 
+from core.access import require
 from core.models import Office, Term
+from core.transfer import FORMAT, load, plan as written
 from courses.models import Course
 from students.models import Study
 from .apps import OVERSIGHT
@@ -67,4 +72,24 @@ def program(request, pk):
         'program': program, 'rows': rows, 'semesters': range(1, program.semesters + 1), 'term': term, 'edit': request.user.may('edit_curriculum', program),
         'reachable': Course.reachable(request.user, Course.objects.filter(pk__in=[c.pk for found in offers.values() for c in found])),
         'total': sum(m.credits for m in tree), 'figures': figures, 'students': figures and program.studies.filter(status='enrolled').count(),
+        'coming': Term.objects.filter(start__gt=timezone.localdate()).order_by('start'),
     })
+
+
+@require('edit_curriculum')
+@require_POST
+def copy(request, pk):
+    """The Studienplan as a new PO-Version that applies from a semester to come: whoever studies in it keeps theirs, whoever
+    starts from that semester starts in the new one, to be changed until then."""
+    program = get_object_or_404(request.user.within(Program.objects.all(), 'edit_curriculum'), pk=pk)
+    starts = Term.objects.filter(pk=request.POST.get('gilt_ab') or None, start__gt=timezone.localdate()).first()
+    if not starts:
+        messages.error(request, 'Bitte das Semester wählen, ab dem die neue PO-Version gilt.')
+        return redirect(program)
+    version = Program.objects.filter(degree=program.degree, name=program.name).aggregate(Max('version'))['version__max'] + 1
+    load({'format': FORMAT, 'programs': [written(program)[0] | {'version': version}]})
+    new = Program.objects.get(degree=program.degree, name=program.name, version=version)
+    new.starts = starts
+    new.save(update_fields=['starts'])
+    messages.success(request, f'PO-Version {version} angelegt, gilt ab dem {starts}; bis dahin beginnt man in Version {program.version}.')
+    return redirect(new)

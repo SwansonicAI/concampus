@@ -38,7 +38,7 @@ from courses.models import Appointment, Area, Course, Ensemble, Format, Particip
 from courses.panel import mean, rounding
 from curriculum.models import Module, Program, Rounding, Subject
 from instruments.models import Instrument, Loan
-from rooms.models import Booking, BookingCategory, Room, RoomFunction
+from rooms.models import Booking, BookingCategory, Building, Room, RoomFunction
 from rooms.views import agenda
 from students.disposal import ended, reduce
 from students.models import Disposal, Document, DocumentType, Event, InsuranceReport, Study, StudyTerm
@@ -241,6 +241,11 @@ TEACHER_INSTITUTE = {  # teachers without a Hauptfach of their own
 }
 
 # Rooms and their purposes as the HfM's Asimut lists them; rooms the Asimut groups leave out get the Institut their purpose names.
+BUILDINGS = {  # as the Hochschule's page of venues gives them (hfm-weimar.de, 30.10.2026); the others' addresses to fill in
+    'Fürstenhaus': 'Platz der Demokratie 2/3, 99423 Weimar', 'Palais': 'Am Palais 4, 99423 Weimar',
+    'Hochschulzentrum am Horn': 'Carl-Alexander-Platz 1, 99425 Weimar', 'Belvedere': 'Schloss Belvedere, 99425 Weimar',
+    'Musikgymnasium Belvedere': 'Schloss Belvedere 1, 99425 Weimar', 'Weimarhalle': 'UNESCO-Platz 1, 99423 Weimar',
+}
 ROOMS = {
     'Fürstenhaus': 'Festsaal:Festsaal; FH 022:Sitzungsraum; FH 115:Senatssaal; FH 024:Unterrichtsraum Liedgestaltung; FH 105:Übungsraum Alte Musik; '
                    'FH 106:Unterrichtsraum Alte Musik; FH 107:Unterrichtsraum Alte Musik; FH 108:Salon; FH 109:Unterrichtsraum Kammermusik; '
@@ -931,7 +936,7 @@ class Command(BaseCommand):
                 s.grade = s.progress()[1] or FINALS[s.pk % len(FINALS)]
             Study.objects.bulk_update(recent, ['grade'])
             first = dict(Study.objects.values('person').annotate(start=models.Min('start_term__start')).values_list('person', 'start'))
-            agreed = list(Person.objects.filter(pk__in=first).only('pk'))
+            agreed = [p for p in Person.objects.filter(pk__in=first).only('pk') if p.pk % 12]  # about one in twelve keeps Bescheide by post
             for p in agreed:  # Bescheide by Postfach, as they agreed when signing up, half a year before they began
                 p.electronic = at(first[p.pk] - timedelta(days=180), hour=12)
             Person.objects.bulk_update(agreed, ['electronic'], batch_size=2000)
@@ -1029,6 +1034,7 @@ class Command(BaseCommand):
                 name, purpose = entry.split(':')
                 function, capacity, equipment = furnish(name, purpose)
                 self.rooms[name] = Room.objects.create(building=building, name=name, purpose=purpose, function_id=function, capacity=capacity, equipment=equipment)
+        Building.objects.bulk_create(Building(name=name, address=BUILDINGS.get(name, '')) for name in ROOMS)
         for key, names in ROOM_INSTITUTES.items():
             self.institutes[key].rooms.set(self.rooms[name] for name in names.split(', '))
 
@@ -1788,7 +1794,7 @@ class Command(BaseCommand):
                 subject, body = lost.study.wording('endgueltig', pruefung=lost.course.title, modul=lost.module, versuch=3)  # sent with the result
                 when = lost.course.released + timedelta(days=2)
                 notice = Message.objects.create(person=lost.study.person, subject=subject, body=body, sender=texts.block('absender_bescheide'), created=when, read=when)
-                Document.objects.create(person=lost.study.person, study=lost.study, kind_id='notice', title=subject, message=notice, created=when)
+                Document.objects.create(person=lost.study.person, study=lost.study, kind_id='notice', title=subject, message=notice, created=when, template='endgueltig')
                 lost.study.participations.filter(course__term=now).delete()  # with the Prüfungsanspruch lost, nothing new this semester
                 lost.study.ensembles.clear()
 
@@ -2387,18 +2393,18 @@ class Command(BaseCommand):
         study = self.demo_study()
         lesson = Booking.objects.filter(participants=demo, course__kind=Course.Kind.LESSON, course__term=self.current).select_related('room', 'course').order_by('start').first()
         past = [  # what she received before: her place, her Immatrikulation, her lesson time
-            (*study.wording('zulassung', frist=f'{date(2024, 6, 14):%d.%m.%Y}', begruendung=''), at(date(2024, 5, 31), hour=10), True),
-            (*study.wording('immatrikulation'), at(study.start_term.start - timedelta(days=10), hour=10), True),
+            (*study.wording('zulassung', frist=f'{date(2024, 6, 14):%d.%m.%Y}', begruendung=''), at(date(2024, 5, 31), hour=10), 'zulassung'),
+            (*study.wording('immatrikulation'), at(study.start_term.start - timedelta(days=10), hour=10), 'immatrikulation'),
         ]
         if lesson:
             past.append((*texts.render(
                 'unterrichtszeit', vorname=demo.first_name, nachname=demo.last_name, veranstaltung=lesson.course.title, von=wendt,
                 zeit=date_format(timezone.localtime(lesson.start), 'l, G:i') + ' Uhr', raum=lesson.room, ab=date_format(timezone.localtime(lesson.start), 'j.n.Y'),
-            ), at(self.current.start - timedelta(days=5), hour=16), False))
+            ), at(self.current.start - timedelta(days=5), hour=16), ''))
         for subject, body, when, notice in past:
             sent = Message.objects.create(person=demo, subject=subject, body=body, created=when, read=when, sender=texts.block('absender_bescheide') if notice else '')
             if notice:
-                Document.objects.create(person=demo, study=study, kind_id='notice', title=subject, message=sent, created=when)
+                Document.objects.create(person=demo, study=study, kind_id='notice', title=subject, message=sent, created=when, template=notice)
         Message.objects.bulk_create([
             Message(person=demo, subject='Prüfungsanmeldung vom 01. bis 15.11.2026', created=at(date(2026, 10, 15), hour=9),
                     body='Melden Sie sich bitte vom 01. bis 15.11.2026 in ConCampus zu den Prüfungen dieses Semesters an. Abmelden können Sie sich bis zum 18.01.2027.',
@@ -2418,11 +2424,11 @@ class Command(BaseCommand):
         decided = Study.objects.filter(status__in=list(DECISIONS), start_term__in=[self.current, self.next])
         for study in decided.select_related('person', 'program', 'subject', 'start_term'):
             deadline = study.since + timedelta(days=Institution.get().accept_days)
-            notices.append((study, *study.wording(DECISIONS[study.status], frist=f'{deadline:%d.%m.%Y}', datum=f'{study.since:%d.%m.%Y}', begruendung=grounds(study)), at(study.since, hour=10)))
+            notices.append((study, DECISIONS[study.status], *study.wording(DECISIONS[study.status], frist=f'{deadline:%d.%m.%Y}', datum=f'{study.since:%d.%m.%Y}', begruendung=grounds(study)), at(study.since, hour=10)))
         for study in (s for s in self.enrolled if s.fs == 1):
-            notices.append((study, *study.wording('immatrikulation'), at(study.start_term.start - timedelta(days=10), hour=10)))
+            notices.append((study, 'immatrikulation', *study.wording('immatrikulation'), at(study.start_term.start - timedelta(days=10), hour=10)))
         sender = texts.block('absender_bescheide')
         sent = Message.objects.bulk_create(
-            Message(person=s.person, subject=title, body=text, sender=sender, created=when, read=when) for s, title, text, when in notices
+            Message(person=s.person, subject=title, body=text, sender=sender, created=when, read=when) for s, _, title, text, when in notices
         )
-        Document.objects.bulk_create(Document(person=s.person, study=s, kind_id='notice', title=title, message=m, created=when) for (s, title, _, when), m in zip(notices, sent))
+        Document.objects.bulk_create(Document(person=s.person, study=s, kind_id='notice', title=title, message=m, created=when, template=key) for (s, key, title, _, when), m in zip(notices, sent))

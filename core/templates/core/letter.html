@@ -5,6 +5,7 @@
   {% if letters %}<button class="btn" onclick="window.print()">Drucken / PDF</button>{% endif %}
   {% if missing %}<span class="muted">Ohne Bescheid: {{ missing|join:", " }}</span>{% endif %}
 </p>
+{% if printing %}<form method="post" action="{% url 'students:printed' %}" class="no-print actions">{% csrf_token %}{% for pk in printing %}<input type="hidden" name="bescheid" value="{{ pk }}">{% endfor %}<button class="btn ghost">Gedruckt: {{ printing|length }} per Post als gedruckt markieren</button></form>{% endif %}
 {% for letter in letters %}
 <div class="document letter">
   {% include "core/_letterhead.html" with office=letter.sender|default:institution.name %}

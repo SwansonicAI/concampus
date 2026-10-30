@@ -334,6 +334,10 @@ class Participation(Judged, Tracked, models.Model):
     module = models.ForeignKey(Module, models.PROTECT, null=True, blank=True, related_name='participations', verbose_name='Modul')
     note = models.TextField('Notiz', blank=True, help_text='Repertoire bei Prüfungen, Herkunft bei Anerkennungen.')
     slot = models.DateTimeField('Termin', null=True, blank=True)
+    accompanist = models.ForeignKey(
+        Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Begleitung',
+        help_text='Bei einer Eignungsprüfung mit Korrepetition: wer begleitet, aus der Korrepetition eingeteilt.',
+    )
     grade = models.DecimalField('Note / Punkte', max_digits=4, decimal_places=2, null=True, blank=True)
     reason = models.CharField('Begründung der abweichenden Note', max_length=200, blank=True)
     passed = models.BooleanField('Bestanden', null=True, blank=True)

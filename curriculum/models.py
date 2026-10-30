@@ -7,7 +7,7 @@ from django.urls import reverse
 
 from core import destatis
 from core.keys import DEGREES, FIELDS, KeyField
-from core.models import Tracked
+from core.models import Term, Tracked
 
 
 class Rounding(models.TextChoices):  # what Prüfungsordnungen say about one decimal
@@ -75,6 +75,10 @@ class Program(Tracked, models.Model):
     name = models.CharField('Name', max_length=120)
     degree = models.CharField('Abschluss', max_length=40)
     version = models.PositiveSmallIntegerField('PO-Version')
+    starts = models.ForeignKey(
+        Term, models.PROTECT, null=True, blank=True, related_name='+', verbose_name='Gilt ab',
+        help_text='Das erste Semester, in dem man in dieser PO-Version beginnt; bis dahin in der vorigen. Leer: von Anfang an.',
+    )
     semesters = models.PositiveSmallIntegerField('Regelstudienzeit')
     subjects = models.ManyToManyField(Subject, blank=True, related_name='programs', verbose_name='Hauptfächer')
     postgraduate = models.BooleanField('Setzt einen Abschluss voraus', default=False, help_text='Bewerbende reichen ihr Abschlusszeugnis ein.')
@@ -167,7 +171,7 @@ class Program(Tracked, models.Model):
         return (
             f'Änderungen an ECTS, Gewichtung, Rundung oder Versuchen gelten sofort: für die Noten von {counts.get("enrolled", 0)} '
             f'Studierenden dieser Prüfungsordnung und für die Zeugnisse von {counts.get("graduated", 0)} Absolvent:innen. Ein neuer '
-            'Studienplan ist eine neue PO-Version.'
+            'Studienplan ist eine neue PO-Version: auf der Seite des Studiengangs „Als neue PO-Version kopieren“, mit dem Semester, ab dem sie gilt.'
         )
 
     def chosen_by(self):
@@ -189,11 +193,13 @@ class Program(Tracked, models.Model):
         return cls.objects.filter(modules__isnull=False).distinct().ordered()
 
     @classmethod
-    def current(cls):
-        """The latest Prüfungsordnung of each planned Studiengang, what one can start now; each with the pks of the
-        Hauptfächer it `offered`."""
-        newer = cls.objects.filter(degree=models.OuterRef('degree'), name=models.OuterRef('name'), version__gt=models.OuterRef('version'))
-        programs = list(cls.planned().exclude(models.Exists(newer)).prefetch_related('subjects'))
+    def current(cls, term=None):
+        """The Prüfungsordnung of each planned Studiengang one starts in in `term`, this semester if none: the latest that
+        applies by then; each with the pks of the Hauptfächer it `offered`."""
+        term = term or Term.current()
+        valid = cls.objects.filter(models.Q(starts=None) | models.Q(starts__start__lte=term.start)) if term else cls.objects.all()
+        newer = valid.filter(degree=models.OuterRef('degree'), name=models.OuterRef('name'), version__gt=models.OuterRef('version'))
+        programs = list(cls.planned().filter(pk__in=valid.values('pk')).exclude(models.Exists(newer)).prefetch_related('subjects'))
         for p in programs:
             p.offered = {s.pk for s in p.subjects.all()}
         return programs

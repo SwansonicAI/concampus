@@ -9,8 +9,10 @@
 <form class="toolbar">
   <div class="inline">
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name oder Matrikelnummer"></label>
-    <label>Art<select name="art" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for k in kinds %}<option{% if k == kind %} selected{% endif %}>{{ k }}</option>{% endfor %}</select></label>
+    <label>Art<select name="art" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for key, title in kinds %}<option value="{{ key }}"{% if key == kind %} selected{% endif %}>{{ title }}</option>{% endfor %}</select></label>
+    <label>Zustellung<select name="zustellung" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for key, title in deliveries.items %}<option value="{{ key }}"{% if key == delivery %} selected{% endif %}>{{ title }}</option>{% endfor %}</select></label>
   </div>
+  {% if sent %}<a class="btn ghost" href="?{% if request.GET.urlencode %}{{ request.GET.urlencode }}&amp;{% endif %}drucken">{% if count > sent|length %}Die ersten {{ sent|length }}{% else %}Alle {{ count }}{% endif %} drucken</a>{% endif %}
 </form>
 <table>
   <thead><tr><th>Versandt</th><th>Bescheid</th><th>An</th><th>Studium</th><th>Zustellung</th></tr></thead>
@@ -21,7 +23,7 @@
       <td>{% if d.message %}<a href="{% url 'letter' d.message.pk %}">{{ d.title }}</a> <small class="muted">{{ d.message.reference }}</small>{% else %}{{ d.title }}{% endif %}</td>
       <td><a href="{{ d.study.get_absolute_url }}">{{ d.person.name }}</a></td>
       <td>{{ d.study.program.title }} · {{ d.study.subject }}</td>
-      <td>{% if not d.person.electronic %}<span class="badge wait">per Post</span>{% elif d.message.read %}im Postfach geöffnet am {{ d.message.read|date:"j.n.Y" }}{% else %}<span class="muted">noch nicht geöffnet</span>{% endif %}</td>
+      <td>{% if not d.person.electronic %}{% if d.printed %}per Post, gedruckt am {{ d.printed|date:"j.n.Y" }}{% else %}<span class="badge wait">per Post</span>{% endif %}{% elif d.message.read %}im Postfach geöffnet am {{ d.message.read|date:"j.n.Y" }}{% else %}<span class="muted">noch nicht geöffnet</span>{% endif %}</td>
     </tr>
     {% empty %}<tr><td colspan="5" class="empty">Keine Treffer.</td></tr>
     {% endfor %}

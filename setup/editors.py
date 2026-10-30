@@ -22,7 +22,7 @@ from curriculum.forms import ModuleForm, ProgramForm
 from curriculum.models import Module, Program, Subject
 from instruments.models import Instrument
 from mobility.models import Agreement, Partner
-from rooms.models import Booking, BookingCategory, Room, RoomFunction
+from rooms.models import Booking, BookingCategory, Building, Room, RoomFunction
 from students.forms import StudyForm
 from students.models import DocumentType, Study
 
@@ -370,7 +370,7 @@ EDITORS = {e.key: e for e in [
     Editor(
         'studiengaenge', Program, 'Studiengänge', 'edit_curriculum', 'Studium und Lehre', form=ProgramForm,
         sections=[
-            (None, [('degree', 'name', 'version'), ('semesters', 'attempts', 'thesis_weeks'), 'postgraduate', 'subjects']),
+            (None, [('degree', 'name'), ('version', 'starts'), ('semesters', 'attempts', 'thesis_weeks'), 'postgraduate', 'subjects']),
             ('Noten', [('rounding', 'mean_rounding', 'honours')]),
             ('Diploma Supplement und Statistik', [('level', 'kind', 'field'), ('qualification', 'english'), 'outcomes', ('exam', 'exam_office')]),
         ],
@@ -410,7 +410,7 @@ EDITORS = {e.key: e for e in [
         columns=[('Prüfung', 'title'), ('Semester', 'term'), ('Studiengang', 'program'), ('Bewerbungsschluss', 'deadline'), ('Plätze', 'capacity')],
         search=['title', 'subject__name'], words='aufnahmeprüfung videostufe kommission bewerbungsfrist',
         queryset=lambda: Course.objects.filter(kind=Course.Kind.AUDITION).select_related('term', 'program').order_by('-term__start', 'title'),
-        new=lambda request: Course(kind=Course.Kind.AUDITION, term=Term.upcoming() or Term.current()),
+        new=lambda request: Course(kind=Course.Kind.AUDITION, term=Term.upcoming() or Term.current()), carry='courses:auditions_again',
     ),
     Editor(
         'raeume', Room, 'Räume', 'manage_rooms', 'Räume',
@@ -448,6 +448,10 @@ EDITORS = {e.key: e for e in [
         columns=[('Unterlagen', 'name'), ('In der Checkliste', 'condition'), ('Pflicht', 'required')],
         search=['name'], words='checkliste bewerbung video zeugnis nachweis hochladen',
         queryset=lambda: DocumentType.objects.exclude(key__in=DocumentType.SYSTEM),  # Bescheide and theses are filed by the system
+    ),
+    Editor(
+        'gebaeude', Building, 'Gebäude', 'manage_rooms', 'Räume', sections=[(None, ['name', 'address'])],
+        columns=[('Gebäude', 'name'), ('Anschrift', 'address')], search=['name', 'address'], words='adresse anschrift lageplan standort',
     ),
     Editor(
         'raumfunktionen', RoomFunction, 'Raumfunktionen', 'manage_rooms', 'Räume', sections=[(None, [('name', 'order'), 'central'])],

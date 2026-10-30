@@ -260,6 +260,20 @@ class DisposalTest(Seeded):
         self.assertTrue(teacher.last_name and teacher.teaching.exists())
 
 
+class NoticesTest(Seeded):
+    def test_bescheide_by_post_print_together_and_are_marked_printed(self):
+        """Versandte Bescheide by the text they came from and how they go: those by post print as one batch of letters,
+        then are marked printed."""
+        asa = self.login('asa')
+        page = asa.get('/studierende/versandt/?zustellung=post')
+        self.assertIn(('immatrikulation', 'Immatrikulation'), [(k, t[:15]) for k, t in page.context['kinds']])
+        batch = asa.get('/studierende/versandt/?zustellung=post&drucken')
+        self.assertTrue(batch.context['printing'])
+        asa.post('/studierende/versandt/gedruckt/', {'bescheid': batch.context['printing']})
+        self.assertEqual(Document.objects.filter(pk__in=batch.context['printing'], printed__isnull=False).count(), len(batch.context['printing']))
+        self.assertFalse(set(batch.context['printing']) & {d.pk for d in asa.get('/studierende/versandt/?zustellung=post').context['sent']})
+
+
 class XHochschuleTest(Seeded):
     def test_bescheinigungen_go_out_as_xhochschule_files(self):
         """Each Bescheinigung also as an XHochschule 1.2 file, valid against the standard's schemas, a leave with its ground;

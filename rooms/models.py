@@ -1,4 +1,5 @@
 from datetime import timedelta
+from urllib.parse import quote
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -38,6 +39,28 @@ class RoomFunction(Tracked, Keyed):
         return self.name
 
 
+class Building(Tracked, models.Model):
+    """A building rooms are in, under the name the rooms give it: its address, for invitations, letters for a visa and
+    calendar entries, with a link to the map."""
+
+    capabilities = ('manage_rooms',)
+
+    name = models.CharField('Name', max_length=40, unique=True, help_text='Wie bei den Räumen, z. B. „Hauptgebäude“.')
+    address = models.CharField('Anschrift', max_length=120, blank=True, help_text='Straße, Hausnummer, PLZ und Ort.')
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Gebäude'
+        verbose_name_plural = 'Gebäude'
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def map(self):
+        return self.address and f'https://www.openstreetmap.org/search?query={quote(self.address)}'
+
+
 class Room(Tracked, models.Model):
     """A room of the Hochschule or a venue it uses. Institutes book their own rooms; others are given out centrally."""
 
@@ -59,6 +82,16 @@ class Room(Tracked, models.Model):
 
     def __str__(self):
         return self.name
+
+    @property
+    def site(self):
+        """Its building, with the address where one is kept."""
+        return Building.objects.filter(name=self.building).first() or Building(name=self.building)
+
+    def place(self, linked=False):
+        """Where it is, as an invitation says it: room, building and address; `linked` adds the map."""
+        site = self.site
+        return f'{self} ({", ".join(filter(None, [site.name, site.address]))})' + (f'\nLageplan: {site.map}' if linked and site.map else '')
 
 
 class BookingCategory(Tracked, Keyed):

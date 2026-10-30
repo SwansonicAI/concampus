@@ -682,19 +682,44 @@ def exmatriculate(request, pk):
     return redirect(study.get_absolute_url())
 
 
+DELIVERY = {'post': 'per Post, noch nicht gedruckt', 'gedruckt': 'per Post, gedruckt', 'elektronisch': 'elektronisch'}
+
+
 @require('manage_students')
 def notices(request):
-    """Versandte Bescheide: every Bescheid the office's studies received, newest first, how each reached its person."""
-    q, kind = request.GET.get('q', '').strip(), request.GET.get('art', '')
+    """Versandte Bescheide: every Bescheid the office's studies received, newest first, how each reached its person; by
+    the text it came from and how it is delivered. Those going by post print all at once, each a letter, and are marked
+    printed afterwards."""
+    q, kind, delivery = request.GET.get('q', '').strip(), request.GET.get('art', ''), request.GET.get('zustellung', '')
     sent = (
         Document.objects.filter(kind='notice', study__in=request.user.within(Study.objects.all(), 'manage_students'))
         .select_related('person', 'study__program', 'study__subject', 'message').order_by('-created')
     )
-    kinds = sorted(set(sent.values_list('title', flat=True)))
+    kinds = sorted(((k, texts.TEXTS[k].title) for k in set(sent.exclude(template='').values_list('template', flat=True)) if k in texts.TEXTS), key=lambda k: k[1])
     if kind:
-        sent = sent.filter(title=kind)
+        sent = sent.filter(template=kind)
+    by_post = Q(person__electronic=None)
+    sent = sent.filter({'post': by_post & Q(printed=None), 'gedruckt': by_post & Q(printed__isnull=False), 'elektronisch': ~by_post}.get(delivery, Q()))
     sent = matching(sent, q, 'person__first_name', 'person__last_name', 'person__matriculation', starts=True)
-    return render(request, 'students/notices.html', {'sent': sent[:SHOWN], 'count': sent.count(), 'kinds': kinds, 'kind': kind, 'q': q})
+    if 'drucken' in request.GET:
+        shown = list(sent[:SHOWN])
+        return render(request, 'core/letter.html', {
+            'letters': [d.message for d in shown if d.message], 'printing': [d.pk for d in shown if not (d.person.electronic or d.printed)],
+        })
+    return render(request, 'students/notices.html', {
+        'sent': sent[:SHOWN], 'count': sent.count(), 'kinds': kinds, 'kind': kind, 'q': q, 'deliveries': DELIVERY, 'delivery': delivery,
+    })
+
+
+@require('manage_students')
+@require_POST
+def printed(request):
+    """Bescheide by post marked printed, after printing them all."""
+    done = Document.objects.filter(
+        pk__in=request.POST.getlist('bescheid'), kind='notice', printed=None, study__in=request.user.within(Study.objects.all(), 'manage_students'),
+    ).update(printed=timezone.now())
+    messages.success(request, f'{plural(done, "Bescheid", "Bescheide")} als gedruckt markiert.')
+    return redirect(f"{reverse('students:notices')}?zustellung=post")
 
 
 @require('manage_students')

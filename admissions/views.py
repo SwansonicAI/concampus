@@ -333,7 +333,7 @@ def after(course):
     found = []
     for c in next_stages(course).prefetch_related('bookings__room'):
         first = min(c.bookings.all(), key=lambda b: b.start, default=None)
-        found.append(f'{c.title}: {date_format(timezone.localtime(first.start), "l, j. F Y, H:i")} Uhr, {first.room} ({first.room.building})' if first else f'{c.title}: Termin folgt')
+        found.append(f'{c.title}: {date_format(timezone.localtime(first.start), "l, j. F Y, H:i")} Uhr, {first.room.place()}' if first else f'{c.title}: Termin folgt')
     return found
 
 
@@ -343,7 +343,7 @@ def invite(p):
     start, _, room = held(p)
     p.study.notify(
         'einladung_eignungspruefung', reverse('admissions:mine'), pruefung=p.course.title, termin=date_format(timezone.localtime(start), 'l, j. F Y, H:i'),
-        raum=f'{room} ({room.building})' if room else 'wird mitgeteilt', programm=p.note or '–', danach='\n'.join(f'– {line}' for line in after(p.course)) or '–',
+        raum=room.place(linked=True) if room else 'wird mitgeteilt', programm=p.note or '–', danach='\n'.join(f'– {line}' for line in after(p.course)) or '–',
     )
 
 
@@ -351,7 +351,7 @@ def calendar(request, pk):
     """An applicant's appointment as a calendar file."""
     p = get_object_or_404(Participation.objects.select_related('course'), pk=pk, study__person=request.user, slot__isnull=False, course__kind=Course.Kind.AUDITION)
     start, end, room = held(p)
-    return ics(request, [(f'eignungspruefung-{p.pk}', start, end, p.course.title, f'{room}, {room.building}' if room else '')], 'eignungspruefung.ics')
+    return ics(request, [(f'eignungspruefung-{p.pk}', start, end, p.course.title, room.place() if room else '')], 'eignungspruefung.ics')
 
 
 def programme(note):
@@ -437,7 +437,7 @@ def plan(request, pk):
         times = [timezone.localtime(data['start'] + step * n) for n in range(len(rows))]
         end = times[-1] + timedelta(minutes=data['minutes'])
         letter = rows[0].study.wording(
-            'einladung_eignungspruefung', pruefung=course.title, termin=date_format(times[0], 'l, j. F Y, H:i'), raum=f'{data["room"]} ({data["room"].building})',
+            'einladung_eignungspruefung', pruefung=course.title, termin=date_format(times[0], 'l, j. F Y, H:i'), raum=data['room'].place(linked=True),
             programm=rows[0].note or '–', danach='\n'.join(f'– {line}' for line in after(course)) or '–',
         )
         notes = [

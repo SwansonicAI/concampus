@@ -152,6 +152,13 @@ def catalogue(request):
     })
 
 
+def accompanied(course):
+    """The auditions of a Korrepetition course's participants this term, where someone of its staff plays with them."""
+    return Participation.objects.filter(
+        course__term=course.term, course__kind=Course.Kind.AUDITION, course__video=False, course__subject__isnull=False, study__in=course.participations.values('study'),
+    )
+
+
 def course(request, pk):
     person = request.user
     course = get_object_or_404(Course.objects.select_related('term', 'subject'), pk=pk, kind__in=TEACHING, term__in=Term.shown(person))
@@ -167,6 +174,15 @@ def course(request, pk):
 
     staff, rows = sheet()
     refused = None
+    if request.method == 'POST' and 'begleitung' in request.POST:  # the accompaniment: who plays at which audition
+        if not staffed:
+            raise PermissionDenied
+        players = {str(t.pk): t for t in course.staff.all()}
+        for p in accompanied(course).filter(pk__in=request.POST.getlist('teilnahme')):
+            p.accompanist = players.get(request.POST.get(f'begleitung-{p.pk}'))
+            p.save(update_fields=['accompanist'])
+        messages.success(request, 'Begleitung eingeteilt.')
+        return redirect(course)
     if request.method == 'POST':
         if not staffed or course.released:
             raise PermissionDenied('Ergebnisse tragen die Lehrenden der Veranstaltung ein.')
@@ -198,17 +214,16 @@ def course(request, pk):
         upcoming = upcoming.filter(Q(participants=None) | Q(participants=person) | Q(person=person)).distinct()
     playing = None
     if course.kind == Course.Kind.LESSON and Course.objects.filter(accompaniment=course).exists():  # accompaniment at auditions: who plays when, what
-        playing = (
-            Participation.objects.filter(course__term=course.term, course__kind=Course.Kind.AUDITION, course__video=False, course__subject__isnull=False, study__in=course.participations.values('study'))
-            .select_related('study__person', 'study__subject', 'course').order_by(F('slot').asc(nulls_last=True), 'study__person__last_name')
-        )
         from admissions.views import held  # which imports from here
 
-        playing = list(playing)
+        playing = list(accompanied(course).select_related('study__person', 'study__subject', 'course').order_by(F('slot').asc(nulls_last=True), 'study__person__last_name'))
         times = {p.pk: held(p) for p in playing if p.slot}  # where, and who plays at the same time: one accompanist cannot be in two places
         for p in playing:
             p.room = p.pk in times and times[p.pk][2]
-            p.together = ', '.join(o.study.person.name for o in playing if o is not p and p.pk in times and o.pk in times and times[o.pk][0] < times[p.pk][1] and times[p.pk][0] < times[o.pk][1])
+            p.together = ', '.join(
+                o.study.person.name for o in playing if o is not p and o.accompanist_id == p.accompanist_id and p.pk in times and o.pk in times
+                and times[o.pk][0] < times[p.pk][1] and times[p.pk][0] < times[o.pk][1]
+            )
     running = course.term.end >= timezone.localdate()  # what is over is planned no more
     lessons = lesson_times(course) if staffed and running and course.kind == Course.Kind.LESSON and playing is None else []
     timetable = lessons and Lessons(sent(request, 'lessons'), initial=[row for _, row in lessons], form_kwargs={'person': person})
@@ -218,7 +233,7 @@ def course(request, pk):
     )
     ensembles.sort(key=lambda e: (e.coach_id != person.pk, e.coach_id is not None, e.wish_id != person.pk))  # one's own, then those still open
     return render(request, 'courses/course.html', {
-        'course': course, 'playing': playing,
+        'course': course, 'playing': playing, 'players': list(course.staff.all()) if playing is not None else [],
         'lengths': sorted(Counter(minutes(p.module) or course.hours for p in course.participations.select_related('module')).items(), reverse=True) if course.kind == Course.Kind.LESSON else [],
         'staff': staff,
         'rows': rows if staffed else [],
@@ -1070,6 +1085,45 @@ def appoint_again(request):
             made[-1].subjects.set(a.subjects.all())
     messages.success(request, f'{plural(len(made), "Bestellung", "Bestellungen")} aus {last}/{(last + 1) % 100:02d} für {last + 1}/{(last + 2) % 100:02d} übernommen.')
     return redirect('setup:list', 'pruefende')
+
+
+@require('run_auditions')
+@require_POST
+def auditions_again(request):
+    """Each intake into the same semester a year on, for a semester to come that has no Eignungsprüfung yet: every stage
+    the office keeps, with its jury, its Fristen a year on by whole weeks, the stages linked as before and to the new
+    semester's Korrepetition. Rooms and times are planned anew."""
+    made = []
+    with transaction.atomic():
+        for target in Term.objects.filter(start__gt=timezone.localdate()).exclude(courses__kind=Course.Kind.AUDITION).order_by('start'):
+            source = Term.objects.filter(start__range=(target.start - timedelta(days=400), target.start - timedelta(days=330)), courses__kind=Course.Kind.AUDITION).distinct().first()
+            if source:
+                made.append((source, target, again(request.user, source, target)))
+    if not made:
+        messages.error(request, 'Kein Semester ohne Eignungsprüfungen, das ein Jahr nach einem mit Eignungsprüfungen beginnt: bitte erst das Semester anlegen.')
+    for source, target, n in made:
+        messages.success(request, f'{plural(n, "Eignungsprüfung", "Eignungsprüfungen")} aus {source} nach {target} übernommen.')
+    return redirect('setup:list', 'eignungspruefungen')
+
+
+def again(person, source, target):
+    """The auditions of `source` the person keeps, copied into `target`; returns how many."""
+    shift = timedelta(weeks=round((target.start - source.start).days / 7))
+    versions = {(p.degree, p.name): p for p in Program.current(target)}  # each Studiengang in the PO-Version that applies then
+    old = list(person.within(Course.objects.filter(term=source, kind=Course.Kind.AUDITION), 'run_auditions').select_related('accompaniment').prefetch_related('staff', 'after'))
+    new = {}
+    for c in old:
+        new[c.pk] = Course.objects.create(
+            term=target, kind=c.kind, title=c.title, area=c.area, format=c.format, subject=c.subject, oral=c.oral, hours=c.hours,
+            program=c.program and versions.get((c.program.degree, c.program.name), c.program),
+            capacity=c.capacity, allocation=c.allocation, pass_mark=c.pass_mark, max_points=c.max_points, video=c.video, description=c.description,
+            rhythm=c.rhythm, origin=c, opens=c.opens and c.opens + shift, deadline=c.deadline and c.deadline + shift, marks_by=c.marks_by and c.marks_by + shift,
+            accompaniment=c.accompaniment and Course.objects.filter(term=target, kind=c.accompaniment.kind, title=c.accompaniment.title).first(),
+        )
+        new[c.pk].staff.set(c.staff.all())
+    for c in old:
+        new[c.pk].after.set(new[a.pk] for a in c.after.all() if a.pk in new)
+    return len(new)
 
 
 def carry(request, target, pending):

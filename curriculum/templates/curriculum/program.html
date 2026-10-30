@@ -8,8 +8,9 @@
     <a class="btn ghost" href="{% url 'setup:edit' 'studiengaenge' program.pk %}?next={{ request.path|urlencode }}">Bearbeiten</a>
   </div>{% endif %}
 </div>
-<p class="lead">Prüfungsordnung {{ program.version }} · {{ program.semesters }} Semester · {{ total }} CP{% if figures %} · {{ students }} Studierende{% endif %}</p>
+<p class="lead">Prüfungsordnung {{ program.version }}{% if program.starts %}, gilt ab dem {{ program.starts }}{% endif %} · {{ program.semesters }} Semester · {{ total }} CP{% if figures %} · {{ students }} Studierende{% endif %}</p>
 <p>{% for s in program.subjects.all %}<span class="badge">{{ s }}</span> {% endfor %}</p>
+{% if edit and coming %}<form method="post" action="{% url 'curriculum:copy' program.pk %}" class="inline">{% csrf_token %}<label>Als neue PO-Version kopieren, gilt ab<select name="gilt_ab" required>{% for t in coming %}<option value="{{ t.pk }}">{{ t }}</option>{% endfor %}</select></label><button class="btn ghost">Kopieren</button></form>{% endif %}
 <section>
   <h2>Studienverlaufs- und Prüfungsplan</h2>
   <p class="lead">Credits je Fachsemester, T Testat ohne eigene CP, ● Prüfung. Gewicht: Anteil an der Modulnote, bei Modulen an der Gesamtnote. Darunter die Veranstaltungen im {{ term }}.</p>

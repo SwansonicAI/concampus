@@ -81,6 +81,7 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 
 | Rule | Source | Code | Set in |
 |---|---|---|---|
+| A new PO-Version applies from its semester; who starts before then starts in the one before | Prüfungsordnung | `curriculum/models.py` `Program.current()` | Einstellungen › Studiengänge (Gilt ab) |
 | The Immatrikulationsbescheinigung also as the version of § 9 BAföG, with the start of the study, the first enrolment and the Regelstudienzeit; it stands in for Formblatt 2 | BAföG § 9, Formblatt 2 Teil C | `students/views.py` `certificate()` | code |
 | Immatrikulation once the place is accepted, the fee paid, the insurer's report in and the HZB on record | ThürHG, § 199a SGB V | `students/models.py` `Study.missing()` | code |
 | An insurer's report is booked to the one person applying or studying here born that day with its first name and surname or birth name; otherwise the student office books or drops it. Arrears (M12) hold the Rückmeldung back until the insurer reports them paid (M13) | § 199a SGB V | `students/smv.py` `match()`, `book()`; `core/models.py` `Person.missing()` | code |

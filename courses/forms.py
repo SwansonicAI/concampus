@@ -313,6 +313,9 @@ class AuditionForm(CourseForm):
         data = super().clean()
         if data.get('marks_by') and data.get('deadline') and data['marks_by'] <= data['deadline']:
             self.add_error('marks_by', 'Die Kommission wertet nach dem Bewerbungsschluss, sonst bleibt wer zuletzt einreicht ungewertet.')
+        program, term = data.get('program'), data.get('term')
+        if program and program.starts and term and term.start < program.starts.start:
+            self.add_error('program', f'Diese PO-Version gilt erst ab dem {program.starts}; wer im {term} beginnt, beginnt in der vorigen.')
         return data
 
 
