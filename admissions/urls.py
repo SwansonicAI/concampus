@@ -27,6 +27,7 @@ urlpatterns = [
     path('pruefung/<int:pk>/', views.audition, name='audition'),
     path('pruefung/<int:pk>/sichtung/', views.review, name='review'),
     path('pruefung/<int:pk>/termine/', views.plan, name='plan'),
+    path('pruefung/<int:pk>/verlegen/', views.move, name='move'),
     path('pruefung/<int:pk>/weiter/', views.advance, name='advance'),
     path('pruefung/<int:pk>/abschluss/', views.close, name='close'),
     path('pruefung/<int:pk>/nachruecken/', views.move_up, name='move_up'),

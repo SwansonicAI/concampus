@@ -164,9 +164,9 @@ def cases(studies, case):
     return studies
 
 
-@require('view_students')
-def roster(request):
-    today = timezone.localdate()
+def listed(request):
+    """(the studies the list shows as filtered, all of them and not only the rows on the page; its status; the studies
+    the person may list at that status)."""
     status = request.GET.get('status', Study.Status.ENROLLED)
     status = status if status in dict(STATES) else Study.Status.ENROLLED
     shown = Study.objects.filter(status=status) if status else Study.objects.exclude(status__in=Study.APPLICATION)
@@ -176,8 +176,14 @@ def roster(request):
         if (value := request.GET.get(key, '')).isdigit():
             studies = studies.filter(**{field: value})
     studies = cases(studies, request.GET.get('stand', ''))
+    studies = matching(studies, request.GET.get('q', '').strip(), 'person__first_name', 'person__last_name', 'person__birth_name', 'person__email', 'person__matriculation', 'teacher__last_name')
+    return studies, status, scoped
+
+
+@require('view_students')
+def roster(request):
+    studies, status, scoped = listed(request)
     q, sort = request.GET.get('q', '').strip(), request.GET.get('sortierung', '')
-    studies = matching(studies, q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__email', 'person__matriculation', 'teacher__last_name')
     if field := next((f for _, key, f in COLUMNS if key == sort.removeprefix('-')), None):
         studies = studies.order_by(F(field).desc(nulls_last=True) if sort.startswith('-') else F(field).asc(nulls_last=True), 'person__last_name', 'person__first_name')
     if request.GET.get('format') == 'csv':
@@ -217,8 +223,10 @@ def letters(request):
 
 @require('message_students')
 def compose(request):
-    """One message to the chosen people, e.g. everyone in their first semester."""
-    studies = request.user.within(Study.objects.filter(pk__in=request.POST.getlist('study') or request.GET.getlist('study')), 'message_students').select_related('person')
+    """One message to the chosen people, e.g. everyone in their first semester: the ticked, or with ?alle every study the
+    list's filter finds, beyond the rows it shows."""
+    chosen = listed(request)[0].values('pk') if request.GET.get('alle') else request.POST.getlist('study') or request.GET.getlist('study')
+    studies = request.user.within(Study.objects.filter(pk__in=chosen), 'message_students').select_related('person')
     people = sorted({s.person for s in studies}, key=lambda p: p.name)
     back = request.POST.get('next') or request.GET.get('next', '')
     if not url_has_allowed_host_and_scheme(back, {request.get_host()}):
@@ -861,6 +869,9 @@ def disposal(request):
     if request.method == 'POST':
         if request.POST.get('anbieten') and 'dispose_files' in roles:
             messages.success(request, f'{plural(offer(due(), request.user), "Akte", "Akten")} dem Archiv angeboten.')
+        elif request.POST.get('zuruecknehmen') and 'assess_files' in roles:  # until the night cuts them down
+            n = Disposal.objects.filter(assessed__isnull=False, reduced=None).update(assessed=None, archival=None, assessed_by=None)
+            messages.success(request, f'{plural(n, "Bewertung", "Bewertungen")} zurückgenommen; die Akten sind wieder angeboten.')
         elif (archival := request.POST.get('archivwuerdig')) and 'assess_files' in roles:
             n = assess(request.POST.getlist('person'), archival == 'ja', request.user)
             messages.success(request, f'{plural(n, "Akte", "Akten")} bewertet; heute Nacht werden sie bis auf die Grunddaten gelöscht.')
@@ -873,6 +884,7 @@ def disposal(request):
     return render(request, 'students/disposal.html', {
         'due': sorted(Counter(day.year for day in last.values()).items()), 'due_total': len(last), 'offered': offered[:SHOWN], 'offered_total': offered.count(),
         'done': done, 'institution': Institution.get(), 'assessing': 'assess_files' in roles, 'offering': 'dispose_files' in roles,
+        'pending': Disposal.objects.filter(assessed__isnull=False, reduced=None).select_related('person'),
     })
 
 

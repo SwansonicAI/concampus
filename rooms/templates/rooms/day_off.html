@@ -2,17 +2,18 @@
 {% block title %}Termine absagen{% endblock %}
 {% block subnav %}{% include "rooms/_nav.html" %}{% endblock %}
 {% block content %}
-<h1>Termine am {{ day|date:"l, j. F" }} absagen</h1>
-<p class="lead">Etwa bei Krankheit. Die Termine bleiben als „Abgesagt“ im Plan, die Räume werden frei. Wer teilnimmt, erhält eine Nachricht mit allen Terminen des Tages; einen Grund müssen Sie nicht nennen. Prüfungen sind ausgenommen: sie verlegt, wer sie plant.</p>
+<h1>Termine am {{ day|date:"l, j. F" }} absagen{% if building %} · {{ building }}{% elif teaching %} · alle Lehrveranstaltungen{% endif %}</h1>
+<p class="lead">{% if building %}Etwa wenn das Gebäude geschlossen ist. {% elif teaching %}Der Tag ist unterrichtsfrei. {% else %}Etwa bei Krankheit. {% endif %}Die Termine bleiben als „Abgesagt“ im Plan, die Räume werden frei. Wer teilnimmt, erhält eine Nachricht mit allen Terminen des Tages{% if not building and not teaching %}; einen Grund müssen Sie nicht nennen{% endif %}. Prüfungen sind ausgenommen: sie verlegt, wer sie plant.</p>
+{% if buildings %}<form class="toolbar"><div class="inline"><input type="hidden" name="tag" value="{{ day|date:'Y-m-d' }}"><label>Gebäude schließen<select name="gebaeude" onchange="this.form.requestSubmit()"><option value="">Nur meine Termine</option>{% for b in buildings %}<option{% if b == building %} selected{% endif %}>{{ b }}</option>{% endfor %}</select></label></div></form>{% endif %}
 <form method="post" class="form">
   {% csrf_token %}
   <div>
     {% for b in dates %}<label class="option"><input type="checkbox" name="booking" value="{{ b.pk }}" checked> {{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }} {{ b.label }}{% if b.who %} · {{ b.who }}{% endif %} <small class="muted">{{ b.room }}</small></label>
-    {% empty %}<p class="empty">Keine eigenen Termine mehr an diesem Tag.</p>{% endfor %}
+    {% empty %}<p class="empty">Keine {% if not building and not teaching %}eigenen {% endif %}Termine mehr an diesem Tag.</p>{% endfor %}
   </div>
   {% if dates %}
   <div><label for="id_note">Nachricht</label><div class="helptext">Freiwillig, z. B. wann es weitergeht.</div><input id="id_note" name="note" maxlength="300"></div>
-  <div class="actions"><button class="btn">Absagen und benachrichtigen</button><a class="btn ghost" href="{% url 'courses:timetable' %}?tag={{ day|date:'Y-m-d' }}">Zurück</a></div>
+  <div class="actions"><button class="btn"{% if building or teaching %} data-confirm="{{ dates|length }} Termine absagen und alle Teilnehmenden benachrichtigen?"{% endif %}>Absagen und benachrichtigen</button><a class="btn ghost" href="{% url 'courses:timetable' %}?tag={{ day|date:'Y-m-d' }}">Zurück</a></div>
   {% endif %}
 </form>
 {% endblock %}

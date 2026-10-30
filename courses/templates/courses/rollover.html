@@ -57,8 +57,9 @@
   {% if dropped %}<p>Entfallen: {% for c in dropped %}{{ c.title }} <small class="muted">({{ c.cancel_reason }})</small>{% if not forloop.last %}, {% endif %}{% endfor %}. Beim Veröffentlichen werden sie gelöscht.</p>{% endif %}
   <form method="post" class="inline">
     {% csrf_token %}<input type="hidden" name="schritt" value="fragen">
-    <label>Antwort bis<input name="bis" data-day autocomplete="off" value="{{ target.replies_by|date:'d.m.Y' }}" placeholder="z. B. 15.12."></label>
-    <button class="btn{% if target.replies_by %} ghost{% endif %}"{% if not planned %} disabled{% endif %}>{% if target.replies_by %}Noch offene erneut fragen{% else %}Lehrende fragen{% endif %}</button>
+    <label>Antwort bis<input name="bis" data-day autocomplete="off" value="{{ target.replies_by|default:proposed|date:'d.m.Y' }}" placeholder="z. B. 15.12."></label>
+    <button class="btn{% if target.replies_by %} ghost{% endif %}"{% if not planned or not waiting %} disabled{% endif %} data-confirm="{{ waiting|length }} Lehrenden eine Nachricht mit ihren offenen Veranstaltungen senden?">{% if target.replies_by %}{{ waiting|length }} noch offene erneut fragen{% else %}{{ waiting|length }} Lehrende fragen{% endif %}</button>
+    {% if target.ready_by %}<small class="muted">Vor dem {{ target.ready_by|date:"j.n.Y" }}, an dem das Vorlesungsverzeichnis fertig sein soll.</small>{% endif %}
   </form>
 </section>
 
@@ -104,7 +105,9 @@
     <dt>Ohne Angebot</dt><dd>{% for m, n in gaps %}{{ m.code }} {{ m.title }} <small class="muted">{{ m.program.title }}, {{ m.semester }}. Semester: {{ n }} Studierende</small>{% if not forloop.last %}<br>{% endif %}{% empty %}{% if planned %}keine Lücken im Studienplan{% else %}–{% endif %}{% endfor %}</dd>
   </dl>
   {% if target.planning %}
-  {% if publisher %}<form method="post" style="margin-top: 16px">{% csrf_token %}<input type="hidden" name="schritt" value="veroeffentlichen"><button class="btn" data-confirm="{{ target }} für Studierende veröffentlichen?">{{ target }} veröffentlichen</button></form>
+  <p style="margin-top: 16px"><a class="more" href="{% url 'courses:catalogue' %}?semester={{ target.pk }}">Vorlesungsverzeichnis {{ target }} ansehen</a>{% if waiting %} · <a class="more" href="{% url 'courses:catalogue' %}?semester={{ target.pk }}&amp;stand=offen">nur noch nicht bestätigte</a>{% endif %}</p>
+  {% if not planned or not target.replies_by %}<p class="muted">Veröffentlichen lässt es sich, sobald Veranstaltungen übernommen und die Lehrenden gefragt sind.</p>
+  {% elif publisher %}<form method="post" style="margin-top: 16px">{% csrf_token %}<input type="hidden" name="schritt" value="veroeffentlichen"><button class="btn" data-confirm="{{ target }} für Studierende veröffentlichen? {{ planned }} übernommene Veranstaltungen{% if dropped %}; {{ dropped|length }} abgesagte werden gelöscht{% endif %}{% if waiting %}; {{ waiting|length }} Lehrende haben noch nicht geantwortet{% endif %}.{% if unpublishers %} Zurück in die Planung bringt es nur {{ unpublishers }}.{% endif %}">{{ target }} veröffentlichen</button></form>
   {% else %}<p class="muted">Veröffentlicht wird von: {{ publishers|default:"dem zuständigen Amt" }}.</p>{% endif %}
   {% endif %}
 </section>

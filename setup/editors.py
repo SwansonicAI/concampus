@@ -1,11 +1,16 @@
 """Every list staff keep up themselves, described once: which model, which fields, who may edit it."""
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import Callable
 
 from django import forms
 from django.contrib.auth.models import Permission
 from django.db import models
 from django.shortcuts import get_object_or_404
+from django.urls import reverse
+from django.utils import timezone
+from django.utils.formats import date_format
+from django.utils.html import format_html, format_html_join
 
 from core.access import CAPABILITIES, EVERYWHERE
 from core.dates import DayField, PastField
@@ -15,7 +20,7 @@ from courses.models import Appointment, Area, Course, Format, Reduction
 from curriculum.forms import ModuleForm, ProgramForm
 from curriculum.models import Module, Program, Subject
 from instruments.models import Instrument
-from rooms.models import BookingCategory, Room, RoomFunction
+from rooms.models import Booking, BookingCategory, Room, RoomFunction
 from students.forms import StudyForm
 from students.models import DocumentType, Study
 
@@ -223,6 +228,23 @@ class ReductionForm(forms.ModelForm):
         return data
 
 
+class HolidayForm(forms.ModelForm):
+    """A day without teaching; one added after the dates were booked names those still on it, to call them off."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.instance.pk:
+            return
+        days = [self.instance.first + timedelta(days=n) for n in range(((self.instance.last or self.instance.first) - self.instance.first).days + 1)]
+        teaching = Booking.objects.filter(start__date__in=days, end__gt=timezone.now(), category__blocks=True, course__kind__in=[Course.Kind.COURSE, Course.Kind.LESSON])
+        if counts := [(d, n) for d in days if (n := teaching.filter(start__date=d).count())]:
+            self.note = format_html(
+                'Noch gebucht: {}', format_html_join(', ', '<a href="{}?tag={}&amp;lehre=1">{} Termine am {}</a>', (
+                    (reverse('rooms:day_off'), f'{d:%Y-%m-%d}', n, date_format(d, 'j.n.')) for d, n in counts
+                )),
+            )
+
+
 def new_module(request):
     program = get_object_or_404(Program, pk=request.GET.get('studiengang'))
     return Module(program=program, parent=program.modules.filter(pk=request.GET.get('unter') or None).first())
@@ -285,7 +307,7 @@ EDITORS = {e.key: e for e in [
     Editor(
         'unterrichtsfrei', Holiday, 'Unterrichtsfreie Tage', 'manage_terms', 'Verwaltung', sections=[(None, ['name', ('first', 'last'), 'public'])],
         columns=[('Bezeichnung', 'name'), ('Von', 'first'), ('Bis', 'last'), ('Feiertag', 'public')], search=['name'], words='feiertage ferien vorlesungsfrei weihnachten semesterplanung',
-        queryset=lambda: Holiday.objects.order_by('-first'),
+        queryset=lambda: Holiday.objects.order_by('-first'), form=HolidayForm,
     ),
     Editor('institute', Institute, 'Institute', 'manage_institution', 'Verwaltung', fields=['name'], columns=[('Institut', 'name')], search=['name']),
     Editor(

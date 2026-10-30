@@ -124,6 +124,6 @@ class CoursesConfig(Tile, AppConfig):
             upcoming = Term.upcoming()
             if upcoming and (count := person.within(missing(upcoming), 'roll_over').exclude(rhythm=Course.Rhythm.ONCE).count()):
                 found.append(task(f'Semesterwechsel: {plural(count, "Veranstaltung", "Veranstaltungen")} für {upcoming} übernehmen', reverse('courses:rollover'), upcoming.ready_by or upcoming.start))
-        if 'publish_term' in person.roles and (upcoming := Term.upcoming()) and upcoming.planning and upcoming.courses.filter(kind__in=TEACHING).exists():
+        if 'publish_term' in person.roles and (upcoming := Term.upcoming()) and upcoming.planning and upcoming.replies_by and upcoming.courses.filter(kind__in=TEACHING).exclude(origin=None).exists():  # taken over and asked
             found.append(task(f'{upcoming} prüfen und veröffentlichen', reverse('courses:rollover'), upcoming.ready_by))
         return found

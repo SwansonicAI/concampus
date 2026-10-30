@@ -18,6 +18,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from core import texts
+from core.dates import MomentField
 from core.forms import again, sent
 from core.access import CODENAMES, require
 from core.apps import plural
@@ -415,6 +416,7 @@ def audition(request, pk):
         'candidates': substitutes(course) if office and any(p.vacant for p in rows) else [],
         'history': bool(Course.seen_by(person, course.pk)),
         'slots': SlotForm(person=person, course=course) if office else None,
+        'scheduled': course.participations.filter(slot__isnull=False).select_related('study__person').order_by('slot') if office and not course.released else [],
         'stages': next_stages(course) if office else [],
         'ready': sum(1 for p in rows if p.passed and p.study.status == Study.Status.APPLIED and p.study_id not in invited),  # not yet at the next stage
         'missing': sum(1 for p in rows if panel.due(p)),
@@ -428,7 +430,22 @@ def audition(request, pk):
 def plan(request, pk):
     course = get_object_or_404(request.user.within(Course.objects.all(), 'run_auditions'), pk=pk, kind=Course.Kind.AUDITION)
     form = SlotForm(request.POST, person=request.user, course=course)
-    rows = list(course.participations.filter(slot=None, study__status=Study.Status.APPLIED).select_related('study__person').order_by('created'))
+    rows = list(course.participations.filter(slot=None, study__status=Study.Status.APPLIED).select_related('study__person', 'study__program', 'study__subject').order_by('created'))
+    if form.is_valid() and rows and not request.POST.get('bestaetigt'):  # the times first, with the end of the day, then the letters
+        data = form.cleaned_data
+        step = timedelta(minutes=data['minutes'] + data['pause'])
+        times = [timezone.localtime(data['start'] + step * n) for n in range(len(rows))]
+        end = times[-1] + timedelta(minutes=data['minutes'])
+        letter = rows[0].study.wording(
+            'einladung_eignungspruefung', pruefung=course.title, termin=date_format(times[0], 'l, j. F Y, H:i'), raum=f'{data["room"]} ({data["room"].building})',
+            programm=rows[0].note or '–', danach='\n'.join(f'– {line}' for line in after(course)) or '–',
+        )
+        notes = [
+            f'{plural(len(rows), "Termin", "Termine")} am {date_format(times[0], "l, j. F Y")} in {data["room"]}, von {times[0]:%H:%M} bis {end:%H:%M} Uhr.',
+            'Reihenfolge: ' + ', '.join(f'{t:%H:%M} {p.study.person.name}' for t, p in zip(times, rows)) + '.',
+            'Einzelne Termine lassen sich danach verlegen, mit neuer Einladung.',
+        ]
+        return preview(request, f'Termine: {course.title}', [('Einladung', [p.study.person for p in rows], letter)], f'{len(rows)} Termine vergeben und einladen', course.get_absolute_url(), notes)
     if form.is_valid() and rows:
         try:
             panel.schedule(course, rows, form.cleaned_data['start'], form.cleaned_data['minutes'], form.cleaned_data['room'], request.user, form.cleaned_data['pause'])
@@ -441,6 +458,28 @@ def plan(request, pk):
     else:
         messages.error(request, 'Bitte Beginn, Dauer und Raum angeben.' if rows else 'Alle Bewerbenden haben schon einen Termin.')
     return redirect(course)
+
+
+@require('run_auditions')
+@require_POST
+def move(request, pk):
+    """Give one applicant another time, with a new invitation; not one another holds."""
+    p = get_object_or_404(Participation.objects.select_related('course', 'study__person'), pk=request.POST.get('participation'), course=pk, slot__isnull=False, course__released=None)
+    if not request.user.may('run_auditions', p.course):
+        raise PermissionDenied
+    try:
+        slot = MomentField().clean(request.POST.get('slot', ''))
+    except ValidationError as error:
+        messages.error(request, f'Neuer Termin: {error.messages[0]}')
+        return redirect(p.course)
+    if p.course.participations.filter(slot=slot).exclude(pk=p.pk).exists():
+        messages.error(request, f'Um {timezone.localtime(slot):%H:%M} hat schon jemand einen Termin.')
+        return redirect(p.course)
+    p.slot = slot
+    p.save(update_fields=['slot'])
+    invite(p)
+    messages.success(request, f'{p.study.person} verlegt auf {date_format(timezone.localtime(slot), "j.n.Y, H:i")}; neue Einladung versandt.' + ('' if held(p)[2] else ' Für diese Zeit ist noch kein Raum gebucht.'))
+    return redirect(p.course)
 
 
 @require('run_auditions')

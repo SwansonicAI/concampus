@@ -473,14 +473,23 @@ def cancel(request, pk):
 
 
 def day_off(request):
-    """Call off one's own dates of a day at once, as when ill: lessons, course dates, rehearsals one booked or teaches;
-    not exams, which whoever plans them moves. Whoever takes part hears once, with all their dates of the day."""
+    """Call off dates of a day at once: one's own, as when ill (lessons, course dates, rehearsals one booked or teaches);
+    for an office that looks after rooms, every booking of a building or room it closes; for whoever keeps the semesters,
+    the teaching of a day newly unterrichtsfrei. Never exams, which whoever plans them moves. Whoever takes part hears
+    once, with all their dates of the day."""
     person = request.user
     day = understood(request.GET.get('tag', '')) or timezone.localdate()
-    dates = list(
-        Booking.objects.filter(Q(person=person) | Q(course__staff=person) & (Q(ensemble=None) | Q(ensemble__coach=person)), start__date=day, end__gt=timezone.now(), category__blocks=True, requested=False)
-        .exclude(course__kind__in=Course.PANEL).select_related('room', 'course', 'person').prefetch_related('participants').distinct().order_by('start')
-    )
+    building, teaching = request.GET.get('gebaeude', ''), request.GET.get('lehre') == '1'
+    if teaching and not person.everywhere('manage_terms') or building and 'manage_bookings' not in person.roles:
+        raise PermissionDenied
+    found = Booking.objects.filter(start__date=day, end__gt=timezone.now(), category__blocks=True, requested=False)
+    if building:  # a closure: everything there, as far as the office looks after it
+        found = person.within(found.filter(room__building=building), 'manage_bookings')
+    elif teaching:
+        found = found.filter(course__kind__in=[Course.Kind.COURSE, Course.Kind.LESSON])
+    else:
+        found = found.filter(Q(person=person) | Q(course__staff=person) & (Q(ensemble=None) | Q(ensemble__coach=person)))
+    dates = list(found.exclude(course__kind__in=Course.PANEL).select_related('room', 'course', 'person').prefetch_related('participants').distinct().order_by('start'))
     for b in dates:
         b.who = ', '.join(f'{p.first_name} {p.last_name}' for p in b.participants.all())
     if request.method == 'POST':
@@ -493,8 +502,11 @@ def day_off(request):
             subject, body = texts.render('tag_abgesagt', vorname=p.first_name, nachname=p.last_name, tag=date_format(day, 'l, j. F Y'), termine='\n'.join(lines), von=person)
             Message.send(p, subject, body + (f'\n\n{note}' if note else ''), reverse('courses:timetable') + f'?tag={day:%Y-%m-%d}')
         messages.success(request, f'{plural(len(chosen), "Termin", "Termine")} abgesagt. Nachricht an {plural(len(told), "Person", "Personen")}.')
-        return redirect(f"{reverse('courses:timetable')}?tag={day:%Y-%m-%d}")
-    return render(request, 'rooms/day_off.html', {'day': day, 'dates': dates})
+        return redirect(request.get_full_path() if building or teaching else f"{reverse('courses:timetable')}?tag={day:%Y-%m-%d}")
+    return render(request, 'rooms/day_off.html', {
+        'day': day, 'dates': dates, 'building': building, 'teaching': teaching,
+        'buildings': person.within(Room.objects.all(), 'manage_bookings').values_list('building', flat=True).distinct().order_by('building') if 'manage_bookings' in person.roles else [],
+    })
 
 
 @require_POST

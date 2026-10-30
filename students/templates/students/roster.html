@@ -25,6 +25,7 @@
   <div class="actions picked">
     <small class="muted">Angekreuzte:</small>
     <button class="btn ghost small" formaction="{% url 'students:compose' %}">Nachricht schreiben</button>
+    {% if 'message_students' in user.roles and count > studies|length %}<a class="more" href="{% url 'students:compose' %}?alle=1&amp;{{ request.GET.urlencode }}&amp;next={{ request.get_full_path|urlencode }}"><small>an alle {{ count }} Treffer</small></a>{% endif %}
     {% if 'manage_students' in user.roles %}<button class="btn ghost small" formaction="{% url 'students:letters' %}">Bescheide drucken</button>{% endif %}
   </div>
   <table data-panel>

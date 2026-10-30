@@ -951,6 +951,7 @@ def rollover(request):
         'leave': Reduction.objects.filter(term=target, reason=Reduction.Reason.LEAVE, person__teaching__in=live).distinct().select_related('person'),
         'gaps': gaps(target)[:12] if planned.exists() else [],
         'publishers': Office.holding('publish_term', linked=True),
+        'proposed': target.ready_by and max(timezone.localdate() + timedelta(weeks=1), target.ready_by - timedelta(weeks=2)),  # time to answer, and to check after 'unpublishers': Office.holding('manage_terms'),
     })
 
 
@@ -986,6 +987,9 @@ def ask(request, target, pending):
     by = understood(request.POST.get('bis', ''))
     if by is None or by <= timezone.localdate():
         messages.error(request, 'Bitte einen Tag in der Zukunft angeben, bis zu dem die Lehrenden antworten.')
+        return
+    if target.ready_by and by >= target.ready_by:
+        messages.error(request, f'Die Antworten braucht es vor dem {date_format(target.ready_by, "j.n.Y")}, wenn das Vorlesungsverzeichnis fertig sein soll.')
         return
     target.replies_by = by
     target.save(update_fields=['replies_by'])

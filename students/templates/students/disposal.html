@@ -24,8 +24,8 @@
   {% csrf_token %}
   <div class="toolbar">
     <div class="actions">
-      <button class="btn" name="archivwuerdig" value="ja">Übernommen: archivwürdig</button>
-      <button class="btn ghost" name="archivwuerdig" value="nein">Nicht archivwürdig</button>
+      <button class="btn" name="archivwuerdig" value="ja" data-confirm="Die angekreuzten Akten als übernommen bewerten? Heute Nacht werden sie hier bis auf die Grunddaten gelöscht.">Übernommen: archivwürdig</button>
+      <button class="btn ghost" name="archivwuerdig" value="nein" data-confirm="Die angekreuzten Akten als nicht archivwürdig bewerten? Heute Nacht werden sie bis auf die Grunddaten gelöscht; bis dahin lässt sich die Bewertung zurücknehmen.">Nicht archivwürdig</button>
     </div>
     <small class="muted">Archivwürdige Akten erst herunterladen und übernehmen, dann bewerten.</small>
   </div>
@@ -49,6 +49,15 @@
 </form>
 {% elif offered_total %}<p>{{ offered_total }} Akte{{ offered_total|pluralize:"n" }} zur Bewertung angeboten.</p>
 {% else %}<p class="muted">Keine Akte angeboten.</p>{% endif %}
+
+{% if pending %}
+<h2>Heute Nacht gekürzt</h2>
+<form method="post" class="actions">
+  {% csrf_token %}
+  <p>{% for d in pending %}{{ d.person.name }} <small class="muted">{% if d.archival %}übernommen{% else %}nicht archivwürdig{% endif %}</small>{% if not forloop.last %} · {% endif %}{% endfor %}</p>
+  {% if assessing %}<button class="btn ghost small" name="zuruecknehmen" value="1">Bewertungen zurücknehmen</button>{% endif %}
+</form>
+{% endif %}
 
 <h2>Bewertet</h2>
 <table>
