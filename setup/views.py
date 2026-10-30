@@ -156,7 +156,7 @@ def edit(request, key, pk=None):
     if not (pk or e.creatable):
         raise Http404
     obj = get_object_or_404(e.objects(request.user), pk=pk) if pk else e.start(request)
-    form = modelform_factory(e.model, form=e.form, fields=e.fields, formfield_callback=formfield)(request.POST or None, instance=obj)
+    form = modelform_factory(e.model, form=e.form, fields=e.fields, formfield_callback=formfield)(request.POST or None, request.FILES or None, instance=obj)
     form.by = request.user  # who gives a right, which a second person confirms
     if e.sections:
         form.layout = e.sections

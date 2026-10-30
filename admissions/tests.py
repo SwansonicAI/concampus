@@ -11,6 +11,7 @@ from core.models import Message, Person, Term
 from core.testing import Seeded, flashes
 from courses.models import Course, Participation, Score
 from students.models import Document, DocumentType, Study, StudyTerm
+from students.smv import receive
 from .retention import forget
 from .views import checklist, incomplete, recommendations, vacancies
 
@@ -34,7 +35,8 @@ class DecisionTest(Seeded):
         study.person.refresh_from_db()
         self.assertEqual(study.person.insurer, 'BARMER')
         self.assertTrue(StudyTerm.objects.filter(study=study).exists())
-        asa.post(f'/studierende/{study.pk}/versicherung/')
+        p = study.person
+        receive(reason='10', insurer='BARMER', insurer_number='90000003', insurance='gesetzlich', last_name=p.last_name, first_name=p.first_name, birth_date=p.birth_date)
         asa.post(f'/studierende/{study.pk}/immatrikulieren/', {'bestaetigt': '1'})
         self.assertEqual(Study.objects.get(pk=study.pk).status, Study.Status.ADMITTED)  # not before the fee is in
         asa.post(f'/studierende/{study.pk}/beitrag/', {'paid': 'heute', 'amount': str(study.start_term.fee).replace('.', ','), 'reference': 'Quittung 7'})

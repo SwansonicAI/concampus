@@ -12,7 +12,7 @@ class PersonAdmin(UserAdmin):
         ('Person', {'fields': ['title', 'given_names', 'birth_name', 'gender', 'birth_date', 'birth_place', 'nationality', 'second_nationality', 'address', 'home', 'residence']}),
         ('Hochschulzugang', {'fields': ['entrance', 'entrance_date', 'entrance_region', 'first_university', 'first_term', 'external_terms']}),
         ('Letzter Abschluss', {'fields': ['degree_university', 'degree_exam', 'degree_field', 'degree_date', 'degree_grade', 'vocational', 'internship']}),
-        ('Krankenversicherung', {'fields': ['insurer', 'insurance', 'insurance_confirmed']}),
+        ('Krankenversicherung', {'fields': ['insurer', 'insurer_number', 'insurance', 'insurance_confirmed', 'insurance_arrears']}),
         ('Hochschule', {'fields': ['matriculation', 'hold']}),
     )
     list_display = ['username', 'first_name', 'last_name', 'email', 'matriculation', 'hold']

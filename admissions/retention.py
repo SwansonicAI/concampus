@@ -5,7 +5,7 @@ from django.db.models import Q
 from core.dates import months_before
 from core.models import Change, Consent, Message, Person, SignIn
 from courses.models import Participation
-from students.models import Document, Study
+from students.models import Document, InsuranceReport, Study
 
 
 def ended(cutoff):
@@ -33,6 +33,7 @@ def forget(cutoff):
     Change.objects.filter(person__in=ids).delete()  # what the history kept about them
     Consent.objects.filter(person__in=ids).delete()
     SignIn.objects.filter(person__in=ids).delete()
+    InsuranceReport.objects.filter(person__in=ids).delete()
     Participation.objects.filter(study__person__in=ids).update(note='')
     Person.anonymise(ids)
     return deleted, len(ids)

@@ -1,0 +1,73 @@
+{% extends base %}
+{% block title %}Krankenkassen{% endblock %}
+{% block subnav %}{% include "students/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Krankenkassen</h1>
+</div>
+<p class="lead">Meldungen im Studierendenmeldeverfahren (§ 199a SGB V): die Krankenkassen melden Versicherung, Kassenwechsel und Beitragsrückstände, die Hochschule Beginn und Ende des Studiums.
+  {% if institution.sender_number %}Absendernummer der Hochschule: {{ institution.sender_number }}.{% else %}<span class="fail">Noch keine Absendernummer</span> unter <a href="{% url 'setup:list' 'hochschule' %}">Einstellungen › Hochschule</a>: ohne sie erreicht keine Meldung die Hochschule.{% endif %}
+  {% if waiting %}{{ waiting }} Meldung{{ waiting|pluralize:"en" }} der Hochschule {{ waiting|pluralize:"wartet,warten" }} auf den Versand.{% endif %}</p>
+
+{% if unbooked %}
+<h2 id="ohne-zuordnung">Ohne Zuordnung</h2>
+<p class="muted">Campus hat niemanden eindeutig gefunden. Vorgeschlagen wird, wer sich mit diesem Geburtstag bewirbt oder hier studiert und den Vornamen oder einen Teil des Nachnamens teilt.</p>
+<table>
+  <thead><tr><th>Eingegangen</th><th>Meldung</th><th>Gemeldet</th><th>Krankenkasse</th><th></th></tr></thead>
+  <tbody>
+    {% for r, people in unbooked %}
+    <tr>
+      <td class="nowrap">{{ r.created|date:"j.n.Y" }}</td>
+      <td>{{ r.get_reason_display }}{% if r.insurance %}<br><small class="muted">{{ r.get_insurance_display }}</small>{% endif %}</td>
+      <td>{{ r.first_name }} {{ r.last_name }}<br><small class="muted">geboren am {{ r.birth_date|date:"j.n.Y" }}</small></td>
+      <td>{{ r.insurer }}</td>
+      <td>
+        <form method="post" class="inline">
+          {% csrf_token %}<input type="hidden" name="meldung" value="{{ r.pk }}">
+          {% if people %}<select name="person" aria-label="Person">{% for p in people %}<option value="{{ p.pk }}">{{ p.name }}, geboren am {{ p.birth_date|date:"j.n.Y" }}</option>{% endfor %}</select>
+          <button class="btn ghost small">Zuordnen</button>{% else %}<small class="muted">Niemand mit diesem Geburtstag</small>{% endif %}
+          <button class="btn ghost small" name="verwerfen" value="1" data-confirm="Meldung verwerfen? Sie betrifft niemanden hier, etwa weil der Kasse eine falsche Absendernummer genannt wurde.">Verwerfen</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h2>Alle Meldungen</h2>
+<form class="toolbar">
+  <div class="inline">
+    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name, Matrikelnummer oder Kasse"></label>
+    <label>Meldung<select name="art" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for value, label in reasons %}<option value="{{ value }}"{% if value == reason %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for value, label in states %}<option value="{{ value }}"{% if value == state %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  </div>
+</form>
+<table>
+  <thead><tr><th>Datum</th><th>Meldung</th><th>Person</th><th>Krankenkasse</th><th>Inhalt</th><th>Stand</th></tr></thead>
+  <tbody>
+    {% for r, study in reports %}
+    <tr>
+      <td class="nowrap" data-value="{{ r.created|date:'c' }}">{{ r.created|date:"j.n.Y" }}</td>
+      <td>{% if r.incoming %}von der Kasse{% else %}an die Kasse{% endif %}<br>{{ r.get_reason_display }}{% if r.cancels_id %} <span class="badge wait">Storno</span>{% endif %}</td>
+      <td>{% if study %}<a href="{{ study.get_absolute_url }}">{{ r.person.name }}</a>{% elif r.person %}{{ r.person.name }}{% else %}{{ r.first_name }} {{ r.last_name }}{% endif %}{% if r.person.matriculation %}<br><small class="muted">{{ r.person.matriculation }}</small>{% endif %}</td>
+      <td>{{ r.insurer }}</td>
+      <td>{% if r.reason == '10' %}{{ r.get_insurance_display }}{% elif r.reason == '11' %}versichert ab {{ r.day|date:"j.n.Y" }}{% elif r.reason == '20' %}{{ r.term }}, eingeschrieben am {{ r.day|date:"j.n.Y" }}{% elif r.reason == '30' %}{{ r.term }}, exmatrikuliert zum {{ r.day|date:"j.n.Y" }}{% endif %}</td>
+      <td>
+        {% if r.state == 'erledigt' %}<span class="badge green">{% if r.incoming %}verbucht{% else %}versandt{% endif %}</span> <small class="muted">{{ r.done|date:"j.n.Y" }}{% if r.by %}, von Hand{% endif %}</small>
+        {% elif r.state == 'offen' %}<span class="badge open">wartet</span>{% if r.due > today %} <small class="muted">bis {{ r.due|date:"j.n.Y" }}</small>{% endif %}
+        {% elif r.state == 'abgewiesen' %}<span class="badge no">abgewiesen</span><br><small>{{ r.error }}</small>
+        {% else %}<span class="badge">verworfen</span>{% if r.error %}<br><small class="muted">{{ r.error }}</small>{% endif %}{% endif %}
+        {% for c in r.cancellations.all %}<br><small class="muted">storniert am {{ c.created|date:"j.n.Y" }}</small>{% endfor %}
+        {% if not r.incoming and not r.cancels_id and not r.cancellations.all %}
+        {% if r.state == 'offen' or r.state == 'erledigt' %}<form method="post" class="inline">{% csrf_token %}<input type="hidden" name="meldung" value="{{ r.pk }}"><button class="link" name="stornieren" value="1" data-confirm="{% if r.state == 'offen' %}Meldung zurückziehen, bevor sie verschickt wird?{% else %}Storno an die {{ r.insurer }} schicken? Die Meldung war falsch, etwa weil die Immatrikulation oder Exmatrikulation zurückgenommen wurde.{% endif %}"><small>stornieren</small></button></form>
+        {% elif r.state == 'abgewiesen' %}<form method="post" class="inline">{% csrf_token %}<input type="hidden" name="meldung" value="{{ r.pk }}"><button class="link" name="erneut" value="1" data-confirm="Erst die Stammdaten berichtigen. Meldung an die Krankenkasse aus den Stammdaten neu erstellen?"><small>erneut senden</small></button></form>{% endif %}
+        {% endif %}
+      </td>
+    </tr>
+    {% empty %}<tr><td colspan="6" class="empty">Keine Meldung.</td></tr>
+    {% endfor %}
+    {% if count > reports|length %}<tr><td colspan="6" class="empty">{{ reports|length }} von {{ count }}: Suche oder Auswahl eingrenzen.</td></tr>{% endif %}
+  </tbody>
+</table>
+{% endblock %}

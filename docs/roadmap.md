@@ -31,26 +31,24 @@ Hochschule, on its own subdomain.
 
 To change:
 
-1. HfM's name in the header and letterhead (`core/templates/core/base.html`, `core/templates/core/_letterhead.html`):
-   from Einstellungen, with a logo.
-2. HfM's look (`core/static/core/hfm.css`): accent colour and logo per Hochschule.
-3. The sender address `campus@hfm-weimar.de` (`concampus/settings.py`).
-4. Thuringian rules in code: the Deputat after the ThürLVVO; other states' rules beside it. The accessibility
+1. Done: name, logo, accent colour and corner radius under Einstellungen › Hochschule (`core/static/core/campus.css`
+   takes them as variables); the sender address from the server's settings (`DEFAULT_FROM_EMAIL`). A font of its own
+   would need a licence for the web and its files on our server, so it waits until a Hochschule asks.
+2. Thuringian rules in code: the Deputat after the ThürLVVO; other states' rules beside it. The accessibility
    statement's enforcement body is an editable text.
-5. Studienpläne and courses imported, not typed in (`docs/sweep.md` D8); the seed is HfM's.
-6. A new instance set up by script, each with its database, backups and migrations.
-7. English.
-8. Built for Musikhochschulen: Hauptfach, Klassen, Eignungsprüfung, Korrepetition, Übezeiten, instruments.
+3. Studienpläne and courses imported, not typed in (`docs/sweep.md` D8); the seed is HfM's.
+4. A new instance set up by script, each with its database, backups and migrations.
+5. English.
+6. Built for Musikhochschulen: Hauptfach, Klassen, Eignungsprüfung, Korrepetition, Übezeiten, instruments.
 
 ## Order
 
 Most of it can be built before HfM's systems are open to us; what needs them waits.
 
-1. **Name and look from Einstellungen** (1 to 3 above). Small; ends hard-coded HfM before more is built on it.
-2. **One outbox of status changes**: Immatrikulation, Beurlaubung, Exmatrikulation and their cancellation, as events
-   the health insurers, Bauhaus and Moodle each read. On it **the health insurers inside Campus**: the insurer by its
-   number, an inbox that matches reports to people, M20, M30 and Storno, the Sperre from M12 and M13, the log; towards
-   dakota a folder of files. To the published schemata; the connection itself with HfM.
+1. Done: **name and look from Einstellungen** (1 above).
+2. Done: **one list of status changes** (`students.models.Event`): whoever begins or stops studying here, for the
+   health insurers now and Bauhaus and Moodle later; a Beurlaubung joins it once one of them needs it. On it **the
+   health insurers inside Campus** (`docs/smv.md`); the files to and from dakota wait for the GKV's schemata.
 3. **An import format**: people, studies, semesters, results by Prüfungsordnung, insurance, Studienpläne; tested by a
    round trip of the seed. HfM's export then only needs mapping, and the next Hochschule's Studienpläne come in the
    same way.

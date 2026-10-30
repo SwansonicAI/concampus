@@ -6,6 +6,7 @@ from core.dates import months_before
 from core.history import tracked
 from core.models import Change, Feedback, Institution, SignIn
 from students.disposal import expire, reduce
+from students.models import InsuranceReport
 
 
 class Command(BaseCommand):
@@ -21,6 +22,7 @@ class Command(BaseCommand):
         self.stdout.write(f'{SignIn.objects.filter(at__lt=now - SignIn.KEEP).delete()[0]} Anmeldungen gelöscht.')
         self.stdout.write(f'{Feedback.objects.filter(answered__lt=timezone.localdate() - Feedback.KEEP).delete()[0]} Rückmeldungen zur Barrierefreiheit gelöscht.')
         if months := Institution.get().retention_months:
-            documents, people = forget(months_before(timezone.localdate(), months))
-            self.stdout.write(f'{documents} Unterlagen gelöscht, {people} Personen anonymisiert.')
+            documents, people = forget(cutoff := months_before(timezone.localdate(), months))
+            dropped = InsuranceReport.objects.filter(person=None, created__date__lt=cutoff).delete()[0]  # about nobody here
+            self.stdout.write(f'{documents} Unterlagen gelöscht, {people} Personen anonymisiert, {dropped} Meldungen der Krankenkassen ohne Person gelöscht.')
         self.stdout.write(f'{reduce()} Studierendenakten auf die Grunddaten gekürzt, {expire()} Grunddaten anonymisiert.')

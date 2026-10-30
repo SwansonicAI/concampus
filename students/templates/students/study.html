@@ -57,8 +57,9 @@
       <dt>Krankenversicherung</dt>
       <dd>
         {{ p.insurer|default:"–" }}{% if p.insurance %} · {{ p.get_insurance_display }}{% endif %}<br>
-        {% if p.insurance_confirmed %}<small class="muted">Versicherungsmeldung vom {{ p.insurance_confirmed|date:"j.n.Y" }}</small>
-        {% else %}<small class="fail">Versicherungsmeldung fehlt</small>{% if office %} <form method="post" action="{% url 'students:insured' study.pk %}" style="display: inline">{% csrf_token %}<button class="link"><small>Eingang verbuchen</small></button></form>{% endif %}{% endif %}
+        {% if p.insurance_confirmed %}<small class="muted">Versicherungsmeldung vom {{ p.insurance_confirmed|date:"j.n.Y" }}</small>{% else %}<small class="fail">Versicherungsmeldung fehlt</small>{% endif %}
+        {% if p.insurance_arrears %}<br><small class="fail">Beitragsrückstand gemeldet am {{ p.insurance_arrears|date:"j.n.Y" }}</small>{% endif %}
+        {% if 'manage_students' in user.reach and user.reach.manage_students is None %}<a href="{% url 'students:insurers' %}?person={{ p.pk }}"><small>Meldungen</small></a>{% endif %}
       </dd>
       {% endif %}
       <dt>{% if study.program.kind == '5' %}Betreuung{% else %}Hauptfachlehrer:in{% endif %}</dt><dd>{% if study.teacher %}<a href="mailto:{{ study.teacher.email }}">{{ study.teacher }}</a>{% else %}–{% endif %}</dd>

@@ -172,7 +172,7 @@ LOGOUT_REDIRECT_URL = 'login'
 
 MEDIA_URL = 'media/'
 MEDIA_ROOT = BASE_DIR / 'media'
-DEFAULT_FROM_EMAIL = 'campus@hfm-weimar.de'
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'campus@localhost')  # where the Hochschule has no address of its own (Einstellungen › Hochschule)
 
 
 # Email

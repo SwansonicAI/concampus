@@ -4,6 +4,7 @@ from zipfile import ZipFile
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
+from django.db.models import Count
 from django.test import Client
 from django.utils import timezone
 
@@ -12,7 +13,8 @@ from core.models import Message, Person, Term
 from core.testing import Seeded, flashes
 from exams.views import exhausted
 from .disposal import due
-from .models import Document, Study, StudyTerm
+from .models import Document, InsuranceReport, Study, StudyTerm
+from .smv import receive
 
 
 class EnrolmentTest(Seeded):
@@ -21,12 +23,29 @@ class EnrolmentTest(Seeded):
         study = next(s for s in Study.objects.filter(status='admitted') if s.missing() == ['Versicherungsmeldung der Krankenkasse fehlt'])
         self.assertIn('Versicherungsmeldung der Krankenkasse fehlt', study.missing())
         self.assertIn('Versicherungsmeldung', flashes(asa.post(f'/studierende/{study.pk}/immatrikulieren/', follow=True))[0])
-        asa.post(f'/studierende/{study.pk}/versicherung/')
+        report = InsuranceReport.objects.get(state='offen', reason='10', birth_date=study.person.birth_date)  # the insurer spells the surname longer
+        asa.post('/studierende/krankenkassen/', {'meldung': report.pk, 'person': study.person.pk})
         asa.post(f'/studierende/{study.pk}/immatrikulieren/', {'bestaetigt': '1'})
         study.refresh_from_db()
         self.assertEqual(study.status, Study.Status.ENROLLED)
         self.assertTrue(study.person.matriculation)
         self.assertTrue(Document.objects.filter(study=study, title='Immatrikulationsbescheid').exists())
+        self.assertTrue(InsuranceReport.objects.filter(person=study.person, reason='20', state='offen').exists())  # the insurer is told
+
+    def test_insurers_hear_who_starts_and_stops_and_arrears_hold_the_rueckmeldung(self):
+        twice = Study.objects.filter(status='enrolled').values('person').annotate(n=Count('pk')).filter(n=2).values('person')
+        both = Study.objects.filter(person__in=twice, status='enrolled').first()
+        both.set_status(Study.Status.LEFT, '6')  # still studying the other subject: nothing to tell
+        self.assertFalse(InsuranceReport.objects.filter(person=both.person, reason='30').exists())
+        study = Study.objects.filter(status='enrolled', person__insurance='gesetzlich', person__insurance_arrears=None).exclude(person__in=twice).select_related('person').first()
+        study.set_status(Study.Status.LEFT, '2')
+        self.assertEqual(InsuranceReport.objects.filter(person=study.person, reason='30', state='offen', insurer_number=study.person.insurer_number).count(), 1)
+        p = Study.objects.filter(status='enrolled', person__insurance_arrears=None).first().person
+        about = {'insurer': p.insurer, 'insurer_number': p.insurer_number, 'last_name': p.last_name, 'first_name': p.first_name, 'birth_date': p.birth_date}
+        receive(reason='12', **about)
+        self.assertIn('Beitragsrückstand bei der Krankenkasse', Person.objects.get(pk=p.pk).missing())
+        receive(reason='13', **about)
+        self.assertNotIn('Beitragsrückstand bei der Krankenkasse', Person.objects.get(pk=p.pk).missing())
 
     def test_bescheide_print_as_letters_for_their_recipient_and_the_office(self):
         notice = Document.objects.filter(kind='notice', study__status='rejected').select_related('person').first()

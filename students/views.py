@@ -34,9 +34,9 @@ from curriculum.models import Module, Program, Subject
 from curriculum.views import plan
 from exams.views import exhausted
 from instruments.models import Loan
-from . import payments
+from . import payments, smv
 from .disposal import assess, due, offer
-from .models import EXITS, FIRST_TERM_LEAVES, LEAVE_TERMS, LEAVES, OFFICIAL, Disposal, Document, DocumentType, Study, StudyTerm
+from .models import EXITS, FIRST_TERM_LEAVES, LEAVE_TERMS, LEAVES, OFFICIAL, Disposal, Document, DocumentType, InsuranceReport, Study, StudyTerm
 
 class ChangeForm(forms.Form):
     program = forms.ModelChoiceField(label='Neuer Studiengang', queryset=Program.objects.all(), empty_label='Bitte wählen')
@@ -494,14 +494,49 @@ def fee_paid(request, pk):
 
 
 @require('manage_students')
-@require_POST
-def insured(request, pk):
-    """The health insurer's electronic notice (Studierendenmeldeverfahren) has arrived."""
-    study = get_object_or_404(request.user.within(Study.objects.select_related('person'), 'manage_students'), pk=pk)
-    study.person.insurance_confirmed = timezone.localdate()
-    study.person.save(update_fields=['insurance_confirmed'])
-    messages.success(request, 'Versicherungsmeldung verbucht.')
-    return redirect(study.get_absolute_url())
+def insurers(request):
+    """Studierendenmeldeverfahren (students/smv.py): the insurers' reports Campus found nobody for, to book by hand or drop;
+    then every report in and out, newest first. An office for the whole Hochschule only: unbooked reports may be about
+    anyone."""
+    if not request.user.everywhere('manage_students'):
+        raise PermissionDenied
+    reports, State = InsuranceReport.objects.select_related('person', 'term'), InsuranceReport.State
+    unbooked = reports.filter(state=State.OPEN, reason__in=InsuranceReport.INCOMING)
+    if request.method == 'POST':
+        report = get_object_or_404(reports, pk=request.POST.get('meldung'))
+        open_ = report.state == State.OPEN
+        if report.incoming and open_ and (person := next((p for p in smv.candidates(report) if str(p.pk) == request.POST.get('person')), None)):
+            smv.book(report, person, request.user)
+            messages.success(request, f'{report.get_reason_display()} verbucht für {person}.')
+        elif report.incoming and open_ and 'verwerfen' in request.POST:
+            report.state, report.by = State.DROPPED, request.user
+            report.save(update_fields=['state', 'by'])
+            messages.success(request, f'{report.get_reason_display()} der {report.insurer} verworfen.')
+        elif not report.incoming and 'stornieren' in request.POST and report.state in (State.OPEN, State.DONE) and not report.cancels_id and not report.cancellations.exists():
+            done = smv.cancel(report, request.user)
+            messages.success(request, 'Meldung zurückgezogen, bevor sie verschickt wurde.' if done is report else 'Storno erstellt; es geht mit dem nächsten Versand.')
+        elif not report.incoming and 'erneut' in request.POST and report.state == State.FAILED:
+            smv.again(report, request.user)
+            messages.success(request, f'{report.get_reason_display()} neu erstellt, mit der Krankenkasse aus den Stammdaten.')
+        return redirect(request.get_full_path())
+    q, reason, state = request.GET.get('q', '').strip(), request.GET.get('art', ''), request.GET.get('stand', '')
+    shown = reports.exclude(pk__in=unbooked).prefetch_related('cancellations')
+    if reason in InsuranceReport.Reason.values:
+        shown = shown.filter(reason=reason)
+    if state in State.values:
+        shown = shown.filter(state=state)
+    if (who := request.GET.get('person', '')).isdigit():
+        shown = shown.filter(person=who)
+    shown = matching(shown, q, 'person__first_name', 'person__last_name', 'person__matriculation', 'last_name', 'insurer', starts=True)
+    rows = list(shown[:SHOWN])
+    files = {}
+    for s in Study.objects.filter(person__in={r.person_id for r in rows}).order_by('start_term__start'):
+        files[s.person_id] = s  # each person's latest study, for the link to their file
+    return render(request, 'students/insurers.html', {
+        'unbooked': [(r, smv.candidates(r)) for r in unbooked], 'reports': [(r, files.get(r.person_id)) for r in rows], 'count': shown.count(),
+        'q': q, 'reason': reason, 'state': state, 'reasons': InsuranceReport.Reason.choices, 'states': State.choices, 'today': timezone.localdate(),
+        'waiting': reports.filter(state=State.OPEN).exclude(reason__in=InsuranceReport.INCOMING).count(),
+    })
 
 
 @require('manage_students')
@@ -574,7 +609,10 @@ def remedies(study, missing):
         if reason.startswith('Sperre'):
             found.append((reason, format_html('aufzuheben über {}', Office.holding('manage_students', study.program, linked=True))))
         elif reason.startswith('Versicherungsmeldung'):
-            found.append((reason, 'bitte Ihre Krankenkasse, Ihren Versicherungsstatus elektronisch an die Hochschule zu melden'))
+            number = Institution.get().sender_number
+            found.append((reason, 'bitte Ihre Krankenkasse, Ihren Versicherungsstatus elektronisch an die Hochschule zu melden' + (f', mit der Absendernummer {number}' if number else '')))
+        elif reason.startswith('Beitragsrückstand'):
+            found.append((reason, 'bitte bei der Krankenkasse begleichen; sie meldet die Zahlung der Hochschule'))
         elif reason.startswith('Leihinstrument'):
             found.append((reason, format_html('zurückzugeben bei {}', Office.holding('manage_instruments', linked=True))))
         else:

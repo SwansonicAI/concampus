@@ -53,6 +53,7 @@ def contents(person):
             for c in describe(Change.objects.filter(person=person).select_related('by'), person)
         ],
         'Einwilligungen': [values(c) for c in person.consents.all()],
+        'Meldungen im Studierendenmeldeverfahren': [values(r) for r in person.insurance_reports.select_related('term')],
         'Anmeldungen': [values(s) for s in person.sign_ins.all()],
         'Leihinstrumente': [values(loan) for loan in Loan.objects.filter(person=person).select_related('instrument')],
         'Raumbuchungen': [values(b) for b in Booking.objects.filter(Q(person=person) | Q(participants=person)).select_related('room', 'category', 'course').distinct()],

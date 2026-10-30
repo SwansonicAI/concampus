@@ -12,8 +12,9 @@ approves before production use.
   audio and video.
 - **GDPR**: purpose limitation and data minimisation (Art. 5(1)(b), (c)); by default only the data each purpose needs is
   accessible (Art. 25(2)); health data is a special category (Art. 9); access control (Art. 32).
-- **Health insurance**: the insurer reports the status electronically for enrolment and Rückmeldung (§ 199a SGB V,
-  Gemeinsame Grundsätze of the GKV-Spitzenverband and the HRK; `docs/smv.md`). It is the student office's business alone.
+- **Health insurance**: the insurer reports the status electronically for enrolment and Rückmeldung, the Hochschule
+  the start and end of studies (§ 199a SGB V, Gemeinsame Grundsätze of the GKV-Spitzenverband and the HRK;
+  `docs/smv.md`). It is the student office's business alone.
 
 ## Principle
 
@@ -125,6 +126,15 @@ file is cut down to the Grunddaten: names, birth date and place, Matrikelnummer,
 results. Documents, messages, the Verlauf, contact and personal administration data, consents, sign-ins, loans,
 bookings, notes, Gutachten, grounds of leave and a Nachteilsausgleich go. After `core_years` (50) the Grunddaten are
 made anonymous (`students/disposal.py`, `manage.py prune`).
+
+### Reports with the health insurers
+
+An insurer's report names the person (names, birth date), their insurer and its Betriebsnummer, and the status, a new
+insurer from a day, or arrears; the Hochschule's names the person, the semester and the day they began or stopped
+studying (`students.models.InsuranceReport`). Only the student office for the whole Hochschule sees them (Studierende ›
+Krankenkassen): until a report is booked it may be about anyone. Booked, it goes with the file and into the person's
+copy; about nobody here, it is deleted after the period for applications (`manage.py prune`). The list of who began or
+stopped studying (`students.models.Event`) holds no more than the study's status does, and goes with the file.
 
 ### Reports of barriers
 

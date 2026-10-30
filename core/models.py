@@ -4,7 +4,7 @@ from django.apps import apps
 from django.contrib.auth.models import AbstractUser, Group
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
-from django.core.validators import RegexValidator
+from django.core.validators import FileExtensionValidator, MaxValueValidator, RegexValidator
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models, transaction
 from django.db.models.functions import Cast, Concat
@@ -92,13 +92,38 @@ class Keyed(models.Model):
         super().save(*args, **kwargs)
 
 
+def contrast(colour):
+    """How white text reads on `colour` (#rrggbb): the contrast ratio after WCAG 2.1."""
+    def linear(value):
+        value /= 255
+        return value / 12.92 if value <= 0.03928 else ((value + 0.055) / 1.055) ** 2.4
+
+    r, g, b = (linear(int(colour[i:i + 2], 16)) for i in (1, 3, 5))
+    return 1.05 / (0.2126 * r + 0.7152 * g + 0.0722 * b + 0.05)
+
+
 class Institution(Tracked, models.Model):
-    """The Hochschule itself: its name and address for letters, and the rules it sets. One record."""
+    """The Hochschule itself: its name and address for letters, its look, and the rules it sets. One record."""
 
     capabilities = ('manage_institution',)
 
     name = models.CharField('Name', max_length=120, default='Hochschule')
     short_name = models.CharField('Kurzname', max_length=40, blank=True, help_text='Im Fenstertitel und in kurzen Sätzen.')
+    wordmark = models.TextField(
+        'Schriftzug', blank=True,
+        help_text='Im Kopf jeder Seite und im Briefkopf, eine Zeile je Zeile; die weiteren in der Akzentfarbe. Leer: der Name.',
+    )
+    logo = models.FileField(
+        'Logo', upload_to='hochschule/', blank=True, validators=[FileExtensionValidator(['svg', 'png'])],
+        help_text='Im Briefkopf statt des Schriftzugs, als SVG oder PNG.',
+    )
+    accent = models.CharField(
+        'Akzentfarbe', max_length=7, blank=True, validators=[RegexValidator(r'^#[0-9a-fA-F]{6}$', 'Als #rrggbb, z. B. #008a00.')],
+        help_text='Für Balken, Schaltflächen und Hervorhebungen; leer: Grün. Weiße Schrift darauf muss lesbar bleiben.',
+    )
+    radius = models.PositiveSmallIntegerField(
+        'Eckenradius (Pixel)', default=4, validators=[MaxValueValidator(12)], help_text='Für Schaltflächen, Felder und kleine Kästen; 0: eckig.',
+    )
     address = models.TextField('Anschrift', blank=True)
     place = models.CharField('Ort', max_length=60, blank=True, help_text='Für Datumszeilen in Briefen.')
     email = models.EmailField('E-Mail', blank=True)
@@ -135,6 +160,10 @@ class Institution(Tracked, models.Model):
         help_text='Name, Geburtsdaten, Matrikelnummer, Studienzeiten und Leistungen, für Studienzeitbescheinigungen und Zweitschriften; danach anonymisiert.',
     )
     signup = models.BooleanField('Neue Bewerbungskonten', default=True, help_text='Ohne Haken legt niemand ein neues Bewerbungskonto an.')
+    sender_number = models.CharField(
+        'Absendernummer', max_length=8, blank=True, validators=[RegexValidator(r'^H\d{7}$', '„H“ und sieben Ziffern, z. B. H0001281.')],
+        help_text='Im Studierendenmeldeverfahren, vom GKV-Spitzenverband vergeben; wer einen Studienplatz annimmt, nennt sie der Krankenkasse.',
+    )
     insurers = models.TextField('Krankenkassen', blank=True, help_text='Vorschläge beim Annehmen des Studienplatzes, eine je Zeile.')
     student_daily_hours = models.PositiveSmallIntegerField('Übezeit am Tag (Std.)', default=4, help_text='So viele Stunden buchen Studierende am Tag.')
     student_ahead_hours = models.PositiveSmallIntegerField('Vorlauf für Studierende (Std.)', default=24, help_text='So weit im Voraus buchen Studierende.')
@@ -152,10 +181,33 @@ class Institution(Tracked, models.Model):
     def __str__(self):
         return self.name
 
+    def clean(self):
+        if self.accent and (ratio := contrast(self.accent)) < 4.5:
+            raise ValidationError({'accent': f'Zu hell: weiße Schrift darauf erreicht einen Kontrast von {ratio:.1f} : 1, nötig sind 4,5 : 1.'.replace('.', ',')})
+
     @classmethod
     def get(cls):
         """The record, or its defaults until someone fills it in."""
         return cls.objects.first() or cls()
+
+    @property
+    def lines(self):
+        """The wordmark, line by line."""
+        return (self.wordmark or self.name).splitlines()
+
+    @property
+    def look(self):
+        """The stylesheet's variables (campus.css :root) where the Hochschule has its own: {name: value}."""
+        found = {'radius': f'{self.radius}px'} if self.radius != 4 else {}
+        if self.accent:
+            rgb, hexed = [int(self.accent[i:i + 2], 16) for i in (1, 3, 5)], '#{:02x}{:02x}{:02x}'.format
+            found |= {
+                'accent': self.accent,
+                'accent-dark': hexed(*(round(v * 0.78) for v in rgb)),
+                'accent-light': hexed(*(round((v + 255) / 2) for v in rgb)),
+                'accent-pale': hexed(*(round(v + (255 - v) * 0.9) for v in rgb)),
+            }
+        return found
 
 
 class Institute(Tracked, models.Model):
@@ -239,6 +291,10 @@ class Person(Tracked, AbstractUser):
         'Versicherungsmeldung erhalten am', null=True, blank=True,
         help_text='Elektronische Meldung der Krankenkasse im Studierendenmeldeverfahren; Voraussetzung für Immatrikulation und Rückmeldung.',
     )
+    insurer_number = models.CharField('Betriebsnummer der Krankenkasse', max_length=8, blank=True, help_text='Aus ihrer Meldung; an sie gehen die Meldungen der Hochschule.')
+    insurance_arrears = models.DateField(
+        'Beitragsrückstand gemeldet am', null=True, blank=True, help_text='Von der Krankenkasse (M12); hält die Rückmeldung auf, bis sie die Zahlung meldet (M13).',
+    )
     electronic = models.DateTimeField(
         'Bescheide elektronisch seit', null=True, blank=True,
         help_text='Einwilligung, dass Bescheide am Tag nach dem Öffnen im Postfach bekannt gegeben sind (§ 41 Abs. 2a VwVfG); ohne sie gehen Bescheide per Post.',
@@ -313,6 +369,8 @@ class Person(Tracked, AbstractUser):
         reasons = [f'Sperre: {self.hold}'] if self.hold else []
         if not self.insurance_confirmed:
             reasons.append('Versicherungsmeldung der Krankenkasse fehlt')
+        if self.insurance_arrears:
+            reasons.append('Beitragsrückstand bei der Krankenkasse')
         return reasons + [f'Leihinstrument zurückgeben: {loan.instrument.name}' for loan in self.loans.all() if loan.overdue]
 
     COUNTED = {'gender', 'nationality', 'entrance'}  # what the figures count people by (analytics/figures.py), kept when made anonymous

@@ -41,7 +41,8 @@ from instruments.models import Instrument, Loan
 from rooms.models import Booking, BookingCategory, Room, RoomFunction
 from rooms.views import agenda
 from students.disposal import ended, reduce
-from students.models import Disposal, Document, DocumentType, Study, StudyTerm
+from students.models import Disposal, Document, DocumentType, Event, InsuranceReport, Study, StudyTerm
+from students.smv import book
 from ..plans import EARLY, HF, JENA, PIANO, PROGRAMS, RESEARCH, SECTION, SPEECH, STRINGS, TEACHING, VOCAL, WINDS, WS
 
 FEE = Decimal('341.30')  # Semesterbeitrag WiSe 2026/27: Studierendenwerk 95,00 + Deutschlandsemesterticket 226,80 + Studierendenrat 19,50
@@ -488,6 +489,7 @@ TEXTS = {  # where the HfM words things its own way (core.texts has the defaults
     ),
 }
 INSURERS = ['Techniker Krankenkasse', 'AOK PLUS', 'BARMER', 'DAK-Gesundheit', 'IKK classic', 'KKH Kaufmännische Krankenkasse', 'hkk Krankenkasse']
+INSURER_NUMBERS = {name: f'9{n:07d}' for n, name in enumerate(INSURERS, 1)}  # made up, eight digits as a Betriebsnummer has
 FUNCTIONS = [  # key, name, given out centrally: the room functions Asimut lists
     ('uebung', 'Übungsraum', False), ('unterricht', 'Unterrichtsraum', False), ('kammermusik', 'Kammermusik', False), ('orgel', 'Orgel', False),
     ('seminar', 'Hörsaal und Seminarraum', False), ('studio', 'Studio und Labor', False), ('sitzung', 'Sitzungsraum', True),
@@ -920,6 +922,7 @@ class Command(BaseCommand):
             self.planning()
             forget(months_before(timezone.localdate(), Institution.get().retention_months))  # as the nightly prune would have
             self.archive()
+            self.insurance()
         self.territory()
         self.changes()
         self.stdout.write(self.style.SUCCESS(
@@ -957,7 +960,8 @@ class Command(BaseCommand):
         keys.schluesselverzeichnis()
         keys.gemeindeverzeichnis(keys.DATA / 'gemeindeverzeichnis-2025-12-31.xlsx')  # the next comes in after the people (territory)
         Institution.objects.create(
-            name='Hochschule für Musik FRANZ LISZT Weimar', short_name='HfM Weimar', address='Platz der Demokratie 2/3\n99423 Weimar', place='Weimar',
+            name='Hochschule für Musik FRANZ LISZT Weimar', short_name='HfM Weimar', wordmark='Hochschule für Musik\nFranz Liszt Weimar',
+            address='Platz der Demokratie 2/3\n99423 Weimar', place='Weimar', sender_number='H0002850',  # not HfM's Absendernummer: that is to ask (docs/smv.md)
             email='campus@hfm-weimar.de', student_mail='stud.hfm-weimar.de', website='https://www.hfm-weimar.de', imprint='https://www.hfm-weimar.de/footer/impressum',
             privacy='https://www.hfm-weimar.de/footer/datenschutz', accessibility='https://www.hfm-weimar.de/footer/barrierefreiheit',
             insurers='\n'.join(INSURERS), university='2850', region='16055', report_id='28500000',
@@ -1272,6 +1276,7 @@ class Command(BaseCommand):
             if person.insurer:
                 continue
             person.insurer, person.insurance = rng.choice(INSURERS), Person.Insurance.STATUTORY if rng.random() < 0.9 else Person.Insurance.EXEMPT
+            person.insurer_number = INSURER_NUMBERS[person.insurer]
             person.insurance_confirmed = study.start_term.start - timedelta(days=rng.randint(20, 50))
             if study.status == Study.Status.ADMITTED:
                 person.insurance_confirmed = date(2026, 9, 28) if study is current[0] else None  # one insurer has reported, the other not yet
@@ -1609,9 +1614,7 @@ class Command(BaseCommand):
         self.late, library = self.rng.sample(others, 2)  # one keeps a lent instrument too long (loans()), one owes the library
         library.hold = 'Bibliotheksgebühren offen'
         library.save(update_fields=['hold'])
-        for person in self.rng.sample(others, 2):  # changed insurer; the new one has not reported yet
-            person.insurer, person.insurance_confirmed = 'BARMER' if person.insurer != 'BARMER' else 'AOK PLUS', None
-            person.save(update_fields=['insurer', 'insurance_confirmed'])
+        self.changing, self.owing = self.rng.sample(others, 2)  # changes insurer, owes contributions (insurance())
 
     def schedule(self, takers):
         """Weekly bookings across the lecture period: group courses first, each where the fewest of its students already
@@ -1799,6 +1802,67 @@ class Command(BaseCommand):
         for d in made:
             d.reduced = d.assessed + timedelta(days=1)
         Disposal.objects.bulk_update(made, ['reduced'], batch_size=2000)
+
+    def insurance(self):
+        """The Studierendenmeldeverfahren since the summer (students/smv.py): the insurers' reports on this winter's newcomers
+        and the Hochschule's on their enrolment, its reports on whoever left, one of them turned down; arrears owed and paid in
+        August, arrears owed now, a change of insurer whose new insurer hears in November. Not booked yet: the report on an
+        accepted place whose insurer spells the surname longer, and one about someone who does not study here."""
+        Reason, State = InsuranceReport.Reason, InsuranceReport.State
+        made, events, today = [], [], timezone.localdate()
+
+        def report(reason, person, when, **fields):
+            created = at(when, hour=9)
+            return InsuranceReport(
+                reason=reason, person=person, insurer=person.insurer, insurer_number=person.insurer_number, created=created, state=State.DONE,
+                done=created if reason in InsuranceReport.INCOMING else created + timedelta(days=1, hours=-2), **fields,
+            )
+
+        def tells(person, kind, day, term):
+            events.append(event := Event(person=person, kind=kind, on=day, term=term, at=at(day, hour=11)))
+            if person.insurance == Person.Insurance.STATUTORY:
+                made.append(report(Reason.START if kind == Event.Kind.ENROLLED else Reason.END, person, day, event=event, day=day, term=term, due=day))
+
+        enrolled = set(Study.objects.filter(status=Study.Status.ENROLLED).values_list('person', flat=True))
+        for s in Study.objects.filter(start_term=self.current, status=Study.Status.ENROLLED).exclude(person__insurance_confirmed=None).select_related('person').order_by('since', 'pk'):
+            p = s.person
+            made.append(report(Reason.STATUS, p, p.insurance_confirmed, insurance=p.insurance, last_name=p.last_name, first_name=p.first_name, birth_date=p.birth_date))
+            tells(p, Event.Kind.ENROLLED, s.since, self.current)
+        left = Study.objects.filter(status__in=Study.FORMER, since__range=(self.current.start - timedelta(days=92), today)).exclude(exit_reason='').exclude(person__in=enrolled)
+        for s in left.select_related('person').order_by('since', 'pk'):
+            tells(s.person, Event.Kind.LEFT, s.since, Term.objects.filter(start__lte=s.since).order_by('-start').first())
+        Event.objects.bulk_create(events)
+        if ends := [r for r in made if r.reason == Reason.END]:
+            ends[0].state, ends[0].error = State.FAILED, 'Die versicherte Person ist bei der Krankenkasse nicht bekannt.'
+        paid = next(s.person for s in sorted(self.enrolled, key=lambda s: s.pk) if s.person.insurance == Person.Insurance.STATUTORY and s.person not in (self.demo, self.late, self.changing, self.owing))
+        made += [report(Reason.ARREARS, paid, date(2026, 8, 4)), report(Reason.PAID, paid, date(2026, 8, 21))]
+        waiting = Study.objects.filter(status=Study.Status.ADMITTED, terms__term=self.current).select_related('person').order_by('pk')
+        for s in waiting.filter(person__insurance_confirmed__isnull=False):
+            p = s.person
+            made.append(report(Reason.STATUS, p, p.insurance_confirmed, insurance=p.insurance, last_name=p.last_name, first_name=p.first_name, birth_date=p.birth_date))
+        InsuranceReport.objects.bulk_create(made)
+        for s in waiting.filter(person__insurance_confirmed=None)[:1]:  # the insurer has the surname with its second part
+            p = s.person
+            InsuranceReport.objects.create(
+                reason=Reason.STATUS, insurer=p.insurer, insurer_number=p.insurer_number, insurance=p.insurance, created=at(today - timedelta(days=2), hour=7),
+                last_name=f'{p.last_name}-Weber', first_name=p.first_name, birth_date=p.birth_date,
+            )
+        InsuranceReport.objects.create(  # whoever gave the insurer this Hochschule's number by mistake
+            reason=Reason.STATUS, insurer='DAK-Gesundheit', insurer_number=INSURER_NUMBERS['DAK-Gesundheit'], insurance=Person.Insurance.STATUTORY,
+            created=at(today - timedelta(days=3), hour=7), last_name='Krüger', first_name='Jonas', birth_date=date(2005, 3, 14),
+        )
+        new = 'BARMER' if self.changing.insurer != 'BARMER' else 'AOK PLUS'
+        for reason, person, day, fields in [
+            (Reason.ARREARS, self.owing, today - timedelta(days=14), {}),
+            (Reason.CHANGE, self.changing, today - timedelta(days=9), {'insurer': new, 'insurer_number': INSURER_NUMBERS[new], 'insurance': Person.Insurance.STATUTORY, 'day': date(2026, 11, 1)}),
+        ]:
+            r = InsuranceReport.objects.create(
+                reason=reason, created=at(day, hour=7), last_name=person.last_name, first_name=person.first_name, birth_date=person.birth_date,
+                **{'insurer': person.insurer, 'insurer_number': person.insurer_number} | fields,
+            )
+            book(r, person)
+            InsuranceReport.objects.filter(pk=r.pk).update(done=r.created)
+            InsuranceReport.objects.filter(cancels=None, person=person, state=State.OPEN).update(created=r.created)
 
     def territory(self):
         """A Gemeindeverzeichnis comes in after the people, as the quarterly one would: Hanau, kreisfrei since 1.1.2026,

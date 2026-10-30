@@ -121,10 +121,18 @@ class Study(Tracked, models.Model):
         return set(found.values_list('pk', flat=True))
 
     def set_status(self, status, reason='', since=None):
-        """A new status from `since`, else today; `reason` says why a study ended, as the official statistics count it."""
+        """A new status from `since`, else today; `reason` says why a study ended, as the official statistics count it.
+        Whoever thereby starts or stops studying here goes on the list of status changes (Event)."""
+        person = self.person
+        enrolled = person.studies.filter(status=self.Status.ENROLLED).exists
+        was = enrolled()
         self.status, self.since, self.exit_reason = status, since or timezone.localdate(), reason
         self.save(update_fields=['status', 'since', 'exit_reason'])
-        person = self.person
+        if was != enrolled():  # the first study here began, or the last ended; a change of subject is neither
+            from .smv import tell
+
+            term = self.start_term if not was else Term.objects.filter(start__lte=self.since).order_by('-start').first()
+            tell(Event.objects.create(person=person, kind=Event.Kind.LEFT if was else Event.Kind.ENROLLED, on=self.since, term=term))
         if status in self.FORMER and person.private_email and not person.studies.filter(status__in=[self.Status.ENROLLED, self.Status.GUEST]).exists():
             person.email = person.private_email  # the Hochschul address ends with the study
             person.save(update_fields=['email'])
@@ -435,6 +443,83 @@ class Document(Tracked, models.Model):
     def playable(self):
         """A video the browser plays right here: an upload, or a link straight to a video file."""
         return (self.file.name if self.file else self.url).lower().split('?')[0].endswith(self.VIDEO_FILES)
+
+
+class Event(models.Model):
+    """Someone began studying here or stopped: the list of such changes that systems outside follow, each at its own
+    pace (docs/roadmap.md). The Hochschule's reports to the health insurers come from it (students/smv.py)."""
+
+    class Kind(models.TextChoices):
+        ENROLLED = 'immatrikuliert', 'Immatrikulation'
+        LEFT = 'exmatrikuliert', 'Exmatrikulation'
+
+    person = models.ForeignKey(Person, models.CASCADE, related_name='events', verbose_name='Person')
+    kind = models.CharField('Art', max_length=14, choices=Kind)
+    on = models.DateField('Zum', help_text='Der erste oder der letzte Tag immatrikuliert.')
+    term = models.ForeignKey(Term, models.PROTECT, related_name='+', verbose_name='Semester')
+    at = models.DateTimeField('Erfasst', default=timezone.now)
+
+    class Meta:
+        ordering = ['at']
+        verbose_name = 'Statuswechsel'
+        verbose_name_plural = 'Statuswechsel'
+
+    def __str__(self):
+        return f'{self.get_kind_display()} {self.person} zum {self.on:%d.%m.%Y}'
+
+
+class InsuranceReport(models.Model):
+    """A report of the Studierendenmeldeverfahren (§ 199a SGB V, docs/smv.md): a health insurer's about someone's insurance
+    (M10 to M13), or the Hochschule's about their studies (M20, M30)."""
+
+    class Reason(models.TextChoices):
+        STATUS = '10', 'M10 Versicherungsstatus'
+        CHANGE = '11', 'M11 Kassenwechsel'
+        ARREARS = '12', 'M12 Beitragsrückstand'
+        PAID = '13', 'M13 Rückstand beglichen'
+        START = '20', 'M20 Studienbeginn'
+        END = '30', 'M30 Studienende'
+
+    class State(models.TextChoices):
+        OPEN = 'offen', 'offen'  # an insurer's not matched to anyone yet; the Hochschule's not sent yet
+        DONE = 'erledigt', 'erledigt'  # booked to its person; sent
+        FAILED = 'abgewiesen', 'abgewiesen'  # the insurer turned the Hochschule's down
+        DROPPED = 'verworfen', 'verworfen'  # about nobody here; withdrawn before it went
+
+    INCOMING = [Reason.STATUS, Reason.CHANGE, Reason.ARREARS, Reason.PAID]
+    UNINSURED = 'keine'
+    STATUSES = [*Person.Insurance.choices, (UNINSURED, 'nicht versichert')]
+
+    reason = models.CharField('Meldung', max_length=2, choices=Reason)
+    state = models.CharField('Stand', max_length=10, choices=State, default=State.OPEN)
+    person = models.ForeignKey(Person, models.CASCADE, null=True, blank=True, related_name='insurance_reports', verbose_name='Person')
+    event = models.ForeignKey(Event, models.SET_NULL, null=True, blank=True, related_name='reports', verbose_name='Statuswechsel')
+    cancels = models.ForeignKey('self', models.CASCADE, null=True, blank=True, related_name='cancellations', verbose_name='Storno zu')
+    insurer = models.CharField('Krankenkasse', max_length=80)
+    insurer_number = models.CharField('Betriebsnummer der Krankenkasse', max_length=8)
+    last_name = models.CharField('Nachname', max_length=150, blank=True)  # whom an insurer's report is about, as it says
+    first_name = models.CharField('Vorname', max_length=150, blank=True)
+    birth_date = models.DateField('Geboren', null=True, blank=True)
+    insurance = models.CharField('Versicherungsstatus', max_length=10, choices=STATUSES, blank=True)
+    day = models.DateField('Tag', null=True, blank=True, help_text='M11: Beginn der neuen Versicherung; M20: Tag der Einschreibung; M30: Tag der Exmatrikulation.')
+    term = models.ForeignKey(Term, models.PROTECT, null=True, blank=True, related_name='+', verbose_name='Semester')
+    created = models.DateTimeField('Eingegangen oder erstellt', default=timezone.now)
+    due = models.DateField('Zu senden ab', null=True, blank=True)
+    done = models.DateTimeField('Verbucht oder versandt', null=True, blank=True)
+    by = models.ForeignKey(Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Von Hand durch')
+    error = models.CharField('Fehler', max_length=200, blank=True)
+
+    class Meta:
+        ordering = ['-created']
+        verbose_name = 'Meldung im Studierendenmeldeverfahren'
+        verbose_name_plural = 'Meldungen im Studierendenmeldeverfahren'
+
+    def __str__(self):
+        return f'{self.get_reason_display()}{" (Storno)" if self.cancels_id else ""}'
+
+    @property
+    def incoming(self):
+        return self.reason in self.INCOMING
 
 
 class Disposal(models.Model):

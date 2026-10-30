@@ -1,9 +1,9 @@
 # Studierendenmeldeverfahren
 
 The reports between the Hochschule and the statutory health insurers about each student's insurance (§ 199a SGB V).
-Electronic only, both ways, since 1.1.2022; the insurers accept no paper. Not built yet: Campus keeps the insurer, the
-status and the day the report came, entered by hand (`docs/legal.md`, Interoperability). This is what building it
-takes. From research of October 2026; what is still to be checked is listed at the end.
+Electronic only, both ways, since 1.1.2022; the insurers accept no paper. Inside Campus it is built
+(`students/smv.py`, Studierende › Krankenkassen); the files to and from dakota are not, as they wait for the GKV's XML
+schemata. From research of October 2026; what is still to be checked is listed at the end.
 
 ## The rules
 
@@ -64,22 +64,33 @@ The likeliest way: Campus connects to the dakota HfM already runs, instead of on
   open in HISinOne carried across.
 - Our part on HfM's machine falls under the processor agreement (`docs/legal.md`).
 
-## What Campus needs
+## In Campus
 
-1. The Absendernummer in the Hochschule's settings, shown to applicants.
-2. The insurer by its number from the report instead of free text (`Person.insurer`), and the identifiers the reports
-   carry.
-3. An inbox, fetched daily like `prune`: M10 to M13 matched to the person; what does not match goes to a list for the
-   student office, where „Versicherungsmeldung verbuchen“ (`students:insured`) becomes the manual match.
-4. An outbox: M20 and M30 from enrolment and Exmatrikulation, Storno when either is taken back.
-5. The Sperre from M12 and its lifting by M13; the Exmatrikulation for reason 7 at the semester's change.
-6. A log of every file and report, sent or received, with its status and error; a to-do for the student office when one
-   fails or stays unmatched.
-7. dakota: HfM's own (above); otherwise a Windows machine of ours, or ITSG's module built in. For several
+- **Absendernummer** under Einstellungen › Hochschule; applicants read it where they accept their place, students where
+  a missing report holds their Rückmeldung back.
+- **The insurer** by its Betriebsnummer from its report (`Person.insurer_number`), beside its name.
+- **Reports in** (`receive()`): booked to the one person applying or studying here born that day, with that first name
+  and surname or birth name. What matches nobody, or several, waits under „Ohne Zuordnung“ with the people it may be
+  about, to book by hand or drop; a to-do says so. M10 sets insurer and status and lets the Immatrikulation go ahead;
+  „nicht versichert“ does not. M11 changes the insurer, and an M20 to the new one waits for the day it insures. M12
+  holds the Rückmeldung back (`Person.missing()`), M13 lets it go; who has not re-registered at the semester's change
+  is exmatriculated for reason 7, as before.
+- **Reports out** (`tell()`): from the list of status changes (`students.models.Event`), made when someone's first
+  study here begins or their last ends (`Study.set_status()`); a change of subject or a second study makes none. M20
+  with the semester and the day of enrolment, M30 with the semester and the last day; only for the statutorily insured.
+- **Storno** of a report sent; one not sent yet is dropped. One the insurer turned down is made anew once the record is
+  right; a to-do says so.
+- **Who sees them**: the student office for the whole Hochschule alone (`docs/privacy.md`). They go with the file
+  (`students/disposal.py`); reports about nobody here after the period for applications.
+
+## Still to build
+
+1. The files: reports written and read after the GKV's XML schemata (KVdS 2.0), with their sequence numbers, handed to
+   dakota and fetched from it on weekday mornings; until then the Hochschule's wait as open, and nothing arrives.
+2. dakota: HfM's own (above); otherwise a Windows machine of ours, or ITSG's module built in. For several
    Hochschulen, one Absendernummer and certificate each.
-8. A test against the procedure's test system before going live.
-9. Who sees the reports: the student office alone, as the insurance now (`docs/privacy.md`); how long they are kept.
-10. Current students' insurer and status taken over from HISinOne, for their M30.
+3. A test against the procedure's test system before going live.
+4. Current students' insurer, its number and their status taken over from HISinOne, for their M30.
 
 ## To check
 
@@ -91,7 +102,10 @@ The likeliest way: Campus connects to the dakota HfM already runs, instead of on
 3. dakota for a software maker: licence, platform, whether it runs on Linux, one installation for several Hochschulen;
    or eXTra without dakota.
 4. Whether HfM asks for an M10 from students over 30, Promovierende and Jungstudierende.
-5. How long the reports are kept.
+5. How long the reports are kept; Campus keeps them with the file.
+6. Whether an insurer that exempted a student also wants M20 and M30; Campus sends them only for the statutorily insured.
+7. Which fields identify a person in the insurers' reports: Campus matches by birth date and names, and would use the
+   Krankenversichertennummer or Matrikelnummer if the reports carry them.
 
 ## Sources
 

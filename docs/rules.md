@@ -83,6 +83,8 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 |---|---|---|---|
 | The Immatrikulationsbescheinigung also as the version of § 9 BAföG, with the start of the study, the first enrolment and the Regelstudienzeit; it stands in for Formblatt 2 | BAföG § 9, Formblatt 2 Teil C | `students/views.py` `certificate()` | code |
 | Immatrikulation once the place is accepted, the fee paid, the insurer's report in and the HZB on record | ThürHG, § 199a SGB V | `students/models.py` `Study.missing()` | code |
+| An insurer's report is booked to the one person applying or studying here born that day with its first name and surname or birth name; otherwise the student office books or drops it. Arrears (M12) hold the Rückmeldung back until the insurer reports them paid (M13) | § 199a SGB V | `students/smv.py` `match()`, `book()`; `core/models.py` `Person.missing()` | code |
+| The insurer hears when someone's first study here begins (M20) and their last ends (M30), not of a change of subject; only for the statutorily insured. After a change of insurer, the new one hears from the day it insures | § 199a SGB V, Gemeinsame Grundsätze | `students/models.py` `Study.set_status()`, `students/smv.py` `tell()`, `book()` | code |
 | An HZB from a school abroad is assessed; German proved where it is not in German; an APS certificate for China, India, Vietnam; both by the Immatrikulation | ThürHG, KMK | `core/models.py` `Person.abroad`, `needs_german`, `needs_aps`; `core/destatis.py` | Einstellungen › Unterlagenarten |
 | Prüfungsprogramm, Wunschlehrer:in and Korrepetition can be changed until the application's deadline; an application can be withdrawn while it runs or from the Nachrückliste, its appointments freed | Hochschule | `admissions/views.py` `details()`, `retract()` | code |
 | A changed weekly lesson time replaces the weekly series only; make-up lessons and dates called off stay; it is refused where teacher or student are elsewhere, the way between buildings included | Hochschule | `courses/views.py` `lessons()` | code |
@@ -162,6 +164,7 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 | Files with personal data that leave are logged | GDPR Art. 5(2) | `core/models.py` `Export` | code |
 | Sign-ins and failed tries kept 90 days; five failures for a name from one address hold it back there a quarter of an hour | GDPR Art. 32 | `core/backends.py`, `core/models.py` `SignIn` | code |
 | Health data only with consent, kept with its wording; withdrawing it deletes the document | GDPR Art. 7, Art. 9(2)(a) | `core/models.py` `Consent`, `core/views.py` `revoke()` | Einstellungen › Texte (wording) |
+| Reports with the health insurers go with the file; those about nobody here after the period for applications | GDPR Art. 5(1)(e) | `students/disposal.py`, `core/management/commands/prune.py` | Einstellungen › Hochschule (Löschfrist) |
 
 ## Official keys
 

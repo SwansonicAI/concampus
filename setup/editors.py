@@ -293,7 +293,8 @@ EDITORS = {e.key: e for e in [
         'hochschule', Institution, 'Hochschule', 'manage_institution', 'Verwaltung', single=True, deletable=False,
         sections=[
             ('Briefkopf und Website', [('name', 'short_name'), 'address', ('place', 'email', 'website'), ('imprint', 'privacy', 'accessibility')]),
-            ('Aufnahme und Immatrikulation', [('matriculation_start', 'student_mail', 'accept_days'), 'signup', 'insurers']),
+            ('Erscheinungsbild', ['wordmark', ('logo', 'accent', 'radius')]),
+            ('Aufnahme und Immatrikulation', [('matriculation_start', 'student_mail', 'accept_days'), 'signup', 'sender_number', 'insurers']),
             ('Aufbewahrung', [('retention_months', 'file_years', 'core_years')]),
             ('Rückmeldung und Prüfungen', [('late_fee', 'withdraw_weeks'), 'payee', ('iban', 'bic')]),
             ('Raumbuchung', [('student_daily_hours', 'student_ahead_hours'), ('last_minute_hours', 'teacher_ahead_days')]),
@@ -353,7 +354,7 @@ EDITORS = {e.key: e for e in [
         sections=[  # what changes most often first
             ('Kontakt', ['address', ('phone', 'email')]),
             ('Person', [('title', 'first_name', 'given_names'), ('last_name', 'birth_name', 'gender'), ('birth_date', 'birth_place'), ('nationality', 'second_nationality')]),
-            ('Krankenversicherung', [('insurer', 'insurance')]),
+            ('Krankenversicherung', [('insurer', 'insurer_number', 'insurance')]),
             ('Hochschulzugang', [('entrance', 'entrance_date'), 'entrance_region', 'entrance_town']),
             ('Bisheriges Studium', [
                 'first_university', ('first_term', 'external_terms'), 'degree_university', ('degree_exam', 'degree_field'), ('degree_date', 'degree_grade'), ('vocational', 'internship'),

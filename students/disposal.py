@@ -11,7 +11,7 @@ from core.models import Change, Consent, Institution, Message, Person, SignIn
 from courses.models import Ensemble, Participation, Recusal, Score
 from instruments.models import Loan
 from rooms.models import Booking
-from .models import Disposal, Document, Study, StudyTerm
+from .models import Disposal, Document, Event, InsuranceReport, Study, StudyTerm
 
 CORE = {  # the Grunddaten: who it was, and through the studies kept with them, when and what they studied and passed
     'username', 'title', 'first_name', 'last_name', 'given_names', 'birth_name', 'birth_date', 'birth_place', 'matriculation', 'date_joined',
@@ -50,7 +50,7 @@ def reduce():
     ids = list(Person.objects.filter(disposal__assessed__isnull=False, disposal__reduced=None).values_list('pk', flat=True))
     with quietly():
         Document.purge(Document.objects.filter(person__in=ids))
-        for model in (Message, Consent, SignIn, Loan, Booking):
+        for model in (Message, Consent, SignIn, Loan, Booking, Event, InsuranceReport):
             model.objects.filter(person__in=ids).delete()
         for through in (Booking.participants.through, Booking.absent.through):
             through.objects.filter(person__in=ids).delete()

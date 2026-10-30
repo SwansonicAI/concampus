@@ -11,7 +11,7 @@ from core.apps import Tile, feature, plural, task
 
 WAITS = {  # the first word of what an accepted place still lacks: what it waits for, as the office's to-do says it
     'Versicherungsmeldung': 'die Krankenkasse', 'Semesterbeitrag': 'den Semesterbeitrag', 'Hochschulzugangsberechtigung': 'den Hochschulzugang',
-    'Sperre:': 'die Aufhebung einer Sperre', 'Leihinstrument': 'ein Leihinstrument',
+    'Sperre:': 'die Aufhebung einer Sperre', 'Leihinstrument': 'ein Leihinstrument', 'Beitragsrückstand': 'die Krankenkasse',
 }
 
 
@@ -63,6 +63,8 @@ class StudentsConfig(Tile, AppConfig):
             ]
         if person.roles & {'dispose_files', 'assess_files'}:
             found.append(feature('Aussonderung', reverse('students:disposal'), 'archiv löschen löschfrist aufbewahrung akten ehemalige bewerten'))
+        if person.everywhere('manage_students'):
+            found.append(feature('Krankenkassen', reverse('students:insurers'), 'studierendenmeldeverfahren smv meldungen versicherung m10 m11 m12 m20 m30 dakota zuordnen storno'))
         if 'manage_reregistration' in person.roles:
             found += [
                 feature('Rückmeldung', reverse('students:reregistration'), 'semesterbeitrag zahlung bezahlt überweisung exmatrikulieren'),
@@ -79,7 +81,7 @@ class StudentsConfig(Tile, AppConfig):
         from django.utils import timezone
 
         from core.models import Institution, Term
-        from .models import Disposal, Study, StudyTerm
+        from .models import Disposal, InsuranceReport, Study, StudyTerm
 
         term, today = Term.upcoming(), timezone.localdate()
         due = term and (term.deadline if today <= term.deadline else term.closes)  # in the Nachfrist, its end
@@ -123,6 +125,12 @@ class StudentsConfig(Tile, AppConfig):
 
             if n := review()[0].count():
                 found.append(task(f'Gebietsänderung: {plural(n, "Wohnsitz", "Wohnsitze")} prüfen', reverse('setup:keys')))
+        if person.everywhere('manage_students'):
+            reports, State = InsuranceReport.objects.all(), InsuranceReport.State
+            if n := reports.filter(state=State.OPEN, reason__in=InsuranceReport.INCOMING).count():
+                found.append(task(f'{plural(n, "Meldung", "Meldungen")} der Krankenkassen ohne Zuordnung', f"{reverse('students:insurers')}#ohne-zuordnung"))
+            if n := reports.filter(state=State.FAILED).count():
+                found.append(task(f'{plural(n, "Meldung", "Meldungen")} an die Krankenkassen abgewiesen', f"{reverse('students:insurers')}?stand={State.FAILED}"))
         if 'dispose_files' in person.roles:
             from .disposal import due
 

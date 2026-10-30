@@ -87,7 +87,7 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 |---|---|---|---|
 | XHochschule documents | XBildung, IT-Planungsrat 2025/43 | partly | Immatrikulations-, Studienzeit- and Exmatrikulationsbescheinigung, Leistungsübersicht, Zeugnis, Urkunde, Diploma Supplement in English and German, as printable pages; the Immatrikulationsbescheinigung checkable by its Prüfcode, also as the version of § 9 BAföG, which stands in for Formblatt 2. No XHochschule data, no eIDAS seal |
 | Statistics delivery | HStatG | yes | eSTATISTIK.core files |
-| Reports with the health insurers, electronic only since 2022 | § 199a SGB V, Gemeinsame Grundsätze of the GKV-Spitzenverband and the HRK; Absendernummer under § 18n SGB IV | partly | Campus keeps the insurer, the status and the day the insurer's report came, and enrols and accepts a Rückmeldung only with it; the office enters that day by hand. No connection to the insurers' data exchange: their reports (M10 status, M11 change of insurer, M12 and M13 arrears and their payment) are not received, the Hochschule's (M20 Einschreibung, M30 Exmatrikulation) not sent. Needs HfM's Absendernummer, an ITSG certificate and dakota; what it takes is in `docs/smv.md` |
+| Reports with the health insurers, electronic only since 2022 | § 199a SGB V, Gemeinsame Grundsätze of the GKV-Spitzenverband and the HRK; Absendernummer under § 18n SGB IV | partly | Inside Campus: the insurers' reports (M10 to M13) booked to their person, by hand where none or several match; enrolment only with the status, the Rückmeldung held back by arrears; the Hochschule's reports (M20, M30, Storno) made when someone begins or stops studying here; the Absendernummer shown to applicants. Not yet: the files to and from dakota, which wait for the GKV's XML schemata; HfM's Absendernummer and certificate (`docs/smv.md`) |
 | Erasmus Without Paper | European Commission | no | No mobility: no inter-institutional agreements, no online learning agreements |
 | Finance system | – | no | Payments come in from bank statements; nothing is booked to the Hochschule's ERP |
 
@@ -118,8 +118,7 @@ Every requirement above that is not „yes“ is here.
 
 In Campus:
 
-1. Electronic reports with the health insurers (§ 199a SGB V): receive M10 to M13, send M20 and M30, through dakota
-   (`docs/smv.md`). The largest piece still missing.
+1. Electronic reports with the health insurers (§ 199a SGB V): the files to and from dakota (`docs/smv.md`).
 2. XHochschule data for the certificates, with an eIDAS seal.
 3. Statistics of academic and artistic staff.
 4. Mark a record as restricted (Art. 18).

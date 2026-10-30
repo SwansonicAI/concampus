@@ -174,6 +174,15 @@ def admitted(request):
     return bool(settings.DEMO_CODE) and constant_time_compare(request.COOKIES.get('demo', ''), ticket())
 
 
+def logo(request):
+    """The Hochschule's logo, for the letterhead; an SVG cannot run scripts from here."""
+    if not (logo := Institution.get().logo):
+        raise Http404
+    response = FileResponse(logo.open('rb'), content_type='image/svg+xml' if logo.name.endswith('.svg') else 'image/png')
+    response['Content-Security-Policy'] = 'sandbox'
+    return response
+
+
 @login_not_required
 def accessibility(request):
     """Erklärung zur Barrierefreiheit (ThürBarrWebG), with the form to report a barrier; signed in, name and address

@@ -7,6 +7,7 @@ urlpatterns = [
     path('demo/', views.demo, name='demo'),
     path('zugang/', views.gate, name='gate'),
     path('barrierefreiheit/', views.accessibility, name='accessibility'),
+    path('logo/', views.logo, name='logo'),
     path('suche/', views.search, name='search'),
     path('datum/', views.when, name='when'),
     path('orte/', views.towns, name='towns'),

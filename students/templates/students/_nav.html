@@ -4,6 +4,7 @@
   {% if 'view_students' in user.roles %}<a href="{% url 'students:list' %}" class="{% if here == 'list' or here == 'study' %}on{% endif %}">Studierende</a>{% endif %}
   {% if 'manage_reregistration' in user.roles %}<a href="{% url 'students:reregistration' %}" class="{% if here == 'reregistration' %}on{% endif %}">Rückmeldung</a>{% endif %}
   {% if 'manage_students' in user.roles %}<a href="{% url 'students:notices' %}" class="{% if here == 'notices' %}on{% endif %}">Versandte Bescheide</a>{% endif %}
+  {% if 'manage_students' in user.reach and user.reach.manage_students is None %}<a href="{% url 'students:insurers' %}" class="{% if here == 'insurers' %}on{% endif %}">Krankenkassen</a>{% endif %}
   {% if 'dispose_files' in user.roles %}<a href="{% url 'students:disposal' %}" class="{% if here == 'disposal' %}on{% endif %}">Aussonderung</a>{% endif %}
   {% elif 'student' in user.roles or 'alumni' in user.roles %}
   <a href="{% url 'students:index' %}" class="on">Mein Studium</a>
