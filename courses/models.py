@@ -385,9 +385,9 @@ class Participation(Judged, Tracked, models.Model):
 
 
 def owed_module(course, study):
-    """The module of the study's programme a course counts for: the earliest not yet passed; None once all are."""
-    passed = Participation.objects.filter(study=study, passed=True, module__isnull=False).values('module')
-    return course.modules.filter(program=study.program_id).exclude(pk__in=passed).order_by('semester', 'code').first()
+    """The module of the study's programme a course counts for: the earliest still open (Study.settled()); None once
+    none is."""
+    return course.modules.filter(program=study.program_id).exclude(pk__in=study.settled()).order_by('semester', 'code').first()
 
 
 def marked(person):

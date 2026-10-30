@@ -155,14 +155,26 @@ def catalogue(request):
         courses = courses.filter(confirmed=None, cancelled=None).exclude(origin=None)
     if q := request.GET.get('q', '').strip():
         courses = matching(courses, q, 'title', 'staff__last_name', 'subject__name', 'area__name', 'description', 'modules__title', 'modules__code')  # also by the module's name in the Studienplan
-    passed = Participation.objects.filter(study__in=studies, passed=True, module__isnull=False).values('module')
+    if node := Module.objects.filter(pk=request.GET.get('modul', '')).first() if request.GET.get('modul', '').isdigit() else None:  # from the Studienplan
+        courses = courses.filter(pk__in=Course.objects.filter(modules__in=node.within()).values('pk'))
+    settled = set().union(*(s.settled() for s in studies))
     counting = Module.objects.filter(courses=OuterRef('pk'), program__in=studies.values('program'))
-    courses = courses.annotate(counting=Exists(counting), owed=Exists(counting.exclude(pk__in=passed)))
+    courses = courses.annotate(counting=Exists(counting), owed=Exists(counting.exclude(pk__in=settled)))
     done = request.GET.get('bestandene') == '1'
-    if studies and not done:  # a student sees what is still to pass first; the passed on asking
+    if studies and not done:  # a student sees what still counts first; the rest on asking
         courses = courses.exclude(counting=True, owed=False)
     mine = {p.course_id: queued(p) or 0 for p in Participation.objects.filter(study__in=studies, course__term=term).select_related('course').annotate(ahead=ahead())}
     asked = set(Signup.objects.filter(study__in=studies, course__term=term).values_list('course', flat=True))
+    today = timezone.localdate()
+    running = term.end >= today  # registered late, the teachers may still take someone
+    if studies:  # lesson classes are given out: a student sees their own
+        courses = courses.exclude(Q(kind=Course.Kind.LESSON) & ~Q(pk__in=list(mine)))
+    joinable = request.GET.get('anmeldung') == 'moeglich'
+    if studies and joinable:  # what one can still register for, or ask to join late
+        can = (Q(opens=None) | Q(opens__lte=today)) & (Q(deadline=None) | Q(deadline__gte=today))
+        if running:
+            can |= Q(allocation__in=[Course.Allocation.ORDER, Course.Allocation.CHOICE])
+        courses = courses.filter(can, owed=True, cancelled=None, kind=Course.Kind.COURSE).exclude(allocation=Course.Allocation.STAFF).exclude(pk__in=list(mine))
     return render(request, 'courses/catalogue.html', {
         'term': term,
         'terms': Term.shown(person).filter(courses__kind__in=TEACHING).distinct().order_by('-start').filter(**since(request.user)), 'open': open_,
@@ -176,6 +188,7 @@ def catalogue(request):
         'q': q,
         'office': 'manage_courses' in person.roles,
         'scoped': scoped, 'reach': reach, 'student': studies.exists(), 'done': done, 'mine': mine, 'asked': asked,
+        'running': running, 'joinable': joinable, 'node': node,
     })
 
 
@@ -267,7 +280,8 @@ def course(request, pk):
     ensembles.sort(key=lambda e: (e.coach_id != person.pk, e.coach_id is not None, e.wish_id != person.pk))  # one's own, then those still open
     return render(request, 'courses/course.html', {
         'course': course, 'playing': playing, 'players': list(course.staff.all()) if playing is not None else [],
-        'lengths': sorted(Counter(minutes(p.module) or course.hours for p in course.participations.select_related('module')).items(), reverse=True) if course.kind == Course.Kind.LESSON else [],
+        'lengths': sorted(Counter(minutes(p.module) or course.hours for p in course.participations.select_related('module')).items(), reverse=True) if course.kind == Course.Kind.LESSON and staffed else [],
+        'share': minutes(own[0].module) or course.hours if own and course.kind == Course.Kind.LESSON else None,
         'staff': staff,
         'rows': rows if staffed else [],
         'own': own,
@@ -280,7 +294,7 @@ def course(request, pk):
         'eligible': eligible, 'completed': counting and not eligible and not own,
         'unmarked': sum(1 for p in rows if p.passed is None and not p.remark) if staffed and course.kind == Course.Kind.COURSE and over(course) and not course.modules.filter(exam=True).exists() else 0,
         'counts_for': besides_focus(course, eligible[0]) if eligible and not own else '',
-        'clashing': clashes(person, course.bookings.filter(start__gte=timezone.now(), participants=None)[:8]) if eligible and not own else [],
+        'clashing': clashes(person, course.bookings.filter(start__gte=timezone.now(), participants=None).select_related('room')[:8]) if eligible and not own else [],
         'running': running, 'cancelling': office and not course.term.planning and not course.cancelled and running,
         'from': max(course.term.lectures_start, timezone.localdate()), 'office': office,
         'modules': credited(course),
@@ -368,7 +382,7 @@ def add(request, pk):
             messages.success(request, f'{study.person} eingetragen, für {module.code}.')
         else:
             counts = course.modules.filter(program=study.program_id).exists()
-            messages.warning(request, f'{study.person} eingetragen, ohne Modul: {"alle Module dieser Veranstaltung sind schon bestanden" if counts else "im Studiengang nicht anrechenbar"}.')
+            messages.warning(request, f'{study.person} eingetragen, ohne Modul: {"ihre Module sind bestanden, oder ihr Bereich im Studienplan ist schon voll" if counts else "im Studiengang nicht anrechenbar"}.')
     return redirect(course)
 
 
@@ -456,25 +470,39 @@ def register(request, pk):
         messages.error(request, 'Der Anmeldeschluss ist vorbei.')
     elif module is None:
         counts = course.modules.filter(program=study.program_id).exists()
-        messages.error(request, 'Die Module dieser Veranstaltung haben Sie bereits bestanden.' if counts else 'Diese Veranstaltung ist in Ihrem Studiengang nicht anrechenbar.')
+        messages.error(request, 'Diese Veranstaltung zählt für nichts mehr in Ihrem Studium: ihre Module sind bestanden, oder ihr Bereich im Studienplan ist schon voll.' if counts else 'Diese Veranstaltung ist in Ihrem Studiengang nicht anrechenbar.')
     elif lost(study):
         messages.error(request, 'Der Prüfungsanspruch ist erloschen; neue Anmeldungen sind nicht möglich.')
     elif course.allocation == Course.Allocation.CHOICE or late:
-        Signup.objects.get_or_create(course=course, study=study, defaults={'module': module, 'note': request.POST.get('note', '').strip()})
+        if Signup.objects.get_or_create(course=course, study=study, defaults={'module': module, 'note': request.POST.get('note', '').strip()})[1]:
+            texts.send('angefragt', request.user, course.get_absolute_url(), veranstaltung=course.title, semester=course.term)
         messages.success(request, f'{"Nachmeldung angefragt" if late else "Angefragt"}. Die Lehrenden entscheiden; die Antwort kommt in Ihr Postfach.{besides}')
     else:
-        participation, _ = Participation.objects.get_or_create(course=course, study=study, module=module)
+        participation, created = Participation.objects.get_or_create(course=course, study=study, module=module)
         if participation.pk in (waitlist := course.waitlist()):
-            messages.success(request, f'Sie stehen auf Platz {waitlist.index(participation.pk) + 1} der Warteliste. Wird ein Platz frei, rücken Sie nach und erhalten eine Nachricht.{besides}')
+            place = waitlist.index(participation.pk) + 1
+            if created:
+                texts.send('warteliste', request.user, course.get_absolute_url(), veranstaltung=course.title, semester=course.term, platz=place)
+            messages.success(request, f'Sie stehen auf Platz {place} der Warteliste. Wird ein Platz frei, rücken Sie nach und erhalten eine Nachricht.{besides}')
         else:
             messages.success(request, f'Sie sind angemeldet.{besides}')
     return redirect(course)
 
 
 def clashes(person, bookings):
-    """Of these dates, those that overlap something already in the person's timetable."""
-    mine = agenda(person)
-    return [b for b in bookings if mine.filter(start__lt=b.end, end__gt=b.start).exclude(course=b.course_id).exists()]
+    """What of these dates collides with the person's timetable, once per weekday and time: [(date, the other, whether
+    only the way between buildings is too short)]."""
+    mine, found = agenda(person).select_related('room', 'course', 'category'), {}
+    for b in bookings:
+        at = timezone.localtime(b.start)
+        key = (at.weekday(), at.time())
+        if key in found:
+            continue
+        if other := mine.filter(start__lt=b.end, end__gt=b.start).exclude(course=b.course_id).first():
+            found[key] = (b, other, False)
+        elif other := next((o for o in around(person, b.start, b.end) if o.course_id != b.course_id and o.room.building != b.room.building), None):
+            found[key] = (b, other, True)
+    return list(found.values())
 
 
 def lost(study):
@@ -643,7 +671,7 @@ def back(request, course):
 def retract(request, pk):
     signup = get_object_or_404(Signup, pk=pk, study__person=request.user)
     signup.delete()
-    messages.success(request, 'Anfrage zurückgezogen.')
+    messages.success(request, f'Anfrage für „{signup.course.title}“ zurückgezogen.')
     return back(request, signup.course)
 
 
@@ -686,7 +714,7 @@ def withdraw(request, pk):
         before = participation.course.waitlist()
         participation.delete()
         admit(participation.course, before)
-        messages.success(request, 'Sie sind abgemeldet.')
+        messages.success(request, f'Von „{participation.course.title}“ abgemeldet.')
     elif participation.course.is_open:
         messages.error(request, 'Abmelden geht hier über die Lehrenden.')
     else:

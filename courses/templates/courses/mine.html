@@ -78,8 +78,8 @@
       <tr>
         <td><a href="{% url 'courses:course' r.course.pk %}"><b>{{ r.course.title }}</b></a></td>
         <td>{{ r.module|default:"" }}</td>
-        <td><small class="muted">angefragt am {{ r.created|date:"j.n.Y" }}</small></td>
-        <td><span class="badge wait">Die Lehrenden entscheiden</span><form method="post" action="{% url 'courses:retract' r.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="link" data-confirm="Anfrage für {{ r.course.title }} zurückziehen?"><small>zurückziehen</small></button></form></td>
+        <td><small class="muted">seit {{ r.created|date:"j.n." }}; die Lehrenden entscheiden</small></td>
+        <td><span class="badge wait">angefragt</span><form method="post" action="{% url 'courses:retract' r.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="link" data-confirm="Anfrage für {{ r.course.title }} zurückziehen?"><small>zurückziehen</small></button></form></td>
       </tr>
       {% endfor %}
     </tbody>

@@ -35,6 +35,7 @@
           <a class="muted" href="{% url 'setup:new' 'module' %}?studiengang={{ r.node.program_id }}&unter={{ r.node.pk }}&next={{ request.path|urlencode }}" title="Ein Modul darunter anlegen"><small>+ Untermodul</small></a>
           {% else %}<b>{{ r.node.code }}</b> {{ r.node.title }}{% endif %}
           {% if r.node.offered > r.node.credits %}<span class="badge">Wahl: {{ r.node.credits }} von {{ r.node.offered }} CP</span>{% endif %}
+          {% if r.node.pk in findable %}<a href="{% url 'courses:catalogue' %}?modul={{ r.node.pk }}"><small>Veranstaltungen finden</small></a>{% endif %}
           {% if r.node.description %}<br><small class="muted">{{ r.node.description }}</small>{% endif %}
         </td>
         {% for s in semesters %}<td></td>{% endfor %}

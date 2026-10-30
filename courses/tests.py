@@ -9,7 +9,7 @@ from curriculum.models import Program
 from rooms.models import Room
 from core.testing import Seeded, flashes
 from students.models import Study
-from .models import Course, Ensemble, MoodleCourse, Participation, Signup
+from .models import Course, Ensemble, MoodleCourse, Participation, Signup, owed_module
 from .moodle import flat, sync
 from .views import deputat, loads
 
@@ -75,6 +75,16 @@ class WaitlistTest(Seeded):
         teacher.post(f'/lehre/{course.pk}/nachricht/', {'study': [rows[2].study_id], 'subject': 'Raum', 'body': 'Hallo {vorname}'})
         self.assertEqual(list(Message.objects.filter(subject='Raum').values_list('person', 'body')), [(rows[2].study.person_id, f'Hallo {rows[2].study.person.first_name}')])
         self.assertEqual(self.login('student').get(f'/lehre/{course.pk}/nachricht/').status_code, 403)
+
+
+class SettledTest(Seeded):
+    def test_a_wahlkatalog_with_its_credits_earned_takes_no_more(self):
+        study = Study.objects.get(person__username='student')
+        course = Course.objects.get(term__name='WiSe 2026/27', title='Mentales Training')
+        self.assertTrue(course.modules.filter(program=study.program).exclude(participations__study=study, participations__passed=True).exists())
+        self.assertIsNone(owed_module(course, study))
+        listed = self.login('student').get('/lehre/verzeichnis/').context['courses']
+        self.assertNotIn(course, listed)
 
 
 class EnsembleTest(Seeded):

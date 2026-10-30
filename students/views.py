@@ -31,7 +31,7 @@ from core.apps import plural
 from core.models import Consent, Export, Institution, Office, Person, Term
 from core.text import fold, handle, matching
 from core.views import SHOWN, preview, without_term
-from courses.models import Participation
+from courses.models import Course, Participation
 from courses.views import untimed
 from curriculum.models import Module, Program, Subject
 from curriculum.views import plan
@@ -248,6 +248,27 @@ def compose(request):
     return render(request, 'students/compose.html', {'form': form, 'people': people, 'studies': studies, 'back': back, 'sender': sender})
 
 
+def findable(tree, taking):
+    """The open modules and areas of a student's plan with courses this term for what is still open in them and not
+    taken yet (`taking`): each leads to the Vorlesungsverzeichnis, narrowed to it."""
+    offered = set(Course.modules.through.objects.filter(course__term=Term.current(), course__kind=Course.Kind.COURSE, course__cancelled=None).values_list('module', flat=True))
+    found = set()
+
+    def visit(node):
+        if node.done:
+            return False
+        if not node.nodes:
+            return node.pk in offered and node.pk not in taking
+        hits = [visit(child) for child in node.nodes]  # every child, so each open one is marked
+        if any(hits):
+            found.add(node.pk)
+        return any(hits)
+
+    for root in tree:
+        visit(root)
+    return found
+
+
 def study(request, pk):
     person = request.user
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term', 'teacher', 'focus', 'advised'), pk=pk)
@@ -275,6 +296,7 @@ def study(request, pk):
     for t in terms:  # the Säumnisgebühr is for a late Rückmeldung, never for the semester one enrols in
         t.due = t.term.fee if t.term_id == study.start_term_id else t.term.due(t.paid or today, late_fee)
     reachable = Study.reachable(person, study.person.studies.exclude(pk=study.pk))
+    taking = set(study.participations.filter(course__term=Term.current()).values_list('module_id', flat=True))
     options = study.options() if study.status == Study.Status.ENROLLED else []
     lost = exhausted(study) if study.status == Study.Status.ENROLLED else []  # the Prüfungsanspruch: no Rückmeldung then
     return render(request, 'students/study.html', {
@@ -287,9 +309,9 @@ def study(request, pk):
         'certify': own or office,  # Bescheinigungen
         'unpaying': 'manage_reregistration' in person.roles,
         'enrolling': study.missing() if office and study.status == Study.Status.ADMITTED else [],
-        'rows': plan(tree, study.program.semesters),
+        'rows': plan(tree, study.program.semesters), 'findable': findable(tree, taking) if own and study.status == Study.Status.ENROLLED else set(),
         'semesters': range(1, study.program.semesters + 1),
-        'taking': set(study.participations.filter(course__term=Term.current()).values_list('module_id', flat=True)),
+        'taking': taking,
         'late': late,
         'average': average,
         'earned': sum(m.earned for m in tree),

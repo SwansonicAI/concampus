@@ -214,6 +214,16 @@ TEXTS = {
         'Für „{veranstaltung}“ im {semester} konnten wir Ihnen leider keinen Platz geben.', ('veranstaltung', 'semester'),
     ),
     'ausgetragen': Spec(NACHRICHT, 'Aus einer Veranstaltung oder Prüfung ausgetragen', 'Ausgetragen: {veranstaltung}', 'Ihre Anmeldung zu „{veranstaltung}“ im {semester} ist gelöscht.', ('veranstaltung', 'semester')),
+    'angefragt': Spec(
+        NACHRICHT, 'Platz angefragt', 'Angefragt: {veranstaltung}',
+        'Ihre Anfrage für „{veranstaltung}“ im {semester} ist bei den Lehrenden. Sie entscheiden; ihre Antwort erhalten Sie als Nachricht. '
+        'Zurückziehen können Sie die Anfrage auf der Seite der Veranstaltung.', ('veranstaltung', 'semester'),
+    ),
+    'warteliste': Spec(
+        NACHRICHT, 'Auf der Warteliste', 'Warteliste: {veranstaltung}',
+        'Für „{veranstaltung}“ im {semester} stehen Sie auf Platz {platz} der Warteliste. Wird ein Platz frei, rücken Sie nach und erhalten eine Nachricht.',
+        ('veranstaltung', 'semester', 'platz'),
+    ),
     'nachgerueckt': Spec(
         NACHRICHT, 'Von der Warteliste nachgerückt', 'Platz frei: {veranstaltung}',
         'In „{veranstaltung}“ im {semester} ist ein Platz frei geworden: Sie sind von der Warteliste nachgerückt und angemeldet.', ('veranstaltung', 'semester'),

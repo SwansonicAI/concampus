@@ -216,6 +216,22 @@ class Study(Tracked, models.Model):
                 best[p.module_id] = p
         return sorted(best.values(), key=lambda p: p.module.code)
 
+    def settled(self):
+        """The modules a course can count for no longer: those passed, and everything within a part of the plan that is
+        complete, such as a Wahlkatalog whose credits are earned."""
+        found = set()
+
+        def walk(node, closed):
+            closed = closed or node.done
+            if closed:
+                found.add(node.pk)
+            for child in node.nodes:
+                walk(child, closed)
+
+        for root in self.program.curriculum({p.module_id: p.grade for p in self.record()}, self.subject_id):
+            walk(root, False)
+        return found
+
     @staticmethod
     def choose_by(fs, first):
         """When a Schwerpunkt beginning in semester `first` is chosen, `fs` being the Fachsemester now: before its term starts."""

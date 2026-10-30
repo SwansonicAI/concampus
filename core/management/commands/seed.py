@@ -1514,7 +1514,8 @@ class Command(BaseCommand):
 
     def allocation(self):
         """How places are given: lessons by their teachers, two electives by choosing among requests (the demo student
-        waits for one), Kammermusik in ensembles, and Liturgik as a block seminar on three Mondays."""
+        waits for one), Kammermusik in ensembles, two courses still open for registration, and Liturgik as a block seminar
+        on three Mondays."""
         now = Course.objects.filter(term=self.current)
         now.filter(models.Q(kind=Course.Kind.LESSON) | models.Q(format=self.formats['E+x'])).update(allocation=Course.Allocation.STAFF, opens=None, deadline=None)
         notes = ['Ich spiele im Februar Probespiele und möchte vorher Auftrittspraxis sammeln.', '', 'Ich hatte mich im Sommer schon angemeldet.', '']
@@ -1534,6 +1535,11 @@ class Command(BaseCommand):
                 for n, s in enumerate(wishing)
             )
         self.ensembles(now.filter(title='Kammermusik').first())
+        for title, spare in [('Historische Spielpraxis auf modernen Instrumenten', 3), ('Schreibwerkstatt: wissenschaftliches Schreiben', 0)]:  # registration into the second week of lectures: one with places, one full
+            course = now.filter(title=title).annotate(size=models.Count('participations')).first()
+            if course:
+                course.deadline, course.capacity = date(2026, 11, 13), course.size + spare
+                course.save(update_fields=['deadline', 'capacity'])
         block = now.filter(title='Liturgik und Hymnologie').first()
         if block:
             block.bookings.all().delete()

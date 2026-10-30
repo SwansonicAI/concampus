@@ -398,6 +398,7 @@ function disarm(button) {
   button.innerHTML = button.dataset.label;
   button.style.minWidth = '';
   delete button.dataset.armed;
+  button.nextElementSibling?.matches('.unconfirm') && button.nextElementSibling.remove();
 }
 document.addEventListener('click', event => {
   const button = event.target.closest('button[data-confirm]');
@@ -408,6 +409,7 @@ document.addEventListener('click', event => {
   button.dataset.label = button.innerHTML;
   button.dataset.armed = '1';
   button.textContent = button.dataset.confirm;
+  button.after(Object.assign(document.createElement('button'), {type: 'button', className: 'link unconfirm', textContent: 'Abbrechen'}));
 });
 document.addEventListener('keydown', event => event.key === 'Escape' && document.querySelectorAll('button[data-armed]').forEach(disarm));
 

@@ -68,10 +68,7 @@ class ModuleForm(Graded):
         program = self.instance.program
         self.guard(program)
         modules = list(program.modules.all())
-        below, frontier = set(), {self.instance.pk} - {None}
-        while frontier:  # neither the module itself nor anything under it can hold it
-            below |= frontier
-            frontier = {m.pk for m in modules if m.parent_id in frontier} - below
+        below = self.instance.within() if self.instance.pk else set()  # neither the module itself nor anything under it can hold it
         holding = {m.parent_id for m in modules}
         depth, order = {}, []
 

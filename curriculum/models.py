@@ -273,6 +273,15 @@ class Module(Tracked, models.Model):
     def __str__(self):
         return f'{self.code} {self.title}'.strip()
 
+    def within(self):
+        """The pks of the module and everything under it."""
+        modules = list(self.program.modules.values_list('pk', 'parent'))
+        found, frontier = set(), {self.pk}
+        while frontier:
+            found |= frontier
+            frontier = {pk for pk, parent in modules if parent in frontier} - found
+        return found
+
     def used(self):
         """What still hangs on the module, in words: empty when it may go (setup/views.py delete())."""
         counts = [

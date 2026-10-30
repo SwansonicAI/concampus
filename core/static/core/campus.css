@@ -111,6 +111,8 @@ main.page { min-height: 70vh; padding-top: 32px; padding-bottom: 96px; }
 .btn:disabled { opacity: 0.4; pointer-events: none; }
 .link { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; }
 .link:hover { text-decoration: underline; }
+.link[data-armed] { padding: 2px 8px; border: 1px solid currentColor; border-radius: var(--radius); font-size: 14px; text-align: left; }
+.unconfirm { margin-left: 10px; color: var(--muted); font-size: 14px; }
 /* Arrows are drawn, not taken from the font, so they are as strong in every browser; they take the colour of their text */
 .arrow, .more::before, .todo .what::before, th[aria-sort] button::after, .menu summary::after {
   content: "";
@@ -409,6 +411,7 @@ button.chip { background: none; font: inherit; font-size: 12px; cursor: pointer;
   section { margin-top: 40px; }
   .facts { grid-template-columns: 1fr; gap: 0 24px; }
   .facts dd { margin-bottom: 8px; }
+  th.spare, td.spare { display: none; }
   .panel { padding: 16px; }
   .toolbar > *, .inline, .inline > *, .inline label, .inline select { min-width: 0; max-width: 100%; }
   .toolbar input[type=search], .head input[type=search] { width: 100%; }

@@ -16,24 +16,27 @@
     <label>Lehrform<select name="lehrform" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for f in formats %}<option value="{{ f.pk }}"{% if f.pk|stringformat:'s' == form %} selected{% endif %}>{{ f }}</option>{% endfor %}</select></label>
     <label>Studiengang<select name="studiengang" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for p in programs %}<option value="{{ p.pk }}"{% if p.pk|stringformat:'s' == program %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Titel oder Lehrende"></label>
-    {% if student %}<label>Module<select name="bestandene" onchange="this.form.requestSubmit()"><option value="">noch offene</option><option value="1"{% if done %} selected{% endif %}>auch bestandene</option></select></label>{% endif %}
+    {% if student %}<label>Module<select name="bestandene" onchange="this.form.requestSubmit()"><option value="">noch offene</option><option value="1"{% if done %} selected{% endif %}>auch erledigte</option></select></label>
+    <label>Anmeldung<select name="anmeldung" onchange="this.form.requestSubmit()"><option value="">alle</option><option value="moeglich"{% if joinable %} selected{% endif %}>noch möglich</option></select></label>{% endif %}
+    {% if node %}<input type="hidden" name="modul" value="{{ node.pk }}">{% endif %}
   </div>
 </form>
+{% if node %}<div class="chips filters-on"><a class="chip" href="{% querystring modul=None %}" title="Diese Einschränkung entfernen">Modul: {{ node }} ×</a></div>{% endif %}
 {% regroup courses by area as groups %}
 {% for group in groups %}
 <section>
   <h2>{{ group.grouper|default:"Ohne Fachgebiet" }}</h2>
   <table data-panel>
-    <thead><tr><th>Veranstaltung</th><th>Lehrende</th><th class="num">SWS</th><th class="num">Teilnahmen</th><th>Anmeldung</th><th>Nächster Termin</th></tr></thead>
+    <thead><tr><th>Veranstaltung</th><th>Lehrende</th><th class="num spare">SWS</th><th class="num">Teilnahmen</th><th>Anmeldung</th><th class="spare">Nächster Termin</th></tr></thead>
     <tbody>
       {% for c in group.list %}
       <tr>
-        <td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a>{% if c.cancelled %} <span class="badge no">entfällt</span>{% elif term.planning and c.origin_id %} {% if c.confirmed %}<span class="badge yes">bestätigt</span>{% else %}<span class="badge wait">offen</span>{% endif %}{% endif %}{% if c.pk in mine %} {% with queue=mine|of:c.pk %}{% if queue %}<span class="badge wait">Warteliste, Platz {{ queue }}</span>{% else %}<span class="badge open">angemeldet</span>{% endif %}{% endwith %}{% elif c.pk in asked %} <span class="badge wait">angefragt</span>{% elif student and c.counting and not c.owed %} <span class="badge yes">bestanden</span>{% endif %}{% if office and not c.cancelled and c.kind == 'course' %}{% if not c.booked and c.format.dated is not False %} <span class="badge wait">ohne Termine</span>{% endif %}{% if c.hours is None %} <span class="badge wait">ohne SWS</span>{% endif %}{% endif %}<br><small class="muted">{{ c.format|default:c.get_kind_display }}{% if c.subject %} · {{ c.subject }}{% endif %}</small></td>
+        <td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a>{% if c.cancelled %} <span class="badge no">entfällt</span>{% elif term.planning and c.origin_id %} {% if c.confirmed %}<span class="badge yes">bestätigt</span>{% else %}<span class="badge wait">offen</span>{% endif %}{% endif %}{% if c.pk in mine %} {% with queue=mine|of:c.pk %}{% if queue %}<span class="badge wait">Warteliste, Platz {{ queue }}</span>{% else %}<span class="badge open">angemeldet</span>{% endif %}{% endwith %}{% elif c.pk in asked %} <span class="badge wait">angefragt</span>{% elif student and c.counting and not c.owed %} <span class="badge yes" title="Ihre Module sind bestanden, oder ihr Bereich im Studienplan ist schon voll">erledigt</span>{% endif %}{% if office and not c.cancelled and c.kind == 'course' %}{% if not c.booked and c.format.dated is not False %} <span class="badge wait">ohne Termine</span>{% endif %}{% if c.hours is None %} <span class="badge wait">ohne SWS</span>{% endif %}{% endif %}<br><small class="muted">{{ c.format|default:c.get_kind_display }}{% if c.subject %} · {{ c.subject }}{% endif %}</small></td>
         <td>{% for s in c.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-        <td class="num">{{ c.hours|default_if_none:"" }}</td>
+        <td class="num spare">{{ c.hours|default_if_none:"" }}</td>
         <td class="num">{% if c.capacity and c.size > c.capacity and c.allocation != 'order' %}<span class="badge no" title="Mehr Teilnehmende als Plätze">{{ c.size }} / {{ c.capacity }}</span>{% else %}{{ c.size }}{% if c.capacity %} / {{ c.capacity }}{% if c.size >= c.capacity and c.allocation == 'order' %}<br><small class="muted">ausgebucht</small>{% endif %}{% endif %}{% endif %}</td>
-        <td data-value="{{ c.deadline|date:'c' }}"><small>{% if c.allocation == 'staff' %}<span class="muted">Lehrende teilen ein</span>{% elif c.upcoming %}ab {{ c.opens|date:"j.n." }}{% if c.deadline %} bis {{ c.deadline|date:"j.n." }}{% endif %}{% elif c.is_open %}offen{% if c.deadline %} bis {{ c.deadline|date:"j.n." }}{% endif %}{% else %}<span class="muted">vorbei</span>{% endif %}</small></td>
-        <td data-value="{{ c.next_start|date:'c' }}">{% if c.next_start %}{{ c.next_start|date:"D j.n., H:i" }}<br><small class="muted">{{ c.next_room }}</small>{% endif %}</td>
+        <td data-value="{{ c.deadline|date:'c' }}"><small>{% if c.cancelled %}{% elif c.allocation == 'staff' or c.kind == 'lesson' %}<span class="muted">Zuteilung durch Lehrende</span>{% elif student and not c.counting %}<span class="muted">nicht anrechenbar</span>{% elif c.upcoming %}ab {{ c.opens|date:"j.n." }}{% if c.deadline %} bis {{ c.deadline|date:"j.n." }}{% endif %}{% elif c.is_open %}{% if c.allocation == 'ensemble' %}als Ensemble{% if c.deadline %} bis {{ c.deadline|date:"j.n." }}{% endif %}{% elif c.deadline %}bis {{ c.deadline|date:"j.n." }}{% else %}offen{% endif %}{% elif running and c.allocation != 'ensemble' %}Nachmeldung möglich{% else %}<span class="muted">vorbei</span>{% endif %}</small></td>
+        <td class="spare" data-value="{{ c.next_start|date:'c' }}">{% if c.next_start %}{{ c.next_start|date:"D j.n., H:i" }}<br><small class="muted">{{ c.next_room }}</small>{% endif %}</td>
       </tr>
       {% endfor %}
     </tbody>
