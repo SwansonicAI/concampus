@@ -75,12 +75,14 @@ def share(course, coached):
     return coached if course.allocation == Course.Allocation.ENSEMBLE else 1
 
 
-def credited(course):
-    """The modules a course counts for, by title: [(title, [(program, codes)])], so a course in many plans reads in a few lines."""
+def credited(course, own=()):
+    """The modules a course counts for, by title: [(title, [(program, codes)])], so a course in many plans reads in a few lines;
+    the Studiengänge in `own` first."""
     found = defaultdict(lambda: defaultdict(list))
     for m in course.modules.select_related('program').order_by('title', 'program__degree', 'program__name', 'code'):
         found[m.title][m.program].append(m.code)
-    return [(title, list(programs.items())) for title, programs in found.items()]
+    rows = [(title, sorted(programs.items(), key=lambda p: p[0].pk not in own)) for title, programs in found.items()]
+    return sorted(rows, key=lambda row: row[1][0][0].pk not in own)
 
 
 def teaches(person, course):
@@ -252,6 +254,7 @@ def course(request, pk):
     for s in counting:
         s.owed = owed_module(course, s)
     eligible = [s for s in counting if s.owed]  # a module of it still to pass
+    studied = {s.program_id for s in counting}
     upcoming = course.bookings.filter(start__gte=timezone.now())
     if course.allocation == Course.Allocation.ENSEMBLE and staffed and not person.may('manage_courses', course):  # a coach: the course's own dates and their ensembles'
         upcoming = upcoming.filter(Q(ensemble=None) | Q(ensemble__coach=person))
@@ -298,7 +301,7 @@ def course(request, pk):
         'clashing': clashes(person, course.bookings.filter(start__gte=timezone.now(), participants=None).select_related('room')[:8]) if eligible and not own else [],
         'running': running, 'cancelling': office and not course.term.planning and not course.cancelled and running,
         'from': max(course.term.lectures_start, timezone.localdate()), 'office': office,
-        'modules': credited(course),
+        'modules': credited(course, studied), 'studied': studied,
         'bookings': upcoming.select_related('room', 'category').prefetch_related('participants', 'absent')[:8],
         'plan': PlanForm(sent(request, 'plan'), person=person, course=course) if staffed and running and not course.cancelled and course.kind != Course.Kind.LESSON else None,
         'date': DateForm(sent(request, 'date'), person=person, course=course) if staffed and running and not course.cancelled else None,

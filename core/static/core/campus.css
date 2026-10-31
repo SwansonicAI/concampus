@@ -33,6 +33,7 @@ a:hover { text-decoration: underline; }
 p { margin: 0 0 1em; }
 small { font-size: 13px; }
 .muted { color: var(--muted); }
+.code { color: var(--muted); font-size: 12px; font-weight: 600; }  /* a module's code before its title */
 .wrap { width: 100%; max-width: var(--wide); margin: 0 auto; padding: 0 48px; }
 
 /* Headings: the accent bar is the house mark; sentence case keeps it a tool, not the website */
@@ -177,6 +178,8 @@ select.cell { padding: 4px 6px; }
 .panel { padding: 24px; background: var(--soft); }
 .panel a, .flash a { color: var(--accent-dark); }  /* on grey the accent falls short of 4.5:1 */
 .panel h3 { color: var(--ink); }
+.panel p.muted { max-width: 84ch; font-size: 14px; line-height: 1.5; }
+.panel p.muted small { font-size: inherit; }
 
 /* Feedback */
 .flash { margin: 0 0 24px; padding: 12px 16px; border-left: 6px solid var(--accent); background: var(--soft); font-weight: 600; }
@@ -235,7 +238,7 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 @container (max-width: 880px) { .cols { grid-template-columns: minmax(0, 1fr); } }  /* the side panel stacks what sits side by side on a page */
 .calm { color: var(--muted); }
 .launch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.app { display: flex; gap: 16px; align-items: center; padding: 18px 20px; border: 1px solid var(--line); border-left: 6px solid var(--accent); color: var(--ink); }
+.app { display: flex; gap: 16px; align-items: center; padding: 18px 20px; border: 1px solid var(--line); color: var(--ink); }
 .app:hover { border-color: var(--accent); text-decoration: none; }
 .app svg { flex: none; width: 34px; height: 34px; fill: none; stroke: var(--accent); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 .app b { display: block; font-size: 17px; }
@@ -264,6 +267,12 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .facts + .facts { margin-top: 22px; }  /* groups of a record: the study, contact, the person, administration */
 .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 48px; }
 .cols > section, .cols > div > section:first-child { margin-top: 0; }
+.catalogue { table-layout: fixed; }  /* Vorlesungsverzeichnis: each Fachgebiet's table with the same columns */
+.catalogue th:nth-child(2) { width: 18%; }
+.catalogue th:nth-child(3) { width: 72px; }
+.catalogue th:nth-child(4) { width: 128px; }
+.catalogue th:nth-child(5) { width: 184px; }
+.catalogue th:nth-child(6) { width: 176px; }
 
 /* Studienverlaufs- und Prüfungsplan: rows of whole pixels, so the squares sit alike in every row */
 .svpp { border-collapse: separate; border-spacing: 0; font-size: 14px; }
@@ -283,7 +292,7 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .svpp tbody tr:is(.part, .module, .group):has(+ tr:is(.module, .group, .or)) td, .svpp tbody tr.part:last-child td { border-bottom-color: transparent; }
 .svpp tr.part :is(.sem, .cp) { color: #767676; font-size: 13px; font-weight: 400; }
 .svpp tr.off td { color: #767676; }
-.svpp .code { margin-right: 8px; color: var(--muted); font-size: 12px; font-weight: 600; line-height: 1; }
+.svpp .code { margin-right: 8px; line-height: 1; }
 .svpp .name { color: var(--ink); font-size: 15px; font-weight: 700; line-height: 1; }
 .svpp a .name { color: inherit; }
 .svpp .choice { margin-left: 6px; color: var(--muted); font-size: 13px; line-height: 1; }
@@ -307,23 +316,26 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .svpp td:is(.done, .now, .late) { position: relative; }
 .tile { position: absolute; top: 50%; left: 50%; display: flex; align-items: center; justify-content: center; width: 32px; height: 28px; margin: -14px 0 0 -16px; border-radius: var(--radius); font-size: 13px; font-weight: 700; }
 .done > .tile { background: var(--accent-pale); color: var(--accent-dark); }
-.now > .tile { box-shadow: inset 0 0 0 2px var(--accent); color: var(--ink); }
+.now > .tile { box-shadow: inset 0 0 0 2px var(--blue); color: var(--ink); }
 .late > .tile { box-shadow: inset 0 0 0 2px var(--amber); color: var(--ink); }
 .tile-num { display: block; line-height: 1; text-box: trim-both cap alphabetic; font-variant-numeric: proportional-nums; }
 .tile-num.dot { position: relative; top: -1px; }
 .svpp tr.part td.cp { padding-right: 0; }
 .svpp td.cp .tile { right: 4px; left: auto; margin-left: 0; }
 .svpp .plain { display: inline-block; width: 40px; text-align: center; }
-/* The legend above the plan: what a field shows, and the state it is in, drawn as in the table */
-.sv-legend { display: grid; grid-template-columns: max-content 1fr; align-items: center; gap: 12px 18px; margin: 0 0 26px; color: var(--muted); font-size: 13px; }
-.panel + .sv-legend { margin-top: 36px; }
-.sv-legend-heading { color: var(--ink); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
-.sv-legend-items { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; }
-.sv-legend-item { display: inline-flex; align-items: center; gap: 8px; }
-.sv-legend .tile { position: relative; top: auto; left: auto; flex: none; margin: 0; }
-.sv-legend-symbol > .tile { box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); }
-.sv-legend-planned > .tile { color: #767676; font-weight: 400; }  /* as planned numbers in the table */
-.sv-legend-sem { color: var(--accent-dark); font-weight: 700; }  /* as the semester's heading in the table */
+/* Colour keys: what a mark shows, drawn as where it is used, a heading per kind where there are several */
+.legend { display: grid; grid-template-columns: max-content 1fr; align-items: center; gap: 12px 18px; margin: 0 0 26px; color: var(--muted); font-size: 13px; }
+.panel + .legend { margin-top: 36px; }
+.legend-heading { color: var(--ink); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.legend-items { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 24px; }
+.legend > .legend-items:only-child { grid-column: 1 / -1; }
+.toolbar .legend { margin: 0; }
+.legend .booking { flex: none; width: 26px; height: 18px; margin: 0; padding: 0; }
+.legend-item { display: inline-flex; align-items: center; gap: 8px; }
+.legend .tile { position: relative; top: auto; left: auto; flex: none; margin: 0; }
+.legend-symbol > .tile { box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); }
+.legend-planned > .tile { color: #767676; font-weight: 400; }  /* as planned numbers in the table */
+.legend-sem { color: var(--accent-dark); font-weight: 700; }  /* as the semester's heading in the table */
 @media (min-width: 1100px) {
   .scroll:has(> .svpp) { overflow: visible; }
   .svpp thead th { position: sticky; top: 0; z-index: 3; background: #fff; }
@@ -342,7 +354,7 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .explainer .codes dd { margin: 0; color: var(--muted); }
 .choose h3 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 6px; }
 .choose h3 small { font-size: 13px; font-weight: 600; }
-.choose > p.muted { max-width: 84ch; margin: 0 0 18px; font-size: 14px; line-height: 1.5; }
+.choose > p.muted { margin: 0 0 18px; }
 .choose .badge { margin-left: 8px; font-size: 12px; }
 
 /* Curriculum tree */
@@ -423,9 +435,8 @@ button.chip { background: none; font: inherit; font-size: 12px; cursor: pointer;
 .booking.event { border-left-color: var(--blue); background: #e3eefb; }
 .booking.service { border-left-color: var(--line); background: repeating-linear-gradient(135deg, var(--soft) 0 6px, #fff 6px 12px); }
 .booking.blocked { border-left-color: var(--red); background: #fbe3e4; }
+.booking.taken { border-left-color: var(--line); }  /* someone else's, without what it is */
 .booking.cancelled { border-left-color: var(--line); background: #fff; color: var(--muted); text-decoration: line-through; }
-.legend { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; }
-.legend .booking { margin: 0; }
 .booking.mine { outline: 2px solid var(--ink); outline-offset: -2px; }
 .prow .now { z-index: 3; width: 2px; background: var(--red); }
 
@@ -437,8 +448,8 @@ button.chip { background: none; font: inherit; font-size: 12px; cursor: pointer;
 .week .line { grid-column: 2 / -1; border-top: 1px solid var(--line); }
 .week .booking { margin: 1px 3px; white-space: normal; }
 .week .booking.short { white-space: nowrap; }
-.week .booking.clash { outline: 2px solid var(--red); outline-offset: -2px; }
-.week .booking.move { border-top: 3px solid var(--amber); }
+:is(.week, .legend) .booking.clash { outline: 2px solid var(--red); outline-offset: -2px; }
+:is(.week, .legend) .booking.move { border-top: 3px solid var(--amber); }
 .week .booking.split { width: calc(100% / var(--lanes) - 4px); margin-left: calc(100% / var(--lanes) * var(--lane) + 2px); }
 
 /* Print: certificates and transcripts */
@@ -480,6 +491,7 @@ button.chip { background: none; font: inherit; font-size: 12px; cursor: pointer;
   .facts { grid-template-columns: 1fr; gap: 0 24px; }
   .facts dd { margin-bottom: 8px; }
   th.spare, td.spare { display: none; }
+  .catalogue { table-layout: auto; }
   .panel { padding: 16px; }
   .toolbar > *, .inline, .inline > *, .inline label, .inline select { min-width: 0; max-width: 100%; }
   .toolbar input[type=search], .head input[type=search] { width: 100%; }

@@ -1,5 +1,6 @@
 from django import template
 from django.utils.formats import number_format
+from django.utils.html import format_html
 
 register = template.Library()
 
@@ -19,6 +20,14 @@ def programme(note):
     from core.text import untimed
 
     return untimed(note)
+
+
+@register.filter
+def coded(module):
+    """A module as the plan names it: its code small and muted, then its title."""
+    if not module:
+        return ''
+    return format_html('<span class="code">{}</span> {}', module.code, module.title) if module.code else module.title
 
 
 @register.filter

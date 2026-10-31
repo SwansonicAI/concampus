@@ -1,4 +1,5 @@
 {% extends base %}
+{% load marks %}
 {% block title %}{% if teaching is not None %}Meine Lehre{% else %}Meine Veranstaltungen{% endif %}{% endblock %}
 {% block subnav %}{% include "courses/_nav.html" %}{% endblock %}
 {% block content %}
@@ -67,9 +68,9 @@
       {% for p in registrations %}
       <tr>
         <td><a href="{% url 'courses:course' p.course.pk %}"><b>{{ p.course.title }}</b></a></td>
-        <td>{{ p.module|default:"" }}</td>
+        <td>{{ p.module|coded }}</td>
         <td data-value="{{ p.next.start|date:'c' }}">{% if p.next %}{{ p.next.start|date:"D j.n., H:i" }}<br><small class="muted">{{ p.next.room }}</small>{% endif %}</td>
-        <td>{% if p.passed %}<span class="badge yes">bestanden</span>{% elif p.queue %}<span class="badge wait">Warteliste, Platz {{ p.queue }}</span>{% else %}<span class="badge open">angemeldet</span>{% endif %}
+        <td>{% if p.passed %}bestanden{% elif p.queue %}<span class="badge wait">Warteliste, Platz {{ p.queue }}</span>{% else %}<span class="badge open">angemeldet</span>{% endif %}
           {% if p.course.leavable and p.passed is None %}<form method="post" action="{% url 'courses:withdraw' p.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="link" data-confirm="Von {{ p.course.title }} abmelden?"><small>abmelden</small></button></form>{% endif %}</td>
       </tr>
       {% empty %}{% if not requests %}<tr><td colspan="4" class="empty">Noch nichts belegt. <a class="more" href="{% url 'courses:catalogue' %}">Vorlesungsverzeichnis</a></td></tr>{% endif %}
@@ -77,7 +78,7 @@
       {% for r in requests %}
       <tr>
         <td><a href="{% url 'courses:course' r.course.pk %}"><b>{{ r.course.title }}</b></a></td>
-        <td>{{ r.module|default:"" }}</td>
+        <td>{{ r.module|coded }}</td>
         <td><small class="muted">seit {{ r.created|date:"j.n." }}; die Lehrenden entscheiden</small></td>
         <td><span class="badge wait">angefragt</span><form method="post" action="{% url 'courses:retract' r.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="link" data-confirm="Anfrage für {{ r.course.title }} zurückziehen?"><small>zurückziehen</small></button></form></td>
       </tr>

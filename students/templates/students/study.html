@@ -198,19 +198,19 @@
   </form>
   {% endwith %}{% endif %}
   {% if not grades %}<p class="lead">Der Studienverlaufs- und Prüfungsplan; was erbracht ist und mit welchen Noten, sieht die Prüfungsverwaltung.</p>{% else %}
-  <div class="sv-legend">
-    <span class="sv-legend-heading">Im Feld</span>
-    <span class="sv-legend-items">
-      {% if credited %}<span class="sv-legend-item sv-legend-symbol"><span class="tile"><span class="tile-num">2</span></span>CP der Lehrveranstaltung</span>{% endif %}
-      <span class="sv-legend-item sv-legend-symbol"><span class="tile"><span class="tile-num">T</span></span>{% if credited %}Testat, ohne CP{% else %}Lehrveranstaltung{% endif %}</span>
-      <span class="sv-legend-item sv-legend-symbol"><span class="tile"><span class="tile-num dot">●</span></span>Prüfung</span>
+  <div class="legend">
+    <span class="legend-heading">Im Feld</span>
+    <span class="legend-items">
+      {% if credited %}<span class="legend-item legend-symbol"><span class="tile"><span class="tile-num">2</span></span>CP der Lehrveranstaltung</span>{% endif %}
+      <span class="legend-item legend-symbol"><span class="tile"><span class="tile-num">T</span></span>{% if credited %}Testat, ohne CP{% else %}Lehrveranstaltung{% endif %}</span>
+      <span class="legend-item legend-symbol"><span class="tile"><span class="tile-num dot">●</span></span>Prüfung</span>
     </span>
-    <span class="sv-legend-heading">Stand</span>
-    <span class="sv-legend-items">
-      <span class="sv-legend-item done"><span class="tile"><span class="tile-num">2</span></span>bestanden</span>
-      <span class="sv-legend-item now"><span class="tile"><span class="tile-num">2</span></span><span>belegt, jetzt im <span class="sv-legend-sem">{{ fs }}.</span> Semester</span></span>
-      <span class="sv-legend-item late"><span class="tile"><span class="tile-num">2</span></span>überfällig</span>
-      <span class="sv-legend-item sv-legend-planned"><span class="tile"><span class="tile-num">2</span></span>geplant</span>
+    <span class="legend-heading">Stand</span>
+    <span class="legend-items">
+      <span class="legend-item done"><span class="tile"><span class="tile-num">2</span></span>bestanden</span>
+      <span class="legend-item now"><span class="tile"><span class="tile-num">2</span></span><span>belegt, jetzt im <span class="legend-sem">{{ fs }}.</span> Semester</span></span>
+      <span class="legend-item late"><span class="tile"><span class="tile-num">2</span></span>überfällig</span>
+      <span class="legend-item legend-planned"><span class="tile"><span class="tile-num">2</span></span>geplant</span>
     </span>
   </div>
   {% endif %}

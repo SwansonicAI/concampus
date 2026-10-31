@@ -35,7 +35,7 @@
   {% for p in own %}
   <form method="post" action="{% url 'courses:withdraw' p.pk %}" class="actions">
     {% csrf_token %}
-    <span>{% if p.passed %}<span class="badge yes">bestanden{% if p.grade %} ({{ p.grade|floatformat:1 }}){% endif %}</span>{% elif p.waiting %}<span class="badge wait">Warteliste, Platz {{ p.waiting }}</span>{% else %}<span class="badge open">angemeldet</span>{% endif %} seit {{ p.created|date:"j. F Y" }}{% if p.module %}, für {{ p.module.code }} {{ p.module.title }}{% endif %}</span>
+    <span>{% if p.passed %}<span class="badge yes">bestanden{% if p.grade %} ({{ p.grade|floatformat:1 }}){% endif %}</span>{% elif p.waiting %}<span class="badge wait">Warteliste, Platz {{ p.waiting }}</span>{% else %}<span class="badge open">angemeldet</span>{% endif %} seit {{ p.created|date:"j. F Y" }}{% if p.module %}, für {{ p.module|coded }}{% endif %}</span>
     {% if course.leavable and p.passed is None %}<button class="btn ghost small" data-confirm="Wirklich abmelden?">Abmelden</button>{% elif course.allocation == 'ensemble' %}<small class="muted">{% with coach=ensembles.0.coach %}Abmelden über {% if coach %}Ihre Betreuung, {% if coach.email %}<a href="mailto:{{ coach.email }}">{{ coach }}</a>{% else %}{{ coach }}{% endif %}{% else %}das Institut{% endif %}{% endwith %}</small>
     {% elif course.allocation == 'staff' %}<small class="muted">Abmelden über {% if staff|length == 1 %}{% if staff.0.email %}<a href="mailto:{{ staff.0.email }}">{{ staff.0 }}</a>{% else %}{{ staff.0 }}{% endif %}{% else %}die Lehrenden{% endif %}</small>{% endif %}
   </form>
@@ -54,8 +54,8 @@
   {% elif course.is_open %}
   <form method="post" action="{% url 'courses:register' course.pk %}">
     {% csrf_token %}
-    <p class="muted" style="margin: 0 0 12px"><small>
-      {% if eligible|length == 1 %}Zählt für {{ eligible.0.owed.code }} {{ eligible.0.owed.title }}.{{ counts_for }}<br>{% endif %}
+    <p class="muted" style="margin: 0 0 18px"><small>
+      {% if eligible|length == 1 %}Zählt für {{ eligible.0.owed|coded }}.{{ counts_for }}<br>{% endif %}
       {% if course.allocation == 'choice' %}Die Lehrenden wählen aus den Anfragen{% if course.capacity %}, {{ course.capacity }} Plätze{% endif %}; die Antwort kommt in Ihr Postfach.
       {% elif free is None %}Ohne Platzgrenze.
       {% elif free > 0 %}Noch {{ free }} von {{ course.capacity }} Plätzen frei, vergeben in der Reihenfolge der Anmeldung.
@@ -72,7 +72,7 @@
   </form>
   {% elif course.upcoming %}<p class="muted" style="margin: 0">Anmeldung ab {{ course.opens|date:"j. F Y" }}.</p>
   {% elif running and eligible %}
-  <p class="muted" style="margin: 0 0 12px"><small>{% if eligible|length == 1 %}Zählt für {{ eligible.0.owed.code }} {{ eligible.0.owed.title }}.{{ counts_for }}<br>{% endif %}Der Anmeldeschluss war am {{ course.deadline|date:"j. F" }}. Die Lehrenden können Sie noch aufnehmen; die Antwort kommt in Ihr Postfach.</small></p>
+  <p class="muted" style="margin: 0 0 18px"><small>{% if eligible|length == 1 %}Zählt für {{ eligible.0.owed|coded }}.{{ counts_for }}<br>{% endif %}Der Anmeldeschluss war am {{ course.deadline|date:"j. F" }}. Die Lehrenden können Sie noch aufnehmen; die Antwort kommt in Ihr Postfach.</small></p>
   {% include "courses/_clashing.html" %}
   <form method="post" action="{% url 'courses:register' course.pk %}" class="inline">
     {% csrf_token %}
@@ -94,7 +94,7 @@
       <dt>Teilnahmen</dt><dd>{{ placed }}{% if course.capacity %} von {{ course.capacity }} Plätzen{% endif %}{% if waitlist %}, {{ waitlist|length }} auf der Warteliste{% endif %}</dd>
       <dt>Platzvergabe</dt><dd>{{ course.get_allocation_display|capfirst }}</dd>
       {% if course.allocation != 'staff' %}<dt>Anmeldung</dt><dd>{% if course.opens %}vom {{ course.opens|date:"j. F" }} {% endif %}{% if course.deadline %}bis {{ course.deadline|date:"j. F Y" }}{% elif not course.opens %}–{% endif %}</dd>{% endif %}
-      <dt>Anrechenbar für</dt><dd>{% for title, programs in modules %}{{ title }}<br><small>{% for program, codes in programs %}<a href="{{ program.get_absolute_url }}">{{ program.title }}</a> <span class="muted">{{ codes|join:", " }}</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}</small><br>{% empty %}–{% endfor %}</dd>
+      <dt>Anrechenbar für</dt><dd>{% for title, programs in modules %}{{ title }}<br><small>{% for program, codes in programs %}<a href="{{ program.get_absolute_url }}">{% if program.pk in studied %}<b>{{ program.title }}</b>{% else %}{{ program.title }}{% endif %}</a> <span class="muted">{{ codes|join:", " }}</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}</small><br>{% empty %}–{% endfor %}</dd>
     </dl>
     {% if course.description %}<p style="margin-top: 24px">{{ course.description|linebreaksbr }}</p>{% endif %}
   </div>
