@@ -261,6 +261,7 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .facts { display: grid; grid-template-columns: 200px 1fr; align-content: start; gap: 8px 24px; margin: 0; }
 .facts dt { color: var(--muted); }
 .facts dd { margin: 0; }
+.facts + .facts { margin-top: 22px; }  /* groups of a record: the study, contact, the person, administration */
 .cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 48px; }
 .cols > section, .cols > div > section:first-child { margin-top: 0; }
 

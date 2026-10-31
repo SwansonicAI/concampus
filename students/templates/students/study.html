@@ -39,21 +39,32 @@
     <h2>Akte</h2>
     {% with p=study.person %}
     <dl class="facts">
+      <dt>{% if study.program.kind == '5' %}Betreuung{% else %}Hauptfachlehrer:in{% endif %}</dt><dd>{% if study.teacher %}<a href="mailto:{{ study.teacher.email }}">{{ study.teacher }}</a>{% else %}–{% endif %}</dd>
+      {% if study.focus %}<dt>Schwerpunkt</dt><dd>{{ study.focus.title }}</dd>{% elif study.advised %}<dt>Schwerpunkt</dt><dd>noch nicht gewählt · <small class="muted">empfohlen: {{ study.advised.title }}</small></dd>{% endif %}
+      <dt>Studienbeginn</dt><dd>{{ study.start_term }}{% if study.prior_terms %} · {{ study.prior_terms }} Semester angerechnet{% endif %}</dd>
+      <dt>{% if study.status == 'graduated' or study.status == 'left' %}Beendet zum{% else %}Status seit{% endif %}</dt><dd>{{ study.since|date:"j. F Y" }}</dd>
+      {% for o in others %}<dt>Weiteres Studium</dt><dd>{% if o.pk in reachable %}<a href="{{ o.get_absolute_url }}">{{ o.program }} · {{ o.subject }}</a>{% else %}{{ o.program }} · {{ o.subject }}{% endif %} <span class="badge {{ o.status }}">{{ o.state }}</span></dd>{% endfor %}
+      {% if study.compensation and identity or compensate %}<dt>Nachteilsausgleich</dt><dd>{{ study.compensation|default:"–" }}
+        {% if compensate %}<details><summary><small>{% if study.compensation %}ändern oder beenden{% else %}gewähren{% endif %}</small></summary><form method="post" enctype="multipart/form-data" action="{% url 'exams:compensate' study.pk %}" class="inline" style="margin-top: 8px">{% csrf_token %}<label>Maßnahme<input name="compensation" value="{{ study.compensation }}" size="40" placeholder="z. B. 50 % mehr Bearbeitungszeit bei Klausuren"></label><label>Attest auf Papier am<input name="received" data-day autocomplete="off" size="11"></label><label>oder als Scan<input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png"></label><div class="choices"><label><input type="checkbox" name="consent" value="1"> Einwilligung liegt unterschrieben vor</label></div><button class="btn ghost small">Speichern</button></form><small class="muted">Leer gespeichert, endet er. Die Prüfenden sehen nur die Maßnahme.</small></details>{% endif %}</dd>{% endif %}
+    </dl>
+    <dl class="facts">
+      <dt>E-Mail</dt><dd>{{ p.email }}{% if identity and p.private_email and p.private_email != p.email %}<br><small class="muted">privat: {{ p.private_email }}</small>{% endif %}</dd>
+      {% if identity %}
+      {% if p.phone %}<dt>Telefon</dt><dd>{{ p.phone }}</dd>{% endif %}
+      <dt>Anschrift</dt><dd>{{ p.address|linebreaksbr|default:"–" }}{% if p == user %} <a href="{% url 'account' %}"><small>ändern</small></a>{% endif %}</dd>
+      {% endif %}
+    </dl>
+    {% if identity or personal %}<dl class="facts">
       {% if identity %}
       {% if p.given_names %}<dt>Alle Vornamen</dt><dd>{{ p.given_names }}</dd>{% endif %}
       {% if p.birth_name %}<dt>Geburtsname</dt><dd>{{ p.birth_name }}</dd>{% endif %}
-      <dt>Geschlecht</dt><dd>{{ p.get_gender_display|default:"–" }}</dd>
       <dt>Geboren</dt><dd>{{ p.birth_date|date:"j. F Y"|default:"–" }}{% if p.birth_place %} in {{ p.birth_place }}{% endif %}</dd>
       {% endif %}
       {% if personal %}<dt>Staatsangehörigkeit</dt><dd>{{ p.get_nationality_display|default:"–" }}{% if p.second_nationality %}, {{ p.get_second_nationality_display }}{% endif %}</dd>{% endif %}
-      <dt>E-Mail</dt><dd>{{ p.email }}{% if identity and p.private_email and p.private_email != p.email %}<br><small class="muted">privat: {{ p.private_email }}</small>{% endif %}</dd>
-      {% if identity %}
-      <dt>Anschrift</dt><dd>{{ p.address|linebreaksbr|default:"–" }}{% if p == user %} <a href="{% url 'account' %}"><small>ändern</small></a>{% endif %}</dd>
-      {% if p.phone %}<dt>Telefon</dt><dd>{{ p.phone }}</dd>{% endif %}
-      {% endif %}
-      {% if personal %}
+      {% if identity %}<dt>Geschlecht</dt><dd>{{ p.get_gender_display|default:"–" }}</dd>{% endif %}
+    </dl>{% endif %}
+    {% if personal %}<dl class="facts">
       <dt>Hochschulzugang</dt><dd>{{ p.get_entrance_display|default:"–" }}{% if p.entrance_date %}, {{ p.entrance_date|date:"j.n.Y" }}{% endif %}{% if p.entrance_region %}, {{ p.get_entrance_region_display }}{% endif %}{% if p.abroad %}<br><small class="{% if p.entrance_checked %}muted{% else %}fail{% endif %}">{% if p.entrance_checked %}geprüft am {{ p.entrance_checked|date:"j.n.Y" }}{% else %}noch nicht geprüft{% endif %}</small>{% endif %}</dd>
-      <dt>Bescheide</dt><dd>{% if p.electronic %}elektronisch, eingewilligt am {{ p.electronic|date:"j.n.Y" }}{% else %}per Post{% endif %}</dd>
       <dt>Krankenversicherung</dt>
       <dd>
         {{ p.insurer|default:"–" }}{% if p.insurance %} · {{ p.get_insurance_display }}{% endif %}<br>
@@ -61,17 +72,12 @@
         {% if p.insurance_arrears %}<br><small class="fail">Beitragsrückstand gemeldet am {{ p.insurance_arrears|date:"j.n.Y" }}</small>{% endif %}
         {% if 'manage_students' in user.reach and user.reach.manage_students is None %}<a href="{% url 'students:insurers' %}?person={{ p.pk }}"><small>Meldungen</small></a>{% endif %}
       </dd>
-      {% endif %}
-      <dt>{% if study.program.kind == '5' %}Betreuung{% else %}Hauptfachlehrer:in{% endif %}</dt><dd>{% if study.teacher %}<a href="mailto:{{ study.teacher.email }}">{{ study.teacher }}</a>{% else %}–{% endif %}</dd>
-      {% if study.compensation and identity or compensate %}<dt>Nachteilsausgleich</dt><dd>{{ study.compensation|default:"–" }}
-        {% if compensate %}<details><summary><small>{% if study.compensation %}ändern oder beenden{% else %}gewähren{% endif %}</small></summary><form method="post" enctype="multipart/form-data" action="{% url 'exams:compensate' study.pk %}" class="inline" style="margin-top: 8px">{% csrf_token %}<label>Maßnahme<input name="compensation" value="{{ study.compensation }}" size="40" placeholder="z. B. 50 % mehr Bearbeitungszeit bei Klausuren"></label><label>Attest auf Papier am<input name="received" data-day autocomplete="off" size="11"></label><label>oder als Scan<input type="file" name="file" accept=".pdf,.jpg,.jpeg,.png"></label><div class="choices"><label><input type="checkbox" name="consent" value="1"> Einwilligung liegt unterschrieben vor</label></div><button class="btn ghost small">Speichern</button></form><small class="muted">Leer gespeichert, endet er. Die Prüfenden sehen nur die Maßnahme.</small></details>{% endif %}</dd>{% endif %}
-      {% if study.focus %}<dt>Schwerpunkt</dt><dd>{{ study.focus.title }}</dd>{% elif study.advised %}<dt>Schwerpunkt</dt><dd>noch nicht gewählt · <small class="muted">empfohlen: {{ study.advised.title }}</small></dd>{% endif %}
-      <dt>Studienbeginn</dt><dd>{{ study.start_term }}{% if study.prior_terms %} · {{ study.prior_terms }} Semester angerechnet{% endif %}</dd>
-      <dt>{% if study.status == 'graduated' or study.status == 'left' %}Beendet zum{% else %}Status seit{% endif %}</dt><dd>{{ study.since|date:"j. F Y" }}</dd>
-      {% for o in others %}<dt>Weiteres Studium</dt><dd>{% if o.pk in reachable %}<a href="{{ o.get_absolute_url }}">{{ o.program }} · {{ o.subject }}</a>{% else %}{{ o.program }} · {{ o.subject }}{% endif %} <span class="badge {{ o.status }}">{{ o.state }}</span></dd>{% endfor %}
+      <dt>Bescheide</dt><dd>{% if p.electronic %}elektronisch, eingewilligt am {{ p.electronic|date:"j.n.Y" }}{% else %}per Post{% endif %}</dd>
+    </dl>{% endif %}
+    {% if loans or identity %}<dl class="facts">
       {% if loans %}<dt>Leihinstrumente</dt><dd>{% for loan in loans %}{{ loan.instrument.name }} <small class="muted">bis {{ loan.due|date:"j.n.Y" }}</small>{% if loan.overdue %} <span class="badge no">überfällig</span>{% endif %}<br>{% endfor %}</dd>{% endif %}
       {% if identity %}<dt>Unterlagen</dt><dd>{% for d in documents %}<a href="{{ d.href }}">{{ d.title }}</a> <small class="muted">{{ d.created|date:"j.n.Y" }}</small><br>{% empty %}–{% endfor %}</dd>{% endif %}
-    </dl>
+    </dl>{% endif %}
     {% endwith %}
   </section>
   <section>
