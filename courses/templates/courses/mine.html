@@ -59,8 +59,33 @@
 {% endif %}
 {% endif %}
 
+{% for study, items in to_take %}
+<section id="offen">
+  <h2>Noch offen{% if to_take|length > 1 %}: {{ study.program }}{% endif %}</h2>
+  <p class="lead">Was Ihr Studienplan bis zum {{ study.fs }}. Fachsemester vorsieht und in diesem Semester angeboten wird.{% if study.until %} Anmeldung bis zum {{ study.until|date:"j. F" }}.{% endif %}</p>
+  <table class="slots take">
+    <thead><tr><th>Modul</th><th>Veranstaltung</th><th>Zeit und Raum</th><th>Ihr Stundenplan</th><th class="num">Plätze</th><th></th></tr></thead>
+    <tbody>
+      {% for module, courses in items %}{% for c in courses %}
+      <tr>
+        {% if forloop.first %}<td rowspan="{{ courses|length }}">{{ module|coded }}{% if module.nodes %}<br><small class="muted">{{ module.short }} CP zur Wahl</small>{% elif module.semester < study.fs %}<br><small class="muted">laut Plan im {{ module.semester }}. Semester</small>{% endif %}</td>{% endif %}
+        <td><a href="{{ c.get_absolute_url }}"><b>{{ c.title }}</b></a><br><small class="muted">{% for s in c.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</small></td>
+        <td>{% if c.groups.all %}{{ c.groups.all|length }} Gruppen, zu verschiedenen Zeiten{% else %}{% for b in c.times %}{{ b.start|date:"D" }} {{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }} · {{ b.room }}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="muted">Zeit folgt</span>{% endfor %}{% endif %}</td>
+        <td>{% if not c.groups.all and c.times %}<span class="fit">{% include "courses/_fit.html" with clashing=c.clashing limit=c.limit %}</span>{% endif %}</td>
+        <td class="num nowrap">{% if c.free is None %}{% elif c.free > 0 %}{{ c.free }} frei{% if c.groups.all %} in {{ c.open_groups }} Gruppe{{ c.open_groups|pluralize:"n" }}{% endif %}{% else %}voll{% endif %}</td>
+        <td class="num nowrap">{% if c.upcoming %}<small class="muted">ab {{ c.opens|date:"j.n." }}</small>
+          {% elif c.groups.all and c.grouping == 'choice' %}<a class="btn small" href="{{ c.get_absolute_url }}#gruppen">Gruppe wählen</a>
+          {% elif c.allocation == 'ensemble' or c.concern %}<a class="btn small" href="{{ c.get_absolute_url }}"{% if c.concern %} title="{{ c.concern }}"{% endif %}>Anmelden</a>
+          {% else %}<form method="post" action="{% url 'courses:register' c.pk %}">{% csrf_token %}<input type="hidden" name="study" value="{{ study.pk }}"><input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn small"{% if c.clash == 'heavy' %} data-confirm="Trotz der Überschneidung?"{% endif %}>{% if not c.is_open %}Nachmeldung anfragen{% elif c.allocation == 'choice' %}Anfragen{% elif c.free is not None and c.free <= 0 %}Warteliste{% else %}Anmelden{% endif %}</button></form>{% endif %}</td>
+      </tr>
+      {% endfor %}{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endfor %}
+
 {% if registrations is not None %}
-{% if teaching is not None %}<section>
+{% if teaching is not None or to_take %}<section>
   <h2>Belegt</h2>{% endif %}
   <table{% if registrations %} data-panel{% endif %}>
     <thead><tr><th>Veranstaltung</th><th>Modul</th><th>Nächster Termin</th><th>Status</th></tr></thead>
@@ -85,6 +110,6 @@
       {% endfor %}
     </tbody>
   </table>
-{% if teaching is not None %}</section>{% endif %}
+{% if teaching is not None or to_take %}</section>{% endif %}
 {% endif %}
 {% endblock %}

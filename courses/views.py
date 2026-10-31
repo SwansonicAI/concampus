@@ -431,6 +431,7 @@ def course(request, pk):
     )
     ensembles.sort(key=lambda e: (e.coach_id != person.pk, e.coach_id is not None, e.wish_id != person.pk))  # one's own, then those still open
     return render(request, 'courses/course.html', {
+        'trail': [('Meine Lehre', reverse('courses:mine')) if staffed and not office else ('Meine Veranstaltungen', reverse('courses:mine')) if own else ('Vorlesungsverzeichnis', reverse('courses:catalogue'))],
         'course': course, 'playing': playing, 'players': list(course.staff.all()) if playing is not None else [],
         'lengths': sorted(Counter(minutes(p.module) or course.hours for p in course.participations.select_related('module__program')).items(), reverse=True) if course.kind == Course.Kind.LESSON and staffed else [],
         'share': minutes(own[0].module) or course.hours if own and course.kind == Course.Kind.LESSON else None,
@@ -691,19 +692,19 @@ def register(request, pk):
             messages.success(request, f'Sie stehen auf Platz {place} der Warteliste. Wird ein Platz frei, rücken Sie nach und erhalten eine Nachricht.{besides}')
         else:
             messages.success(request, f'Sie sind angemeldet.{besides}')
-    return redirect(course)
+    return back(request, course)
 
 
 def clashes(person, bookings, mine=None):
     """What of these dates collides with the person's timetable, once per weekday and time and what it collides with:
     [(the first such date, the other, whether only the way between buildings is too short)], the date with `times`, on
-    how many of that weekday's dates, and `of`, of how many: a project week is not every week. Practice the person booked
-    moves aside and counts not. `mine`: their dates, fetched once for many calls."""
+    how many of that weekday's dates, `of`, of how many: a project week is not every week, and `weeks`, the Mondays of
+    those weeks. Practice the person booked moves aside and counts not. `mine`: their dates, fetched once for many calls."""
     if not (bookings := list(bookings)):
         return []
     if mine is None:
         mine = list(agenda(person).filter(start__lte=max(b.end for b in bookings) + QUARTER, end__gte=min(b.start for b in bookings) - QUARTER).select_related('room', 'course', 'category'))
-    found, dates, times = {}, Counter(), Counter()
+    found, dates, times, weeks = {}, Counter(), Counter(), defaultdict(set)
     for b in bookings:
         at = timezone.localtime(b.start)
         dates[slot := (at.weekday(), at.time())] += 1
@@ -714,8 +715,9 @@ def clashes(person, bookings, mine=None):
             key = (slot, other.course_id or other.label, way)
             found.setdefault(key, (copy(b), other, way))  # its own, so that another call, or another clash of it, leaves its counts alone
             times[key] += 1
+            weeks[key].add(at.date() - timedelta(days=at.weekday()))
     for key, (b, _, _) in found.items():
-        b.times, b.of = times[key], dates[key[0]]
+        b.times, b.of, b.weeks = times[key], dates[key[0]], weeks[key]
     return sorted(found.values(), key=lambda f: (f[2], -f[0].times, f[0].start))  # what weighs most first: at the same time, often
 
 
@@ -1200,6 +1202,73 @@ def lessons(request, pk):
     return redirect(course)
 
 
+def registering():
+    """The semester students register for now: the next, once its registration has begun, else the one under way."""
+    coming = Term.upcoming()
+    if coming and not coming.planning and coming.courses.filter(kind=Course.Kind.COURSE, opens__lte=timezone.localdate()).exists():
+        return coming
+    return Term.current()
+
+
+def to_take(study, term):
+    """What the student's Studienplan has up to the Fachsemester they are in during `term` (`study.fs`) and no course in
+    `term` taken or asked for yet: [(module, the courses of `term` to take for it)], where there are any. A part of the
+    plan to choose from comes once, from the semester it begins in, with the courses of all it offers; once something in
+    it is taken in `term`, only in its last semester, while its credits fall short (`short`). Never a Schwerpunkt
+    not chosen, nor what the teachers give out, as Einzelunterricht. Each course with `times`, `free`, `concern` and how
+    it fits the student's week (clashes()); `study.until`, the first Anmeldeschluss among them."""
+    study.fs = study.semester + (term.start > timezone.localdate())  # registering before the semester: they are one further then
+    tree, _ = study.progress()
+    options = study.program.choices()
+    areas, hidden = {o.choice.pk for o in options}, {o.pk for o in options} - {study.focus_id}
+    taken = {*study.participations.filter(course__term=term).values_list('module', flat=True), *study.signups.filter(course__term=term).values_list('module', flat=True)}
+    links = list(Course.modules.through.objects.filter(module__program=study.program_id, course__term=term).values_list('module', 'course'))
+    offered = {c.pk: c for c in term.courses.filter(pk__in={c for _, c in links}, kind=Course.Kind.COURSE, cancelled=None).exclude(allocation=Course.Allocation.STAFF).annotate(
+        size=Count('participations__study', distinct=True),
+    ).prefetch_related('staff', Prefetch('groups', Group.objects.annotate(size=Count('participations__study', distinct=True))), Prefetch(
+        'bookings', Booking.objects.filter(start__gte=timezone.now()).select_related('room'),
+    ))}
+    courses = defaultdict(list)
+    for module, course in links:
+        if course in offered:
+            courses[module].append(offered[course])
+    found = []
+
+    def leaves(node):
+        return [node] if not node.nodes else [leaf for child in node.nodes for leaf in leaves(child)]
+
+    def visit(node):
+        if node.done or node.pk in hidden:
+            return
+        if not node.nodes:
+            if node.semester and node.semester <= study.fs and node.pk not in taken and courses[node.pk]:
+                found.append((node, courses[node.pk]))
+        elif node.offered > node.credits and node.pk not in areas:  # to choose from: once, with all it offers
+            open_ = [leaf for leaf in leaves(node) if not leaf.done]
+            there = list({c.pk: c for leaf in open_ for c in courses[leaf.pk] if leaf.pk not in taken}.values())
+            started = sum(leaf.credits for leaf in open_ if leaf.pk in taken)
+            node.short = node.credits - node.earned - started
+            if there and node.first and node.first <= study.fs and (not started or study.fs >= node.last and node.short > 0):
+                found.append((node, there))
+        else:
+            for child in node.nodes:
+                visit(child)
+
+    for root in tree:
+        visit(root)
+    mine = list(agenda(study.person).filter(start__lte=timezone.make_aware(datetime.combine(term.end, datetime.max.time())), end__gte=timezone.now()).select_related('room', 'course', 'category'))
+    for c in {c.pk: c for _, there in found for c in there}.values():
+        groups = c.groups.all()
+        c.times = sorted(series(c.bookings.all()), key=lambda b: (timezone.localtime(b.start).weekday(), timezone.localtime(b.start).time()))
+        c.free = sum(max(g.capacity - g.size, 0) for g in groups) if groups else c.capacity - c.size if c.capacity is not None else None
+        c.open_groups, c.limit = sum(g.size < g.capacity for g in groups), c.clash_limit()
+        c.clashing = [] if groups else clashes(study.person, c.bookings.all(), mine)
+        c.clash, _ = weight(c, c.clashing)
+        c.concern = fits(c, copy(study)).concern
+    study.until = min((c.deadline for _, there in found for c in there if c.is_open and c.deadline), default=None)
+    return found
+
+
 def mine(request):
     person = request.user
     term = Term.pick(request.GET.get('semester'))
@@ -1232,6 +1301,8 @@ def mine(request):
             p.next, p.queue = coming.get(p.course_id), queued(p)
         context['registrations'] = registrations
         context['requests'] = Signup.objects.filter(study__person=person, course__term=term).select_related('course', 'module')  # the teachers still decide
+        if term == registering():  # what the Studienplan still wants this semester
+            context['to_take'] = [(s, found) for s in person.studies.filter(status=Study.Status.ENROLLED).select_related('program', 'person') if (found := to_take(s, term))]
     return render(request, 'courses/mine.html', context)
 
 
@@ -1269,7 +1340,8 @@ def taught(person, term):
 
 def timetable(request):
     """One's week, days side by side; with `gruppe`, a group of a course drawn in, dashed, to see how it would fit before
-    choosing it, the days one under the other, the whole week, so that a clash shows in a row with the hours across."""
+    choosing it, the days one under the other, the whole week, so that a clash shows in a row with the hours across, and
+    which other weeks of the semester it clashes in. The legend names only what the week shows."""
     day = understood(request.GET.get('tag', '')) or timezone.localdate()
     shown = agenda(request.user)
     if trial := Group.objects.filter(pk=request.GET.get('gruppe') or None, course__term__in=Term.shown(request.user)).select_related('course').first():
@@ -1282,8 +1354,17 @@ def timetable(request):
             b.clash = any(o is not b and (b.trial or o.trial) and o.start < b.end and b.start < o.end for o in context['placed'])
             if getattr(b, 'move', None) and not (b.trial or b.came.trial):  # a change of building, only the group's
                 b.move = None
+        dates = list(trial.bookings.filter(start__gte=timezone.now(), category__blocks=True).select_related('room'))
+        weeks = sorted(set().union(*(b.weeks for b, _, way in clashes(request.user, dates) if not way)))
+        context |= {
+            'every': len(weeks) > 1 and len(weeks) == len({timezone.localdate(b.start) - timedelta(days=timezone.localdate(b.start).weekday()) for b in dates}),
+            'here': context['monday'] in weeks, 'others': [m for m in weeks if m != context['monday']],
+        }
+    placed = context['placed']
     return render(request, 'courses/timetable.html', {
-        'day': day, 'clashes': True, 'tones': legend(), 'off': 'teacher' in request.user.roles, 'trial': trial, 'way_in': trial and way_in(request.user, trial), **context,
+        'day': day, 'clashes': True, 'off': 'teacher' in request.user.roles, 'trial': trial, 'way_in': trial and way_in(request.user, trial),
+        'tones': [(tone, label) for tone, label in legend() if any(b.tone == tone for b in placed)],
+        'clashed': any(b.clash for b in placed), 'moved': any(getattr(b, 'move', None) for b in placed), **context,
     })
 
 

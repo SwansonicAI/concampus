@@ -50,6 +50,7 @@ h1 { font-size: 30px; line-height: 1.2; }
 h2 { font-size: 21px; line-height: 1.25; border-top-width: 4px; margin-bottom: 18px; font-weight: 500; }
 h3 { margin: 0 0 8px; color: var(--accent); font-size: 17px; font-weight: 700; }
 .eyebrow { margin: 0 0 6px; color: var(--muted); font-size: 14px; }
+.trail { display: block; }  /* where a page sits: the pages above it, each a way back */
 .lead { margin: -12px 0 28px; color: var(--muted); font-size: 17px; }
 section { margin-top: 52px; }
 .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
@@ -115,7 +116,7 @@ main.page { min-height: 70vh; padding-top: 32px; padding-bottom: 96px; }
 .link[data-armed] { padding: 2px 8px; border: 1px solid currentColor; border-radius: var(--radius); font-size: 14px; text-align: left; }
 .unconfirm { margin-left: 10px; color: var(--muted); font-size: 14px; }
 /* Arrows are drawn, not taken from the font, so they are as strong in every browser; they take the colour of their text */
-.arrow, .more::before, .todo .what::before, th[aria-sort] button::after, .menu summary::after {
+.arrow, .more::before, .todo .what::before, th[aria-sort] button::after, .menu summary::after, .trail a + a::before {
   content: "";
   display: inline-block;
   width: 1em;
@@ -130,6 +131,7 @@ main.page { min-height: 70vh; padding-top: 32px; padding-bottom: 96px; }
 .more::before { margin-right: 0.35em; }
 .menu summary::after { margin-left: 6px; background: #cfcfcf; -webkit-mask-image: var(--chevron); mask-image: var(--chevron); }
 .menu[open] summary::after { transform: rotate(180deg); }
+.trail a + a::before { margin: 0 6px; background: var(--muted); -webkit-mask-image: var(--chevron); mask-image: var(--chevron); transform: rotate(-90deg); }
 .more { font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .actions.sticky { position: sticky; bottom: 0; z-index: 2; padding: 12px 0; border-top: 1px solid var(--line); background: #fff; }

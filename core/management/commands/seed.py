@@ -1506,6 +1506,9 @@ class Command(BaseCommand):
                 else:
                     course, teacher, rooms = self.course_for(study, leaf, term)
                     staff.add((course.pk, teacher.pk))
+                    if study.person == self.demo and not done and leaf.code.startswith('BM-XX-MW-P2'):  # Professionalisierung II still to choose: her start page says so
+                        links.add((course.pk, leaf.pk))
+                        continue
                     rows[(course.pk, study.pk, leaf.pk)] = Participation(
                         course=course, study=study, module=leaf, passed=True if done else None,
                         created=at(term.start + timedelta(days=rng.randint(0, 14)), hour=rng.randint(8, 20)),

@@ -1,6 +1,6 @@
-{% with here=request.resolver_match.url_name roles=user.roles %}
+{% with here=top.url_name|default:request.resolver_match.url_name roles=user.roles %}
 <nav class="subnav">
-  <a href="{% url 'courses:catalogue' %}" class="{% if here == 'catalogue' or here == 'course' %}on{% endif %}">Vorlesungsverzeichnis</a>
+  <a href="{% url 'courses:catalogue' %}" class="{% if here == 'catalogue' %}on{% endif %}">Vorlesungsverzeichnis</a>
   {% if 'teacher' in roles or 'student' in roles %}<a href="{% url 'courses:mine' %}" class="{% if here == 'mine' %}on{% endif %}">{% if 'teacher' in roles %}Meine Lehre{% else %}Meine Veranstaltungen{% endif %}</a>{% endif %}
   <a href="{% url 'courses:timetable' %}" class="{% if here == 'timetable' %}on{% endif %}">Stundenplan</a>
   {% if 'teacher' in roles or 'view_teaching_load' in roles %}<a href="{% url 'courses:load' %}" class="{% if here == 'load' %}on{% endif %}">Deputat</a>{% endif %}

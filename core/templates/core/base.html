@@ -1,4 +1,4 @@
-{% load static %}<!doctype html>
+{% load static layout %}<!doctype html>
 <html lang="de">
 <head>
 <meta charset="utf-8">
@@ -9,6 +9,7 @@
 <script src="{% static 'core/app.js' %}" defer></script>
 </head>
 <body>
+{% with top=trail.0.1|resolved %}
 <a class="skip" href="#inhalt">Zum Inhalt</a>
 <header class="appbar">
   <div class="wrap appbar-row">
@@ -18,7 +19,7 @@
     </a>
     {% if nav %}
     <nav class="apps">
-      {% for app, title in nav %}{% if app.label != 'setup' %}<a href="{% url app.url %}" class="{% if request.resolver_match.app_name == app.label %}on{% endif %}">{{ title }}</a>{% endif %}{% endfor %}
+      {% for app, title in nav %}{% if app.label != 'setup' %}<a href="{% url app.url %}" class="{% if top.app_name|default:request.resolver_match.app_name == app.label %}on{% endif %}">{{ title }}</a>{% endif %}{% endfor %}
     </nav>
     {% endif %}
     {% if user.is_authenticated %}
@@ -43,6 +44,7 @@
 </header>
 <main class="wrap page" id="inhalt">
   {% block subnav %}{% endblock %}
+  {% if trail %}<nav class="eyebrow trail no-print" aria-label="Pfad">{% for title, url in trail %}<a href="{{ url }}">{{ title }}</a>{% endfor %}</nav>{% endif %}
   {% for message in messages %}<p class="flash {{ message.tags }}">{{ message }}</p>{% endfor %}
   {% block content %}{% endblock %}
 </main>
@@ -67,5 +69,6 @@
   <div class="drawer-body"></div>
 </aside>
 {% endif %}
+{% endwith %}
 </body>
 </html>

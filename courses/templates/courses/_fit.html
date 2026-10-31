@@ -1,0 +1,1 @@
+{% for b, other, way in clashing|slice:":2" %}<span class="{% if not way and b.times >= limit %}heavy{% else %}light{% endif %}">{% if way %}knapp {% if other.end <= b.start %}nach{% else %}vor{% endif %} {{ other.label }}{% else %}{{ other.label }}{% endif %}, {% include "courses/_when.html" %}</span>{% if not forloop.last %}<br>{% endif %}{% empty %}passt{% endfor %}

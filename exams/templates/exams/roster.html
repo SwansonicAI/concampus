@@ -3,7 +3,7 @@
 {% block title %}{% if notice %}Aushang{% else %}Notenliste{% endif %} {{ course.title }}{% endblock %}
 {% block content %}
 <div class="document">
-  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="more" href="{{ course.get_absolute_url }}">Zur Prüfung</a></p>
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button></p>
   {% include "core/_letterhead.html" with office=sender %}
   <h1>{% if notice %}Ergebnisse{% else %}Notenliste{% endif %}</h1>
   <dl class="facts">

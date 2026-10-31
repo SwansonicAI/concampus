@@ -2,7 +2,7 @@
 {% block title %}{% if complete %}Zeugnis{% else %}Leistungsübersicht{% endif %} {{ study.person.name }}{% endblock %}
 {% block content %}
 <div class="document">
-  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button>{% if study.issued %}<a class="btn ghost" href="{% url 'exams:certificate' study.pk %}">Urkunde</a>{% endif %}{% if supplement %}<a class="btn ghost" href="{% url 'exams:supplement' study.pk %}">Diploma Supplement</a>{% endif %}<a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button>{% if study.issued %}<a class="btn ghost" href="{% url 'exams:certificate' study.pk %}">Urkunde</a>{% endif %}{% if supplement %}<a class="btn ghost" href="{% url 'exams:supplement' study.pk %}">Diploma Supplement</a>{% endif %}</p>
   {% include "core/_letterhead.html" with office=sender %}
   <h1>{% if complete %}Zeugnis{% else %}Leistungsübersicht{% endif %}</h1>
   {% if complete and not study.issued %}<p class="fail"><b>Entwurf: noch nicht ausgestellt.</b></p>{% endif %}

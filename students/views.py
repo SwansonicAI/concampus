@@ -279,6 +279,14 @@ def findable(study, tree, choices, taking):
     return found
 
 
+def above(person, study):
+    """The trail to a study's Akte, the Akte last: from the list of students, the teacher's own, or one's own studies."""
+    if study.person == person:
+        return [('Mein Studium', study.get_absolute_url())]
+    first = ('Studierende', reverse('students:list')) if 'view_students' in person.roles else ('Meine Lehre', reverse('courses:mine'))
+    return [first, (f'{study.person.first_name} {study.person.last_name}', study.get_absolute_url())]
+
+
 def study(request, pk):
     person = request.user
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term', 'teacher', 'focus', 'advised'), pk=pk)
@@ -314,7 +322,7 @@ def study(request, pk):
     options = study.options() if study.status == Study.Status.ENROLLED else []
     lost = exhausted(study) if study.status == Study.Status.ENROLLED else []  # the Prüfungsanspruch: no Rückmeldung then
     return render(request, 'students/study.html', {
-        'study': study, 'today': today,
+        'study': study, 'today': today, 'trail': above(person, study)[:-1],
         'office': office,
         'own': own,
         'personal': personal, 'identity': identity,

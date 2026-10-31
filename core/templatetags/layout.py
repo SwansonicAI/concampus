@@ -1,4 +1,7 @@
+from urllib.parse import urlsplit
+
 from django import template
+from django.urls import resolve
 
 register = template.Library()
 
@@ -14,3 +17,9 @@ def arranged(form):
         groups.append((heading, [row for row in rows if row]))
     groups.append((None, [[f] for f in fields.values()]))
     return [(heading, rows) for heading, rows in groups if rows]
+
+
+@register.filter
+def resolved(url):
+    """Where a link of the site goes, its app and page: a page's trail starts there, so the bars mark it."""
+    return resolve(urlsplit(url).path) if url else None

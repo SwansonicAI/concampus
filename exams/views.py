@@ -518,7 +518,7 @@ def roster(request, pk):
     if notice and not course.released:
         raise Http404
     return render(request, 'exams/roster.html', {
-        'course': course, 'staff': staff, 'rows': sorted(rows, key=lambda p: p.study.person.matriculation or '') if notice else rows,
+        'trail': [('Prüfungen', reverse('exams:index')), (course.title, course.get_absolute_url())], 'course': course, 'staff': staff, 'rows': sorted(rows, key=lambda p: p.study.person.matriculation or '') if notice else rows,
         'notice': notice, 'bookings': course.bookings.select_related('room'), 'today': timezone.localdate(), 'sender': texts.block('absender_leistungen'),
     })
 
@@ -786,8 +786,9 @@ def transcript(request, pk):
         raise PermissionDenied
     found, office = achievements(study), request.user.may('decide_results', study)  # a Zeugnis comes from the office
     copy = not office and study.person == request.user and study.issued and found['finished']  # graduates print their own
+    from students.views import above  # which imports from here
     return render(request, 'exams/transcript.html', found | {
-        'complete': found['finished'] and (office or copy), 'copy': copy, 'supplement': (office or copy) and study.program.level,
+        'trail': above(request.user, study), 'complete': found['finished'] and (office or copy), 'copy': copy, 'supplement': (office or copy) and study.program.level,
         'issue': office and found['finished'] and study.issued is None and study.status == Study.Status.ENROLLED,
         'still': [item for item in leaving(study) if not item[0].startswith('Zeugnis')] if office and found['finished'] and study.issued is None else [],
         'verbal': verbal(found['average']) if found['average'] else '', 'sender': texts.block('absender_leistungen'),

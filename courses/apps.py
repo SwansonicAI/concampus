@@ -19,7 +19,7 @@ class CoursesConfig(Tile, AppConfig):
         if 'manage_courses' in roles:
             return 'Lehre'
         if 'teacher' in roles:
-            return 'Meine Lehre'
+            return 'Lehre'
         if 'student' in roles:
             return 'Lehrveranstaltungen'
 
@@ -61,7 +61,7 @@ class CoursesConfig(Tile, AppConfig):
         from core.models import Term
         from students.models import Study
         from .models import Course, Participation
-        from .views import TEACHING, untimed
+        from .views import TEACHING, registering, to_take, untimed
 
         found, term = [], Term.current()
         if 'teacher' in person.roles:
@@ -118,6 +118,11 @@ class CoursesConfig(Tile, AppConfig):
                     found.append(task(
                         f'{planned} planen: {plural(n, "Veranstaltung", "Veranstaltungen")} noch ohne Antwort', f"{reverse('courses:catalogue')}?semester={planned.pk}&stand=offen", planned.replies_by,
                     ))
+        if 'student' in person.roles and (coming := registering()):  # what the Studienplan wants and registration is open for
+            for study in Study.objects.filter(person=person, status=Study.Status.ENROLLED).select_related('program', 'person'):
+                items = to_take(study, coming)
+                if any(c.is_open for _, there in items for c in there):
+                    found.append(task(f'Anmeldung {coming}: {plural(len(items), "Modul", "Module")} noch ohne Veranstaltung', f"{reverse('courses:mine')}?semester={coming.pk}#offen", study.until))
         if 'roll_over' in person.roles:
             from .views import missing
 
