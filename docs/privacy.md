@@ -187,6 +187,8 @@ deleted a year after it was answered.
   does not see. A coach of an ensemble course reaches the members of their own ensembles only, a teacher of groups of a
   course those in their own groups (`seen()`); the office sees all. Students see a course's groups by time, room,
   teachers and free places, never who is in them (`grouped()`); Moodle gets each group with its members.
+  What a student writes when registering against the Studienplan's advice (why: a transfer, interest) the course's
+  teachers and office see with the registration, as they see whether a prerequisite is missing (`fits()`, `unmet()`).
 - `students/views.py`, `roster()`: gender and nationality in the export only for `manage_students`. Every file with
   personal data that leaves (student list, Notenliste, Teilnehmendenliste, amtliche Statistik) is logged with who, when, what and how many
   rows (`core.models.Export`), shown to `manage_accounts` under Einstellungen › Exporte, and kept two years. So is the

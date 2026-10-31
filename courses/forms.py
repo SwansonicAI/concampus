@@ -218,11 +218,14 @@ class CourseForm(forms.ModelForm):
         widget=forms.Select(attrs={'data-leads': 'modules'}),
     )
     opens = DayField(label='Anmeldung ab', required=False, help_text='Erster Tag der Anmeldung; leer: sofort.')
-    deadline = DayField(label='Anmeldeschluss', required=False, help_text='Letzter Tag für An- und Abmeldung.')
+    deadline = DayField(label='Anmeldeschluss', required=False, help_text='Letzter Tag der Anmeldung; abmelden geht bis zum Ende der Vorlesungszeit.')
 
     class Meta:
         model = Course
-        fields = ['term', 'title', 'kind', 'area', 'format', 'subject', 'rhythm', 'staff', 'modules', 'hours', 'capacity', 'allocation', 'opens', 'deadline', 'description']
+        fields = [
+            'term', 'title', 'kind', 'area', 'format', 'subject', 'rhythm', 'staff', 'modules', 'hours', 'capacity', 'allocation', 'grouping', 'opens', 'deadline',
+            'clash_dates', 'description',
+        ]
         labels = {'staff': 'Lehrende'}
         localized_fields = ['hours', 'pass_mark']  # a decimal comma, in a text box
         widgets = {
@@ -233,7 +236,7 @@ class CourseForm(forms.ModelForm):
 
     layout = [
         (None, ['correction', 'term', 'title', ('kind', 'allocation'), ('area', 'format'), ('subject', 'rhythm')]),
-        ('Umfang und Anmeldung', [('hours', 'capacity', 'opens', 'deadline')]),
+        ('Umfang und Anmeldung', [('hours', 'capacity', 'opens', 'deadline'), ('grouping', 'clash_dates')]),
         ('Lehrende und Module', ['staff', 'programme', 'modules']),
         (None, ['description']),
     ]
@@ -272,6 +275,8 @@ class CourseForm(forms.ModelForm):
             self.fields['subject'].empty_label = 'Keines'
         if 'capacity' in self.fields and self.instance.pk and self.instance.groups.exists():  # the places are the groups'
             del self.fields['capacity']
+        if 'clash_dates' in self.fields:
+            self.fields['clash_dates'].help_text = f'Leer: wie in den Hochschuldaten, {Institution.get().clash_dates}. Verhindert wird die Anmeldung nie.'
         if 'program' in self.fields:
             self.fields['program'].queryset = Program.planned()
         if 'term' in self.fields and self.instance.pk and not self.moves:  # its dates and people are that semester's
@@ -288,7 +293,7 @@ class TeachingForm(CourseForm):
     those, its staff and its kind are for the office."""
 
     class Meta(CourseForm.Meta):
-        fields = ['capacity', 'allocation', 'opens', 'deadline', 'description']
+        fields = ['capacity', 'allocation', 'opens', 'deadline', 'clash_dates', 'description']
 
 
 class ExamForm(CourseForm):

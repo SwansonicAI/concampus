@@ -1,5 +1,6 @@
 import csv
 import re
+from copy import copy
 import uuid
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
@@ -132,6 +133,41 @@ def seen(course, person, rows):
     return [p for p in rows if p.group_id in taught] if taught else rows
 
 
+def fits(course, study):
+    """The study with `owed`, the module the course counts for in it, `counts`, whether its Studienplan has the course at
+    all, and `concern`, what the plan says against taking it: a module before it not passed, nothing left for it to
+    count for, or no place in the plan. The student is warned and gives a reason, as a transfer or out of interest; never
+    turned away."""
+    study.owed = owed_module(course, study)
+    study.counts = study.owed is not None or course.modules.filter(program=study.program_id).exists()
+    missing = unmet([(study.pk, study.owed.pk)])[study.pk, study.owed.pk] if study.owed else []
+    study.concern = (
+        f'Laut Studienplan vorher: {", ".join(m.title for m in missing)}; nicht bestanden.' if missing
+        else '' if study.owed
+        else 'Die Module dafür sind bestanden, oder ihr Bereich im Studienplan ist voll: die Veranstaltung zählt für nichts mehr.' if study.counts
+        else f'Die Veranstaltung gehört nicht zum Studienplan {study.program.title}: sie zählt für nichts.'
+    )
+    return study
+
+
+def unmet(rows):
+    """{(study pk, module pk): the modules the Studienplan wants passed before it that the study has not}; a
+    recognition counts as passed."""
+    rows = [r for r in rows if r[1]]
+    needs = defaultdict(list)
+    for m in Module.objects.filter(required_by__in={m for _, m in rows}).annotate(by=F('required_by')):
+        needs[m.by].append(m)
+    passed = set(Participation.objects.filter(study__in={s for s, _ in rows}, module__in={m.pk for ms in needs.values() for m in ms}, passed=True).values_list('study', 'module'))
+    return {(s, m): [r for r in needs[m] if (s, r.pk) not in passed] for s, m in rows}
+
+
+def weight(course, found):
+    """(how plainly to warn, on how many dates) of a course's clashes() with someone's week: 'heavy' past the dates the
+    course lets clash, 'light' within them, as a rehearsal now and then, or only a way between buildings too short."""
+    dates = sum(b.times for b, _, way in found if not way)
+    return ('heavy' if dates > course.clash_limit() else 'light' if found else ''), dates
+
+
 def grouped(course, person=None):
     """A course's groups, each with `size`, the students in it (one counting for two modules is in it once), and `free`;
     with `person`, each with `clashing`, what of its dates collides with their week (clashes())."""
@@ -141,19 +177,21 @@ def grouped(course, person=None):
     for g in groups:
         g.free = max(g.capacity - g.size, 0)
         g.clashing = clashes(person, g.bookings.all()) if person else []
+        g.clash, g.clash_dates = weight(course, g.clashing)
     return groups
 
 
-def join(course, study, module, group):
-    """A place in a group of the course, or why not: one place a person in a course, none past a group's last. The
-    course is locked meanwhile, so neither slips through, however many register in the same moment."""
+def join(course, study, module, group, note=''):
+    """A place in a course taught in groups, or why not: one place a person in a course, none past a group's last; without
+    a group where the Institut gives them out. The course is locked meanwhile, so neither slips through, however many
+    register in the same moment."""
     with transaction.atomic():
         Course.objects.select_for_update().get(pk=course.pk)
         if mine := course.participations.filter(study__person=study.person_id).select_related('group').first():
-            return f'Sie haben schon einen Platz{f" in Gruppe {mine.group.number}" if mine.group else ""}. Die Gruppe wechseln Sie oben unter „Meine Anmeldung“.'
-        if taking(group) >= group.capacity:
+            return f'Sie haben schon einen Platz{f" in Gruppe {mine.group.number}" if mine.group else ""}.' + (' Die Gruppe wechseln Sie oben unter „Meine Anmeldung“.' if group else '')
+        if group and taking(group) >= group.capacity:
             return f'Gruppe {group.number} ist inzwischen voll. Bitte eine andere wählen.'
-        Participation.objects.create(course=course, study=study, module=module, group=group)
+        Participation.objects.create(course=course, study=study, module=module, group=group, note=note)
     return ''
 
 
@@ -312,11 +350,15 @@ def course(request, pk):
     if refused:
         panel.retype(rows, request.POST, refused)
     own = [p for p in rows if p.study.person_id == person.pk]
-    counting = list(person.studies.filter(status=Study.Status.ENROLLED, program__modules__courses=course).distinct())
-    for s in counting:
-        s.owed = owed_module(course, s)
-    eligible = [s for s in counting if s.owed]  # a module of it still to pass
-    studied = {s.program_id for s in counting}
+    eligible = sorted(  # who may register: in any study, those it counts for first; warned of what the plan says against it
+        (fits(course, s) for s in person.studies.filter(status=Study.Status.ENROLLED).select_related('program')), key=lambda s: bool(s.concern),
+    ) if course.kind == Course.Kind.COURSE else []
+    if course.allocation == Course.Allocation.ENSEMBLE:  # an ensemble registers in a study the course counts for
+        eligible = [s for s in eligible if s.counts]
+    studied = {s.program_id for s in eligible if s.counts}
+    gaps = unmet([(p.study_id, p.module_id) for p in rows]) if staffed and course.kind == Course.Kind.COURSE else {}
+    for p in rows:  # what the teachers see of a registration the plan would not have
+        p.missing = gaps.get((p.study_id, p.module_id))
     upcoming = course.bookings.filter(start__gte=timezone.now())
     if course.allocation == Course.Allocation.ENSEMBLE and staffed and not person.may('manage_courses', course):  # a coach: the course's own dates and their ensembles'
         upcoming = upcoming.filter(Q(ensemble=None) | Q(ensemble__coach=person))
@@ -362,14 +404,16 @@ def course(request, pk):
         'free': course.capacity - count + waiting if course.capacity is not None else None,
         'dropping': staffed and course.kind == Course.Kind.COURSE and course.allocation != Course.Allocation.ENSEMBLE,
         'staffed': staffed,
-        'eligible': eligible, 'completed': counting and not eligible and not own,
+        'eligible': eligible,
         'unmarked': sum(1 for p in rows if p.passed is None and not p.remark) if staffed and course.kind == Course.Kind.COURSE and over(course) and not course.modules.filter(exam=True).exists() else 0,
         'counts_for': besides_focus(course, eligible[0]) if eligible and not own else '',
-        'clashing': clashes(person, course.bookings.filter(start__gte=timezone.now(), participants=None).select_related('room')[:8]) if eligible and not own and not groups else [],
+        'clashing': (clashing := clashes(person, course.bookings.filter(start__gte=timezone.now(), participants=None).select_related('room')) if eligible and not own and not groups else []),
+        'clash': weight(course, clashing),
         'groups': groups, 'taught': taught, 'regrouping': groups and staffed and not course.term.over,
-        'choosing': groups and eligible and not own and not wished and course.is_open,
+        'choosing': groups and eligible and not own and not wished and course.is_open and course.grouping == Course.Grouping.CHOICE,
+        'unplaced': course.participations.filter(group=None).values('study').distinct().count() if groups and office else 0,
         'open_groups': sum(1 for g in groups if g.free), 'places': sum(g.capacity for g in groups), 'taken': sum(g.size for g in groups),
-        'switchable': [g for g in groups if g.free and own and g.pk != own[0].group_id],
+        'switchable': [g for g in groups if g.free and own and g.pk != own[0].group_id] if course.is_open and course.grouping == Course.Grouping.CHOICE else [],
         'running': running, 'cancelling': office and not course.term.planning and not course.cancelled and running,
         'from': max(course.term.lectures_start, timezone.localdate()), 'office': office,
         'modules': credited(course, studied), 'studied': studied,
@@ -386,7 +430,7 @@ def course(request, pk):
     })
 
 
-COPIED = ['kind', 'title', 'area', 'format', 'subject', 'rhythm', 'hours', 'capacity', 'allocation', 'opens', 'deadline', 'description']  # what „Duplizieren“ takes
+COPIED = ['kind', 'title', 'area', 'format', 'subject', 'rhythm', 'hours', 'capacity', 'allocation', 'grouping', 'opens', 'deadline', 'clash_dates', 'description']  # what „Duplizieren“ takes
 
 
 def edit(request, pk=None):
@@ -448,7 +492,7 @@ def add(request, pk):
         messages.error(request, f'{study.person} nicht eingetragen: {refused}')
         return redirect(course)
     group = form.cleaned_data.get('group')
-    if group and (there := course.participations.filter(study__person=study.person_id).select_related('group').first()):
+    if not exam and (there := course.participations.filter(study__person=study.person_id).select_related('group').first()):
         messages.success(request, f'{study.person} ist bereits eingetragen{f", in Gruppe {there.group.number}" if there.group else ""}.')
         return redirect(course)
     participation, created = Participation.objects.get_or_create(course=course, study=study, module=module, defaults={'group': group})
@@ -460,11 +504,12 @@ def add(request, pk):
         messages.success(request, f'{study.person} eingetragen, {attempt}. Versuch{"" if course.is_open else ", außerhalb der Anmeldefrist"}.')
     else:
         texts.send('eingetragen', study.person, course.get_absolute_url(), veranstaltung=course.title, semester=course.term)
-        if module:
-            messages.success(request, f'{study.person} eingetragen, für {module.code}.')
-        else:
-            counts = course.modules.filter(program=study.program_id).exists()
-            messages.warning(request, f'{study.person} eingetragen, ohne Modul: {"ihre Module sind bestanden, oder ihr Bereich im Studienplan ist schon voll" if counts else "im Studiengang nicht anrechenbar"}.')
+        fits(course, study)
+        dates = (group.bookings if group else course.bookings.filter(group=None, participants=None)).filter(start__gte=timezone.now()).select_related('room')
+        _, clashing = weight(course, clashes(study.person, dates))
+        notes = ' '.join(filter(None, [study.concern, clashing and f'An {plural(clashing, "Termin", "Terminen")} überschneidet sie sich mit dem Stundenplan.']))
+        done = f'{study.person} eingetragen' + (f', für {module.code}' if module else '') + (f', in Gruppe {group.number}' if group else '') + '.'
+        (messages.warning if notes else messages.success)(request, f'{done} {notes}'.strip())
     return redirect(course)
 
 
@@ -536,12 +581,13 @@ def write(request, pk):
 @require_POST
 def register(request, pk):
     course = get_object_or_404(Course, pk=pk, kind__in=TEACHING)
-    study = get_object_or_404(Study, pk=request.POST.get('study'), person=request.user, status=Study.Status.ENROLLED)
-    module = owed_module(course, study)
+    study = fits(course, get_object_or_404(Study, pk=request.POST.get('study'), person=request.user, status=Study.Status.ENROLLED))
+    module, reason = study.owed, request.POST.get('grund', '').strip()[:200]
     late = not course.is_open and not course.upcoming  # the teachers may still take someone while the term runs
     besides = besides_focus(course, study)
-    group = course.groups.filter(pk=request.POST.get('gruppe') or None).first()
-    full = not group and course.groups.exists()  # every group full: the teachers may open another
+    choosing = course.grouping == Course.Grouping.CHOICE
+    group = course.groups.filter(pk=request.POST.get('gruppe') or None).first() if choosing else None
+    full = choosing and not group and course.groups.exists()  # every group full: the teachers may open another
     if course.cancelled or course.term.planning:
         messages.error(request, 'Diese Veranstaltung entfällt.' if course.cancelled else 'Das Semester ist noch nicht veröffentlicht.')
     elif course.allocation == Course.Allocation.STAFF:
@@ -552,22 +598,23 @@ def register(request, pk):
         messages.error(request, f'Die Anmeldung beginnt am {date_format(course.opens, "j.n.Y")}.')
     elif late and course.term.end < timezone.localdate():
         messages.error(request, 'Der Anmeldeschluss ist vorbei.')
-    elif module is None:
-        counts = course.modules.filter(program=study.program_id).exists()
-        messages.error(request, 'Diese Veranstaltung zählt für nichts mehr in Ihrem Studium: ihre Module sind bestanden, oder ihr Bereich im Studienplan ist schon voll.' if counts else 'Diese Veranstaltung ist in Ihrem Studiengang nicht anrechenbar.')
+    elif study.concern and not reason:
+        messages.error(request, 'Bitte kurz angeben, warum Sie sich dennoch anmelden; die Lehrenden sehen es.')
     elif lost(study):
         messages.error(request, 'Der Prüfungsanspruch ist erloschen; neue Anmeldungen sind nicht möglich.')
     elif course.allocation == Course.Allocation.CHOICE or late or full:
-        if Signup.objects.get_or_create(course=course, study=study, defaults={'module': module, 'note': request.POST.get('note', '').strip()})[1]:
+        if Signup.objects.get_or_create(course=course, study=study, defaults={'module': module, 'note': reason or request.POST.get('note', '').strip()})[1]:
             texts.send('angefragt', request.user, course.get_absolute_url(), veranstaltung=course.title, semester=course.term)
         messages.success(request, f'{"Nachmeldung angefragt" if late else "Angefragt"}. Die Lehrenden entscheiden; die Antwort kommt in Ihr Postfach.{besides}')
-    elif group:
-        if refused := join(course, study, module, group):
+    elif group or course.groups.exists():
+        if refused := join(course, study, module, group, reason):
             messages.error(request, refused)
         else:
-            messages.success(request, f'Sie sind angemeldet, in Gruppe {group.number}.{besides}')
+            messages.success(request, f'Sie sind angemeldet, in Gruppe {group.number}.{besides}' if group else f'Sie sind angemeldet. Ihre Gruppe teilt das Institut zu; Sie erfahren sie per Nachricht.{besides}')
+    elif course.participations.filter(study__person=request.user).exists():
+        messages.error(request, 'Sie sind bereits angemeldet.')
     else:
-        participation, created = Participation.objects.get_or_create(course=course, study=study, module=module)
+        participation, created = Participation.objects.get_or_create(course=course, study=study, module=module, defaults={'note': reason})
         if place := course.waitlist().get(participation.pk):
             if created:
                 texts.send('warteliste', request.user, course.get_absolute_url(), veranstaltung=course.title, semester=course.term, platz=place)
@@ -577,26 +624,29 @@ def register(request, pk):
     return redirect(course)
 
 
-def clashes(person, bookings):
+def clashes(person, bookings, mine=None):
     """What of these dates collides with the person's timetable, once per weekday and time and what it collides with:
     [(the first such date, the other, whether only the way between buildings is too short)], the date with `times`, on
-    how many of that weekday's dates, and `of`, of how many: a project week is not every week."""
+    how many of that weekday's dates, and `of`, of how many: a project week is not every week. Practice the person booked
+    moves aside and counts not. `mine`: their dates, fetched once for many calls."""
     if not (bookings := list(bookings)):
         return []
-    mine = list(agenda(person).filter(start__lt=max(b.end for b in bookings) + QUARTER, end__gt=min(b.start for b in bookings) - QUARTER).select_related('room', 'course', 'category'))
-    found, dates = {}, Counter()
+    if mine is None:
+        mine = list(agenda(person).filter(start__lt=max(b.end for b in bookings) + QUARTER, end__gt=min(b.start for b in bookings) - QUARTER).select_related('room', 'course', 'category'))
+    found, dates, times = {}, Counter(), Counter()
     for b in bookings:
         at = timezone.localtime(b.start)
         dates[slot := (at.weekday(), at.time())] += 1
-        others = [o for o in mine if o.course_id != b.course_id]
+        others = [o for o in mine if o.course_id != b.course_id and o.category.tone != BookingCategory.Tone.PRACTICE]
         hit = next(((o, False) for o in others if o.start < b.end and b.start < o.end), None) or next((
             (o, True) for o in others if (b.start - QUARTER <= o.end <= b.start or b.end <= o.start <= b.end + QUARTER) and o.room.building != b.room.building
         ), None)
         if hit:
-            first = found.setdefault((slot, hit[0].course_id or hit[0].label, hit[1]), (b, *hit))[0]
-            first.times = getattr(first, 'times', 0) + 1
-    for (slot, _, _), (b, _, _) in found.items():
-        b.of = dates[slot]
+            key = (slot, hit[0].course_id or hit[0].label, hit[1])
+            found.setdefault(key, (copy(b), *hit))  # its own, so that another call, or another clash of it, leaves its counts alone
+            times[key] += 1
+    for key, (b, _, _) in found.items():
+        b.times, b.of = times[key], dates[key[0]]
     return sorted(found.values(), key=lambda f: f[0].start)
 
 
@@ -826,13 +876,40 @@ def switch(request, pk):
     participation = get_object_or_404(Participation.objects.select_related('course__term', 'group'), pk=pk, study__person=request.user, group__isnull=False, passed=None)
     course = participation.course
     group = get_object_or_404(course.groups, pk=request.POST.get('gruppe') or None)
-    if not course.leavable:
-        messages.error(request, 'Die Gruppe wechseln geht bis zum Anmeldeschluss; danach über die Lehrenden.')
+    if not course.is_open or course.grouping != Course.Grouping.CHOICE:
+        messages.error(request, 'Die Gruppe wechseln geht bis zum Anmeldeschluss, wo Sie sie selbst wählen; sonst über die Lehrenden.')
     elif refused := moved(course, group, participation):
         messages.error(request, refused)
     else:
         messages.success(request, f'Gewechselt: jetzt in Gruppe {group.number}.')
     return back(request, course)
+
+
+@require_POST
+def distribute(request, pk):
+    """The office puts everyone in the course without a group into one with a place: the one whose dates clash least with
+    their week, in the order they registered. Each hears of their group; who finds no place stays without."""
+    course = get_object_or_404(Course.objects.select_related('term'), pk=pk, kind=Course.Kind.COURSE)
+    if not request.user.may('manage_courses', course) or course.term.over:
+        raise PermissionDenied
+    groups, first, placed = grouped(course), {}, []
+    for p in course.participations.filter(group=None).select_related('study__person').order_by('created', 'pk'):
+        first.setdefault(p.study_id, p)
+    dates = [b for g in groups for b in g.bookings.all()]
+    span = dates and (min(b.start for b in dates) - QUARTER, max(b.end for b in dates) + QUARTER)
+    for p in first.values():
+        if not (free := [g for g in groups if g.free]):
+            break
+        mine = list(agenda(p.study.person).filter(start__lt=span[1], end__gt=span[0]).select_related('room', 'course', 'category')) if span else []
+        best = min(free, key=lambda g: (weight(course, clashes(p.study.person, g.bookings.all(), mine))[1], g.number))
+        course.participations.filter(study=p.study_id).update(group=best)
+        best.free -= 1
+        placed.append((p.study.person, best))
+    for person, g in placed:
+        texts.send('gruppe', person, course.get_absolute_url(), veranstaltung=course.title, gruppe=g.number, zeit=meets(g), von=request.user)
+    left = len(first) - len(placed)
+    messages.success(request, f'{plural(len(placed), "Person", "Personen")} auf die Gruppen verteilt und benachrichtigt.' + (f' {left} ohne Platz: bitte eine Gruppe hinzufügen.' if left else ''))
+    return redirect(course)
 
 
 @require_POST
@@ -1059,7 +1136,7 @@ def mine(request):
     if 'student' in person.roles:
         registrations = list(
             Participation.objects.filter(study__person=person, course__term=term, course__kind__in=TEACHING)
-            .select_related('course', 'module', 'group').annotate(ahead=ahead())
+            .select_related('course__term', 'module', 'group').annotate(ahead=ahead())
         )
         coming = {}  # each course's next date the student comes to: of a lesson class, their own
         for b in agenda(person).filter(course__term=term, start__gte=timezone.now()).select_related('room').order_by('start'):
@@ -1315,6 +1392,13 @@ def rollover(request):
     })
 
 
+def predecessor(course):
+    """The course of the semester before whose groups a course continues: one taught in groups that counts for a module
+    the course's own modules require, as Gehörbildung 1 for Gehörbildung 2."""
+    before = Term.objects.filter(start__lt=course.term.start).order_by('-start').first()
+    return Course.objects.filter(term=before, kind=Course.Kind.COURSE, modules__required_by__courses=course, groups__isnull=False).distinct().first()
+
+
 def take_over(request, target, pending):
     """The ticked courses as drafts of `target`, from what they were: staff, Turnus, and the modules they counted for, also
     as the same semester a year before had them; registration as the semester sets it; lesson classes without their
@@ -1333,12 +1417,15 @@ def take_over(request, target, pending):
         for c in chosen:
             copy = Course.objects.create(
                 term=target, kind=c.kind, title=c.title, area=c.area, format=c.format, subject=c.subject, hours=c.hours, capacity=c.capacity,
-                allocation=c.allocation, description=c.description, rhythm=c.rhythm, origin=c, opens=target.course_signup_start, deadline=target.course_signup_end,
+                allocation=c.allocation, grouping=c.grouping, clash_dates=c.clash_dates, description=c.description, rhythm=c.rhythm, origin=c,
+                opens=target.course_signup_start, deadline=target.course_signup_end,
             )
             copy.modules.set({m.pk for m in c.modules.all()} | earlier[c.title])
             copy.staff.set(c.staff.all())
-            for g in c.groups.all():
+            source = predecessor(copy) if c.grouping == Course.Grouping.CONTINUED else c  # groups that stay together, with their teachers
+            for g in source.groups.prefetch_related('staff') if source else []:
                 Group.objects.create(course=copy, number=g.number, capacity=g.capacity).staff.set(g.staff.all())
+                copy.staff.add(*g.staff.all())
     hidden = ' als Entwurf; Studierende sehen sie, sobald das Semester veröffentlicht ist' if target.planning else ''
     messages.success(request, f'{plural(len(chosen), "Veranstaltung", "Veranstaltungen")} nach {target} übernommen{hidden}.')
 
@@ -1369,12 +1456,13 @@ def schedule(request, target, pending):
     """Book the ticked drafts weekly as their course took place last time, where the room is free on every date."""
     courses = list(target.courses.filter(pk__in=request.POST.getlist('course'), kind=Course.Kind.COURSE, cancelled=None, bookings__isnull=True).exclude(origin=None).prefetch_related('groups__staff'))
     slots, booked, taken = usual([c.origin_id for c in courses]), 0, []
-    before = {(g.course_id, g.number): g.pk for g in Group.objects.filter(course__in=[c.origin_id for c in courses])}
+    source = {c.pk: (p.pk if c.grouping == Course.Grouping.CONTINUED and (p := predecessor(c)) else c.origin_id) for c in courses}  # where its groups met
+    before = {(g.course_id, g.number): g.pk for g in Group.objects.filter(course__in=source.values())}
     times = usual(before.values(), 'group')
     for c in courses:
         if groups := c.groups.all():  # each group at its time before, booked by its teacher
             dates = [
-                b for g in groups if (slot := times.get(before.get((c.origin_id, g.number))))
+                b for g in groups if (slot := times.get(before.get((source[c.pk], g.number))))
                 for b in weekly(c, g.staff.first() or request.user, dict(zip(['weekday', 'time', 'minutes', 'room'], slot), group=g))
             ]
         elif (slot := slots.get(c.origin_id)) is None:
@@ -1397,7 +1485,8 @@ def schedule(request, target, pending):
 
 def fill(request, target, pending):
     """After the Rückmeldefrist: each lesson class of `target` gets whoever was in it and re-registered, not on leave, and
-    the new students of its teachers in its Hauptfach; each with the module of their next Fachsemester."""
+    the new students of its teachers in its Hauptfach; each with the module of their next Fachsemester. Each group that
+    stays together gets whoever was in it the semester before and did not fail."""
     if timezone.localdate() <= target.deadline:
         messages.error(request, f'Erst nach der Rückmeldefrist am {date_format(target.deadline, "j.n.Y")}.')
         return
@@ -1418,7 +1507,18 @@ def fill(request, target, pending):
             rows.append(Participation(course=c, study=s, module=module))
         history.saved(Participation.objects.bulk_create(rows))
         added += len(rows)
-    messages.success(request, f'{plural(added, "Person", "Personen")} in die Klassen des {target} eingetragen.')
+    for c in target.courses.filter(kind=Course.Kind.COURSE, cancelled=None, grouping=Course.Grouping.CONTINUED).prefetch_related('groups', 'modules'):
+        if (p := predecessor(c)) is None:
+            continue
+        taken, rows = set(c.participations.values_list('study', flat=True)), []
+        was = {g.number: set(g.participations.exclude(passed=False).values_list('study', flat=True)) for g in p.groups.all()}
+        for g in c.groups.all():
+            for pk in was.get(g.number, set()) & (studies.keys() - taken):
+                s, taken = studies[pk], taken | {pk}
+                rows.append(Participation(course=c, study=s, group=g, module=min((m for m in c.modules.all() if m.program_id == s.program_id), key=lambda m: m.semester or 99, default=None)))
+        history.saved(Participation.objects.bulk_create(rows))
+        added += len(rows)
+    messages.success(request, f'{plural(added, "Person", "Personen")} in die Klassen und die fortgeführten Gruppen des {target} eingetragen.')
 
 
 @require('appoint_examiners')

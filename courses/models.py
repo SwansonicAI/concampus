@@ -71,6 +71,11 @@ class Course(Tracked, models.Model):
         STAFF = 'staff', 'die Lehrenden teilen ein, ohne Anmeldung'
         ENSEMBLE = 'ensemble', 'als Ensemble; Lehrende übernehmen die Betreuung, das Institut teilt zu'
 
+    class Grouping(models.TextChoices):
+        CHOICE = 'choice', 'Studierende wählen ihre Gruppe'
+        ASSIGNED = 'assigned', 'das Institut teilt die Gruppen zu'
+        CONTINUED = 'continued', 'die Gruppen der Veranstaltung davor bleiben zusammen'
+
     class Rhythm(models.TextChoices):
         SEMESTER = 'semester', 'jedes Semester'
         YEAR = 'year', 'jährlich, im selben Semester'
@@ -105,7 +110,15 @@ class Course(Tracked, models.Model):
     capacity = models.PositiveSmallIntegerField('Plätze', null=True, blank=True)
     allocation = models.CharField('Platzvergabe', max_length=8, choices=Allocation, default=Allocation.ORDER)
     opens = models.DateField('Anmeldung ab', null=True, blank=True, help_text='Erster Tag der Anmeldung; leer: sofort.')
-    deadline = models.DateField('Anmeldeschluss', null=True, blank=True, help_text='Letzter Tag für An- und Abmeldung.')
+    deadline = models.DateField('Anmeldeschluss', null=True, blank=True, help_text='Letzter Tag der Anmeldung; abmelden geht bis zum Ende der Vorlesungszeit.')
+    grouping = models.CharField(
+        'Gruppen', max_length=10, choices=Grouping, default=Grouping.CHOICE,
+        help_text='Nur bei Gruppen. Bleiben sie zusammen, übernimmt der Semesterwechsel die Gruppen der Veranstaltung, die laut Studienplan davor liegt, '
+                  'mit Lehrenden und Zeit, und trägt nach der Rückmeldung ihre Mitglieder ein.',
+    )
+    clash_dates = models.PositiveSmallIntegerField(
+        'Überschneidungen mit leichtem Hinweis', null=True, blank=True, help_text='Leer: wie in den Hochschuldaten.',
+    )
     pass_mark = models.DecimalField(
         'Bestehensgrenze', max_digits=4, decimal_places=1, null=True, blank=True,
         help_text='Gesetzt: Punkte, bestanden ab dieser Grenze. Leer: Noten, bestanden bis 4,0.',
@@ -187,9 +200,13 @@ class Course(Tracked, models.Model):
 
     @property
     def leavable(self):
-        """Whether participants may withdraw themselves: from what they registered for alone, while registration is open.
-        A class the teachers give out, or an ensemble, they leave through the teachers."""
-        return self.is_open and self.allocation in (self.Allocation.ORDER, self.Allocation.CHOICE)
+        """Whether participants may withdraw themselves: from what they registered for alone, until the lectures end, past
+        the Anmeldeschluss too. A class the teachers give out, or an ensemble, they leave through the teachers."""
+        return self.allocation in (self.Allocation.ORDER, self.Allocation.CHOICE) and timezone.localdate() <= self.term.lectures_end
+
+    def clash_limit(self):
+        """How many of its dates may clash with someone's week before registering warns them plainly."""
+        return Institution.get().clash_dates if self.clash_dates is None else self.clash_dates
 
     @property
     def upcoming(self):

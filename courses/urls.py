@@ -27,6 +27,7 @@ urlpatterns = [
     path('<int:pk>/gruppe/', views.group, name='group'),
     path('<int:pk>/gruppe/<int:number>/', views.group, name='group'),
     path('<int:pk>/gruppen/verschieben/', views.regroup, name='regroup'),
+    path('<int:pk>/gruppen/verteilen/', views.distribute, name='distribute'),
     path('<int:pk>/termin/', views.date, name='date'),
     path('<int:pk>/rueckmeldung/', views.reply, name='reply'),
     path('<int:pk>/entfaellt/', views.cancel, name='cancel'),

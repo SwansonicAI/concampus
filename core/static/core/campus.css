@@ -192,6 +192,7 @@ select.cell { padding: 4px 6px; }
 .badge.rejected, .badge.no, .badge.hold { background: #fbe3e4; color: var(--red); }
 .empty { color: var(--muted); font-style: italic; }
 .fail { color: var(--red); font-weight: 700; }
+.caution { color: var(--amber); font-weight: 600; }  /* a warning that leaves the choice: a clash now and then, a course outside the plan */
 
 /* Tables */
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }

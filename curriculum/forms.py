@@ -58,10 +58,10 @@ class ModuleForm(Graded):
 
     class Meta:
         model = Module
-        fields = ['parent', 'code', 'title', 'credits', 'semester', 'exam', 'final', 'weight', 'description', 'waived']
-        widgets = {'description': forms.Textarea(attrs={'rows': 3})}
+        fields = ['parent', 'code', 'title', 'credits', 'semester', 'exam', 'final', 'weight', 'description', 'requires', 'waived']
+        widgets = {'description': forms.Textarea(attrs={'rows': 3}), 'requires': forms.CheckboxSelectMultiple}
 
-    layout = [(None, ['parent', 'title', ('code', 'credits', 'semester', 'weight'), ('exam', 'final'), 'description', 'waived'])]
+    layout = [(None, ['parent', 'title', ('code', 'credits', 'semester', 'weight'), ('exam', 'final'), 'description', 'requires', 'waived'])]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -85,3 +85,6 @@ class ModuleForm(Graded):
         parent.queryset = program.modules.filter(pk__in=[m.pk for m in fit])
         parent.choices = [('', 'Oberste Ebene')] + [(m.pk, ' ' * depth[m.pk] + f'{m.code} {m.title}'.strip()) for m in fit]
         self.fields['waived'].queryset = program.subjects.all()  # the Hauptfächer of this Studiengang
+        earlier = [m for m in order if m.pk != self.instance.pk and not m.exam and m.pk not in holding]  # course work of the plan
+        self.fields['requires'].queryset = program.modules.filter(pk__in=[m.pk for m in earlier])
+        self.fields['requires'].choices = [(m.pk, f'{m.code} {m.title}'.strip() + (f' · {m.semester}. Semester' if m.semester else '')) for m in earlier]

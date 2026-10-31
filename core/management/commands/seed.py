@@ -911,10 +911,12 @@ class Command(BaseCommand):
         with override_settings(MAILERS=OUTBOX), transaction.atomic(), history.quietly():  # letters land in the Postfach; no mail to made-up people
             self.terms()
             self.structure()
+            self.prerequisites()
             self.people()
             self.students()
             self.teaching()
             self.allocation()
+            self.doubts()
             self.contracts()
             self.reductions()
             self.guests()
@@ -1040,6 +1042,19 @@ class Command(BaseCommand):
         Building.objects.bulk_create(Building(name=name, address=BUILDINGS.get(name, '')) for name in ROOMS)
         for key, names in ROOM_INSTITUTES.items():
             self.institutes[key].rooms.set(self.rooms[name] for name in names.split(', '))
+
+    def prerequisites(self):
+        """Course work in a numbered series needs the one before it, as the Studienpläne have it: Gehörbildung 1 before
+        Gehörbildung 2 und 3, Werkanalyse 1 before Werkanalyse 2."""
+        series = defaultdict(list)
+        for m in Module.objects.filter(children=None, exam=False, semester__isnull=False):
+            if found := re.match(r'^(.*?)\s+(\d+|[IVX]+)(\s+und\s+(\d+|[IVX]+))?$', m.title):
+                series[m.program_id, found[1]].append(m)
+        links = []
+        for modules in series.values():
+            modules.sort(key=lambda m: m.semester)
+            links += [Module.requires.through(from_module_id=later.pk, to_module_id=before.pk) for before, later in zip(modules, modules[1:]) if before.semester < later.semester]
+        Module.requires.through.objects.bulk_create(links)
 
     def build(self, program, nodes, parent=None):
         """Store a plan as the module tree; remember for each piece of course work which course teaches it."""
@@ -1538,6 +1553,8 @@ class Command(BaseCommand):
                 for n, s in enumerate(wishing)
             )
         self.ensembles(now.filter(title='Kammermusik').first())
+        Course.objects.filter(title__startswith='Gehörbildung').update(grouping=Course.Grouping.CONTINUED)  # the Institut places the first year; the groups stay together
+        Course.objects.filter(title__startswith='Gehörbildung 1').update(grouping=Course.Grouping.ASSIGNED)
         for title, spare in [('Historische Spielpraxis auf modernen Instrumenten', 3), ('Schreibwerkstatt: wissenschaftliches Schreiben', -2)]:  # places: a few left, and a waitlist
             course = now.filter(title=title).annotate(size=models.Count('participations')).first()
             if course:
@@ -1557,6 +1574,22 @@ class Command(BaseCommand):
                 if not any(b.clashes().exists() for b in days):
                     Booking.objects.bulk_create(days)
                     break
+
+    def doubts(self):
+        """Two registrations the teachers see marked, with what the student wrote: one from outside the Studienplan, out of
+        interest; one without the course before it, taken at another Hochschule and not yet recognised."""
+        analysis = Course.objects.filter(term=self.current, title='Werkanalyse 2', groups__isnull=False).distinct().first()
+        hearing = Course.objects.filter(term=self.current, title='Gehörbildung 2/Harmonielehre 2', groups__isnull=False).distinct().first()
+        if analysis:
+            group = analysis.groups.annotate(n=models.Count('participations__study', distinct=True)).filter(n__lt=models.F('capacity')).first()
+            guest = next(s for s in self.enrolled if s.person != self.demo and not analysis.modules.filter(program=s.program_id).exists())
+            Participation.objects.create(
+                course=analysis, study=guest, group=group, created=at(date(2026, 10, 20), hour=11),
+                note='Aus Interesse: ich bereite mich auf die Eignungsprüfung für den Master Musiktheorie vor.',
+            )
+        if hearing and (p := hearing.participations.filter(module__requires__isnull=False).select_related('module').first()):
+            Participation.objects.filter(study=p.study_id, module__in=Module.objects.filter(required_by__courses=hearing), passed=True).delete()
+            hearing.participations.filter(study=p.study_id).update(note='Gehörbildung 1 und Harmonielehre 1 an der HMT Leipzig belegt; die Anerkennung ist beantragt.')
 
     def ensembles(self, chamber):
         """Kammermusik's students in the usual groupings, registered from September; the latest still without a coach."""

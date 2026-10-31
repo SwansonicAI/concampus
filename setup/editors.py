@@ -305,6 +305,7 @@ EDITORS = {e.key: e for e in [
             ('Raumbuchung', [('student_daily_hours', 'student_ahead_hours'), ('last_minute_hours', 'teacher_ahead_days')]),
             ('Deputat', ['load_since']),
             ('Studienpläne', ['credit_hours']),
+            ('Anmeldung zu Lehrveranstaltungen', ['clash_dates']),
             ('Amtliche Statistik', [('university', 'region', 'report_id')]),
         ],
         columns=[('Name', 'name'), ('Ort', 'place')],

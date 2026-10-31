@@ -289,6 +289,11 @@ class Module(Tracked, models.Model):
     )
     description = models.TextField('Beschreibung', blank=True)
     waived = models.ManyToManyField(Subject, blank=True, related_name='+', verbose_name='Entfällt für', help_text='Hauptfächer, für die der Plan diese Prüfung erlässt.')
+    requires = models.ManyToManyField(
+        'self', symmetrical=False, blank=True, related_name='required_by', verbose_name='Voraussetzung',
+        help_text='Was vorher bestanden sein soll, etwa Gehörbildung 1 vor Gehörbildung 2. Wer es nicht hat, wird bei der Anmeldung gewarnt, nicht abgewiesen: '
+                  'es mag anderswo belegt sein. Anerkanntes zählt als bestanden.',
+    )
 
     class Meta:
         ordering = ['code']

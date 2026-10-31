@@ -7,13 +7,13 @@ from django.utils import timezone
 
 from core.models import Holiday, Message, Person, Term
 from curriculum.models import Program
-from rooms.models import Room
+from rooms.models import Booking, Room
 from rooms.views import agenda
 from core.testing import Seeded, flashes
 from students.models import Study
 from .models import Course, Ensemble, MoodleCourse, Participation, Signup, owed_module
 from .moodle import flat, sync
-from .views import deputat, loads, taking
+from .views import clashes, deputat, fits, loads, taking, weight
 
 
 class RolloverTest(Seeded):
@@ -81,10 +81,12 @@ class WaitlistTest(Seeded):
 
 class GroupTest(Seeded):
     def test_one_place_a_person_none_past_a_groups_last_and_a_switch_keeps_it(self):
-        course = Course.objects.filter(term__name='WiSe 2026/27', groups__isnull=False).distinct().first()
+        course, study = next(
+            (c, s) for c in Course.objects.filter(term__name='WiSe 2026/27', groups__isnull=False, grouping='choice').distinct()
+            for s in Study.objects.filter(status='enrolled', program__modules__courses=c).exclude(person__studies__participations__course=c).distinct() if fits(c, s).owed and not s.concern
+        )
         course.deadline = timezone.localdate() + timedelta(days=7)
         course.save()
-        study = next(s for s in Study.objects.filter(status='enrolled', program__modules__courses=course).exclude(person__studies__participations__course=course).distinct() if owed_module(course, s))
         full = next(g for g in course.groups.all() if taking(g) >= g.capacity)
         first, second = [g for g in course.groups.all() if taking(g) < g.capacity][:2]
         student = Client()
@@ -120,6 +122,54 @@ class GroupTest(Seeded):
         Participation.objects.filter(course=course, study__person=person).update(group=other)
         sync(moodle, changed=True)
         self.assertEqual((user in moodle.members[there[f'campus-group-{group.pk}']], user in moodle.members[there[f'campus-group-{other.pk}']]), (False, True))
+
+
+class ChecksTest(Seeded):
+    def test_what_the_plan_would_not_have_warns_and_the_teachers_see_why(self):
+        course = Course.objects.filter(term__name='WiSe 2026/27', kind='course', allocation='order', groups=None, capacity=None, cancelled=None).exclude(
+            modules__program__studies__person__username='student').first()
+        course.deadline = timezone.localdate() + timedelta(days=7)
+        course.save()
+        study, student = Study.objects.get(person__username='student'), self.login('student')
+        r = student.post(f'/lehre/{course.pk}/anmelden/', {'study': study.pk}, follow=True)
+        self.assertEqual(flashes(r), ['Bitte kurz angeben, warum Sie sich dennoch anmelden; die Lehrenden sehen es.'])
+        student.post(f'/lehre/{course.pk}/anmelden/', {'study': study.pk, 'grund': 'Aus Interesse'})
+        self.assertEqual(list(course.participations.filter(study=study).values_list('module', 'note')), [(None, 'Aus Interesse')])
+        teacher = Client()
+        teacher.force_login(course.staff.first())
+        row = next(p for p in teacher.get(course.get_absolute_url()).context['rows'] if p.study_id == study.pk)
+        self.assertEqual((row.module, row.note), (None, 'Aus Interesse'))  # shown as „ohne Anrechnung“, with the reason
+        course.deadline = timezone.localdate() - timedelta(days=1)  # registration over: leaving goes on until the lectures end
+        course.save()
+        student.post(f'/lehre/teilnahme/{row.pk}/abmelden/')
+        self.assertFalse(course.participations.filter(study=study).exists())
+
+    def test_a_clash_now_and_then_is_light_more_is_heavy_and_practice_counts_not(self):
+        weekly = Booking.objects.filter(course__term__name='WiSe 2026/27', course__kind='course', course__groups=None, series__isnull=False, start__gte=timezone.now()).first()
+        course, dates = weekly.course, list(Booking.objects.filter(series=weekly.series, start__gte=timezone.now()).select_related('room')[:4])
+        person = next(p for p in Person.objects.filter(studies__status='enrolled').exclude(studies__participations__course=course) if not clashes(p, dates))
+        other = Room.objects.exclude(pk__in=[b.room_id for b in dates]).first()
+
+        def booked(category, n):
+            Booking.objects.filter(person=person, title='Test').delete()
+            for b in dates[:n]:
+                Booking.objects.create(room=other, start=b.start, end=b.end, person=person, category_id=category, title='Test')
+            return weight(course, clashes(person, dates))
+
+        self.assertEqual(booked('uebung', 4)[0], '')  # practice moves aside
+        course.clash_dates = None
+        self.assertEqual(booked('probe', 2), ('light', 2))
+        self.assertEqual(booked('probe', 3), ('heavy', 3))
+
+    def test_the_office_places_whoever_is_without_a_group(self):
+        course = Course.objects.filter(term__name='WiSe 2026/27', groups__isnull=False).distinct().first()
+        moved = course.participations.filter(group__isnull=False).select_related('study__person').first()
+        course.participations.filter(study=moved.study_id).update(group=None)
+        self.login('dekanatsreferat').post(f'/lehre/{course.pk}/gruppen/verteilen/')
+        moved.refresh_from_db()
+        self.assertIsNotNone(moved.group)
+        self.assertLessEqual(taking(moved.group), moved.group.capacity)
+        self.assertTrue(Message.objects.filter(person=moved.study.person, subject__startswith=f'Gruppe {moved.group.number}').exists())
 
 
 class SettledTest(Seeded):
