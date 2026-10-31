@@ -1,5 +1,6 @@
 import re
 from collections import defaultdict
+from datetime import timedelta
 
 from django import forms
 from django.db.models import F, Max, Min, Q
@@ -78,7 +79,7 @@ class GroupForm(PlanForm):
 
     staff = forms.ModelMultipleChoiceField(label='Lehrende', queryset=None, widget=forms.CheckboxSelectMultiple)
     capacity = forms.IntegerField(label='Plätze', min_value=1, max_value=999, help_text='Höchstens so viele, wie der Raum fasst.')
-    layout = [(None, ['capacity']), ('Wöchentlicher Termin', [('weekday', 'time', 'minutes', 'room')]), (None, ['staff'])]
+    layout = [('Wann und wo, jede Woche', [('weekday', 'time', 'minutes', 'room')]), (None, ['capacity', 'staff'])]
 
     def __init__(self, *args, person, course, **kwargs):
         super().__init__(*args, person=person, course=course, **kwargs)
@@ -200,9 +201,14 @@ def substitutes(course):
 
 
 def leaf_modules(exams=False):
-    """The course work of the plans a course can count for, or their exams, as choices grouped by programme in study-plan order."""
+    """The course work of the plans a course can count for, or their exams, as choices grouped by programme, the
+    programmes as lists show them (Bachelor first), each in study-plan order."""
     groups, shared = defaultdict(list), defaultdict(set)
-    leaves = list(Module.objects.filter(children=None, exam=exams).select_related('program').order_by('program', F('semester').asc(nulls_last=True), 'code'))
+    rank = {pk: n for n, pk in enumerate(Program.objects.ordered().values_list('pk', flat=True))}
+    leaves = sorted(
+        Module.objects.filter(children=None, exam=exams).select_related('program').order_by(F('semester').asc(nulls_last=True), 'code'),
+        key=lambda m: rank[m.program_id],
+    )
     for m in leaves:
         shared[m.code, m.title].add(m.program.name)
     for m in leaves:
@@ -230,7 +236,7 @@ class CourseForm(forms.ModelForm):
         localized_fields = ['hours', 'pass_mark']  # a decimal comma, in a text box
         widgets = {
             'staff': forms.CheckboxSelectMultiple,
-            'modules': forms.CheckboxSelectMultiple,
+            'modules': forms.CheckboxSelectMultiple(attrs={'data-twins': ''}),  # a module several Studiengänge share: ticked once for all
             'description': forms.Textarea(attrs={'rows': 4}),
         }
 
@@ -273,10 +279,19 @@ class CourseForm(forms.ModelForm):
             self.fields.pop('programme', None)
         if 'subject' in self.fields:
             self.fields['subject'].empty_label = 'Keines'
-        if 'capacity' in self.fields and self.instance.pk and self.instance.groups.exists():  # the places are the groups'
+        grouped = self.instance.pk and self.instance.groups.exists()
+        if 'capacity' in self.fields and grouped:  # the places are the groups'
             del self.fields['capacity']
+        if 'grouping' in self.fields and not grouped:  # how groups are given out, once there are some
+            del self.fields['grouping']
+        if {'staff', 'modules'} <= set(self.fields):  # who taught these modules lately, to come first once they are ticked
+            taught = defaultdict(set)
+            for module, teacher in Course.objects.filter(kind=Course.Kind.COURSE, term__start__gte=timezone.localdate() - timedelta(days=730)).values_list('modules', 'staff').distinct():
+                if module and teacher:
+                    taught[module].add(teacher)
+            self.taught = {m: sorted(t) for m, t in taught.items()}
         if 'clash_dates' in self.fields:
-            self.fields['clash_dates'].help_text = f'Leer: wie in den Hochschuldaten, {Institution.get().clash_dates}. Verhindert wird die Anmeldung nie.'
+            self.fields['clash_dates'].help_text = f'Überschneidungen mit dem Stundenplan; leer: wie in den Hochschuldaten, ab {Institution.get().clash_dates}. Verhindert wird die Anmeldung nie.'
         if 'program' in self.fields:
             self.fields['program'].queryset = Program.planned()
         if 'term' in self.fields and self.instance.pk and not self.moves:  # its dates and people are that semester's
@@ -286,6 +301,14 @@ class CourseForm(forms.ModelForm):
         for name in ('area', 'format'):  # by them the Verzeichnis, the Deputat and Moodle order it: never left empty
             if name in self.fields:
                 self.fields[name].required, self.fields[name].empty_label = True, 'Bitte wählen'
+
+
+    def clean_modules(self):
+        """A module several Studiengänge share, the same code and title in each, counts for all of them."""
+        chosen = self.cleaned_data['modules']
+        pairs = {(m.code, m.title) for m in chosen if m.code}
+        twins = Module.objects.filter(children=None, code__in={c for c, _ in pairs}, title__in={t for _, t in pairs}) if pairs else Module.objects.none()
+        return Module.objects.filter(pk__in={m.pk for m in chosen} | {m.pk for m in twins if (m.code, m.title) in pairs})
 
 
 class TeachingForm(CourseForm):

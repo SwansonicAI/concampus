@@ -117,7 +117,7 @@ class Course(Tracked, models.Model):
                   'mit Lehrenden und Zeit, und trägt nach der Rückmeldung ihre Mitglieder ein.',
     )
     clash_dates = models.PositiveSmallIntegerField(
-        'Überschneidungen mit leichtem Hinweis', null=True, blank=True, help_text='Leer: wie in den Hochschuldaten.',
+        'Rote Warnung ab', null=True, blank=True, help_text='Überschneidungen mit dem Stundenplan; leer: wie in den Hochschuldaten.',
     )
     pass_mark = models.DecimalField(
         'Bestehensgrenze', max_digits=4, decimal_places=1, null=True, blank=True,
@@ -205,7 +205,7 @@ class Course(Tracked, models.Model):
         return self.allocation in (self.Allocation.ORDER, self.Allocation.CHOICE) and timezone.localdate() <= self.term.lectures_end
 
     def clash_limit(self):
-        """How many of its dates may clash with someone's week before registering warns them plainly."""
+        """From how many of its dates clashing with someone's week registering warns them plainly, in red."""
         return Institution.get().clash_dates if self.clash_dates is None else self.clash_dates
 
     @property

@@ -453,6 +453,42 @@ button.chip { background: none; font: inherit; font-size: 12px; cursor: pointer;
 :is(.week, .legend) .booking.move { border-top: 3px solid var(--amber); }
 .week .booking.split { width: calc(100% / var(--lanes) - 4px); margin-left: calc(100% / var(--lanes) * var(--lane) + 2px); }
 
+/* The groups of a course in a week, where the office places a new time (courses/_weekpick.html) */
+.weekplan .scroll { margin-bottom: 24px; }
+.week.plan { min-width: 620px; }
+.block {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  width: calc(100% / var(--lanes, 1) - 4px);
+  min-width: 0;
+  margin: 1px 0 1px calc(100% / var(--lanes, 1) * var(--lane, 0) + 2px);
+  padding: 3px 6px;
+  overflow: hidden;
+  border: 1px solid var(--accent);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: #fff;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.25;
+}
+.block > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.block[hidden] { display: none; }
+.block small { font-size: 12px; }
+.block.full { border-color: var(--line); color: var(--muted); }
+.block.mine { background: var(--accent-pale); }
+.block.before { border-style: dashed; border-color: var(--muted); color: var(--muted); }
+a.block:hover { background: var(--accent-pale); text-decoration: none; }
+
+/* How a group fits a student's timetable, a link to it: what clashes, in amber now and then, in red often */
+.fit { font-size: 14px; }
+.fit.light { color: var(--amber); font-weight: 600; }
+.fit.heavy { color: var(--red); font-weight: 600; }
+.slots + [data-reveal] { margin-top: 12px; }
+.booking.trial { border: 2px dashed var(--accent); border-left-width: 4px; background: #fff; }  /* a group seen in one's week before choosing it */
+
 /* Print: certificates and transcripts */
 .document { max-width: 820px; }
 .document .letterhead { display: flex; justify-content: space-between; margin-bottom: 48px; }

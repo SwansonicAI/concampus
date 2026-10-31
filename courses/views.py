@@ -1,4 +1,5 @@
 import csv
+from operator import attrgetter
 import re
 from copy import copy
 import uuid
@@ -30,7 +31,7 @@ from core.text import fold, matching
 from core.views import without_term
 from curriculum.models import Module, Program
 from rooms.models import Booking, BookingCategory
-from rooms.views import QUARTER, agenda, around, called_off, legend, week
+from rooms.views import QUARTER, agenda, around, called_off, legend, side_by_side, week
 from students.models import Study
 from . import panel
 from .forms import AddForm, CourseForm, DateForm, EnsembleForm, GroupForm, Lessons, PlanForm, TeachingForm
@@ -142,10 +143,10 @@ def fits(course, study):
     study.counts = study.owed is not None or course.modules.filter(program=study.program_id).exists()
     missing = unmet([(study.pk, study.owed.pk)])[study.pk, study.owed.pk] if study.owed else []
     study.concern = (
-        f'Laut Studienplan vorher: {", ".join(m.title for m in missing)}; nicht bestanden.' if missing
+        f'Vorher laut Studienplan: {", ".join(m.title for m in missing)}, noch nicht bestanden.' if missing
         else '' if study.owed
-        else 'Die Module dafür sind bestanden, oder ihr Bereich im Studienplan ist voll: die Veranstaltung zählt für nichts mehr.' if study.counts
-        else f'Die Veranstaltung gehört nicht zum Studienplan {study.program.title}: sie zählt für nichts.'
+        else 'Die Module dafür sind schon bestanden.' if study.counts
+        else f'Sie gehört nicht zum Studienplan {study.program.title}.'
     )
     return study
 
@@ -162,10 +163,48 @@ def unmet(rows):
 
 
 def weight(course, found):
-    """(how plainly to warn, on how many dates) of a course's clashes() with someone's week: 'heavy' past the dates the
-    course lets clash, 'light' within them, as a rehearsal now and then, or only a way between buildings too short."""
+    """(how plainly to warn, on how many dates) of a course's clashes() with someone's week: 'heavy' from the number of
+    dates the course sets, 'light' below it, as a rehearsal now and then, or only a way between buildings too short."""
     dates = sum(b.times for b, _, way in found if not way)
-    return ('heavy' if dates > course.clash_limit() else 'light' if found else ''), dates
+    return ('heavy' if dates >= course.clash_limit() else 'light' if found else ''), dates
+
+
+def series(bookings):
+    """One date of each weekly series among `bookings`, in the order they begin."""
+    first = {}
+    for b in sorted(bookings, key=attrgetter('start')):
+        if b.series:
+            first.setdefault(b.series, b)
+    return list(first.values())
+
+
+FIT = {'': 0, 'light': 1, 'heavy': 2}  # what fits a student's week first
+
+
+def weekly_at(group):
+    """When a group meets in the week, to sort by: its first weekly date's weekday and time; without dates, last."""
+    first = group.times[:1]
+    return timezone.localtime(first[0].start).strftime('%u%H%M') if first else '9'
+
+
+def week_of(course, groups, before=()):
+    """The course's groups in a week, each a block at its time, where a new one is placed among them; `before`: the
+    course's own weekly time, about to become its first group. Context for courses/_weekpick.html, None if empty."""
+    items = [SimpleNamespace(booking=b, group=g, before=False) for g in groups for b in g.times] + [SimpleNamespace(booking=b, group=None, before=True) for b in before]
+    if not items:
+        return None
+    for i in items:
+        start, end = timezone.localtime(i.booking.start), timezone.localtime(i.booking.end)
+        i.day, i.start, i.end = start.weekday(), start.hour * 60 + start.minute, end.hour * 60 + end.minute
+    side_by_side(items, lambda a, b: a.day == b.day and a.start < b.end and b.start < a.end)
+    first, last = min(9, *(i.start // 60 for i in items)), max(18, *(-(-i.end // 60) for i in items))
+    for i in items:
+        i.place = f'{2 + (i.start - first * 60) // 5} / {2 + i.day} / {2 + (i.end - first * 60) // 5} / {3 + i.day}'
+    return {
+        'items': items, 'days': ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'][:6 if any(i.day == 5 for i in items) else 5],
+        'rows': (last - first) * 12, 'ticks': [(f'{2 + n * 12} / span 12', first + n) for n in range(last - first)],
+        'first': first, 'last': last,
+    }
 
 
 def grouped(course, person=None):
@@ -225,6 +264,8 @@ def catalogue(request):
     studies = person.studies.filter(status=Study.Status.ENROLLED)
     program = request.GET.get('studiengang', str(studies[0].program_id) if studies else '')
     upcoming = Booking.objects.filter(course=OuterRef('pk'), start__gte=timezone.now()).order_by('start')
+    if not person.everywhere('manage_courses'):  # of a course in groups, one's own group's; the office sees the first of any
+        upcoming = upcoming.filter(Q(group=None) | Q(group__staff=person) | Q(group__participations__study__person=person))
     courses = (
         term.courses.filter(kind__in=TEACHING).select_related('subject', 'area', 'format').prefetch_related('staff')
         .annotate(
@@ -277,7 +318,7 @@ def catalogue(request):
         groups = c.groups.all()
         c.open_groups = sum(g.size < g.capacity for g in groups) if groups else None
         if groups:
-            c.capacity = sum(g.capacity for g in groups)
+            c.capacity, c.free = sum(g.capacity for g in groups), sum(max(g.capacity - g.size, 0) for g in groups)
     return render(request, 'courses/catalogue.html', {
         'term': term,
         'terms': Term.shown(person).filter(courses__kind__in=TEACHING).distinct().order_by('-start').filter(**since(request.user)), 'open': open_,
@@ -366,7 +407,8 @@ def course(request, pk):
         upcoming = upcoming.filter(participants=person)  # one's own lessons, not everyone's
     elif not staffed:  # the dates for everyone, and those of one's own ensemble
         upcoming = upcoming.filter(Q(participants=None) | Q(participants=person) | Q(person=person)).distinct()
-    groups = grouped(course, person if eligible and not own else None)
+    student = bool(eligible or own) and not staffed  # what of the groups' times clashes with their week
+    groups = grouped(course, person if student else None)
     wished = course.signups.filter(study__person=person).first()
     taught = [g for g in groups if person in g.staff.all()]
     if groups and not office and (taught or not staffed):  # a group's dates are its own
@@ -410,10 +452,16 @@ def course(request, pk):
         'clashing': (clashing := clashes(person, course.bookings.filter(start__gte=timezone.now(), participants=None).select_related('room')) if eligible and not own and not groups else []),
         'clash': weight(course, clashing),
         'groups': groups, 'taught': taught, 'regrouping': groups and staffed and not course.term.over,
-        'choosing': groups and eligible and not own and not wished and course.is_open and course.grouping == Course.Grouping.CHOICE,
+        'choosing': bool(groups and eligible and not own and not wished and course.is_open and course.grouping == Course.Grouping.CHOICE),
+        'switching': bool(groups and own and own[0].group_id and own[0].passed is None and course.is_open and course.grouping == Course.Grouping.CHOICE),
+        'placing': bool(groups and eligible and not own and not wished and course.is_open and course.grouping != Course.Grouping.CHOICE),
+        'current': (current := next((g for g in groups if own and g.pk == own[0].group_id), None)),
+        'offered': sorted((g for g in groups if g.free and g != current), key=lambda g: (FIT[g.clash], weekly_at(g))),  # what fits first
+        'booked_out': sorted((g for g in groups if not g.free and g != current), key=weekly_at),
+        'deletable': office and not course.participations.exists() and not course.signups.exists() and not course.ensembles.exists(),
+        'growing': office and course.kind == Course.Kind.COURSE and course.allocation != Course.Allocation.ENSEMBLE and (groups or course.bookings.exists()),
         'unplaced': course.participations.filter(group=None).values('study').distinct().count() if groups and office else 0,
         'open_groups': sum(1 for g in groups if g.free), 'places': sum(g.capacity for g in groups), 'taken': sum(g.size for g in groups),
-        'switchable': [g for g in groups if g.free and own and g.pk != own[0].group_id] if course.is_open and course.grouping == Course.Grouping.CHOICE else [],
         'running': running, 'cancelling': office and not course.term.planning and not course.cancelled and running,
         'from': max(course.term.lectures_start, timezone.localdate()), 'office': office,
         'modules': credited(course, studied), 'studied': studied,
@@ -428,6 +476,31 @@ def course(request, pk):
         'reachable': Study.reachable(person, Study.objects.filter(Q(participations__course=course) | Q(signups__course=course))) if staffed else set(),
         'panel': False,
     })
+
+
+def twin_of(data, term):
+    """A course of the semester that a new one would duplicate: one of the same title, or one for the same modules, as a
+    Satztechniken already taught at another time. Better a group of it."""
+    same = Q(title__iexact=data['title'].strip())
+    if chosen := {m.pk for m in data.get('modules', ())}:
+        alike = Course.objects.annotate(n=Count('modules', distinct=True), hit=Count('modules', filter=Q(modules__in=chosen), distinct=True)).filter(n=len(chosen), hit=len(chosen))
+        same |= Q(pk__in=alike.values('pk'))
+    return Course.objects.filter(same, term=data.get('term', term), kind__in=TEACHING, cancelled=None).prefetch_related('staff').first()
+
+
+@require_POST
+def remove(request, pk):
+    """Delete a course made by mistake, with its dates: the office's, while nobody is in it, has asked for a place or plays
+    in an ensemble of it. One that people are in is called off instead (cancel), so that they hear of it."""
+    course = get_object_or_404(Course.objects.select_related('term'), pk=pk, kind__in=TEACHING)
+    if not request.user.may('manage_courses', course):
+        raise PermissionDenied
+    if course.participations.exists() or course.signups.exists() or course.ensembles.exists():
+        messages.error(request, 'Hier hat sich schon jemand angemeldet: bitte absagen statt löschen, damit alle davon erfahren.')
+        return redirect(course)
+    course.delete()
+    messages.success(request, f'„{course.title}“ gelöscht, mit den Terminen.')
+    return redirect(f"{reverse('courses:catalogue')}?semester={course.term_id}")
 
 
 COPIED = ['kind', 'title', 'area', 'format', 'subject', 'rhythm', 'hours', 'capacity', 'allocation', 'grouping', 'opens', 'deadline', 'clash_dates', 'description']  # what „Duplizieren“ takes
@@ -454,9 +527,7 @@ def edit(request, pk=None):
     planning = person.may('plan_teaching', course) if pk else 'plan_teaching' in person.roles
     form = CourseForm(request.POST or None, instance=course, initial=initial, person=person, planning=planning, over=over) if office else TeachingForm(request.POST or None, instance=course, person=person)
     before = course.waitlist() if pk else []  # before the form changes the places
-    twin = not pk and not source and form.is_valid() and 'doppelt' not in request.POST and Course.objects.filter(
-        term=form.cleaned_data.get('term', course.term), title__iexact=form.cleaned_data['title'].strip(), kind__in=TEACHING,
-    ).prefetch_related('staff').first()
+    twin = not pk and not source and form.is_valid() and 'doppelt' not in request.POST and twin_of(form.cleaned_data, course.term)
     if form.is_valid() and not twin:
         with history.because(form.cleaned_data.get('correction', '')):
             saved = kept(form, person, 'manage_courses') if office else form.save()
@@ -467,6 +538,7 @@ def edit(request, pk=None):
     back = course.get_absolute_url() if pk else reverse('courses:catalogue')
     return render(request, 'courses/form.html', {
         'form': form, 'course': course, 'menu': 'courses/_nav.html', 'heading': f'Kopie von {source.title}' if source else 'Neue Veranstaltung', 'back': back, 'twin': twin,
+        'joining': twin and [p.pk for p in form.cleaned_data.get('staff', ())],
         'note': None if office and planning else format_html(
             '{} trägt {} ein: sie zählen im Deputat und in den Studienplänen.', 'Umfang (SWS), Lehrform und Module' if office else 'Umfang (SWS), Lehrende, Module und Lehrform',
             Office.holding('plan_teaching', linked=True) or 'das zuständige Amt',
@@ -939,8 +1011,9 @@ def meets(group):
 
 def group(request, pk, number=None):
     """Add a group to a course, or change one: its teachers, places and weekly time. The office's, as each group counts
-    in the Deputat. A new time is booked from today to the end of the lecture period in place of the old, and the group
-    hears of it; a group nobody is in can go."""
+    in the Deputat. A course taught to all at one time becomes its first group, with its dates and everyone in it, when
+    another time is added. A new time is booked from today to the end of the lecture period in place of the old, where
+    the room and the teachers are free, and the group hears of it; a group nobody is in can go."""
     course = get_object_or_404(Course.objects.select_related('term', 'subject'), pk=pk, kind=Course.Kind.COURSE)
     person = request.user
     if not person.may('manage_courses', course) or course.term.over or course.allocation == Course.Allocation.ENSEMBLE:
@@ -953,17 +1026,19 @@ def group(request, pk, number=None):
             group.delete()
             messages.success(request, f'Gruppe {group.number} gelöscht, mit ihren Terminen.')
         return redirect(course)
-    initial, last = {}, course.groups.last()
-    if group or last:  # a group as it is; a new one like the last
-        start = (group or last).times[:1]
-        initial['capacity'] = (group or last).capacity
+    groups = grouped(course)
+    before = [] if groups else series(course.bookings.filter(group=None, ensemble=None).select_related('room'))  # the course's own time, to become Gruppe 1
+    like = group or next((g for g in groups if str(g.number) == request.GET.get('wie')), None)  # „Speichern und nächste Gruppe“: one like it
+    initial = {'staff': [int(pk) for pk in request.GET.getlist('lehrende') if pk.isdigit()]}
+    if like or groups or before:
+        model = like or (groups[-1] if groups else None)
+        start = model.times[:1] if model else before[:1]
+        initial['capacity'] = model.capacity if model else course.capacity or before[0].room.capacity
         if start:
             b, at = start[0], timezone.localtime(start[0].start)
-            initial |= {'weekday': at.weekday(), 'time': at.time(), 'minutes': int((b.end - b.start).total_seconds() // 60), 'room': b.room_id}
-            if not group:
-                del initial['time']
-        if group:
-            initial['staff'] = list(group.staff.values_list('pk', flat=True))
+            initial |= {'weekday': at.weekday(), 'minutes': int((b.end - b.start).total_seconds() // 60), 'room': b.room_id} | ({'time': at.time()} if group else {})
+        if like:
+            initial['staff'] = list(like.staff.values_list('pk', flat=True))
     form = GroupForm(request.POST or None, initial=initial, person=person, course=course)
     if form.is_valid():
         data, timed = form.cleaned_data, group is None or {'weekday', 'time', 'minutes', 'room'} & set(form.changed_data)
@@ -971,10 +1046,19 @@ def group(request, pk, number=None):
         dates = weekly(course, data['staff'][0], data) if timed else []
         if taken := [b for b in dates if b.clashes().exclude(pk__in=old).exists()]:
             form.add_error(None, 'Der Raum ist belegt am ' + ', '.join(f'{timezone.localtime(b.start):%d.%m.}' for b in taken[:8]) + '.')
-        else:
+        for teacher in data['staff'] if dates else []:  # nobody teaches two groups at once
+            theirs = agenda(teacher).filter(start__lt=max(b.end for b in dates), end__gt=min(b.start for b in dates)).exclude(pk__in=old)
+            if hit := next(((b, o) for o in theirs for b in dates if o.start < b.end and b.start < o.end), None):
+                form.add_error('staff', f'{teacher} hat am {timezone.localtime(hit[0].start):%d.%m.} um diese Zeit schon „{hit[1].label}“.')
+        if form.is_valid():
             with transaction.atomic():
+                if before:  # the one time so far becomes Gruppe 1, with everyone in it
+                    first = Group.objects.create(course=course, number=1, capacity=initial['capacity'])
+                    first.staff.set(course.staff.all())
+                    course.bookings.filter(group=None, ensemble=None).update(group=first)
+                    course.participations.update(group=first)
                 if group is None:
-                    group = Group.objects.create(course=course, number=(last.number if last else 0) + 1, capacity=data['capacity'])
+                    group = Group.objects.create(course=course, number=max([g.number for g in groups] + [1 if before else 0]) + 1, capacity=data['capacity'])
                 else:
                     group.capacity = data['capacity']
                     group.save(update_fields=['capacity'])
@@ -995,12 +1079,18 @@ def group(request, pk, number=None):
                         'unterrichtszeit', p, course.get_absolute_url(), veranstaltung=f'{course.title}, Gruppe {group.number}', von=person, raum=data['room'],
                         zeit=f'{date_format(start, "l").lower()}s {start:%H:%M}–{end:%H:%M} Uhr', ab=date_format(start, 'j.n.Y'),
                     )
-            messages.success(request, f'Gruppe {group.number} gespeichert' + (f', {plural(len(dates), "Termin", "Termine")} in {data["room"]} gebucht.' if timed else '.'))
-            return redirect(course)
+            messages.success(request, ' '.join(filter(None, [
+                before and f'Die bisherige Zeit ist jetzt Gruppe 1, mit {plural(course.participations.values("study").distinct().count(), "Teilnahme", "Teilnahmen")}.',
+                f'Gruppe {group.number} gespeichert' + (f', {plural(len(dates), "Termin", "Termine")} in {data["room"]} gebucht.' if timed else '.'),
+            ])))
+            if 'weitere' in request.POST:
+                return redirect(f"{reverse('courses:group', args=[course.pk])}?wie={group.number}")
+            return redirect(f'{course.get_absolute_url()}#gruppen')
     return render(request, 'courses/form.html', {
-        'form': form, 'course': course, 'menu': 'courses/_nav.html', 'back': course.get_absolute_url(), 'group': group,
+        'form': form, 'course': course, 'menu': 'courses/_nav.html', 'back': course.get_absolute_url(), 'group': group, 'another': True,
         'part': f'Gruppe {group.number}' if group else 'Neue Gruppe',
-        'note': 'Bucht den Raum jede Woche bis zum Ende der Unterrichtszeit, ohne die unterrichtsfreien Tage, nur wenn alle Termine frei sind. Jede Gruppe zählt im Deputat ihrer Lehrenden.',
+        'week': week_of(course, groups, before=before), 'groups': groups, 'before': before,
+        'note': 'Bucht den Raum jede Woche bis zum Ende der Unterrichtszeit, ohne die unterrichtsfreien Tage, nur wenn Raum und Lehrende an allen Terminen frei sind. Jede Gruppe zählt im Deputat ihrer Lehrenden.',
     })
 
 
@@ -1181,10 +1271,15 @@ def taught(person, term):
 
 
 def timetable(request):
+    """One's week; with `gruppe`, a group of a course drawn in, dashed, to see how it would fit before choosing it."""
     day = understood(request.GET.get('tag', '')) or timezone.localdate()
-    return render(request, 'courses/timetable.html', {
-        'day': day, 'clashes': True, 'tones': legend(), 'off': 'teacher' in request.user.roles, **week(agenda(request.user), day, request.user),
-    })
+    shown = agenda(request.user)
+    if trial := Group.objects.filter(pk=request.GET.get('gruppe') or None, course__term__in=Term.shown(request.user)).select_related('course').first():
+        shown = Booking.objects.filter(Q(pk__in=shown.values('pk')) | Q(group=trial, category__blocks=True))
+    context = week(shown, day, request.user)
+    for b in context['placed']:
+        b.trial = trial is not None and b.group_id == trial.pk
+    return render(request, 'courses/timetable.html', {'day': day, 'clashes': True, 'tones': legend(), 'off': 'teacher' in request.user.roles, 'trial': trial, **context})
 
 
 def hours(term, seen):

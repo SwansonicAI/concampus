@@ -1,14 +1,13 @@
 <table class="groups">
-  <thead><tr><th>Gruppe</th><th>Zeit und Raum</th><th>Lehrende</th><th class="num">{% if staffed %}Teilnahmen{% else %}Plätze{% endif %}</th>{% if choosing or office %}<th></th>{% endif %}</tr></thead>
+  <thead><tr><th>Gruppe</th><th>Zeit und Raum</th><th>Lehrende</th><th class="num">Teilnahmen</th>{% if office %}<th></th>{% endif %}</tr></thead>
   <tbody>
     {% for g in groups %}
     <tr>
-      <td class="nowrap">Gruppe {{ g.number }}{% if g in taught %} <span class="badge open">Ihre</span>{% elif g.pk == own.0.group_id %} <span class="badge open">Ihre</span>{% endif %}</td>
-      <td>{% for b in g.times %}{{ b.start|date:"D H:i" }}–{{ b.end|time:"H:i" }} · {{ b.room }}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="muted">noch ohne Termine</span>{% endfor %}{% for b, other, way in g.clashing %}<br><small class="{% if g.clash == 'heavy' %}fail{% else %}caution{% endif %}">{% if b.times == 1 %}am {{ b.start|date:"j.n." }}{% elif b.times < b.of %}{{ b.times }}-mal ab {{ b.start|date:"j.n." }}{% else %}ab {{ b.start|date:"j.n." }}{% endif %}: {% if way %}keine Viertelstunde für den Weg {% if other.end <= b.start %}von{% else %}zu{% endif %} „{{ other.label }}“ in {{ other.room }}{% else %}zur selben Zeit wie „{{ other.label }}“{% endif %}</small>{% endfor %}</td>
+      <td class="nowrap">Gruppe {{ g.number }}{% if g in taught %} <span class="badge open">Ihre</span>{% endif %}</td>
+      <td>{% for b in g.times %}{{ b.start|date:"D H:i" }}–{{ b.end|time:"H:i" }} · {{ b.room }}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="muted">noch ohne Termine</span>{% endfor %}</td>
       <td>{% for s in g.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-      <td class="num nowrap">{% if staffed %}{{ g.size }} / {{ g.capacity }}{% elif g.free %}{{ g.free }} von {{ g.capacity }} frei{% else %}<span class="muted">voll</span>{% endif %}</td>
-      {% if choosing %}<td class="num">{% if g.free %}<button class="btn small" name="gruppe" value="{{ g.pk }}"{% if g.clash == 'heavy' %} data-confirm="Gruppe {{ g.number }} überschneidet sich an {{ g.clash_dates }} Terminen mit Ihrem Stundenplan. Trotzdem anmelden?"{% endif %}>Anmelden</button>{% endif %}</td>
-      {% elif office %}<td class="num"><a href="{% url 'courses:group' course.pk g.number %}"><small>bearbeiten</small></a></td>{% endif %}
+      <td class="num nowrap">{{ g.size }} von {{ g.capacity }}</td>
+      {% if office %}<td class="num"><a href="{% url 'courses:group' course.pk g.number %}"><small>bearbeiten</small></a></td>{% endif %}
     </tr>
     {% endfor %}
   </tbody>

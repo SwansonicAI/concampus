@@ -1,0 +1,13 @@
+{% comment %}A course's groups in a week, where the office places a new time among them: each group a block at its time, the time typed in drawn in as it is typed.{% endcomment %}
+<div class="weekplan">
+  <div class="scroll">
+    <div class="week plan" data-first="{{ week.first }}" data-last="{{ week.last }}" data-days="{{ week.days|length }}" data-label="{% if group %}Neue Zeit{% else %}Neue Gruppe{% endif %}" style="grid-template-columns: 56px repeat({{ week.days|length }}, minmax(0, 1fr)); grid-template-rows: 36px repeat({{ week.rows }}, 5px)">
+      {% for d in week.days %}<div class="dayhead" style="grid-column: {{ forloop.counter|add:1 }}">{{ d }}</div>{% endfor %}
+      {% for rows, hour in week.ticks %}<span class="tick" style="grid-row: {{ rows }}">{{ hour }}:00</span><span class="line" style="grid-row: {{ rows }}"></span>{% endfor %}
+      {% for i in week.items %}{% with g=i.group b=i.booking %}
+      {% if g %}<a class="block{% if not g.free %} full{% endif %}{% if g == group %} mine{% endif %}" href="{% url 'courses:group' course.pk g.number %}" style="grid-area: {{ i.place }}; --lane: {{ i.lane }}; --lanes: {{ i.lanes }}" title="Gruppe {{ g.number }} bearbeiten"><b>Gruppe {{ g.number }}</b><small>{{ b.start|time:"H:i" }} · {{ b.room }}</small><small>{% for s in g.staff.all %}{{ s.last_name }} · {% endfor %}{{ g.size }} von {{ g.capacity }}</small></a>
+      {% else %}<span class="block before" style="grid-area: {{ i.place }}; --lane: {{ i.lane }}; --lanes: {{ i.lanes }}"><b>Bisher, für alle</b><small>{{ b.start|time:"H:i" }} · {{ b.room }}</small></span>{% endif %}
+      {% endwith %}{% endfor %}
+    </div>
+  </div>
+</div>

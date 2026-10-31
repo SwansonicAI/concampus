@@ -7,6 +7,8 @@ const fold = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
 
 function init(root) {
   root.querySelectorAll('.form div[id^="id_"]').forEach(list => (list.dataset.search || list.querySelectorAll('input[type=checkbox]').length > 8) && filterable(list));
+  root.querySelectorAll('form:has(#id_modules):has(#id_staff)').forEach(suggest);
+  root.querySelectorAll('.weekplan .week[data-first]').forEach(preview);
   root.querySelectorAll('datalist[data-suggest]').forEach(suggest);
   root.querySelectorAll('.form select').forEach(select => (select.options.length > 60 || 'find' in select.dataset) && findable(select));
   root.querySelectorAll('select[data-leads]').forEach(lead);
@@ -236,21 +238,48 @@ function filterable(list) {
   input.addEventListener('input', narrow);
   input.addEventListener('filter', narrow);
 
-  // What is ticked shows above, with how many and, in a grouped list, its group: a long list hides nothing. A chip unticks.
+  // What is ticked shows beneath the list, so that ticking never moves it: how many, and each by its name, in a list of
+  // modules with its Studiengang. A module several Studiengänge share (data-twins) is ticked, and shown, once for all.
   const chosen = Object.assign(document.createElement('div'), {className: 'chips'});
-  input.before(chosen);
+  list.after(chosen);
+  const key = box => box.parentElement.textContent.trim().split(' · ')[0];
+  const twins = list.querySelector('input[data-twins]');
+  twins && list.addEventListener('change', event => {
+    if (event.target.matches?.('input[data-twins]')) list.querySelectorAll('input[data-twins]').forEach(box => key(box) === key(event.target) && (box.checked = event.target.checked));
+  });
   const sum = () => {
-    const ticked = [...list.querySelectorAll('input[type=checkbox]:checked')];
-    chosen.replaceChildren(...(ticked.length ? [Object.assign(document.createElement('small'), {className: 'muted', textContent: `${ticked.length} ausgewählt`})] : []), ...ticked.map(box => {
-      const group = box.closest(`#${list.id} > div`)?.querySelector(':scope > label:not(:has(input))')?.textContent.trim();
+    const ticked = Map.groupBy([...list.querySelectorAll('input[type=checkbox]:checked')], box => twins ? key(box) : box.value);
+    chosen.replaceChildren(...(ticked.size ? [Object.assign(document.createElement('small'), {className: 'muted', textContent: `${ticked.size} ausgewählt`})] : []), ...[...ticked.values()].map(boxes => {
+      const group = boxes.length > 1 ? `${boxes.length} Studiengänge` : twins && boxes[0].closest(`#${list.id} > div`)?.querySelector(':scope > label:not(:has(input))')?.textContent.trim();
       const chip = Object.assign(document.createElement('button'), {type: 'button', className: 'chip yes', title: 'Abwählen'});
-      chip.textContent = `${box.parentElement.textContent.trim()}${group ? ` · ${group}` : ''} ×`;
-      chip.addEventListener('click', () => { box.checked = false; box.dispatchEvent(new Event('change', {bubbles: true})); });
+      chip.textContent = `${key(boxes[0])}${group ? ` · ${group}` : ''} ×`;
+      chip.addEventListener('click', () => { boxes.forEach(box => box.checked = false); list.dispatchEvent(new Event('change', {bubbles: true})); });
       return chip;
     }));
   };
   list.addEventListener('change', sum);
   sum();
+}
+
+// In a course's form, who taught the modules ticked comes first, in a group of its own: the page's „taught“ says who
+// taught which module lately. Unticking a module puts them back where they were.
+function suggest(form) {
+  const taught = JSON.parse(document.getElementById('taught')?.textContent || 'null');
+  const modules = form.querySelector('#id_modules'), staff = form.querySelector('#id_staff');
+  if (!taught || !modules || !staff) return;
+  const top = document.createElement('div');
+  top.append(Object.assign(document.createElement('label'), {textContent: 'Lehrende dieser Module'}));
+  staff.prepend(top);
+  const rows = [...staff.querySelectorAll('input[type=checkbox]')].map(box => [box.value, box.closest('div'), box.closest('div').parentElement]);
+  const order = () => {
+    const wanted = new Set([...modules.querySelectorAll('input:checked')].flatMap(box => taught[box.value] || []).map(String));
+    rows.forEach(([value, row, home]) => (wanted.has(value) ? top : home).append(row));
+    for (const group of [top, ...new Set(rows.map(([, , home]) => home))]) {
+      if (group !== staff) group.hidden = !group.querySelector(':scope > div');
+    }
+  };
+  modules.addEventListener('change', order);
+  order();
 }
 
 // Type-to-find in a long dropdown, such as every Kreis and state: only entries matching the words, or their group, stay.
@@ -390,6 +419,33 @@ document.addEventListener('click', event => {
   if (!video) return;
   video.currentTime = Number(mark.dataset.seek);
   video.play();
+});
+
+// The group form: the time typed in shows as a dashed block in the week above, where it falls among the others.
+function preview(week) {
+  const form = document.querySelector('form#neu:has(#id_weekday)');
+  if (!form) return;
+  const block = Object.assign(document.createElement('span'), {className: 'block before', hidden: true});
+  week.append(block);
+  const first = Number(week.dataset.first), last = Number(week.dataset.last);
+  const draw = () => {
+    const day = Number(form.weekday.value), [h, m] = (form.time.value.match(/(\d{1,2})[:.]?(\d{2})?/) || []).slice(1).map(Number);
+    const start = h * 60 + (m || 0), end = start + Number(form.minutes.value || 0);
+    block.hidden = !(h >= first && end <= last * 60 && day < week.dataset.days && end > start);
+    if (block.hidden) return;
+    block.style.gridArea = `${2 + (start - first * 60) / 5} / ${2 + day} / ${2 + (end - first * 60) / 5} / ${3 + day}`;
+    block.innerHTML = `<b>${week.dataset.label}</b><small>${String(h).padStart(2, '0')}:${String(m || 0).padStart(2, '0')}</small>`;
+  };
+  form.addEventListener('input', draw);
+  draw();
+}
+
+// Rows kept back, such as full groups, shown on asking.
+document.addEventListener('click', event => {
+  const reveal = event.target.closest('[data-reveal]');
+  if (!reveal) return;
+  reveal.previousElementSibling.querySelectorAll('[hidden]').forEach(rows => rows.hidden = false);
+  reveal.remove();
 });
 
 // What cannot be undone (data-confirm="Wirklich auflösen?") asks once more: the first click turns the button into the

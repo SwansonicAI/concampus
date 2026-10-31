@@ -1,0 +1,8 @@
+<tr{% if full %} class="muted"{% endif %}>
+  <td class="nowrap">Gruppe {{ g.number }}</td>
+  <td>{% for b in g.times %}{{ b.start|date:"D" }} {{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }} · {{ b.room }}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="muted">Zeit folgt</span>{% endfor %}</td>
+  <td>{% for s in g.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+  {% if seats %}<td class="num nowrap">{% if g.free %}{{ g.free }} von {{ g.capacity }} frei{% else %}voll{% endif %}</td>{% endif %}
+  <td>{% if g.times %}<a class="fit{% if g.clash %} {{ g.clash }}{% endif %}" href="{% url 'courses:timetable' %}?tag={% firstof g.clashing.0.0.start|date:'Y-m-d' g.times.0.start|date:'Y-m-d' %}&amp;gruppe={{ g.pk }}" title="Im Stundenplan ansehen">{% for b, other, way in g.clashing|slice:":2" %}{% if way %}knapp {% if other.end <= b.start %}nach{% else %}vor{% endif %} {{ other.label }}{% else %}{{ other.label }}{% endif %} {% include "courses/_when.html" %}{% if not forloop.last %}<br>{% endif %}{% empty %}passt{% endfor %}</a>{% endif %}</td>
+  {% if action %}<td class="num">{% if not full %}<button class="btn small{% if action == 'wechseln' %} ghost{% endif %}" name="gruppe" value="{{ g.pk }}"{% if action == 'wechseln' %} data-confirm="Wechseln? Ihr Platz in Gruppe {{ current.number }} wird frei."{% elif g.clash == 'heavy' %} data-confirm="Trotz der Überschneidung?"{% endif %}>{% if action == 'wechseln' %}Wechseln{% else %}Anmelden{% endif %}</button>{% endif %}</td>{% endif %}
+</tr>

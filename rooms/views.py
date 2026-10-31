@@ -65,6 +65,16 @@ def around(person, start, end, exclude=None):
     return agenda(person).filter(near).exclude(pk=exclude).select_related('room')
 
 
+def side_by_side(items, overlap):
+    """Lanes for what one grid shows, so that what overlaps stands side by side instead of on top: each item gets `lane`
+    and `lanes`, how many share its time."""
+    for n, item in enumerate(items):
+        taken = {o.lane for o in items[:n] if overlap(o, item)}
+        item.lane = next(i for i in range(len(items)) if i not in taken)
+    for item in items:
+        item.lanes = 1 + max(o.lane for o in items if o is item or overlap(o, item))
+
+
 def week(bookings, day, person=None):
     """Context for the week grid: the Monday-to-Sunday dates around `day` and the bookings placed on them. For one
     person's own plan, their lessons name the student (`who`) and a change of building without a break shows."""
@@ -75,17 +85,13 @@ def week(bookings, day, person=None):
         for b in placed:
             if b.course and b.course.kind == Course.Kind.LESSON and b.person_id == person.pk:
                 b.who = ', '.join(f'{p.first_name} {p.last_name}' + (' (abgemeldet)' if p in b.absent.all() else '') for p in b.participants.all())
-    for n, b in enumerate(placed):
+    for b in placed:
         column = 2 + timezone.localtime(b.start).weekday()
         b.place = f'{line(b.start)} / {column} / {line(b.end)} / {column + 1}'
         b.short = b.end - b.start < timedelta(hours=1)  # room for two lines, the title and the room, one each
         b.tiny = b.end - b.start < timedelta(minutes=40)  # for one: the room first
-        overlapping = [o for o in placed if o is not b and o.start < b.end and b.start < o.end]
-        b.clash = bool(overlapping)
-        taken = {o.lane for o in overlapping if placed.index(o) < n}
-        b.lane = next(i for i in range(len(placed)) if i not in taken)  # side by side instead of on top
-    for b in placed:
-        b.lanes = 1 + max(o.lane for o in placed if o.start < b.end and b.start < o.end)
+        b.clash = any(o is not b and o.start < b.end and b.start < o.end for o in placed)
+    side_by_side(placed, lambda a, b: a.start < b.end and b.start < a.end)
     return {
         'dates': [monday + timedelta(days=n) for n in range(7)],
         'today': timezone.localdate(),

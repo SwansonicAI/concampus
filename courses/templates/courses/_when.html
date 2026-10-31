@@ -1,0 +1,1 @@
+{% if b.times == 1 %}am {{ b.start|date:"j.n." }}{% elif b.times == b.of %}jede Woche{% else %}{{ b.times }}-mal ab {{ b.start|date:"j.n." }}{% endif %}

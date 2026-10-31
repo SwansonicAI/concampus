@@ -5,10 +5,16 @@
 <h1>{% if course.pk %}{{ course.title }}{% else %}{{ heading }}{% endif %}</h1>
 {% if course.pk %}<p class="lead">{% if part %}{{ part }} · {% endif %}{{ course.term }}</p>{% endif %}
 {% if note %}<p class="muted"><small>{{ note }}</small></p>{% endif %}
-{% if twin %}<div class="flash">„{{ twin.title }}“ gibt es im {{ twin.term }} schon{% if twin.staff.all %}, bei {% for s in twin.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}. Für eine weitere Zeit dort eine Gruppe hinzufügen: <a href="{{ twin.get_absolute_url }}">zur Veranstaltung</a>.</div>{% endif %}
-<form method="post" class="form">
+{% if twin %}<div class="panel" style="margin-bottom: 32px">
+  <h3>„{{ twin.title }}“ gibt es im {{ twin.term }} schon</h3>
+  <p class="muted">{% if twin.title|lower != form.cleaned_data.title|lower %}Für dieselben Module, {% endif %}{% if twin.staff.all %}bei {% for s in twin.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}. Zu einer anderen Zeit wird sie dort eine weitere Gruppe: eine Veranstaltung im Verzeichnis, ein Platz je Person, jede Gruppe im Deputat ihrer Lehrenden.</p>
+  <div class="actions"><a class="btn" href="{% url 'courses:group' twin.pk %}?{% for pk in joining %}lehrende={{ pk }}&amp;{% endfor %}">Als Gruppe zu „{{ twin.title }}“ hinzufügen</a><button class="btn ghost" form="neu" name="doppelt" value="1">Trotzdem eigene Veranstaltung</button></div>
+</div>{% endif %}
+{% if week %}<section style="margin-top: 0; margin-bottom: 32px">{% if before %}<p class="lead">Bisher {% for b in before %}{{ b.start|date:"l" }}s {{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}, {{ b.room }}{% if not forloop.last %}; {% endif %}{% endfor %}, für alle. Mit einer zweiten Zeit wird das Gruppe 1, mit allen, die angemeldet sind; diese hier Gruppe 2.</p>{% endif %}{% include "courses/_weekpick.html" %}</section>{% endif %}
+{% if form.taught %}{{ form.taught|json_script:"taught" }}{% endif %}
+<form method="post" class="form" id="neu">
   {% csrf_token %}
   {{ form }}
-  <div class="actions">{% if twin %}<button class="btn ghost" name="doppelt" value="1">Trotzdem anlegen</button>{% else %}<button class="btn">Speichern</button>{% endif %}{% if group and not group.participations.exists %}<button class="btn danger" name="loeschen" value="1" formnovalidate data-confirm="Gruppe {{ group.number }} mit ihren Terminen löschen?">Löschen</button>{% endif %}<a class="btn ghost" data-close href="{{ back }}">Abbrechen</a></div>
+  <div class="actions">{% if not twin %}<button class="btn">Speichern</button>{% endif %}{% if another %}<button class="btn ghost" name="weitere" value="1">Speichern und nächste Gruppe</button>{% endif %}{% if group and not group.participations.exists %}<button class="btn danger" name="loeschen" value="1" formnovalidate data-confirm="Gruppe {{ group.number }} mit ihren Terminen löschen?">Löschen</button>{% endif %}<a class="btn ghost" data-close href="{{ back }}">Abbrechen</a></div>
 </form>
 {% endblock %}

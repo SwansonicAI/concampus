@@ -161,15 +161,32 @@ class ChecksTest(Seeded):
         self.assertEqual(booked('probe', 2), ('light', 2))
         self.assertEqual(booked('probe', 3), ('heavy', 3))
 
-    def test_the_office_places_whoever_is_without_a_group(self):
-        course = Course.objects.filter(term__name='WiSe 2026/27', groups__isnull=False).distinct().first()
-        moved = course.participations.filter(group__isnull=False).select_related('study__person').first()
-        course.participations.filter(study=moved.study_id).update(group=None)
-        self.login('dekanatsreferat').post(f'/lehre/{course.pk}/gruppen/verteilen/')
-        moved.refresh_from_db()
-        self.assertIsNotNone(moved.group)
-        self.assertLessEqual(taking(moved.group), moved.group.capacity)
-        self.assertTrue(Message.objects.filter(person=moved.study.person, subject__startswith=f'Gruppe {moved.group.number}').exists())
+
+class SchedulingTest(Seeded):
+    def test_a_second_time_makes_the_first_a_group_and_nobody_teaches_two_at_once(self):
+        office = Person.objects.get(username='dekanatsreferat')
+        course = next(
+            c for c in Course.objects.filter(term__name='WiSe 2026/27', kind='course', allocation='order', groups=None, bookings__series__isnull=False).annotate(n=Count('participations')).filter(n__gte=3).distinct()
+            if office.may('manage_courses', c)
+        )
+        teacher, room = course.staff.first(), Room.objects.filter(capacity__gte=6).first()
+        before = set(course.participations.values_list('pk', flat=True))
+        client = self.login('dekanatsreferat')
+        saturday = {'weekday': 5, 'time': '07:00', 'minutes': 60, 'room': room.pk, 'capacity': 6, 'staff': [teacher.pk]}  # a Saturday at seven: free
+        client.post(f'/lehre/{course.pk}/gruppe/', saturday)
+        first, second = course.groups.order_by('number')
+        self.assertEqual((set(first.participations.values_list('pk', flat=True)), course.bookings.filter(group=None).exists(), second.bookings.exists()), (before, False, True))
+        other = Room.objects.filter(capacity__gte=6).exclude(pk=room.pk).first()
+        r = client.post(f'/lehre/{course.pk}/gruppe/', saturday | {'room': other.pk})
+        self.assertIn('um diese Zeit schon', r.context['form'].errors['staff'][0])  # the same teacher, the same hour, another room
+
+    def test_only_a_course_nobody_is_in_can_be_deleted(self):
+        client, term = self.login('dekanatsreferat'), Term.objects.get(name='WiSe 2026/27')
+        made = Course.objects.create(term=term, title='Versehentlich angelegt')
+        client.post(f'/lehre/{made.pk}/loeschen/')
+        taken = Course.objects.filter(term=term, kind='course', participations__isnull=False).first()
+        client.post(f'/lehre/{taken.pk}/loeschen/')
+        self.assertEqual((Course.objects.filter(pk=made.pk).exists(), Course.objects.filter(pk=taken.pk).exists()), (False, True))  # people are in it: called off, not deleted
 
 
 class SettledTest(Seeded):

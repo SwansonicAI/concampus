@@ -177,8 +177,9 @@ class Institution(Tracked, models.Model):
         'Arbeitsstunden je CP', null=True, blank=True, help_text='Wie die Prüfungsordnung einen Leistungspunkt rechnet, meist 30; leer: im Studienplan nicht genannt.',
     )
     clash_dates = models.PositiveSmallIntegerField(
-        'Überschneidungen mit leichtem Hinweis', default=2,
-        help_text='So viele Termine einer Veranstaltung dürfen sich mit dem Stundenplan überschneiden, etwa mit einer Probe, ehe die Anmeldung deutlich warnt. Verhindert wird sie nie; Übezeiten zählen nicht.',
+        'Rote Warnung ab', default=3,
+        help_text='So vielen Terminen einer Veranstaltung, die sich mit dem Stundenplan überschneiden. Weniger, etwa eine Probe, warnt nur gelb. '
+                  'Verhindert wird die Anmeldung nie; Übezeiten zählen nicht.',
     )
     load_since = models.DateField(
         'Deputatskonto ab', null=True, blank=True,

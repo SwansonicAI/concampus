@@ -31,6 +31,7 @@ urlpatterns = [
     path('<int:pk>/termin/', views.date, name='date'),
     path('<int:pk>/rueckmeldung/', views.reply, name='reply'),
     path('<int:pk>/entfaellt/', views.cancel, name='cancel'),
+    path('<int:pk>/loeschen/', views.remove, name='remove'),
     path('<int:pk>/ensemble/', views.ensemble, name='ensemble'),
     path('<int:pk>/befangen/', views.recuse, name='recuse'),
     path('ensemble/<int:pk>/', views.coach, name='coach'),
