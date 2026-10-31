@@ -11,12 +11,12 @@
     <a class="btn ghost" href="{% url 'rooms:mine' %}#kalender">Kalender abonnieren</a>
   </div>
 </div>
-<p class="lead">{% if trial %}<b>{{ trial.course.title }}, Gruppe {{ trial.number }}</b>, gestrichelt: so fiele sie in Ihre Woche vom {{ dates.0|date:"j. F" }} bis {{ dates.6|date:"j. F Y" }}.{% else %}Woche vom {{ dates.0|date:"j. F" }} bis {{ dates.6|date:"j. F Y" }}{% endif %}{% if off %} · Wer krank ist, sagt über „absagen“ am Tag alle eigenen Termine auf einmal ab.{% endif %}</p>
+<p class="lead">{% if trial %}<b>{{ trial.course.title }}, Gruppe {{ trial.number }}</b>, gestrichelt: so fiele sie in Ihre Woche vom {{ monday|date:"j. F" }} bis {{ sunday|date:"j. F Y" }}.{% else %}Woche vom {{ monday|date:"j. F" }} bis {{ sunday|date:"j. F Y" }}{% endif %}{% if off %} · Wer krank ist, sagt über „absagen“ am Tag alle eigenen Termine auf einmal ab.{% endif %}</p>
 <div class="legend">
   <span class="legend-heading">Art</span>
   <span class="legend-items">{% for tone, label in tones %}<span class="legend-item"><span class="booking {{ tone }}"></span>{{ label }}</span>{% endfor %}</span>
   <span class="legend-heading">Hinweis</span>
   <span class="legend-items">{% if trial %}<span class="legend-item"><span class="booking trial"></span>Gruppe {{ trial.number }}, zur Ansicht</span>{% endif %}<span class="legend-item"><span class="booking clash"></span>Überschneidung</span><span class="legend-item"><span class="booking move"></span>Gebäudewechsel ohne Pause</span></span>
 </div>
-{% include "rooms/_week.html" %}
+{% if trial %}{% include "rooms/_across.html" %}{% else %}{% include "rooms/_week.html" %}{% endif %}
 {% endblock %}

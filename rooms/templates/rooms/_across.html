@@ -1,0 +1,12 @@
+<div class="scroll weekgrid" data-panel>
+  <div class="across" style="grid-template-columns: 88px repeat({{ rows }}, minmax(0, 1fr)); grid-template-rows: 32px repeat({{ dates|length }}, 76px)">
+    {% for cols, hour in ticks %}<span class="tick" style="grid-column: {{ cols }}">{{ hour }}:00</span><span class="line" style="grid-column: {{ cols }}"></span>{% endfor %}
+    {% for d in dates %}<div class="dayhead{% if d == today %} today{% endif %}" style="grid-row: {{ forloop.counter|add:1 }}">{{ d|date:"D j.n." }}</div>{% endfor %}
+    {% for b in placed %}
+    <a class="booking {{ b.tone }} {{ b.size }}{% if b.lanes > 1 %} split{% if clashes %} clash{% endif %}{% endif %}{% if b.move %} move{% endif %}{% if b.trial %} trial{% endif %}" style="grid-area: {{ b.across }}; --lane: {{ b.lane }}; --lanes: {{ b.lanes }}" href="{% if b.course %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}" title="{{ b.start|time:'H:i' }}–{{ b.end|time:'H:i' }} · {% if b.who %}{{ b.who }} · {% endif %}{{ b.label }} · {{ b.room }}">
+      <b>{% firstof b.who b.label %}</b><small>{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }} · {{ b.room }}</small>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% include "rooms/_weeklist.html" %}

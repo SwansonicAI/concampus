@@ -1271,12 +1271,13 @@ def taught(person, term):
 
 
 def timetable(request):
-    """One's week; with `gruppe`, a group of a course drawn in, dashed, to see how it would fit before choosing it."""
+    """One's week, days side by side; with `gruppe`, a group of a course drawn in, dashed, to see how it would fit before
+    choosing it, the days one under the other, the whole week, so that a clash shows in a row with the hours across."""
     day = understood(request.GET.get('tag', '')) or timezone.localdate()
     shown = agenda(request.user)
     if trial := Group.objects.filter(pk=request.GET.get('gruppe') or None, course__term__in=Term.shown(request.user)).select_related('course').first():
         shown = Booking.objects.filter(Q(pk__in=shown.values('pk')) | Q(group=trial, category__blocks=True))
-    context = week(shown, day, request.user)
+    context = week(shown, day, request.user, whole=bool(trial))
     for b in context['placed']:
         b.trial = trial is not None and b.group_id == trial.pk
     return render(request, 'courses/timetable.html', {'day': day, 'clashes': True, 'tones': legend(), 'off': 'teacher' in request.user.roles, 'trial': trial, **context})

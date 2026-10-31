@@ -1,4 +1,5 @@
 from datetime import UTC, datetime, timedelta
+from operator import attrgetter
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_not_required
@@ -75,9 +76,11 @@ def side_by_side(items, overlap):
         item.lanes = 1 + max(o.lane for o in items if o is item or overlap(o, item))
 
 
-def week(bookings, day, person=None):
-    """Context for the week grid: the Monday-to-Sunday dates around `day` and the bookings placed on them. For one
-    person's own plan, their lessons name the student (`who`) and a change of building without a break shows."""
+def week(bookings, day, person=None, whole=False):
+    """Context for the week grid: the bookings of the week around `day` placed on the days that have any, Monday to Friday
+    always, every day with `whole`, in the hours they need, at least 9 to 18; side by side where they overlap; and by day,
+    for a phone's list. For one person's own plan, their lessons name the student (`who`) and a change of building
+    without a break shows."""
     monday = day - timedelta(days=day.weekday())
     placed = list(bookings.filter(start__date__range=(monday, monday + timedelta(days=6))).select_related('room', 'course', 'category').prefetch_related('participants', 'absent'))
     if person:
@@ -85,18 +88,28 @@ def week(bookings, day, person=None):
         for b in placed:
             if b.course and b.course.kind == Course.Kind.LESSON and b.person_id == person.pk:
                 b.who = ', '.join(f'{p.first_name} {p.last_name}' + (' (abgemeldet)' if p in b.absent.all() else '') for p in b.participants.all())
+    local = {b.pk: (timezone.localtime(b.start), timezone.localtime(b.end)) for b in placed}
+    days = list(range(7)) if whole else sorted({0, 1, 2, 3, 4} | {start.weekday() for start, _ in local.values()})
+    first = min([9] + [start.hour for start, _ in local.values()])
+    last = max([18] + [end.hour + bool(end.minute) for _, end in local.values()])
+
+    def row(t):
+        return 2 + ((t.hour - first) * 60 + t.minute) // STEP
+
     for b in placed:
-        column = 2 + timezone.localtime(b.start).weekday()
-        b.place = f'{line(b.start)} / {column} / {line(b.end)} / {column + 1}'
-        b.short = b.end - b.start < timedelta(hours=1)  # room for two lines, the title and the room, one each
-        b.tiny = b.end - b.start < timedelta(minutes=40)  # for one: the room first
+        start, end = local[b.pk]
+        column, minutes = 2 + days.index(start.weekday()), (end - start).total_seconds() // 60
+        b.place = f'{row(start)} / {column} / {row(end)} / {column + 1}'
+        b.across = f'{column} / {row(start)} / {column + 1} / {row(end)}'  # days down, hours across (_across.html)
+        b.size = 'tiny' if minutes < 40 else 'short' if minutes < 75 else ''  # one line, two, or a title of two
         b.clash = any(o is not b and o.start < b.end and b.start < o.end for o in placed)
     side_by_side(placed, lambda a, b: a.start < b.end and b.start < a.end)
+    now, dates = timezone.localtime(), [monday + timedelta(days=d) for d in days]
     return {
-        'dates': [monday + timedelta(days=n) for n in range(7)],
-        'today': timezone.localdate(),
-        'placed': placed,
-        'ticks': [(f'{2 + i * PER_HOUR} / span {PER_HOUR}', OPEN + i) for i in range(CLOSE - OPEN)],
+        'dates': dates, 'monday': monday, 'sunday': monday + timedelta(days=6), 'today': now.date(), 'placed': placed, 'rows': (last - first) * PER_HOUR,
+        'ticks': [(f'{2 + i * PER_HOUR} / span {PER_HOUR}', first + i) for i in range(last - first)],
+        'now': f'{row(now)} / {2 + dates.index(now.date())}' if now.date() in dates and first <= now.hour < last else None,
+        'agenda': [(d, sorted((b for b in placed if local[b.pk][0].date() == d), key=attrgetter('start'))) for d in dates if any(local[b.pk][0].date() == d for b in placed)],
         'prev': monday - timedelta(days=7),
         'next': monday + timedelta(days=7),
     }

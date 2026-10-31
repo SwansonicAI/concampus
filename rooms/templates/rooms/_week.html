@@ -1,11 +1,13 @@
-<div class="scroll" data-panel>
-  <div class="week">
+<div class="scroll weekgrid" data-panel>
+  <div class="week" style="grid-template-columns: 56px repeat({{ dates|length }}, minmax(0, 1fr)); grid-template-rows: 40px repeat({{ rows }}, 6px)">
     {% for d in dates %}<div class="dayhead{% if d == today %} today{% endif %}" style="grid-column: {{ forloop.counter|add:1 }}">{{ d|date:"D j.n." }}{% if off and d >= today %} <a href="{% url 'rooms:day_off' %}?tag={{ d|date:'Y-m-d' }}" title="Alle eigenen Termine des Tages absagen, etwa bei Krankheit"><small>absagen</small></a>{% endif %}</div>{% endfor %}
     {% for rows, hour in ticks %}<span class="tick" style="grid-row: {{ rows }}">{{ hour }}:00</span><span class="line" style="grid-row: {{ rows }}"></span>{% endfor %}
+    {% if now %}<i class="now" style="grid-area: {{ now }}" title="Jetzt"></i>{% endif %}
     {% for b in placed %}
-    <a class="booking {{ b.tone }}{% if b.clash %} split{% if clashes %} clash{% endif %}{% endif %}{% if b.move %} move{% endif %}{% if b.short %} short{% endif %}{% if b.trial %} trial{% endif %}" style="grid-area: {{ b.place }}; --lane: {{ b.lane }}; --lanes: {{ b.lanes }}" href="{% if b.course %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}" title="{{ b.start|time:'H:i' }}–{{ b.end|time:'H:i' }} · {% if b.who %}{{ b.who }} · {% endif %}{{ b.label }} · {{ b.room }}{% if b.move %} · direkt vorher in {{ b.move }}{% endif %}">
-      {{ b.start|time:"H:i" }} {% if b.tiny %}{{ b.room }} · {% firstof b.who b.label %}{% else %}{% firstof b.who b.label %}<br><small>{{ b.room }}{% if b.move %} · aus {{ b.move }}{% endif %}</small>{% endif %}
+    <a class="booking {{ b.tone }} {{ b.size }}{% if b.lanes > 1 %} split{% if clashes %} clash{% endif %}{% endif %}{% if b.lanes > 2 %} narrow{% endif %}{% if b.move %} move{% endif %}{% if b.trial %} trial{% endif %}" style="grid-area: {{ b.place }}; --lane: {{ b.lane }}; --lanes: {{ b.lanes }}" href="{% if b.course %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}" title="{{ b.start|time:'H:i' }}–{{ b.end|time:'H:i' }} · {% if b.who %}{{ b.who }} · {% endif %}{{ b.label }} · {{ b.room }}{% if b.move %} · direkt vorher in {{ b.move }}{% endif %}">
+      <b>{% firstof b.who b.label %}</b><small>{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}{% if not room %} · {{ b.room }}{% endif %}</small>
     </a>
     {% endfor %}
   </div>
 </div>
+{% include "rooms/_weeklist.html" %}

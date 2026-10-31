@@ -442,15 +442,30 @@ button.chip { background: none; font: inherit; font-size: 12px; cursor: pointer;
 .prow .now { z-index: 3; width: 2px; background: var(--red); }
 
 /* Week view: days across, 5-minute rows down */
-.week { display: grid; grid-template-columns: 56px repeat(7, minmax(0, 1fr)); grid-template-rows: 40px repeat(168, 5px); border-top: 2px solid var(--ink); }
+.week { display: grid; grid-template-columns: 56px repeat(7, minmax(0, 1fr)); grid-template-rows: 40px repeat(168, 6px); border-top: 2px solid var(--ink); }  /* columns and rows set by the week shown */
 .week .dayhead { grid-row: 1; padding: 8px; font-weight: 700; border-left: 1px solid var(--line); }
 .week .dayhead.today { color: var(--accent); }
 .week .tick { grid-column: 1; padding-right: 8px; color: var(--muted); font-size: 12px; text-align: right; border-top: 1px solid var(--line); }
 .week .line { grid-column: 2 / -1; border-top: 1px solid var(--line); }
-.week .booking { margin: 1px 3px; white-space: normal; }
-.week .booking.short { white-space: nowrap; }
-:is(.week, .legend) .booking.clash { outline: 2px solid var(--red); outline-offset: -2px; }
-:is(.week, .legend) .booking.move { border-top: 3px solid var(--amber); }
+.week .booking { display: flex; flex-direction: column; gap: 1px; min-width: 0; margin: 2px 3px; padding: 4px 8px; white-space: normal; }
+.week .booking b { display: -webkit-box; overflow: hidden; font-size: 13px; font-weight: 600; line-height: 1.25; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.week .booking small { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.week .booking:is(.short, .tiny, .narrow) b { -webkit-line-clamp: 1; }  /* under 75 minutes, or a third side by side: the title in one line */
+.week .booking:is(.tiny, .narrow) small { display: none; }  /* under 40 minutes: the title alone, the rest on pointing */
+.week .booking.tiny { padding-block: 2px; }
+/* A group seen in one's week (_across.html): the days one under the other, the hours across, so that a clash shows in its row */
+.across { display: grid; border-top: 2px solid var(--ink); }
+.across .tick { grid-row: 1; padding: 6px 0 0 4px; color: var(--muted); font-size: 12px; border-left: 1px solid var(--line); }
+.across .line { grid-row: 2 / -1; border-left: 1px solid var(--line); }
+.across .dayhead { grid-column: 1; align-self: stretch; padding: 8px 8px 0 0; font-weight: 700; border-top: 1px solid var(--line); }
+.across .dayhead.today { color: var(--accent); }
+.across .booking { display: flex; z-index: 1; flex-direction: column; justify-content: center; min-width: 0; height: calc(76px / var(--lanes, 1) - 4px); margin: calc(76px / var(--lanes, 1) * var(--lane, 0) + 2px) 1px 0; padding: 2px 6px; white-space: nowrap; align-self: start; }
+.across .booking b { overflow: hidden; font-size: 13px; font-weight: 600; text-overflow: ellipsis; }
+.across .booking small { overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; }
+.week .now { z-index: 3; height: 2px; margin-top: -1px; background: var(--red); }
+.weeklist { display: none; }
+:is(.week, .across, .legend) .booking.clash { outline: 2px solid var(--red); outline-offset: -2px; }
+:is(.week, .across, .legend) .booking.move { border-top: 3px solid var(--amber); }
 .week .booking.split { width: calc(100% / var(--lanes) - 4px); margin-left: calc(100% / var(--lanes) * var(--lane) + 2px); }
 
 /* The groups of a course in a week, where the office places a new time (courses/_weekpick.html) */
@@ -538,8 +553,12 @@ a.block:hover { background: var(--accent-pale); text-decoration: none; }
   .agenda .where { grid-column: 2; }
   .prow { --rooms: 112px; min-width: 980px; }
   .prow .room { padding-right: 8px; }
-  .week { min-width: 760px; }
-  .week .tick { position: sticky; left: 0; z-index: 2; background: #fff; }
+  .weekgrid { display: none; }  /* a phone gets the week as a list, day by day */
+  .weeklist { display: grid; gap: 6px; }
+  .weeklist h3 { margin: 16px 0 2px; }
+  .weeklist h3.today { color: var(--accent); }
+  .weeklist .booking { display: grid; grid-template-columns: 92px 1fr; gap: 0 8px; padding: 8px 10px; font-size: 14px; white-space: normal; }
+  .weeklist .booking small { grid-column: 2; color: var(--muted); }
   .drawer-bar { padding: 12px 16px; }
   .drawer-bar .wider { display: none; }
   .drawer-body { padding: 20px 16px 48px; }
