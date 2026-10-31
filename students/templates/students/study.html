@@ -191,7 +191,23 @@
     <div class="inline"><label>Empfehlung<select name="advised"><option value="">keine</option>{% for o in advising %}<option value="{{ o.pk }}"{% if o.pk == study.advised_id %} selected{% endif %}>{{ o.title }}</option>{% endfor %}</select></label><button class="btn ghost">Speichern</button></div>
   </form>
   {% endwith %}{% endif %}
-  {% if not grades %}<p class="lead">Der Studienverlaufs- und Prüfungsplan; was erbracht ist und mit welchen Noten, sieht die Prüfungsverwaltung.</p>{% else %}<div class="squares"><span class="done"><span class="tile"><span class="tile-num">2</span></span> bestanden</span><span class="now"><span class="tile"><span class="tile-num">3</span></span> dieses Semester belegt</span><span class="late"><span class="tile"><span class="tile-num dot">●</span></span> Prüfung nachholen</span>{% if credited %}<span>Zahlen = CP</span>{% endif %}</div>{% endif %}
+  {% if not grades %}<p class="lead">Der Studienverlaufs- und Prüfungsplan; was erbracht ist und mit welchen Noten, sieht die Prüfungsverwaltung.</p>{% else %}
+  <div class="sv-legend">
+    <span class="sv-legend-heading">Im Feld</span>
+    <span class="sv-legend-items">
+      {% if credited %}<span class="sv-legend-item sv-legend-symbol"><span class="tile"><span class="tile-num">2</span></span>CP der Lehrveranstaltung</span>{% endif %}
+      <span class="sv-legend-item sv-legend-symbol"><span class="tile"><span class="tile-num">T</span></span>{% if credited %}Testat, ohne CP{% else %}Lehrveranstaltung{% endif %}</span>
+      <span class="sv-legend-item sv-legend-symbol"><span class="tile"><span class="tile-num dot">●</span></span>Prüfung</span>
+    </span>
+    <span class="sv-legend-heading">Stand</span>
+    <span class="sv-legend-items">
+      <span class="sv-legend-item done"><span class="tile"><span class="tile-num">2</span></span>bestanden</span>
+      <span class="sv-legend-item now"><span class="tile"><span class="tile-num">2</span></span><span>belegt, jetzt im <span class="sv-legend-sem">{{ fs }}.</span> Semester</span></span>
+      <span class="sv-legend-item late"><span class="tile"><span class="tile-num">2</span></span>überfällig</span>
+      <span class="sv-legend-item sv-legend-planned"><span class="tile"><span class="tile-num">2</span></span>geplant</span>
+    </span>
+  </div>
+  {% endif %}
   {% include "curriculum/_plan.html" with progress=grades %}
 </section>
 {% endblock %}
