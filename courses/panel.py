@@ -85,7 +85,7 @@ def sheet(course):
     `attempt`, which try this is, and `last`, whether the Prüfungsordnung allows no further one."""
     staff = list(course.staff.all())
     rows = list(
-        course.participations.select_related('study__person', 'study__program', 'study__subject', 'module__program')
+        course.participations.select_related('study__person', 'study__program', 'study__subject', 'module__program', 'group')
         .prefetch_related('scores__entered_by', 'recusals__substitute')
     )
     panel = course.kind in Course.PANEL

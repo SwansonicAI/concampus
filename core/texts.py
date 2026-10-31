@@ -224,6 +224,10 @@ TEXTS = {
         'Für „{veranstaltung}“ im {semester} stehen Sie auf Platz {platz} der Warteliste. Wird ein Platz frei, rücken Sie nach und erhalten eine Nachricht.',
         ('veranstaltung', 'semester', 'platz'),
     ),
+    'gruppe': Spec(
+        NACHRICHT, 'In eine andere Gruppe eingeteilt', 'Gruppe {gruppe}: {veranstaltung}',
+        '{von} hat Sie in „{veranstaltung}“ in Gruppe {gruppe} eingeteilt: {zeit}.', ('veranstaltung', 'gruppe', 'zeit', 'von'),
+    ),
     'nachgerueckt': Spec(
         NACHRICHT, 'Von der Warteliste nachgerückt', 'Platz frei: {veranstaltung}',
         'In „{veranstaltung}“ im {semester} ist ein Platz frei geworden: Sie sind von der Warteliste nachgerückt und angemeldet.', ('veranstaltung', 'semester'),

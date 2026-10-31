@@ -1,6 +1,7 @@
 """Courses and their people into the Hochschule's Moodle through its web services (docs/moodle.md): each published
 semester's Lehrveranstaltungen as Moodle courses, under the semester, the Fachgebiet and the Lehrform, their teachers
-and participants enrolled, whoever left taken out again, a course called off hidden. ConCampus is the record and Moodle
+and participants enrolled, whoever left taken out again, a course called off hidden; a course taught in groups with a
+Moodle group for each. ConCampus is the record and Moodle
 follows. People are found there by e-mail address; whoever has not signed in to Moodle yet is enrolled the night after
 they have. Off without settings.MOODLE."""
 import json
@@ -72,6 +73,21 @@ def summary(course, slot):
     return format_html_join('', '<p><strong>{}:</strong> {}</p>', ((k, v) for k, v in rows.items() if v)) + (linebreaks(course.description, autoescape=True) if course.description else '')
 
 
+def grouping(call, course, teams, users, ours):
+    """A Moodle course's groups as ConCampus has them, found by their idnumber or made: whoever is missing put in, whoever
+    ConCampus enrolled and is in another group now taken out."""
+    there = {g['idnumber']: g['id'] for g in call('core_group_get_course_groups', courseid=course)}
+    for idnumber, (name, emails) in teams.items():
+        if idnumber not in there:
+            there[idnumber] = call('core_group_create_groups', groups=[{'courseid': course, 'name': name, 'description': '', 'idnumber': idnumber}])[0]['id']
+        group, want = there[idnumber], {users[e] for e in emails if e in users}
+        have = set(call('core_group_get_group_members', groupids=[group])[0]['userids'])
+        if add := want - have:
+            call('core_group_add_group_members', members=[{'groupid': group, 'userid': u} for u in sorted(add)])
+        if gone := (have - want) & ours:
+            call('core_group_delete_group_members', members=[{'groupid': group, 'userid': u} for u in sorted(gone)])
+
+
 def sync(call=call, accounts=False, changed=False):
     """Bring Moodle up to ConCampus; returns {what: how many}. With changed, only the courses whose title, place, dates,
     summary or people have changed since ConCampus last sent them. With accounts, as on the demo, where no login of the
@@ -91,10 +107,14 @@ def sync(call=call, accounts=False, changed=False):
     courses = list(
         Course.objects.filter(kind=Course.Kind.COURSE, term__planning=False, term__end__gte=timezone.localdate())
         .filter(Q(cancelled=None) | Q(moodle__isnull=False)).select_related('term', 'area', 'format')
-        .prefetch_related('staff', 'modules', Prefetch('participations', Participation.objects.select_related('study__person'))).order_by('term__start', 'pk')
+        .prefetch_related('staff', 'modules', Prefetch('participations', Participation.objects.select_related('study__person')), 'groups__staff').order_by('term__start', 'pk')
     )
     mirrors = {m.course_id: m for m in MoodleCourse.objects.filter(course__in=courses)}
     wanted = {c.pk: {p.study.person.email.lower(): own['student'] for p in c.participations.all()} | {t.email.lower(): own['teacher'] for t in c.staff.all()} for c in courses}
+    teams = {c.pk: {  # each group: its name and people
+        f'campus-group-{g.pk}': (f'Gruppe {g.number}', sorted({p.study.person.email.lower() for p in c.participations.all() if p.group_id == g.pk} | {t.email.lower() for t in g.staff.all()}))
+        for g in c.groups.all()
+    } for c in courses}
     slots, todo = usual(courses), []
     for course in courses:
         term = course.term
@@ -104,7 +124,7 @@ def sync(call=call, accounts=False, changed=False):
             'startdate': stamp(term.lectures_start), 'enddate': stamp(term.end), 'visible': course.cancelled is None,
         }
         place = [term.name, course.area_id and course.area.name, course.format_id and course.format.name]
-        state = sha256(json.dumps([fields, place, wanted[course.pk]], sort_keys=True).encode()).hexdigest()
+        state = sha256(json.dumps([fields, place, wanted[course.pk], teams[course.pk]], sort_keys=True).encode()).hexdigest()
         if not (changed and course.pk in mirrors and mirrors[course.pk].state == state):
             todo.append((course, fields, state))
     emails = sorted({e for course, _, _ in todo for e in wanted[course.pk] if e})
@@ -142,6 +162,8 @@ def sync(call=call, accounts=False, changed=False):
             counts['eingeschrieben'] += len(set(roles) - set(mirror.people))
             counts['ausgetragen'] += len(gone)
             mirror.people = sorted(roles)
+            if teams[course.pk]:
+                grouping(call, mirror.moodle_id, teams[course.pk], users, set(roles))
         mirror.synced, mirror.state = timezone.now(), state
         mirror.save(update_fields=['people', 'synced', 'state'])
     counts['Kurse'], counts['ohne Moodle-Konto'] = len(todo), len(set(emails) - set(users))

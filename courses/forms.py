@@ -2,7 +2,7 @@ import re
 from collections import defaultdict
 
 from django import forms
-from django.db.models import F, Min, Q
+from django.db.models import F, Max, Min, Q
 from django.utils import timezone
 
 from core.dates import ClockField, DayField, MomentField, working
@@ -33,10 +33,15 @@ class PlanForm(forms.Form):
             self.fields['minutes'].initial = int(course.hours * 45)
         if course and course.allocation == Course.Allocation.ENSEMBLE:
             for_ensemble(self, person, course)
+        elif course and course.pk and course.groups.exists():
+            for_group(self, person, course)
 
 
 def needed(course):
-    """The seats a course's dates take: its participants, or its places while nobody is in yet."""
+    """The seats a course's dates take: its participants, or its places while nobody is in yet; in a course taught in
+    groups, those of its biggest group."""
+    if course.pk and (biggest := course.groups.aggregate(n=Max('capacity'))['n']):
+        return biggest
     return course.participations.count() or course.capacity or 0
 
 
@@ -54,6 +59,39 @@ def for_ensemble(form, person, course):
     if len(own) == 1:
         field.initial = own[0].pk
     form.order_fields(['ensemble'])
+
+
+def for_group(form, person, course):
+    """'Für': whose dates in a course taught in groups, a teacher's own groups, the office's any; empty, all of them
+    together, as for a joint lecture."""
+    office = person.may('manage_courses', course)
+    groups = course.groups.all() if office else course.groups.filter(staff=person)
+    form.fields['group'] = forms.ModelChoiceField(label='Für', queryset=groups, required=False, empty_label='Alle Gruppen')
+    form.fields['group'].label_from_instance = lambda g: f'Gruppe {g.number}'
+    if not office and len(groups) == 1:
+        form.fields['group'].initial = groups[0].pk
+    form.order_fields(['group'])
+
+
+class GroupForm(PlanForm):
+    """A group of a course: its teachers and places, and its weekly time across the lecture period."""
+
+    staff = forms.ModelMultipleChoiceField(label='Lehrende', queryset=None, widget=forms.CheckboxSelectMultiple)
+    capacity = forms.IntegerField(label='Plätze', min_value=1, max_value=999, help_text='Höchstens so viele, wie der Raum fasst.')
+    layout = [(None, ['capacity']), ('Wöchentlicher Termin', [('weekday', 'time', 'minutes', 'room')]), (None, ['staff'])]
+
+    def __init__(self, *args, person, course, **kwargs):
+        super().__init__(*args, person=person, course=course, **kwargs)
+        self.fields.pop('group', None)
+        self.fields['room'].need = self.initial.get('capacity')
+        self.fields['staff'].queryset = Person.teachers()
+        self.fields['staff'].choices = teachers(course.subject, person.ours('manage_courses'), course.modules.values('parent'))
+
+    def clean(self):
+        data = super().clean()
+        if data.get('room') and data.get('capacity') and data['capacity'] > data['room'].capacity:
+            self.add_error('capacity', f'{data["room"]} fasst {data["room"].capacity} Plätze.')
+        return data
 
 
 class LessonForm(PlanForm):
@@ -102,6 +140,8 @@ class DateForm(forms.Form):
             self.order_fields(['student'])
         elif course and course.allocation == Course.Allocation.ENSEMBLE:  # a coaching session of one's own ensembles; the office books for any
             for_ensemble(self, person, course)
+        elif course and course.groups.exists():
+            for_group(self, person, course)
 
     def clean(self):
         data = super().clean()
@@ -230,6 +270,8 @@ class CourseForm(forms.ModelForm):
             self.fields.pop('programme', None)
         if 'subject' in self.fields:
             self.fields['subject'].empty_label = 'Keines'
+        if 'capacity' in self.fields and self.instance.pk and self.instance.groups.exists():  # the places are the groups'
+            del self.fields['capacity']
         if 'program' in self.fields:
             self.fields['program'].queryset = Program.planned()
         if 'term' in self.fields and self.instance.pk and not self.moves:  # its dates and people are that semester's
@@ -372,3 +414,9 @@ class AddForm(forms.Form):
         label='Teilnehmende eintragen', max_length=120,
         widget=forms.TextInput(attrs={'list': 'enrolled', 'placeholder': 'Name oder Matrikelnummer', 'autocomplete': 'off', 'size': 32}),
     )
+
+    def __init__(self, *args, course=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        if course and course.groups.exists():  # into a group, its places notwithstanding: the teachers decide
+            self.fields['group'] = forms.ModelChoiceField(label='In Gruppe', queryset=course.groups.all(), empty_label=None)
+            self.fields['group'].label_from_instance = lambda g: f'Gruppe {g.number}'

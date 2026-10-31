@@ -37,10 +37,12 @@ def line(moment):
 
 
 def agenda(person):
-    """Bookings a person attends: booked for them or with them, taught or examined by them, or a group course they take part in."""
+    """Bookings a person attends: booked for them or with them, taught or examined by them, or a group course they take
+    part in; of an ensemble or a group of a course, only its own."""
     return Booking.objects.filter(
-        Q(person=person) | Q(participants=person) | Q(course__staff=person, ensemble=None) | Q(ensemble__coach=person)
-        | Q(course__kind=Course.Kind.COURSE, course__participations__study__person=person, ensemble=None)  # an ensemble's dates are its members'
+        Q(person=person) | Q(participants=person) | Q(course__staff=person, ensemble=None, group=None) | Q(ensemble__coach=person) | Q(group__staff=person)
+        | Q(course__kind=Course.Kind.COURSE, course__participations__study__person=person, ensemble=None, group=None)
+        | Q(group__participations__study__person=person)
     ).filter(category__blocks=True, requested=False).distinct()
 
 
@@ -413,7 +415,9 @@ def recipients(booking, by):
     """Who hears when a date is called off: whoever takes part, everyone in a group course, and whoever booked it when
     someone else calls it off."""
     people = set(booking.participants.all())
-    if booking.course_id and booking.course.kind == Course.Kind.COURSE and not booking.ensemble_id:  # an ensemble's date, its members only
+    if booking.group_id:  # a group's date, its own
+        people |= set(Person.objects.filter(studies__participations__group=booking.group_id))
+    elif booking.course_id and booking.course.kind == Course.Kind.COURSE and not booking.ensemble_id:  # an ensemble's date, its members only
         people |= set(Person.objects.filter(studies__participations__course=booking.course_id))
     people.add(booking.person)
     people.discard(by)
@@ -490,7 +494,7 @@ def day_off(request):
     elif teaching:
         found = found.filter(course__kind__in=[Course.Kind.COURSE, Course.Kind.LESSON])
     else:
-        found = found.filter(Q(person=person) | Q(course__staff=person) & (Q(ensemble=None) | Q(ensemble__coach=person)))
+        found = found.filter(Q(person=person) | Q(course__staff=person, ensemble=None, group=None) | Q(ensemble__coach=person) | Q(group__staff=person))
     dates = list(found.exclude(course__kind__in=Course.PANEL).select_related('room', 'course', 'person').prefetch_related('participants').distinct().order_by('start'))
     for b in dates:
         b.who = ', '.join(f'{p.first_name} {p.last_name}' for p in b.participants.all())

@@ -1,3 +1,4 @@
+from collections import defaultdict
 from datetime import date, timedelta
 
 from django.db.models import Count
@@ -7,11 +8,12 @@ from django.utils import timezone
 from core.models import Holiday, Message, Person, Term
 from curriculum.models import Program
 from rooms.models import Room
+from rooms.views import agenda
 from core.testing import Seeded, flashes
 from students.models import Study
 from .models import Course, Ensemble, MoodleCourse, Participation, Signup, owed_module
 from .moodle import flat, sync
-from .views import deputat, loads
+from .views import deputat, loads, taking
 
 
 class RolloverTest(Seeded):
@@ -75,6 +77,49 @@ class WaitlistTest(Seeded):
         teacher.post(f'/lehre/{course.pk}/nachricht/', {'study': [rows[2].study_id], 'subject': 'Raum', 'body': 'Hallo {vorname}'})
         self.assertEqual(list(Message.objects.filter(subject='Raum').values_list('person', 'body')), [(rows[2].study.person_id, f'Hallo {rows[2].study.person.first_name}')])
         self.assertEqual(self.login('student').get(f'/lehre/{course.pk}/nachricht/').status_code, 403)
+
+
+class GroupTest(Seeded):
+    def test_one_place_a_person_none_past_a_groups_last_and_a_switch_keeps_it(self):
+        course = Course.objects.filter(term__name='WiSe 2026/27', groups__isnull=False).distinct().first()
+        course.deadline = timezone.localdate() + timedelta(days=7)
+        course.save()
+        study = next(s for s in Study.objects.filter(status='enrolled', program__modules__courses=course).exclude(person__studies__participations__course=course).distinct() if owed_module(course, s))
+        full = next(g for g in course.groups.all() if taking(g) >= g.capacity)
+        first, second = [g for g in course.groups.all() if taking(g) < g.capacity][:2]
+        student = Client()
+        student.force_login(study.person)
+
+        def register(group):
+            return flashes(student.post(f'/lehre/{course.pk}/anmelden/', {'study': study.pk, 'gruppe': group.pk}, follow=True))
+
+        self.assertEqual(register(full), [f'Gruppe {full.number} ist inzwischen voll. Bitte eine andere wählen.'])
+        self.assertEqual(register(first), [f'Sie sind angemeldet, in Gruppe {first.number}.'])
+        self.assertEqual(register(second), [f'Sie haben schon einen Platz in Gruppe {first.number}. Die Gruppe wechseln Sie oben unter „Meine Anmeldung“.'])
+        place = Participation.objects.get(course=course, study=study)
+        student.post(f'/lehre/teilnahme/{place.pk}/wechseln/', {'gruppe': full.pk})
+        place.refresh_from_db()
+        self.assertEqual(place.group, first)  # full: the place stays
+        student.post(f'/lehre/teilnahme/{place.pk}/wechseln/', {'gruppe': second.pk})
+        place.refresh_from_db()
+        self.assertEqual(place.group, second)
+        self.assertEqual(set(agenda(study.person).filter(course=course).values_list('group', flat=True)), {second.pk})  # its own group's dates only
+        teacher = second.staff.first()
+        self.assertEqual(deputat(Course.objects.filter(pk=course.pk), teacher), course.hours * course.groups.filter(staff=teacher).count())
+
+    def test_moodle_has_a_group_for_each_and_follows_a_move(self):
+        course = Course.objects.filter(term__name='WiSe 2026/27', groups__isnull=False).distinct().first()
+        group, other = course.groups.all()[:2]
+        person = group.participations.select_related('study__person').first().study.person
+        moodle = FakeMoodle([person.email, *(t.email for t in course.staff.all())])
+        sync(moodle)
+        mine = MoodleCourse.objects.get(course=course).moodle_id
+        there = {g['idnumber']: n for n, g in moodle.groups.items() if g['courseid'] == mine}
+        user = moodle.users[person.email.lower()]
+        self.assertEqual((len(there), user in moodle.members[there[f'campus-group-{group.pk}']]), (course.groups.count(), True))
+        Participation.objects.filter(course=course, study__person=person).update(group=other)
+        sync(moodle, changed=True)
+        self.assertEqual((user in moodle.members[there[f'campus-group-{group.pk}']], user in moodle.members[there[f'campus-group-{other.pk}']]), (False, True))
 
 
 class SettledTest(Seeded):
@@ -230,6 +275,7 @@ class FakeMoodle:
     def __init__(self, emails):
         self.users = {e.lower(): n for n, e in enumerate(emails, 100)}
         self.categories, self.courses, self.enrolled = [], {}, set()
+        self.groups, self.members = {}, defaultdict(set)
 
     def __call__(self, function, **p):
         if function == 'core_course_get_categories':
@@ -252,6 +298,18 @@ class FakeMoodle:
             return [{'id': self.users[v], 'email': v} for v in p['values'] if v in self.users]
         if function == 'enrol_manual_enrol_users':
             self.enrolled |= {(e['courseid'], e['userid'], e['roleid']) for e in p['enrolments']}
+            return None
+        if function == 'core_group_get_course_groups':
+            return [{'id': n, **g} for n, g in self.groups.items() if g['courseid'] == p['courseid']]
+        if function == 'core_group_create_groups':
+            for g in p['groups']:
+                self.groups[len(self.groups) + 1] = dict(g)
+            return [{'id': len(self.groups)}]
+        if function == 'core_group_get_group_members':
+            return [{'groupid': g, 'userids': sorted(self.members[g])} for g in p['groupids']]
+        if function in ('core_group_add_group_members', 'core_group_delete_group_members'):
+            for m in p['members']:
+                (self.members[m['groupid']].add if function.endswith('add_group_members') else self.members[m['groupid']].discard)(m['userid'])
             return None
         if function == 'enrol_manual_unenrol_users':
             out = {(e['courseid'], e['userid']) for e in p['enrolments']}

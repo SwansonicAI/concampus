@@ -21,9 +21,9 @@
     <thead><tr><th>Veranstaltung</th><th>Art</th><th class="num">SWS</th><th class="num">Teilnahmen</th></tr></thead>
     <tbody>
       {% for c in teaching %}
-      <tr><td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a>
+      <tr><td><a href="{% url 'courses:course' c.pk %}"><b>{{ c.title }}</b></a>{% if c.own %}<br><small class="muted">{% if c.own|length > 1 %}Gruppen{% else %}Gruppe{% endif %} {% for g in c.own %}{{ g.number }}{% if not forloop.last %}, {% endif %}{% endfor %}</small>{% endif %}
         {% if c.cancelled %} <span class="badge no">entfällt</span>{% elif term.planning and c.origin_id %}{% if c.confirmed %} <span class="badge yes">bestätigt</span>{% else %}
-        <form method="post" action="{% url 'courses:reply' c.pk %}" class="inline" style="margin-top: 6px">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn small" name="antwort" value="findet">Findet so statt</button><a class="more" href="{% url 'courses:course' c.pk %}"><small>ändern oder absagen</small></a></form>{% endif %}{% endif %}</td><td>{{ c.format|default:c.get_kind_display }}</td><td class="num">{{ c.sws|default_if_none:""|floatformat:"-1" }}</td><td class="num" data-value="{% if c.allocation == 'ensemble' %}{{ c.mine }}{% else %}{{ c.size }}{% endif %}">{% if c.allocation == 'ensemble' %}{{ c.mine }}<br><small class="muted" title="In Ihren Ensembles, von allen Teilnehmenden">von {{ c.size }}</small>{% else %}{{ c.size }}{% endif %}{% if c.asked %}<br><a href="{% url 'courses:course' c.pk %}#anfragen"><span class="badge wait">{{ c.asked }} Anfrage{{ c.asked|pluralize:"n" }}</span></a>{% endif %}</td></tr>
+        <form method="post" action="{% url 'courses:reply' c.pk %}" class="inline" style="margin-top: 6px">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="btn small" name="antwort" value="findet">Findet so statt</button><a class="more" href="{% url 'courses:course' c.pk %}"><small>ändern oder absagen</small></a></form>{% endif %}{% endif %}</td><td>{{ c.format|default:c.get_kind_display }}</td><td class="num">{{ c.sws|default_if_none:""|floatformat:"-1" }}</td><td class="num" data-value="{% if c.allocation == 'ensemble' %}{{ c.mine }}{% elif c.own %}{{ c.ingroups }}{% else %}{{ c.size }}{% endif %}">{% if c.allocation == 'ensemble' %}{{ c.mine }}<br><small class="muted" title="In Ihren Ensembles, von allen Teilnehmenden">von {{ c.size }}</small>{% elif c.own %}{{ c.ingroups }}<br><small class="muted" title="In Ihren Gruppen, von allen Teilnehmenden">von {{ c.size }}</small>{% else %}{{ c.size }}{% endif %}{% if c.asked %}<br><a href="{% url 'courses:course' c.pk %}#anfragen"><span class="badge wait">{{ c.asked }} Anfrage{{ c.asked|pluralize:"n" }}</span></a>{% endif %}</td></tr>
       {% empty %}<tr><td colspan="4" class="empty">Keine Veranstaltungen in diesem Semester.</td></tr>
       {% endfor %}
     </tbody>
@@ -67,7 +67,7 @@
     <tbody>
       {% for p in registrations %}
       <tr>
-        <td><a href="{% url 'courses:course' p.course.pk %}"><b>{{ p.course.title }}</b></a></td>
+        <td><a href="{% url 'courses:course' p.course.pk %}"><b>{{ p.course.title }}</b></a>{% if p.group %}<br><small class="muted">Gruppe {{ p.group.number }}</small>{% endif %}</td>
         <td>{{ p.module|coded }}</td>
         <td data-value="{{ p.next.start|date:'c' }}">{% if p.next %}{{ p.next.start|date:"D j.n., H:i" }}<br><small class="muted">{{ p.next.room }}</small>{% endif %}</td>
         <td>{% if p.passed %}bestanden{% elif p.queue %}<span class="badge wait">Warteliste, Platz {{ p.queue }}</span>{% else %}<span class="badge open">angemeldet</span>{% endif %}

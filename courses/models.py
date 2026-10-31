@@ -198,7 +198,7 @@ class Course(Tracked, models.Model):
 
     def waitlist(self):
         """The participations past the places, in the order they registered, where places go by that order; elsewhere
-        the teachers choose or assign, and nobody waits."""
+        the teachers choose or assign, and nobody waits. A course in groups has its places in them, and no waitlist."""
         if self.allocation != self.Allocation.ORDER or self.capacity is None:
             return []
         return list(self.participations.order_by('created', 'pk').values_list('pk', flat=True)[self.capacity:])
@@ -345,6 +345,7 @@ class Participation(Judged, Tracked, models.Model):
         Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Begleitung',
         help_text='Bei einer Eignungsprüfung mit Korrepetition: wer begleitet, aus der Korrepetition eingeteilt.',
     )
+    group = models.ForeignKey('Group', models.SET_NULL, null=True, blank=True, related_name='participations', verbose_name='Gruppe')
     grade = models.DecimalField('Note / Punkte', max_digits=4, decimal_places=2, null=True, blank=True)
     reason = models.CharField('Begründung der abweichenden Note', max_length=200, blank=True)
     passed = models.BooleanField('Bestanden', null=True, blank=True)
@@ -444,6 +445,38 @@ class Ensemble(Tracked, models.Model):
 
     def __str__(self):
         return f'{self.name} · {self.course}'
+
+
+class Group(Tracked, models.Model):
+    """One of a course's parallel groups, such as Satztechniken in groups of six: its own teachers, weekly time and
+    places. A student has a place in one group of a course; a course without groups is taught to all together."""
+
+    capabilities = ('manage_courses',)
+    scope = (['course__subject__institute', 'course__staff__institute'], ['course__modules__program'])
+
+    course = models.ForeignKey(Course, models.CASCADE, related_name='groups', verbose_name='Veranstaltung')
+    number = models.PositiveSmallIntegerField('Nummer')
+    staff = models.ManyToManyField(Person, related_name='teaching_groups', verbose_name='Lehrende')
+    capacity = models.PositiveSmallIntegerField('Plätze', help_text='Höchstens so viele, wie der Raum fasst.')
+
+    class Meta:
+        ordering = ['number']
+        verbose_name = 'Gruppe'
+        verbose_name_plural = 'Gruppen'
+        constraints = [models.UniqueConstraint(fields=['course', 'number'], name='unique_group_number')]
+
+    def __str__(self):
+        return f'Gruppe {self.number} · {self.course}'
+
+    @property
+    def times(self):
+        """A date of each of its weekly series, in the order of the week: when and where it meets. Reads
+        `bookings.all()`; prefetch them, with their rooms, for many groups."""
+        first = {}
+        for b in sorted(self.bookings.all(), key=attrgetter('start')):
+            if b.series:
+                first.setdefault(b.series, b)
+        return sorted(first.values(), key=lambda b: (timezone.localtime(b.start).weekday(), timezone.localtime(b.start).time()))
 
 
 class Score(Judged, Tracked, models.Model):

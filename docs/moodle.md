@@ -13,6 +13,9 @@ record, Moodle follows.
   the Lehrform, the places, the modules it counts for, the Anmeldeschluss, then the description. A course called off is
   hidden, its people kept. ConCampus keeps a checksum of what it last sent (`MoodleCourse.state`), so that each minute only
   what changed goes.
+- **Groups**: a course taught in parallel groups gets a Moodle group for each (`Gruppe 2`, ID number
+  `campus-group-<id>`), with its participants and teachers; whoever changes group in ConCampus changes there too.
+  ConCampus takes out of a group only whom it enrolled.
 - **Categories**: semester (`Wintersemester 2026/27`), Fachgebiet, Lehrform, as HfM's Moodle has them; ConCampus's carry
   ID numbers `campus-…`, so that it finds them again. They go under `MOODLE_CATEGORY` (0: the top).
 - **People**: teachers with the role `MOODLE_TEACHER_ROLE` (3, Moodle's „Trainer:in“), participants with
@@ -28,7 +31,9 @@ record, Moodle follows.
 2. A service with these functions, a user for ConCampus allowed to use it, and a token for that user:
    `core_course_get_categories`, `core_course_create_categories`, `core_course_get_courses_by_field`,
    `core_course_create_courses`, `core_course_update_courses`, `core_user_get_users_by_field`,
-   `enrol_manual_enrol_users`, `enrol_manual_unenrol_users`; on the demo also `core_user_create_users`.
+   `enrol_manual_enrol_users`, `enrol_manual_unenrol_users`, `core_group_get_course_groups`, `core_group_create_groups`,
+   `core_group_get_group_members`, `core_group_add_group_members`, `core_group_delete_group_members`; on the demo also
+   `core_user_create_users`.
 3. Manual enrolment on for new courses (Moodle's default).
 
 ## Checked

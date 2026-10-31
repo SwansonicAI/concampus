@@ -3,11 +3,12 @@
 {% block subnav %}{% include menu %}{% endblock %}
 {% block content %}
 <h1>{% if course.pk %}{{ course.title }}{% else %}{{ heading }}{% endif %}</h1>
-{% if course.pk %}<p class="lead">{{ course.term }}</p>{% endif %}
+{% if course.pk %}<p class="lead">{% if part %}{{ part }} · {% endif %}{{ course.term }}</p>{% endif %}
 {% if note %}<p class="muted"><small>{{ note }}</small></p>{% endif %}
+{% if twin %}<div class="flash">„{{ twin.title }}“ gibt es im {{ twin.term }} schon{% if twin.staff.all %}, bei {% for s in twin.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}. Für eine weitere Zeit dort eine Gruppe hinzufügen: <a href="{{ twin.get_absolute_url }}">zur Veranstaltung</a>.</div>{% endif %}
 <form method="post" class="form">
   {% csrf_token %}
   {{ form }}
-  <div class="actions"><button class="btn">Speichern</button><a class="btn ghost" data-close href="{{ back }}">Abbrechen</a></div>
+  <div class="actions">{% if twin %}<button class="btn ghost" name="doppelt" value="1">Trotzdem anlegen</button>{% else %}<button class="btn">Speichern</button>{% endif %}{% if group and not group.participations.exists %}<button class="btn danger" name="loeschen" value="1" formnovalidate data-confirm="Gruppe {{ group.number }} mit ihren Terminen löschen?">Löschen</button>{% endif %}<a class="btn ghost" data-close href="{{ back }}">Abbrechen</a></div>
 </form>
 {% endblock %}

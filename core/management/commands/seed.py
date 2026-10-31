@@ -34,7 +34,7 @@ from admissions.views import DECISIONS, grounds, invite
 from core import destatis, history, keys, texts
 from core.models import Change, Holiday, Institute, Institution, Key, Membership, Message, Office, Person, Term, Text
 from courses import panel as sheets
-from courses.models import Appointment, Area, Course, Ensemble, Format, Participation, Recusal, Reduction, Score, Signup
+from courses.models import Appointment, Area, Course, Ensemble, Format, Group, Participation, Recusal, Reduction, Score, Signup
 from courses.panel import mean, rounding
 from curriculum.models import Module, Program, Rounding, Subject
 from instruments.models import Instrument, Loan
@@ -392,6 +392,8 @@ LATER = {  # courses that start after the first week of lectures: Musikwissensch
     ], date(2026, 10, 12)),
     'Hochschulchor': date(2026, 10, 13),
 }
+GROUPED = ['Satztechniken des 20./21. Jh. 1', 'Werkanalyse 2', 'Gehörbildung 2/Harmonielehre 2']  # taught in groups of six, as the rooms allow
+GROUP_STARTS = [9 * 60, 10 * 60 + 15, 11 * 60 + 30, 13 * 60, 14 * 60 + 15, 15 * 60 + 30, 16 * 60 + 45]  # an hour each, a quarter to change rooms
 PHASES = {'Hochschulorchester': ('Festsaal', date(2026, 11, 2), 5, '10:00', 420)}  # project weeks instead of weekly rehearsals: room, first day, days, start, minutes
 
 TEACHERS = [  # key, title, first, last, Hauptfach taught
@@ -1672,6 +1674,9 @@ class Command(BaseCommand):
                 ]
                 continue
             people = takers[course.pk]
+            if course.title in GROUPED:
+                patterns += self.parallel(course, teacher, sorted(people), free, take)
+                continue
             if course.title in FIXED:
                 room, day, start, minutes = FIXED[course.title]
                 start = clock(start)
@@ -1687,7 +1692,7 @@ class Command(BaseCommand):
                     continue
                 room, day, start = found
             take([(room, day), (teacher.pk, day), *((p, day) for p in people)], start, start + minutes)
-            patterns.append((room, day, start, minutes, teacher, course, None))
+            patterns.append((room, day, start, minutes, teacher, course, None, None))
         for person, course, teacher, rooms, minutes in self.lessons:
             days = [(teacher.pk + k) % 5 for k in range(5)]
             found = next((
@@ -1698,15 +1703,17 @@ class Command(BaseCommand):
                 continue
             room, day, start = found
             take([(room, day), (teacher.pk, day), (person.pk, day)], start, start + minutes)
-            patterns.append((room, day, start, minutes, teacher, course, person))  # the teacher books, the student is entered
+            patterns.append((room, day, start, minutes, teacher, course, person, None))  # the teacher books, the student is entered
         attending, free = [], Holiday.days(self.current.lectures_start, self.current.lectures_end)
-        for room, day, start, minutes, person, course, student in patterns:
+        for room, day, start, minutes, person, course, student, group in patterns:
             first = LATER.get(course.title, self.current.lectures_start)
             series, d = uuid.uuid4(), first + timedelta(days=(day - first.weekday()) % 7)
             while d <= self.current.lectures_end:
                 if d not in free:
                     category = 'probe' if course.title == 'Hochschulchor' else 'unterricht'
-                    bookings.append(Booking(room=self.rooms[room], start=at(d, start), end=at(d, start + minutes), person=person, course=course, series=series, category_id=category))
+                    bookings.append(Booking(
+                        room=self.rooms[room], start=at(d, start), end=at(d, start + minutes), person=person, course=course, series=series, category_id=category, group=group,
+                    ))
                     if student:
                         attending.append((bookings[-1], student))
                 d += timedelta(weeks=1)
@@ -1714,6 +1721,42 @@ class Command(BaseCommand):
         Booking.participants.through.objects.bulk_create(Booking.participants.through(booking_id=b.pk, person_id=s.pk) for b, s in attending)
         meeting = timezone.localdate()
         Booking.objects.create(room=self.rooms['FH 115'], start=at(meeting, hour=14), end=at(meeting, 15 * 60 + 30), person=self.staff['dekanat'], title='Prüfungsausschuss', category_id='sitzung')
+
+    def parallel(self, course, teacher, people, free, take):
+        """A course taught in groups of six: one group more than its students fill, so that there is a choice, each at a
+        time its teacher and room have free, the first as the Verzeichnis gives it, the others by Lehrbeauftragte of the
+        Institut; each student in the first group with a place that fits their week. Returns the weekly patterns."""
+        size, minutes = 6, FIXED[course.title][3] if course.title in FIXED else length(course.form)
+        if not hasattr(self, 'theorists'):
+            self.theorists = [self.lecturer('MW') for _ in range(3)]
+        staff, slots = [teacher, *self.theorists], [(day, start) for start in GROUP_STARTS for day in range(5)]
+        made, patterns = [], []
+        for n in range(-(-len(people) // size) + 1):
+            who = staff[n % len(staff)]
+            if n == 0 and course.title in FIXED:
+                room, day, start, _ = FIXED[course.title]
+                start = clock(start)
+            else:  # spread over the week
+                turn = slots[n * 4 % len(slots):] + slots[:n * 4 % len(slots)]
+                found = next(((room, day, start) for day, start in turn for room in SEMINAR_ROOMS if free([(room, day), (who.pk, day)], start, start + minutes)), None)
+                if found is None:
+                    continue
+                room, day, start = found
+            take([(room, day), (who.pk, day)], start, start + minutes)
+            group = Group.objects.create(course=course, number=len(made) + 1, capacity=size)
+            group.staff.add(who)
+            course.staff.add(who)
+            made.append((group, day, start, []))
+            patterns.append((room, day, start, minutes, who, course, None, group))
+        for person in people:
+            if not (open_ := [m for m in made if len(m[3]) < size]):
+                break
+            group, day, start, members = next((m for m in open_ if free([(person, m[1])], m[2], m[2] + minutes)), open_[0])
+            members.append(person)
+            take([(person, day)], start, start + minutes)
+        for group, _, _, members in made:
+            Participation.objects.filter(course=course, study__person__in=members).update(group=group)
+        return patterns
 
     # This term's exams: registration 01.–15.11.2026, exam period 08.–26.02.2027
 

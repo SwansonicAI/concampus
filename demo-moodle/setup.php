@@ -88,7 +88,8 @@ my_reset_page_for_all_users(MY_PAGE_PRIVATE, 'my-index');
 
 $functions = ['core_course_get_categories', 'core_course_create_categories', 'core_course_get_courses_by_field',
     'core_course_create_courses', 'core_course_update_courses', 'core_user_get_users_by_field', 'core_user_create_users',
-    'enrol_manual_enrol_users', 'enrol_manual_unenrol_users'];
+    'enrol_manual_enrol_users', 'enrol_manual_unenrol_users', 'core_group_get_course_groups', 'core_group_create_groups',
+    'core_group_get_group_members', 'core_group_add_group_members', 'core_group_delete_group_members'];
 $manager = new webservice();
 if (!$service = $DB->get_record('external_services', ['shortname' => 'campus'])) {
     $service = $DB->get_record('external_services', ['id' => $manager->add_external_service((object) [
