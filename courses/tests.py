@@ -61,7 +61,7 @@ class WaitlistTest(Seeded):
         rows = list(course.participations.order_by('created', 'pk').select_related('study__person'))
         course.capacity, course.deadline = len(rows) - 2, timezone.localdate() + timedelta(days=7)
         course.save()
-        self.assertEqual(course.waitlist(), [p.pk for p in rows[-2:]])
+        self.assertEqual(course.waitlist(), {rows[-2].pk: 1, rows[-1].pk: 2})
 
         def moved(p):
             return Message.objects.filter(person=p.study.person, subject=f'Platz frei: {course.title}').exists()
@@ -73,7 +73,7 @@ class WaitlistTest(Seeded):
         teacher = Client()
         teacher.force_login(course.staff.first())
         teacher.post(f'/lehre/{course.pk}/austragen/', {'study': [rows[1].study_id]})
-        self.assertEqual((course.participations.filter(pk=rows[1].pk).exists(), moved(rows[-1]), course.waitlist()), (False, True, []))
+        self.assertEqual((course.participations.filter(pk=rows[1].pk).exists(), moved(rows[-1]), course.waitlist()), (False, True, {}))
         teacher.post(f'/lehre/{course.pk}/nachricht/', {'study': [rows[2].study_id], 'subject': 'Raum', 'body': 'Hallo {vorname}'})
         self.assertEqual(list(Message.objects.filter(subject='Raum').values_list('person', 'body')), [(rows[2].study.person_id, f'Hallo {rows[2].study.person.first_name}')])
         self.assertEqual(self.login('student').get(f'/lehre/{course.pk}/nachricht/').status_code, 403)

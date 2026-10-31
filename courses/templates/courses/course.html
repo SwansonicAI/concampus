@@ -82,7 +82,7 @@
       {% if course.allocation == 'choice' %}Die Lehrenden wählen aus den Anfragen{% if course.capacity %}, {{ course.capacity }} Plätze{% endif %}; die Antwort kommt in Ihr Postfach.
       {% elif free is None %}Ohne Platzgrenze.
       {% elif free > 0 %}Noch {{ free }} von {{ course.capacity }} Plätzen frei, vergeben in der Reihenfolge der Anmeldung.
-      {% else %}<b>Ausgebucht.</b> Sie kämen auf Platz {{ waitlist|length|add:1 }} der Warteliste und rücken nach, sobald ein Platz frei wird.{% endif %}
+      {% else %}<b>Ausgebucht.</b> Sie kämen auf Platz {{ waiting|add:1 }} der Warteliste und rücken nach, sobald ein Platz frei wird.{% endif %}
       {% if course.deadline %}{% if course.allocation == 'choice' %}Anfragen{% else %}An- und abmelden{% endif %} bis {{ course.deadline|date:"j. F" }}.{% endif %}
     </small></p>
     {% include "courses/_clashing.html" %}
@@ -114,7 +114,7 @@
     <dl class="facts">
       <dt>Lehrende</dt><dd>{% for s in staff %}{% if s.email %}<a href="mailto:{{ s.email }}">{{ s }}</a>{% else %}{{ s }}{% endif %}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
       <dt>Umfang</dt><dd>{% if lengths %}{% for sws, n in lengths %}{{ n }} × {{ sws|mark }} SWS{% if not forloop.last %}, {% endif %}{% endfor %}<br><small class="muted">je Teilnahme nach ihrem Studienplan</small>{% elif share %}{{ share|mark }} SWS{% else %}{{ course.hours|default_if_none:"–" }} SWS{% endif %}</dd>
-      <dt>Teilnahmen</dt><dd>{% if groups %}{{ taken }} von {{ places }} Plätzen, in {{ groups|length }} Gruppen{% else %}{{ placed }}{% if course.capacity %} von {{ course.capacity }} Plätzen{% endif %}{% if waitlist %}, {{ waitlist|length }} auf der Warteliste{% endif %}{% endif %}</dd>
+      <dt>Teilnahmen</dt><dd>{% if groups %}{{ taken }} von {{ places }} Plätzen, in {{ groups|length }} Gruppen{% else %}{{ placed }}{% if course.capacity %} von {{ course.capacity }} Plätzen{% endif %}{% if waiting %}, {{ waiting }} auf der Warteliste{% endif %}{% endif %}</dd>
       <dt>Platzvergabe</dt><dd>{{ course.get_allocation_display|capfirst }}</dd>
       {% if course.allocation != 'staff' %}<dt>Anmeldung</dt><dd>{% if course.opens %}vom {{ course.opens|date:"j. F" }} {% endif %}{% if course.deadline %}bis {{ course.deadline|date:"j. F Y" }}{% elif not course.opens %}–{% endif %}</dd>{% endif %}
       <dt>Anrechenbar für</dt><dd>{% for title, programs in modules %}{{ title }}<br><small>{% for program, codes in programs %}<a href="{{ program.get_absolute_url }}">{% if program.pk in studied %}<b>{{ program.title }}</b>{% else %}{{ program.title }}{% endif %}</a> <span class="muted">{{ codes|join:", " }}</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}</small><br>{% empty %}–{% endfor %}</dd>

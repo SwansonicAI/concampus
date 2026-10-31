@@ -98,9 +98,12 @@ def teaches(person, course):
 
 
 def ahead():
-    """Subquery: participations of the same course registered earlier, or at the same moment and entered earlier."""
-    earlier = Participation.objects.filter(Q(created__lt=OuterRef('created')) | Q(created=OuterRef('created'), pk__lt=OuterRef('pk')), course=OuterRef('course'))
-    return Subquery(earlier.values('course').annotate(n=Count('pk')).values('n')[:1])
+    """Subquery: the other students of the same course who registered earlier, or at the same moment and were entered
+    earlier."""
+    earlier = Participation.objects.filter(
+        Q(created__lt=OuterRef('created')) | Q(created=OuterRef('created'), pk__lt=OuterRef('pk')), course=OuterRef('course'),
+    ).exclude(study=OuterRef('study'))
+    return Subquery(earlier.values('course').annotate(n=Count('study', distinct=True)).values('n')[:1])
 
 
 def queued(participation):
@@ -113,8 +116,8 @@ def queued(participation):
 
 def admit(course, before):
     """Tell who has moved up from the waitlist, `before` being Course.waitlist() then, that they have a place."""
-    for p in course.participations.filter(pk__in=set(before) - set(course.waitlist())).select_related('study__person'):
-        texts.send('nachgerueckt', p.study.person, course.get_absolute_url(), veranstaltung=course.title, semester=course.term)
+    for person in {p.study.person for p in course.participations.filter(pk__in=set(before) - set(course.waitlist())).select_related('study__person')}:
+        texts.send('nachgerueckt', person, course.get_absolute_url(), veranstaltung=course.title, semester=course.term)
 
 
 def seen(course, person, rows):
@@ -305,7 +308,7 @@ def course(request, pk):
     rows.sort(key=lambda p: (p.created, p.pk))
     waitlist = course.waitlist()
     for p in rows:
-        p.waiting = waitlist.index(p.pk) + 1 if p.pk in waitlist else None
+        p.waiting = waitlist.get(p.pk)
     if refused:
         panel.retype(rows, request.POST, refused)
     own = [p for p in rows if p.study.person_id == person.pk]
@@ -355,8 +358,8 @@ def course(request, pk):
         'own': own,
         'wished': wished,
         'signups': course.signups.select_related('study__person', 'study__program', 'study__subject') if staffed else [],
-        'count': len({p.study_id for p in rows}), 'placed': len(rows) - len(waitlist), 'waitlist': waitlist,
-        'free': course.capacity - len(rows) + len(waitlist) if course.capacity is not None else None,
+        'count': (count := len({p.study_id for p in rows})), 'placed': count - (waiting := len(set(waitlist.values()))), 'waiting': waiting,
+        'free': course.capacity - count + waiting if course.capacity is not None else None,
         'dropping': staffed and course.kind == Course.Kind.COURSE and course.allocation != Course.Allocation.ENSEMBLE,
         'staffed': staffed,
         'eligible': eligible, 'completed': counting and not eligible and not own,
@@ -565,8 +568,7 @@ def register(request, pk):
             messages.success(request, f'Sie sind angemeldet, in Gruppe {group.number}.{besides}')
     else:
         participation, created = Participation.objects.get_or_create(course=course, study=study, module=module)
-        if participation.pk in (waitlist := course.waitlist()):
-            place = waitlist.index(participation.pk) + 1
+        if place := course.waitlist().get(participation.pk):
             if created:
                 texts.send('warteliste', request.user, course.get_absolute_url(), veranstaltung=course.title, semester=course.term, platz=place)
             messages.success(request, f'Sie stehen auf Platz {place} der Warteliste. Wird ein Platz frei, rücken Sie nach und erhalten eine Nachricht.{besides}')
@@ -807,7 +809,7 @@ def withdraw(request, pk):
     participation = get_object_or_404(Participation.objects.select_related('course__term'), pk=pk, study__person=request.user, course__kind__in=TEACHING, passed=None)
     if participation.course.leavable:
         before = participation.course.waitlist()
-        participation.delete()
+        participation.course.participations.filter(study=participation.study_id, passed=None).delete()  # each module it counts for
         admit(participation.course, before)
         messages.success(request, f'Von „{participation.course.title}“ abgemeldet.')
     elif participation.course.is_open:

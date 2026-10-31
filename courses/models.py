@@ -197,11 +197,15 @@ class Course(Tracked, models.Model):
         return self.opens is not None and timezone.localdate() < self.opens
 
     def waitlist(self):
-        """The participations past the places, in the order they registered, where places go by that order; elsewhere
-        the teachers choose or assign, and nobody waits. A course in groups has its places in them, and no waitlist."""
+        """{participation pk: place on the waitlist, from 1}: the students past the places, in the order they first
+        registered, where places go by that order; a student is one place, whatever modules the course counts for.
+        Elsewhere the teachers choose or assign, and nobody waits. A course in groups has its places in them, and no
+        waitlist."""
         if self.allocation != self.Allocation.ORDER or self.capacity is None:
-            return []
-        return list(self.participations.order_by('created', 'pk').values_list('pk', flat=True)[self.capacity:])
+            return {}
+        rows = list(self.participations.order_by('created', 'pk').values_list('pk', 'study'))
+        waiting = {study: n for n, study in enumerate(list(dict.fromkeys(study for _, study in rows))[self.capacity:], 1)}
+        return {pk: waiting[study] for pk, study in rows if study in waiting}
 
     @property
     def withdraw_by(self):
