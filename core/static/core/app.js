@@ -727,16 +727,20 @@ if (menu) {
   document.querySelector('.search input')?.addEventListener('focus', () => menu.removeAttribute('open'));
 }
 
-// Side panel: details open beside the page instead of replacing it. Browser back or Esc closes it. A form saved in
-// it returns to the panel's page or closes the panel; either way the page underneath reloads once it closes.
+// Side panel: details open beside the page instead of replacing it. Each page opened within it is a step back can
+// return to, by its „Zurück“, named for where one came from, or the browser's back; „Schließen“ or Esc closes it at
+// once. A form saved in it returns to the panel's page or the one before; the page underneath reloads once it closes.
 const drawer = document.querySelector('.drawer');
 if (drawer) {
   const body = drawer.querySelector('.drawer-body');
   const page = drawer.querySelector('.page');
   const wider = drawer.querySelector('.wider');
+  const back = drawer.querySelector('.back');
   let stale = false;  // something was saved: the page underneath reloads once the panel closes
+  let depth = 0;  // the steps taken within the panel to the page it shows
+  const title = () => body.querySelector('h1')?.textContent.trim() || 'Zurück';
 
-  const show = async (url, options = {}) => {
+  const show = async (url, options = {}, restored = null) => {
     const response = await fetch(url, {...options, headers: {'X-Panel': '1'}});
     stale ||= response.headers.has('X-Stale');  // e.g. a message read: the Postfach's count
     if (response.status === 204) {
@@ -746,16 +750,28 @@ if (drawer) {
     }
     const html = response.headers.get('Content-Type')?.startsWith('text/html') && await response.text();
     if (!html || /^\s*<!doctype/i.test(html)) return location.assign(response.url);  // files, and pages of their own
+    const from = drawer.classList.contains('open') && title(), before = page.href;
     body.innerHTML = html;
     page.href = response.url;
     if (body.querySelector('[data-wide]')) {  // a results sheet needs every column
       drawer.classList.add('wide');
       wider.textContent = 'Schmaler';
     }
-    if (!drawer.classList.contains('open')) {
-      history.pushState({drawer: true}, '');
+    if (restored) {  // back or forward to a step: as it was
+      depth = restored.depth;
       drawer.classList.add('open');
+    } else if (!drawer.classList.contains('open')) {
+      depth = 0;
+      history.pushState({panel: response.url, depth}, '');
+      drawer.classList.add('open');
+    } else if (options.method === 'post' || response.url === before) {  // a form sent stays the same step
+      history.replaceState({...history.state, panel: response.url}, '');
+    } else {
+      depth += 1;
+      history.pushState({panel: response.url, depth, from}, '');
     }
+    back.hidden = !depth;
+    back.querySelector('span').textContent = history.state?.from || 'Zurück';
     drawer.scrollTop = 0;
     const first = body.querySelector('h1, h2') || body;  // a screen reader starts where the panel does
     first.tabIndex = -1;
@@ -763,9 +779,11 @@ if (drawer) {
     init(body);
   };
   let opener = null;  // where focus goes back to once the panel closes
-  const close = () => drawer.classList.contains('open') && (!dirty(body) || leave()) && history.back();
+  const close = () => drawer.classList.contains('open') && (!dirty(body) || leave()) && history.go(-(depth + 1));
+  back.addEventListener('click', () => (!dirty(body) || leave()) && history.back());
 
-  addEventListener('popstate', () => {
+  addEventListener('popstate', event => {
+    if (event.state?.panel) return show(event.state.panel, {}, event.state);
     if (stale) return location.reload();
     drawer.classList.remove('open', 'wide');
     wider.textContent = 'Breiter';

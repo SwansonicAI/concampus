@@ -499,8 +499,8 @@ a.block:hover { background: var(--accent-pale); text-decoration: none; }
 
 /* How a group fits a student's timetable, a link to it: what clashes, in amber now and then, in red often */
 .fit { font-size: 14px; }
-.fit.light { color: var(--amber); font-weight: 600; }
-.fit.heavy { color: var(--red); font-weight: 600; }
+.fit .light { color: var(--amber); font-weight: 600; }
+.fit .heavy { color: var(--red); font-weight: 600; }
 .slots + [data-reveal] { margin-top: 12px; }
 .booking.trial { border: 2px dashed var(--accent); border-left-width: 4px; background: #fff; }  /* a group seen in one's week before choosing it */
 
@@ -594,6 +594,7 @@ a.block:hover { background: var(--accent-pale); text-decoration: none; }
 .drawer.edge { border-left-color: var(--accent-dark); cursor: ew-resize; }
 .drawer-bar { position: sticky; top: 0; z-index: 1; display: flex; justify-content: flex-end; gap: 24px; padding: 14px 32px; border-bottom: 1px solid var(--line); background: #fff; font-size: 14px; font-weight: 600; }
 .drawer-bar .page { margin-right: auto; }
+.drawer-bar .back { max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .drawer-body { padding: 28px 32px 64px; container-type: inline-size; }
 @container (max-width: 900px) { .cols, .review { grid-template-columns: 1fr; } }
 @media print {

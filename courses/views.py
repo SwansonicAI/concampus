@@ -455,6 +455,7 @@ def course(request, pk):
         'choosing': bool(groups and eligible and not own and not wished and course.is_open and course.grouping == Course.Grouping.CHOICE),
         'switching': bool(groups and own and own[0].group_id and own[0].passed is None and course.is_open and course.grouping == Course.Grouping.CHOICE),
         'placing': bool(groups and eligible and not own and not wished and course.is_open and course.grouping != Course.Grouping.CHOICE),
+        'limit': course.clash_limit(),
         'current': (current := next((g for g in groups if own and g.pk == own[0].group_id), None)),
         'offered': sorted((g for g in groups if g.free and g != current), key=lambda g: (FIT[g.clash], weekly_at(g))),  # what fits first
         'booked_out': sorted((g for g in groups if not g.free and g != current), key=weekly_at),
@@ -704,22 +705,21 @@ def clashes(person, bookings, mine=None):
     if not (bookings := list(bookings)):
         return []
     if mine is None:
-        mine = list(agenda(person).filter(start__lt=max(b.end for b in bookings) + QUARTER, end__gt=min(b.start for b in bookings) - QUARTER).select_related('room', 'course', 'category'))
+        mine = list(agenda(person).filter(start__lte=max(b.end for b in bookings) + QUARTER, end__gte=min(b.start for b in bookings) - QUARTER).select_related('room', 'course', 'category'))
     found, dates, times = {}, Counter(), Counter()
     for b in bookings:
         at = timezone.localtime(b.start)
         dates[slot := (at.weekday(), at.time())] += 1
         others = [o for o in mine if o.course_id != b.course_id and o.category.tone != BookingCategory.Tone.PRACTICE]
-        hit = next(((o, False) for o in others if o.start < b.end and b.start < o.end), None) or next((
-            (o, True) for o in others if (b.start - QUARTER <= o.end <= b.start or b.end <= o.start <= b.end + QUARTER) and o.room.building != b.room.building
-        ), None)
-        if hit:
-            key = (slot, hit[0].course_id or hit[0].label, hit[1])
-            found.setdefault(key, (copy(b), *hit))  # its own, so that another call, or another clash of it, leaves its counts alone
+        at_once = [o for o in others if o.start < b.end and b.start < o.end]
+        near = [o for o in others if o not in at_once and (b.start - QUARTER <= o.end <= b.start or b.end <= o.start <= b.end + QUARTER) and o.room.building != b.room.building]
+        for other, way in [(o, False) for o in at_once] + [(o, True) for o in near]:  # each on its own: a lesson every week stays every week, a project week beside it or not
+            key = (slot, other.course_id or other.label, way)
+            found.setdefault(key, (copy(b), other, way))  # its own, so that another call, or another clash of it, leaves its counts alone
             times[key] += 1
     for key, (b, _, _) in found.items():
         b.times, b.of = times[key], dates[key[0]]
-    return sorted(found.values(), key=lambda f: f[0].start)
+    return sorted(found.values(), key=lambda f: (f[2], -f[0].times, f[0].start))  # what weighs most first: at the same time, often
 
 
 def lost(study):
@@ -968,11 +968,11 @@ def distribute(request, pk):
     for p in course.participations.filter(group=None).select_related('study__person').order_by('created', 'pk'):
         first.setdefault(p.study_id, p)
     dates = [b for g in groups for b in g.bookings.all()]
-    span = dates and (min(b.start for b in dates) - QUARTER, max(b.end for b in dates) + QUARTER)
+    span = dates and (min(b.start for b in dates) - QUARTER, max(b.end for b in dates) + QUARTER)  # a date ending as the window opens counts
     for p in first.values():
         if not (free := [g for g in groups if g.free]):
             break
-        mine = list(agenda(p.study.person).filter(start__lt=span[1], end__gt=span[0]).select_related('room', 'course', 'category')) if span else []
+        mine = list(agenda(p.study.person).filter(start__lte=span[1], end__gte=span[0]).select_related('room', 'course', 'category')) if span else []
         best = min(free, key=lambda g: (weight(course, clashes(p.study.person, g.bookings.all(), mine))[1], g.number))
         course.participations.filter(study=p.study_id).update(group=best)
         best.free -= 1

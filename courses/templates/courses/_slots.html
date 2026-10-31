@@ -1,6 +1,6 @@
 {% comment %}A course's groups as a student chooses among them: when and where, with whom, the places left, and how each fits their timetable, which opens beside the page with the group drawn in.{% endcomment %}
 <table class="slots" data-panel>
-  <thead><tr><th>Gruppe</th><th>Zeit und Raum</th><th>Lehrende</th>{% if seats %}<th class="num">Plätze</th>{% endif %}<th>Ihr Stundenplan</th>{% if action %}<th></th>{% endif %}</tr></thead>
+  <thead><tr><th>Zeit und Raum</th><th>Lehrende</th>{% if seats %}<th class="num">Plätze</th>{% endif %}<th>Ihr Stundenplan</th>{% if action %}<th></th>{% endif %}</tr></thead>
   <tbody>
     {% for g in slots %}{% include "courses/_slot.html" %}{% endfor %}
   </tbody>

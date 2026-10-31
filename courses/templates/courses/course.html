@@ -52,14 +52,11 @@
   {% elif course.is_open and choosing %}
   <form method="post" action="{% url 'courses:register' course.pk %}">
     {% csrf_token %}
-    <p class="muted" style="margin: 0 0 18px"><small>{% if eligible|length == 1 and eligible.0.owed %}Zählt für {{ eligible.0.owed|coded }}.{{ counts_for }} {% endif %}Wechseln bis {{ course.deadline|date:"j. F" }}, abmelden bis Ende der Vorlesungszeit.</small></p>
-    {% include "courses/_concern.html" %}
-    {% if eligible|length > 1 or eligible.0.concern %}<div class="inline" style="margin-bottom: 24px">{% include "courses/_studies.html" %}</div>{% else %}<input type="hidden" name="study" value="{{ eligible.0.pk }}">{% endif %}
     {% if offered %}{% include "courses/_slots.html" with slots=offered action="anmelden" seats=True %}
-    {% else %}
-    <p class="muted" style="margin: 0 0 18px"><small>Alle Gruppen sind voll. Die Lehrenden können Sie noch aufnehmen, etwa in einer weiteren Gruppe; die Antwort kommt in Ihr Postfach.</small></p>
-    <div class="inline">{% if not eligible.0.concern %}<input name="note" size="40" placeholder="Nachricht an die Lehrenden (freiwillig)" aria-label="Nachricht an die Lehrenden">{% endif %}<button class="btn">Platz anfragen</button></div>
-    {% endif %}
+    {% else %}<p style="margin: 0 0 12px"><b>Alle Gruppen sind voll.</b> Die Lehrenden können Sie noch aufnehmen, etwa in einer weiteren Gruppe; die Antwort kommt in Ihr Postfach.</p>{% endif %}
+    {% if eligible|length > 1 or eligible.0.concern %}<div style="margin-top: 20px">{% include "courses/_concern.html" %}<div class="inline">{% include "courses/_studies.html" %}{% if not offered %}<button class="btn">Platz anfragen</button>{% endif %}</div></div>
+    {% else %}<input type="hidden" name="study" value="{{ eligible.0.pk }}">{% if not offered %}<div class="inline"><input name="note" size="40" placeholder="Nachricht an die Lehrenden (freiwillig)" aria-label="Nachricht an die Lehrenden"><button class="btn">Platz anfragen</button></div>{% endif %}{% endif %}
+    <p class="muted" style="margin: 20px 0 0"><small>{% if eligible|length == 1 and eligible.0.owed %}Zählt für {{ eligible.0.owed|coded }}.{{ counts_for }} {% endif %}Wechseln bis {{ course.deadline|date:"j. F" }}, abmelden bis Ende der Vorlesungszeit.</small></p>
   </form>
   {% elif course.is_open %}
   <form method="post" action="{% url 'courses:register' course.pk %}">

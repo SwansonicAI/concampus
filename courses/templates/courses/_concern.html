@@ -1,1 +1,1 @@
-{% if eligible.0.concern %}<p class="caution" style="margin: 0 0 12px">{% for s in eligible %}{% if s.concern %}{% if eligible|length > 1 %}{{ s.program.title }}: {% endif %}{{ s.concern }} {% endif %}{% endfor %}Anmelden geht trotzdem, mit kurzem Grund:</p>{% endif %}
+{% if eligible.0.concern %}<p class="caution" style="margin: 0 0 8px"><small>{% for s in eligible %}{% if s.concern %}{% if eligible|length > 1 %}{{ s.program.title }}: {% endif %}{{ s.concern }} {% endif %}{% endfor %}Anmelden geht trotzdem, mit kurzem Grund:</small></p>{% endif %}
