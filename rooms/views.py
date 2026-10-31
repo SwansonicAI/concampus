@@ -52,11 +52,11 @@ QUARTER = timedelta(minutes=15)  # the way from one building to another
 
 def moves(bookings):
     """Mark the bookings of one person that begin within a quarter of an hour of the one before, in another building:
-    `move` is where they come from."""
+    `move` is where they come from, `came` the date there."""
     ordered = sorted(bookings, key=lambda b: b.start)
     for before, b in zip(ordered, ordered[1:]):
         if timedelta(0) <= b.start - before.end <= QUARTER and before.room.building != b.room.building:
-            b.move = before.room.building
+            b.move, b.came = before.room.building, before
 
 
 def around(person, start, end, exclude=None):

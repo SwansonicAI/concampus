@@ -502,7 +502,9 @@ a.block:hover { background: var(--accent-pale); text-decoration: none; }
 .fit .light { color: var(--amber); font-weight: 600; }
 .fit .heavy { color: var(--red); font-weight: 600; }
 .slots + [data-reveal] { margin-top: 12px; }
-.booking.trial { border: 2px dashed var(--accent); border-left-width: 4px; background: #fff; }  /* a group seen in one's week before choosing it */
+.slots tr.ask td { padding-top: 0; }
+.slots tr:has(+ tr.ask:not([hidden])) td { border-bottom-color: transparent; }  /* the question belongs to the row above */
+.booking.trial, .booking.trial small { border-color: var(--accent-dark); background: var(--accent); color: #fff; }  /* a group seen in one's week before choosing it */
 
 /* Print: certificates and transcripts */
 .document { max-width: 820px; }

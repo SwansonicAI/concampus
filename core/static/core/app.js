@@ -440,12 +440,29 @@ function preview(week) {
   draw();
 }
 
-// Rows kept back, such as full groups, shown on asking.
+// Rows kept back, such as full groups, shown on asking and folded away again.
 document.addEventListener('click', event => {
   const reveal = event.target.closest('[data-reveal]');
   if (!reveal) return;
-  reveal.previousElementSibling.querySelectorAll('[hidden]').forEach(rows => rows.hidden = false);
-  reveal.remove();
+  const rows = reveal.previousElementSibling.querySelector('.more-rows');
+  rows.hidden = !rows.hidden;
+  [reveal.textContent, reveal.dataset.less] = [reveal.dataset.less, reveal.textContent];
+});
+
+// A registration the Studienplan would not have asks why, in the row of the group chosen, once „Anmelden“ is pressed;
+// only that row's answer goes.
+document.addEventListener('click', event => {
+  const ask = event.target.closest('[data-ask]');
+  if (!ask) return;
+  const row = ask.closest('tr').nextElementSibling, opening = row.hidden;
+  ask.closest('tbody').querySelectorAll('tr.ask').forEach(other => {
+    const open = opening && other === row, button = other.previousElementSibling.querySelector('[data-ask]');
+    other.hidden = !open;
+    other.querySelectorAll('input').forEach(input => input.disabled = !open);
+    button.textContent = open ? 'Abbrechen' : 'Anmelden';  // the row's own button takes the question back
+    button.classList.toggle('ghost', open);
+  });
+  if (opening) row.querySelector('input').focus();
 });
 
 // What cannot be undone (data-confirm="Wirklich auflösen?") asks once more: the first click turns the button into the

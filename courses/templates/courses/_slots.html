@@ -10,4 +10,4 @@
   </tbody>
   {% endif %}
 </table>
-{% if booked_out and action %}<button type="button" class="link" data-reveal>{{ booked_out|length }} weitere Gruppe{{ booked_out|length|pluralize:"n" }} {{ booked_out|length|pluralize:"ist,sind" }} voll</button>{% endif %}
+{% if booked_out and action %}<button type="button" class="link" data-reveal data-less="Volle Gruppen ausblenden">{{ booked_out|length }} weitere Gruppe{{ booked_out|length|pluralize:"n" }} {{ booked_out|length|pluralize:"ist,sind" }} voll</button>{% endif %}

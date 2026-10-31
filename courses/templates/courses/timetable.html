@@ -11,12 +11,13 @@
     <a class="btn ghost" href="{% url 'rooms:mine' %}#kalender">Kalender abonnieren</a>
   </div>
 </div>
-<p class="lead">{% if trial %}<b>{{ trial.course.title }}, Gruppe {{ trial.number }}</b>, gestrichelt: so fiele sie in Ihre Woche vom {{ monday|date:"j. F" }} bis {{ sunday|date:"j. F Y" }}.{% else %}Woche vom {{ monday|date:"j. F" }} bis {{ sunday|date:"j. F Y" }}{% endif %}{% if off %} · Wer krank ist, sagt über „absagen“ am Tag alle eigenen Termine auf einmal ab.{% endif %}</p>
+<p class="lead">{% if trial %}<b>{{ trial.course.title }}, Gruppe {{ trial.number }}</b>, grün hervorgehoben: so fiele sie in Ihre Woche vom {{ monday|date:"j. F" }} bis {{ sunday|date:"j. F Y" }}.{% else %}Woche vom {{ monday|date:"j. F" }} bis {{ sunday|date:"j. F Y" }}{% endif %}{% if off %} · Wer krank ist, sagt über „absagen“ am Tag alle eigenen Termine auf einmal ab.{% endif %}</p>
+{% if way_in %}<form method="post" action="{% if way_in.0 == 'register' %}{% url 'courses:register' trial.course.pk %}{% else %}{% url 'courses:switch' way_in.1.pk %}{% endif %}" style="margin-bottom: 32px">{% csrf_token %}{% if way_in.0 == 'register' %}<input type="hidden" name="study" value="{{ way_in.1.pk }}">{% if way_in.1.concern %}<p class="caution" style="margin: 0 0 8px"><small>{{ way_in.1.concern }} Anmelden geht trotzdem, mit kurzem Grund:</small></p>{% endif %}{% endif %}<div class="inline">{% if way_in.1.concern %}<input name="grund" required maxlength="200" size="44" placeholder="Warum dennoch? Etwa: anderswo belegt, aus Interesse" aria-label="Warum Sie sich dennoch anmelden">{% endif %}<button class="btn" name="gruppe" value="{{ trial.pk }}"{% if way_in.0 == 'switch' %} data-confirm="Wechseln? Ihr bisheriger Platz wird frei."{% endif %}>{% if way_in.0 == 'register' %}In Gruppe {{ trial.number }} anmelden{% else %}Zu Gruppe {{ trial.number }} wechseln{% endif %}</button></div></form>{% endif %}
 <div class="legend">
   <span class="legend-heading">Art</span>
   <span class="legend-items">{% for tone, label in tones %}<span class="legend-item"><span class="booking {{ tone }}"></span>{{ label }}</span>{% endfor %}</span>
   <span class="legend-heading">Hinweis</span>
-  <span class="legend-items">{% if trial %}<span class="legend-item"><span class="booking trial"></span>Gruppe {{ trial.number }}, zur Ansicht</span>{% endif %}<span class="legend-item"><span class="booking clash"></span>Überschneidung</span><span class="legend-item"><span class="booking move"></span>Gebäudewechsel ohne Pause</span></span>
+  <span class="legend-items">{% if trial %}<span class="legend-item"><span class="booking trial"></span>Gruppe {{ trial.number }}</span>{% endif %}<span class="legend-item"><span class="booking clash"></span>Überschneidung</span><span class="legend-item"><span class="booking move"></span>Gebäudewechsel ohne Pause</span></span>
 </div>
 {% if trial %}{% include "rooms/_across.html" %}{% else %}{% include "rooms/_week.html" %}{% endif %}
 {% endblock %}

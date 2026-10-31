@@ -1,3 +1,2 @@
 {% if eligible|length > 1 %}<select name="study" aria-label="Für welches Studium">{% for s in eligible %}<option value="{{ s.pk }}">{{ s.subject }} · {{ s.program }}{% if s.owed %}: {{ s.owed.code }}{% endif %}</option>{% endfor %}</select>
 {% else %}<input type="hidden" name="study" value="{{ eligible.0.pk }}">{% endif %}
-{% if eligible.0.concern %}<input name="grund" required maxlength="200" size="44" placeholder="Warum dennoch? Etwa: anderswo belegt, aus Interesse" aria-label="Warum Sie sich dennoch anmelden">{% endif %}

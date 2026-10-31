@@ -178,9 +178,6 @@ def series(bookings):
     return list(first.values())
 
 
-FIT = {'': 0, 'light': 1, 'heavy': 2}  # what fits a student's week first
-
-
 def weekly_at(group):
     """When a group meets in the week, to sort by: its first weekly date's weekday and time; without dates, last."""
     first = group.times[:1]
@@ -457,7 +454,7 @@ def course(request, pk):
         'placing': bool(groups and eligible and not own and not wished and course.is_open and course.grouping != Course.Grouping.CHOICE),
         'limit': course.clash_limit(),
         'current': (current := next((g for g in groups if own and g.pk == own[0].group_id), None)),
-        'offered': sorted((g for g in groups if g.free and g != current), key=lambda g: (FIT[g.clash], weekly_at(g))),  # what fits first
+        'offered': sorted((g for g in groups if g.free and g != current), key=weekly_at),
         'booked_out': sorted((g for g in groups if not g.free and g != current), key=weekly_at),
         'deletable': office and not course.participations.exists() and not course.signups.exists() and not course.ensembles.exists(),
         'growing': office and course.kind == Course.Kind.COURSE and course.allocation != Course.Allocation.ENSEMBLE and (groups or course.bookings.exists()),
@@ -1278,9 +1275,30 @@ def timetable(request):
     if trial := Group.objects.filter(pk=request.GET.get('gruppe') or None, course__term__in=Term.shown(request.user)).select_related('course').first():
         shown = Booking.objects.filter(Q(pk__in=shown.values('pk')) | Q(group=trial, category__blocks=True))
     context = week(shown, day, request.user, whole=bool(trial))
-    for b in context['placed']:
-        b.trial = trial is not None and b.group_id == trial.pk
-    return render(request, 'courses/timetable.html', {'day': day, 'clashes': True, 'tones': legend(), 'off': 'teacher' in request.user.roles, 'trial': trial, **context})
+    if trial:  # only what clashes with the group is marked
+        for b in context['placed']:
+            b.trial = b.group_id == trial.pk
+        for b in context['placed']:
+            b.clash = any(o is not b and (b.trial or o.trial) and o.start < b.end and b.start < o.end for o in context['placed'])
+            if getattr(b, 'move', None) and not (b.trial or b.came.trial):  # a change of building, only the group's
+                b.move = None
+    return render(request, 'courses/timetable.html', {
+        'day': day, 'clashes': True, 'tones': legend(), 'off': 'teacher' in request.user.roles, 'trial': trial, 'way_in': trial and way_in(request.user, trial), **context,
+    })
+
+
+def way_in(person, group):
+    """How the person takes a place in `group` seen in their week: ('register', study), the study with its `concern`
+    (fits()) where the plan wants a reason, or ('switch', their participation); None where it is full or the course
+    gives none out so."""
+    course = group.course
+    if not course.is_open or course.grouping != Course.Grouping.CHOICE or taking(group) >= group.capacity:
+        return None
+    if own := course.participations.filter(study__person=person, passed=None).first():
+        return ('switch', own) if own.group_id != group.pk else None
+    studies = [fits(course, s) for s in person.studies.filter(status=Study.Status.ENROLLED).select_related('program')]
+    study = next((s for s in studies if not s.concern), None) or next(iter(studies), None)
+    return study and ('register', study)
 
 
 def hours(term, seen):
