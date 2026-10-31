@@ -32,7 +32,7 @@ from courses import panel
 from courses.forms import AddForm, DateForm, ExamForm, SlotForm, ThesisForm, substitutes
 from courses.views import credited
 from courses.models import Course, Participation, attempts
-from curriculum.models import Module, Program
+from curriculum.models import Module, Program, coverage
 from curriculum.views import plan as study_plan
 from rooms.models import Booking, BookingCategory
 from students.models import Document, DocumentType, Study
@@ -756,6 +756,7 @@ def achievements(study):
     thesis = study.participations.filter(course__kind=Course.Kind.THESIS, passed=True).select_related('course').first()
     return {
         'study': study, 'rows': rows, 'earned': earned, 'total': total, 'finished': earned >= total, 'average': average,
+        'covered': coverage(tree, set(study.program.foci()) - {study.focus_id} if study.focus_id else ())[0],
         'completed': last and timezone.localdate(last),  # the Zeugnis is dated by the last result
         'thesis': thesis and thesis.course.title,
         'honours': None not in (average, honours) and average <= honours, 'today': timezone.localdate(), 'signature': texts.block('unterschrift_zeugnisse'),

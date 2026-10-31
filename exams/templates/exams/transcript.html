@@ -37,13 +37,15 @@
         {% endif %}
         {% empty %}<tr><td colspan="5" class="empty">Noch keine Leistungen.</td></tr>
         {% endfor %}
-        <tr class="total"><td colspan="2">Summe</td><td class="num">{{ earned }} / {{ total }}</td><td></td><td class="num">{{ average|default:"–" }}</td></tr>
+        <tr class="total"><td colspan="2">Summe</td><td class="num">{{ earned }} / {{ total }}</td><td></td><td class="num">{{ average|default:"–" }}{% if average and not complete %}<br><small class="muted">vorläufig</small>{% endif %}</td></tr>
       </tbody>
     </table>
   </section>
   <p class="muted" style="margin-top: 16px"><small>Die Gesamtnote ist das gewichtete Mittel der Modulnoten nach dem Studienverlaufs- und Prüfungsplan, auf eine Nachkommastelle kaufmännisch gerundet (RPSO § 15). Unbenotete Module gehen nicht ein.</small></p>
   {% if complete %}
   <p style="margin-top: 24px">Gesamtnote: <b>{{ average }} ({{ verbal }}){% if honours %}, mit Auszeichnung{% endif %}</b></p>
+  {% elif average %}
+  <p style="margin-top: 24px">Vorläufige Durchschnittsnote: <b>{{ average }}</b>, berechnet aus Modulen mit {{ covered }} % des Gewichts der Gesamtnote.</p>
   {% endif %}
   <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{% if complete and completed %}{{ completed|date:"j. F Y" }}{% else %}{{ today|date:"j. F Y" }}{% endif %}</span>{% if complete %}{% for name in signature.splitlines %}<span>{{ name }}</span>{% endfor %}{% else %}<span>{{ sender }}</span>{% endif %}</div>
 </div>

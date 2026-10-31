@@ -290,6 +290,8 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .svpp .about { display: block; max-width: 90ch; margin-top: 4px; color: var(--muted); font-size: 13px; line-height: 20px; }
 .svpp .find { display: block; margin-top: 6px; color: var(--accent-dark); font-size: 13px; font-weight: 400; line-height: 20px; text-decoration: none; }
 .svpp .find:hover { text-decoration: underline; }
+.svpp tr.total td { padding-top: 14px; padding-bottom: 14px; }
+.svpp tr.total small { display: block; color: var(--muted); font-size: 13px; font-weight: 400; line-height: 20px; }
 .svpp .pending { display: block; margin-top: 2px; color: var(--amber); font-size: 11px; font-weight: 600; line-height: 16px; white-space: nowrap; }
 .svpp tr.part small { line-height: 1; }
 /* Schwerpunkte to choose between: each a block with a bar down its left, „oder“ where one ends and the next begins */

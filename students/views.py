@@ -33,7 +33,7 @@ from core.text import fold, handle, matching
 from core.views import SHOWN, preview, without_term
 from courses.models import Course, Format, Participation
 from courses.views import untimed
-from curriculum.models import Module, Program, Subject
+from curriculum.models import Module, Program, Subject, coverage
 from curriculum.views import columns, plan
 from exams.views import exhausted
 from instruments.models import Loan
@@ -309,6 +309,7 @@ def study(request, pk):
     taking = set(study.participations.filter(course__term=Term.current()).values_list('module_id', flat=True))
     choices = study.program.choices()
     rows = plan(tree, study.program.semesters, choices, taking, late)
+    covered, outstanding = coverage(tree, set(study.program.foci()) - {study.focus_id} if study.focus_id else ())
     grades = own or files or study.teacher_id == person.pk  # the student office sees outcomes: Prüfungsanspruch, Abschluss
     options = study.options() if study.status == Study.Status.ENROLLED else []
     lost = exhausted(study) if study.status == Study.Status.ENROLLED else []  # the Prüfungsanspruch: no Rückmeldung then
@@ -326,7 +327,7 @@ def study(request, pk):
         'semesters': range(1, study.program.semesters + 1),
         'taking': taking,
         'late': late,
-        'average': average,
+        'average': average, 'covered': covered, 'outstanding': outstanding[:3],
         'earned': sum(m.earned for m in tree),
         'total': sum(m.credits for m in tree),
         'terms': terms,

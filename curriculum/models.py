@@ -29,6 +29,28 @@ def weighted(nodes, rounding=Rounding.HALF_UP):
     return rounded(mean, rounding) if rounding else mean
 
 
+def coverage(roots, skip=()):
+    """How far a Gesamtnote so far rests on grades given: the per cent of its weight they carry, and the top modules still
+    open, each with the per cent that waits on it, largest first. A branch counts by its children; what has no weight,
+    is waived for the Hauptfach or is a Schwerpunkt not chosen (`skip`) is left out."""
+    def counted(nodes):
+        return [n for n in nodes if n.weight and not getattr(n, 'excused', False) and n.pk not in skip]
+
+    def carried(node):  # 0 to 1
+        if not node.nodes:
+            return int(node.grade is not None)
+        kids = counted(node.nodes)
+        total = sum(n.weight for n in kids)
+        return sum(n.weight * carried(n) for n in kids) / total if total else 0
+
+    tops = counted(roots)
+    total = sum(n.weight for n in tops)
+    if not total:
+        return 0, []
+    waiting = [(n, round(100 * n.weight * (1 - carried(n)) / total)) for n in tops]
+    return round(100 * sum(n.weight * carried(n) for n in tops) / total), sorted([w for w in waiting if w[1]], key=lambda w: -w[1])
+
+
 class Subject(Tracked, models.Model):
     """Main subject (Hauptfach)."""
 

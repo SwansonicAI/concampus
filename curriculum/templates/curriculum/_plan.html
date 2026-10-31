@@ -48,6 +48,12 @@
       </tr>
       {% endif %}
       {% endfor %}
+      {% if progress and average %}
+      <tr class="total">
+        <td colspan="{{ span|add:'-1' }}">{% if study.status == 'graduated' %}Gesamtnote{% else %}Vorläufige Durchschnittsnote<small>aus Modulen mit {{ covered }} % des Gewichts der Gesamtnote{% if outstanding %}; noch offen: {% for node, share in outstanding %}{{ node.title }} {{ share }} %{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</small>{% endif %}</td>
+        <td class="num">{{ average|floatformat:1 }}</td>
+      </tr>
+      {% endif %}
     </tbody>
   </table>
   <div popover class="explainer" id="zum-plan">
