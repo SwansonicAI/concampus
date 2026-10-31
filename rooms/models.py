@@ -156,7 +156,7 @@ class Booking(Tracked, models.Model):
     keep = timedelta(days=730)
 
     room = models.ForeignKey(Room, models.CASCADE, related_name='bookings', verbose_name='Raum')
-    start = models.DateTimeField('Beginn')
+    start = models.DateTimeField('Beginn', db_index=True)  # every week, day and agenda is a range of it
     end = models.DateTimeField('Ende')
     category = models.ForeignKey(BookingCategory, models.PROTECT, to_field='key', related_name='bookings', verbose_name='Kategorie')
     person = models.ForeignKey(Person, models.CASCADE, related_name='bookings', verbose_name='Gebucht für')

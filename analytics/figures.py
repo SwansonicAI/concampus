@@ -14,7 +14,8 @@ from django.utils.formats import date_format
 from django.utils.choices import flatten_choices
 
 from core import destatis
-from core.models import Institute, Person, Term
+from core.dates import starting
+from core.models import Institute, Person, Term, once
 from courses.models import Course, Participation
 from curriculum.models import Program, Subject
 from rooms.models import Booking, BookingCategory, Room, RoomFunction
@@ -237,8 +238,11 @@ MEASURES = {m.key: m for m in [
 
 def semesters(measure):
     """The semesters with something to count, up to the last one (for applications, the round still open)."""
-    last = measure.rows().order_by(f'-{measure.term}__start').values_list(f'{measure.term}__start', flat=True).first() if measure.term else timezone.localdate()
-    return list(Term.objects.filter(start__lte=last).order_by('start')) if last else []
+    def fetch():
+        last = measure.rows().order_by(f'-{measure.term}__start').values_list(f'{measure.term}__start', flat=True).first() if measure.term else timezone.localdate()
+        return list(Term.objects.filter(start__lte=last).order_by('start')) if last else []
+
+    return list(once(('semesters', measure.key), fetch))  # asked by every chart of the measure
 
 
 def window(measure, years=None):
@@ -250,7 +254,7 @@ def window(measure, years=None):
 def within(measure, rows, terms):
     if measure.term:
         return rows.filter(**{f'{measure.term}__in': terms})
-    return rows.filter(reduce(or_, (Q(start__date__range=(t.start, t.end)) for t in terms), Q(pk=None)))
+    return rows.filter(reduce(or_, (Q(**starting(t.start, t.end)) for t in terms), Q(pk=None)))
 
 
 def narrowed(measure, terms=None, where=None, keys=()):

@@ -38,7 +38,7 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # the app is only
 SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG
 SECURE_HSTS_SECONDS = 365 * 86400  # browsers come back over HTTPS only
 SESSION_COOKIE_AGE = 2 * 3600  # signed out after two hours without a request, and when the browser closes
-SESSION_SAVE_EVERY_REQUEST = SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # renewed by core.middleware.renewal
 CSRF_FAILURE_VIEW = 'core.views.stale'
 
 
@@ -68,6 +68,8 @@ MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'core.middleware.renewal',
+    'core.middleware.lookups',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -77,6 +79,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'core.middleware.panel',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'core.middleware.Atomic',
 ]
 
 ROOT_URLCONF = 'concampus.urls'
@@ -109,7 +112,6 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': BASE_DIR / 'db.sqlite3',
-        'ATOMIC_REQUESTS': True,  # a change and its history are saved together or not at all
     }
 }
 if url := os.environ.get('DATABASE_URL'):  # postgresql://user:password@host/name?sslmode=require

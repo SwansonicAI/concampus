@@ -1,4 +1,5 @@
 from collections import defaultdict
+from copy import copy
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 from django.core.exceptions import ValidationError
@@ -7,7 +8,7 @@ from django.urls import reverse
 
 from core import destatis
 from core.keys import DEGREES, FIELDS, KeyField
-from core.models import Term, Tracked
+from core.models import Term, Tracked, looked_up, once
 
 
 class Rounding(models.TextChoices):  # what Prüfungsordnungen say about one decimal
@@ -228,9 +229,9 @@ class Program(Tracked, models.Model):
         `first` and `last` semester, and, given {module_id: grade} of passed modules, `done`, `earned` and `grade`;
         with the Hauptfach, exams waived for it count as done (`excused`)."""
         results = results or {}
-        excused = set(self.modules.filter(waived=subject).values_list('pk', flat=True)) if subject else set()
+        excused = once(('waived', self.pk, subject), lambda: set(self.modules.filter(waived=subject).values_list('pk', flat=True))) if subject else set()
         children = defaultdict(list)
-        for module in self.modules.order_by('pk'):  # areas and modules as the plan lists them; what is booked in them by semester
+        for module in map(copy, once(('modules', self.pk), lambda: list(self.modules.order_by('pk')))):  # each tree its own, as the walk marks it; areas and modules as the plan lists them, what is booked in them by semester
             children[module.parent_id].append(module)
         for kids in children.values():
             kids.sort(key=lambda m: (0, 0, '', m.pk) if m.pk in children else (1, m.semester or 99, m.code, m.pk))
@@ -257,6 +258,18 @@ class Program(Tracked, models.Model):
         for root in children[None]:
             walk(root)
         return children[None]
+
+
+def preload(programs):
+    """Within a GET request, the modules of these programmes in one query, which their curriculum() then builds on
+    (core.models.once), rather than one query each."""
+    if looked_up.get() is None:
+        return
+    rows = defaultdict(list)
+    for module in Module.objects.filter(program__in=programs).order_by('pk'):
+        rows[module.program_id].append(module)
+    for program in programs:
+        once(('modules', program.pk), lambda program=program: rows[program.pk])
 
 
 class Module(Tracked, models.Model):

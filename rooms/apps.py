@@ -32,6 +32,7 @@ class RoomsConfig(Tile, AppConfig):
     def figure(self, person):
         from django.utils import timezone
 
+        from core.dates import starting
         from core.models import Institution
         from .forms import quota
         from .models import Booking
@@ -39,11 +40,11 @@ class RoomsConfig(Tile, AppConfig):
 
         today = timezone.localdate()
         if 'manage_bookings' in person.roles:
-            return f'{person.within(Booking.objects.filter(start__date=today), "manage_bookings").count()} Buchungen heute'
+            return f'{person.within(Booking.objects.filter(**starting(today)), "manage_bookings").count()} Buchungen heute'
         if 'student' in person.roles:
             daily = Institution.get().student_daily_hours
             return f'Übezeit heute: noch {number_format(daily - quota(person, today))} von {daily} Std.'
-        return f'Ihre Termine heute: {agenda(person).filter(start__date=today).count()}'
+        return f'Ihre Termine heute: {agenda(person).filter(**starting(today)).count()}'
 
     def tasks(self, person):
         from django.utils import timezone

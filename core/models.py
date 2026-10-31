@@ -1,3 +1,4 @@
+from contextvars import ContextVar
 from datetime import timedelta
 
 from django.apps import apps
@@ -17,6 +18,19 @@ from django.utils.text import slugify
 from . import destatis
 from .access import CAPABILITIES, CODENAMES
 from .keys import COUNTRIES, DEGREES, DISTRICTS, FIELDS, GERMAN, PLACES, TOWNS, UNIVERSITIES, Edition, Key, KeyField  # noqa: F401, the key lists' models
+
+looked_up = ContextVar('looked_up', default=None)  # what a GET request has looked up: core.middleware.lookups
+
+
+def once(key, fetch):
+    """`fetch()`, within a GET request once per `key`: what does not change while a page is shown, such as the current
+    semester, asked for in many places. Elsewhere, as after a change, every time."""
+    found = looked_up.get()
+    if found is None:
+        return fetch()
+    if key not in found:
+        found[key] = fetch()
+    return found[key]
 
 
 class Tracked:
@@ -200,7 +214,7 @@ class Institution(Tracked, models.Model):
     @classmethod
     def get(cls):
         """The record, or its defaults until someone fills it in."""
-        return cls.objects.first() or cls()
+        return once('institution', lambda: cls.objects.first() or cls())
 
     @property
     def lines(self):
@@ -496,21 +510,17 @@ class Person(Tracked, AbstractUser):
     def roles(self):
         """The capabilities of the person's offices, plus 'student', 'applicant', 'alumni' (studied here, graduated or not),
         'teacher' and 'juror' (on the jury of an Eignungsprüfung) as derived from studies and teaching."""
-        roles = set(self.reach)
-        studies = list(self.studies.annotate(registered=models.Count('terms')).values_list('status', 'registered'))
-        statuses = {status for status, _ in studies}
-        if 'enrolled' in statuses:
-            roles.add('student')
-        if statuses & {'applied', 'admitted', 'waitlisted'}:
-            roles.add('applicant')
-        if any(status in ('graduated', 'left') and registered for status, registered in studies):
-            roles.add('alumni')
-        kinds = set(self.teaching.values_list('kind', flat=True).distinct())
-        if kinds:
-            roles.add('teacher')
-        if 'audition' in kinds or self.substituting.filter(participation__course__kind='audition').exists():  # a substitute too
-            roles.add('juror')
-        return roles
+        studies, courses, me = self.studies.model.objects, self.teaching.model.objects, models.OuterRef('pk')
+        found = Person.objects.filter(pk=self.pk).values(  # in one query, asked on every page
+            student=models.Exists(studies.filter(person=me, status='enrolled')),
+            applicant=models.Exists(studies.filter(person=me, status__in=['applied', 'admitted', 'waitlisted'])),
+            alumni=models.Exists(studies.filter(person=me, status__in=['graduated', 'left'], terms__isnull=False)),
+            teacher=models.Exists(courses.filter(staff=me)),
+            juror=models.Exists(courses.filter(staff=me, kind='audition')),
+            substitute=models.Exists(self.substituting.model.objects.filter(substitute=me, participation__course__kind='audition')),  # on the jury too
+        ).get()
+        found['juror'] |= found.pop('substitute')
+        return set(self.reach) | {role for role, held in found.items() if held}
 
 
 class Office(Tracked, Group):
@@ -622,11 +632,11 @@ class Term(Tracked, models.Model):
     @classmethod
     def current(cls):
         """The term under way; between terms the last one, before the first term the first."""
-        return cls.objects.filter(start__lte=timezone.localdate()).order_by('-start').first() or cls.objects.first()
+        return once('current', lambda: cls.objects.filter(start__lte=timezone.localdate()).order_by('-start').first() or cls.objects.first())
 
     @classmethod
     def upcoming(cls):
-        return cls.objects.filter(start__gt=timezone.localdate()).first()
+        return once('upcoming', lambda: cls.objects.filter(start__gt=timezone.localdate()).first())
 
     def clean(self):
         if self.start and self.end and self.start >= self.end:

@@ -8,7 +8,7 @@ from django.utils import timezone
 from django.utils.formats import number_format
 
 from core import history
-from core.dates import ClockField, DayField
+from core.dates import ClockField, DayField, starting
 from core.apps import plural
 from core.models import Institution, Person, Term
 from .models import Booking, BookingCategory, Room, later, span
@@ -27,7 +27,7 @@ def bookable(person):
 
 def quota(person, day, exclude=None):
     """Hours a student has booked on `day` that count against their daily hours, last-minute bookings excepted."""
-    counted = person.bookings.filter(category__quota=True, start__date=day).exclude(pk=exclude)
+    counted = person.bookings.filter(category__quota=True, **starting(day)).exclude(pk=exclude)
     last_minute = timedelta(hours=Institution.get().last_minute_hours)
     return round(sum((b.end - b.start).total_seconds() for b in counted if b.start - b.created > last_minute) / 3600, 1)
 

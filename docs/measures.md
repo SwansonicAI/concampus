@@ -27,7 +27,8 @@ periods and rules: `docs/rules.md`; the legal requirements: `docs/legal.md`.
   common passwords and the person's own data (`AUTH_PASSWORD_VALIDATORS`). Five failures for one name from one address
   hold it back there for a quarter of an hour (`core/backends.py` `held()`).
 - Sessions end after two hours without a request and when the browser closes (`SESSION_COOKIE_AGE`,
-  `SESSION_EXPIRE_AT_BROWSER_CLOSE`); cookies only over HTTPS (`SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`).
+  `SESSION_EXPIRE_AT_BROWSER_CLOSE`; a request renews the time at most every five minutes, `core.middleware.renewal`);
+  cookies only over HTTPS (`SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`).
 - Every page needs a sign-in (`LoginRequiredMiddleware`), but for the login, the check of a Bescheinigung's code, a
   person's calendar feed by its secret signed link, and the public calendar of concerts. The demo also asks a shared access code first (`core/middleware.py` `gate`).
 - Accounts of people who leave are deactivated, which ends sign-in at once (Einstellungen › Konten).

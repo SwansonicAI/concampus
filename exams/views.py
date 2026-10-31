@@ -131,7 +131,7 @@ def index(request):
     term = Term.pick(request.GET.get('semester'))
     context = {'term': term, 'terms': Term.objects.filter(courses__kind=Course.Kind.EXAM).distinct().order_by('-start')}
     exams = (
-        Course.objects.filter(term=term, kind__in=[Course.Kind.EXAM, Course.Kind.THESIS]).select_related('subject').prefetch_related('staff', 'modules__program')
+        Course.objects.filter(term=term, kind__in=[Course.Kind.EXAM, Course.Kind.THESIS]).select_related('subject', 'assessor').prefetch_related('staff', 'modules__program')
         .annotate(date=Min('bookings__start'), size=Count('participations', distinct=True), candidate=Min('participations__study__person__last_name'))
         .annotate(graded=Count('participations', filter=Q(participations__passed__isnull=False), distinct=True))
         .order_by(Coalesce('date', Cast('deadline', DateTimeField())).asc(nulls_last=True), 'title')  # a thesis by when it is due

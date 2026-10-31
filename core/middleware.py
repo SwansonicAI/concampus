@@ -1,9 +1,13 @@
+import time
+
 from django.conf import settings
+from django.db import transaction
 from django.contrib.auth.views import redirect_to_login
 from django.http import HttpResponse
 from django.urls import reverse
 
 from .history import acting
+from .models import looked_up
 from .views import admitted
 
 
@@ -19,6 +23,50 @@ def gate(get_response):
         return get_response(request)
 
     return middleware
+
+
+def renewal(get_response):
+    """Signed out after two hours without a request (SESSION_COOKIE_AGE): a request renews the session's time once five
+    minutes have passed since it was last renewed, not every request, which would write to the database each time."""
+
+    def middleware(request):
+        response = get_response(request)
+        session = getattr(request, 'session', None)
+        if session is not None and not session.is_empty() and time.time() - session.get('renewed', 0) > 300:
+            session['renewed'] = int(time.time())
+        return response
+
+    return middleware
+
+
+def lookups(get_response):
+    """A GET request looks up what does not change while it is answered only once (core.models.once)."""
+
+    def middleware(request):
+        token = looked_up.set({} if request.method in ('GET', 'HEAD') else None)
+        try:
+            return get_response(request)
+        finally:
+            looked_up.reset(token)
+
+    return middleware
+
+
+class Atomic:
+    """A change and its history are saved together or not at all: the view of a request that may change something runs
+    in one transaction, as ATOMIC_REQUESTS would. A GET changes a single row at most and goes without, two round trips
+    to the database fewer."""
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        return self.get_response(request)
+
+    def process_view(self, request, view, args, kwargs):
+        if request.method not in ('GET', 'HEAD'):
+            with transaction.atomic():
+                return view(request, *args, **kwargs)
 
 
 def history(get_response):

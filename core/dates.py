@@ -22,6 +22,15 @@ def months_before(day, months):
     return day.replace(year=year, month=month + 1, day=min(day.day, monthrange(year, month + 1)[1]))
 
 
+def starting(first, last=None):
+    """Filter for what starts on the local day `first`, or from it to `last`: a range of `start` itself, which its index
+    serves, where start__date would convert every row first."""
+    def midnight(day):
+        return timezone.make_aware(datetime.combine(day, time.min))
+
+    return {'start__gte': midnight(first), 'start__lt': midnight((last or first) + timedelta(days=1))}
+
+
 def weekday(word):
     """0–6 for 'mo', 'Mi.', 'donnerstag'; None otherwise."""
     word = word.strip('.,')

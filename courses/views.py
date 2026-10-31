@@ -11,7 +11,8 @@ from types import SimpleNamespace
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import Count, Exists, F, Max, Min, OuterRef, Prefetch, Q, Subquery
+from django.db.models import Count, Exists, F, Max, Min, OuterRef, Prefetch, Q, Subquery, prefetch_related_objects
+from django.db.models.functions import Coalesce
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -48,12 +49,19 @@ def deputat(courses, person):
         'participations__module__program', 'origin__participations__module__program'))
 
 
+def counted(rows, by, field='pk'):
+    """How many distinct `field` of `rows`, filtered by OuterRef and grouped `by` it, as a subquery: counts side by
+    side, which joins in one query would multiply."""
+    return Coalesce(Subquery(rows.order_by().values(by).annotate(n=Count(field, distinct=True)).values('n')), 0)
+
+
 def coaching(courses, person):
     """The courses with `size`, `grouped` (how many groups) and `coached`: the ensembles the person coaches, or the
     groups they teach, as share() counts them."""
+    here = OuterRef('pk')
     return courses.annotate(
-        size=Count('participations__study', distinct=True), grouped=Count('groups', distinct=True),
-        coached=Count('ensembles', filter=Q(ensembles__coach=person), distinct=True) + Count('groups', filter=Q(groups__staff=person), distinct=True),
+        size=counted(Participation.objects.filter(course=here), 'course', 'study'), grouped=counted(Group.objects.filter(course=here), 'course'),
+        coached=counted(Ensemble.objects.filter(course=here, coach=person), 'course') + counted(Group.objects.filter(course=here, staff=person), 'course'),
     )
 
 
@@ -210,9 +218,10 @@ def grouped(course, person=None):
     groups = list(course.groups.annotate(size=Count('participations__study', distinct=True)).prefetch_related(
         'staff', Prefetch('bookings', Booking.objects.filter(start__gte=timezone.now()).select_related('room')),
     ))
+    mine = theirs(person, [b for g in groups for b in g.bookings.all()]) if person else None
     for g in groups:
         g.free = max(g.capacity - g.size, 0)
-        g.clashing = clashes(person, g.bookings.all()) if person else []
+        g.clashing = clashes(person, g.bookings.all(), mine) if person else []
         g.clash, g.clash_dates = weight(course, g.clashing)
     return groups
 
@@ -703,7 +712,7 @@ def clashes(person, bookings, mine=None):
     if not (bookings := list(bookings)):
         return []
     if mine is None:
-        mine = list(agenda(person).filter(start__lte=max(b.end for b in bookings) + QUARTER, end__gte=min(b.start for b in bookings) - QUARTER).select_related('room', 'course', 'category'))
+        mine = theirs(person, bookings)
     found, dates, times, weeks = {}, Counter(), Counter(), defaultdict(set)
     for b in bookings:
         at = timezone.localtime(b.start)
@@ -719,6 +728,13 @@ def clashes(person, bookings, mine=None):
     for key, (b, _, _) in found.items():
         b.times, b.of, b.weeks = times[key], dates[key[0]], weeks[key]
     return sorted(found.values(), key=lambda f: (f[2], -f[0].times, f[0].start))  # what weighs most first: at the same time, often
+
+
+def theirs(person, bookings):
+    """The person's dates over the time `bookings` span, a quarter of an hour either side: what clashes() compares with."""
+    if not bookings:
+        return []
+    return list(agenda(person).filter(start__lte=max(b.end for b in bookings) + QUARTER, end__gte=min(b.start for b in bookings) - QUARTER).select_related('room', 'course', 'category'))
 
 
 def lost(study):
@@ -1215,8 +1231,7 @@ def to_take(study, term):
     `term` taken or asked for yet: [(module, the courses of `term` to take for it)], where there are any. A part of the
     plan to choose from comes once, from the semester it begins in, with the courses of all it offers; once something in
     it is taken in `term`, only in its last semester, while its credits fall short (`short`). Never a Schwerpunkt
-    not chosen, nor what the teachers give out, as Einzelunterricht. Each course with `times`, `free`, `concern` and how
-    it fits the student's week (clashes()); `study.until`, the first Anmeldeschluss among them."""
+    not chosen, nor what the teachers give out, as Einzelunterricht. `study.until`: the first Anmeldeschluss among them."""
     study.fs = study.semester + (term.start > timezone.localdate())  # registering before the semester: they are one further then
     tree, _ = study.progress()
     options = study.program.choices()
@@ -1225,9 +1240,7 @@ def to_take(study, term):
     links = list(Course.modules.through.objects.filter(module__program=study.program_id, course__term=term).values_list('module', 'course'))
     offered = {c.pk: c for c in term.courses.filter(pk__in={c for _, c in links}, kind=Course.Kind.COURSE, cancelled=None).exclude(allocation=Course.Allocation.STAFF).annotate(
         size=Count('participations__study', distinct=True),
-    ).prefetch_related('staff', Prefetch('groups', Group.objects.annotate(size=Count('participations__study', distinct=True))), Prefetch(
-        'bookings', Booking.objects.filter(start__gte=timezone.now()).select_related('room'),
-    ))}
+    )}
     courses = defaultdict(list)
     for module, course in links:
         if course in offered:
@@ -1256,8 +1269,19 @@ def to_take(study, term):
 
     for root in tree:
         visit(root)
-    mine = list(agenda(study.person).filter(start__lte=timezone.make_aware(datetime.combine(term.end, datetime.max.time())), end__gte=timezone.now()).select_related('room', 'course', 'category'))
-    for c in {c.pk: c for _, there in found for c in there}.values():
+    study.until = min((c.deadline for _, there in found for c in there if c.is_open and c.deadline), default=None)
+    return found
+
+
+def fitted(study, found):
+    """The courses of to_take(), each with `times`, `free`, `concern` and how it fits the student's week (clashes()):
+    for the list, not the start page, which counts them only."""
+    courses = list({c.pk: c for _, there in found for c in there}.values())
+    prefetch_related_objects(courses, 'staff', Prefetch('groups', Group.objects.annotate(size=Count('participations__study', distinct=True))), Prefetch(
+        'bookings', Booking.objects.filter(start__gte=timezone.now()).select_related('room'),
+    ))
+    mine = theirs(study.person, [b for c in courses for b in c.bookings.all()])
+    for c in courses:
         groups = c.groups.all()
         c.times = sorted(series(c.bookings.all()), key=lambda b: (timezone.localtime(b.start).weekday(), timezone.localtime(b.start).time()))
         c.free = sum(max(g.capacity - g.size, 0) for g in groups) if groups else c.capacity - c.size if c.capacity is not None else None
@@ -1265,7 +1289,6 @@ def to_take(study, term):
         c.clashing = [] if groups else clashes(study.person, c.bookings.all(), mine)
         c.clash, _ = weight(c, c.clashing)
         c.concern = fits(c, copy(study)).concern
-    study.until = min((c.deadline for _, there in found for c in there if c.is_open and c.deadline), default=None)
     return found
 
 
@@ -1275,9 +1298,11 @@ def mine(request):
     context = {'term': term, 'terms': Term.shown(person).filter(courses__isnull=False).distinct().order_by('-start').filter(**since(person))}
     if 'teacher' in person.roles:
         teaching = person.teaching.filter(term=term, kind__in=TEACHING)
+        here = OuterRef('pk')
         taught_here = list(coaching(teaching, person).annotate(
-            asked=Count('signups', distinct=True), mine=Count('ensembles__members', filter=Q(ensembles__coach=person), distinct=True),
-            ingroups=Count('participations__study', filter=Q(participations__group__staff=person), distinct=True),
+            asked=counted(Signup.objects.filter(course=here), 'course'),
+            mine=counted(Ensemble.members.through.objects.filter(ensemble__course=here, ensemble__coach=person), 'ensemble__course', 'study'),
+            ingroups=counted(Participation.objects.filter(course=here, group__staff=person), 'course', 'study'),
         ).select_related('subject', 'format', 'term').prefetch_related(
             'participations__module__program', 'origin__participations__module__program', Prefetch('groups', Group.objects.filter(staff=person), to_attr='own'),
         ))
@@ -1302,7 +1327,7 @@ def mine(request):
         context['registrations'] = registrations
         context['requests'] = Signup.objects.filter(study__person=person, course__term=term).select_related('course', 'module')  # the teachers still decide
         if term == registering():  # what the Studienplan still wants this semester
-            context['to_take'] = [(s, found) for s in person.studies.filter(status=Study.Status.ENROLLED).select_related('program', 'person') if (found := to_take(s, term))]
+            context['to_take'] = [(s, fitted(s, found)) for s in person.studies.filter(status=Study.Status.ENROLLED).select_related('program', 'person') if (found := to_take(s, term))]
     return render(request, 'courses/mine.html', context)
 
 
@@ -1386,7 +1411,8 @@ def hours(term, seen):
     """{teacher: [(course, SWS)]} of a term's teaching, for the teachers `seen` (pks; None: all)."""
     courses = (
         term.courses.filter(kind__in=TEACHING, cancelled=None).select_related('format', 'term')
-        .prefetch_related('staff', 'ensembles', 'groups__staff', 'participations__module__program', 'origin__participations__module__program').annotate(size=Count('participations__study', distinct=True))
+        .prefetch_related('staff', 'ensembles', 'groups__staff', *(Prefetch(path, Participation.objects.filter(course__kind=Course.Kind.LESSON).select_related('module__program')) for path in ('participations', 'origin__participations')))  # sws() counts those of lessons only
+        .annotate(size=Count('participations__study', distinct=True))
     )
     if seen is not None:
         courses = courses.filter(pk__in=Course.objects.filter(staff__in=seen).values('pk'))

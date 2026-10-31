@@ -16,13 +16,13 @@ from django.views.decorators.http import require_POST
 
 from core.access import CODENAMES, require
 from core.apps import plural
-from core.dates import day as understood
+from core.dates import day as understood, starting
 from core.forms import again, sent
 from core.days import busy, strip
 from core import texts
 from core.models import Institute, Institution, Message, Office, Person
 from core.text import matching
-from courses.models import Course
+from courses.models import Course, Group, Participation
 from .forms import BookingForm, CancelForm, FindForm, ServiceForm, bookable, free_again, quota
 from .models import Booking, BookingCategory, Room, RoomFunction
 
@@ -40,11 +40,13 @@ def line(moment):
 def agenda(person):
     """Bookings a person attends: booked for them or with them, taught or examined by them, or a group course they take
     part in; of an ensemble or a group of a course, only its own."""
-    return Booking.objects.filter(
-        Q(person=person) | Q(participants=person) | Q(course__staff=person, ensemble=None, group=None) | Q(ensemble__coach=person) | Q(group__staff=person)
-        | Q(course__kind=Course.Kind.COURSE, course__participations__study__person=person, ensemble=None, group=None)
-        | Q(group__participations__study__person=person)
-    ).filter(category__blocks=True, requested=False).distinct()
+    taking = Participation.objects.filter(study__person=person)
+    return Booking.objects.filter(  # by subqueries, not joins: no row many times over to make distinct again
+        Q(person=person) | Q(pk__in=Booking.participants.through.objects.filter(person=person).values('booking'))
+        | Q(course__in=Course.objects.filter(staff=person).values('pk'), ensemble=None, group=None) | Q(ensemble__coach=person)
+        | Q(group__in=Group.objects.filter(staff=person).values('pk'))
+        | Q(course__in=taking.filter(course__kind=Course.Kind.COURSE).values('course'), ensemble=None, group=None) | Q(group__in=taking.values('group'))
+    ).filter(category__blocks=True, requested=False)
 
 
 QUARTER = timedelta(minutes=15)  # the way from one building to another
@@ -82,7 +84,7 @@ def week(bookings, day, person=None, whole=False):
     for a phone's list. For one person's own plan, their lessons name the student (`who`) and a change of building
     without a break shows."""
     monday = day - timedelta(days=day.weekday())
-    placed = list(bookings.filter(start__date__range=(monday, monday + timedelta(days=6))).select_related('room', 'course', 'category').prefetch_related('participants', 'absent'))
+    placed = list(bookings.filter(**starting(monday, monday + timedelta(days=6))).select_related('room', 'course', 'category').prefetch_related('participants', 'absent'))
     if person:
         moves(placed)
         for b in placed:
@@ -156,7 +158,7 @@ def index(request):
     group = request.GET.get('raeume') or ('zentral' if person.everywhere('book_any_room') else 'meine' if allowed else 'alle')
     kind, _, key = group.partition(':')
     rooms = Room.objects.prefetch_related(Prefetch(
-        'bookings', Booking.objects.filter(start__date=day, requested=False).select_related('course', 'person', 'category').prefetch_related('participants'), to_attr='day',
+        'bookings', Booking.objects.filter(**starting(day), requested=False).select_related('course', 'person', 'category').prefetch_related('participants'), to_attr='day',
     ))
     rooms = {
         'meine': rooms.filter(pk__in=allowed), 'zentral': rooms.filter(function__central=True), 'haus': rooms.filter(building=key), 'funktion': rooms.filter(function=key),
@@ -286,7 +288,7 @@ def mine(request):
     }
     if 'student' in person.roles:
         rules, used = Institution.get(), quota(person, today)
-        booked = sum((b.end - b.start).total_seconds() for b in person.bookings.filter(category__quota=True, start__date=today)) / 3600
+        booked = sum((b.end - b.start).total_seconds() for b in person.bookings.filter(category__quota=True, **starting(today))) / 3600
         context.update(used=used, daily=rules.student_daily_hours, left=rules.student_daily_hours - used, extra=round(booked - used, 1), last_minute=rules.last_minute_hours)
     return render(request, 'rooms/mine.html', context)
 
@@ -303,7 +305,7 @@ def events(request):
     following = (first + timedelta(days=32)).replace(day=1)
     until = (following + timedelta(days=32)).replace(day=1) if coming else following
     picked, q = request.GET.get('kategorie', ''), request.GET.get('q', '').strip()
-    found = Booking.objects.filter(category__public=True, requested=False, start__date__gte=today if coming else first, start__date__lt=until).select_related('room', 'person', 'course', 'category')
+    found = Booking.objects.filter(category__public=True, requested=False, **starting(today if coming else first, until - timedelta(days=1))).select_related('room', 'person', 'course', 'category')
     if picked:
         found = found.filter(category=picked)
     return render(request, 'rooms/events.html', {
@@ -507,7 +509,7 @@ def day_off(request):
     building, teaching = request.GET.get('gebaeude', ''), request.GET.get('lehre') == '1'
     if teaching and not person.everywhere('manage_terms') or building and 'manage_bookings' not in person.roles:
         raise PermissionDenied
-    found = Booking.objects.filter(start__date=day, end__gt=timezone.now(), category__blocks=True, requested=False)
+    found = Booking.objects.filter(**starting(day), end__gt=timezone.now(), category__blocks=True, requested=False)
     if building:  # a closure: everything there, as far as the office looks after it
         found = person.within(found.filter(room__building=building), 'manage_bookings')
     elif teaching:

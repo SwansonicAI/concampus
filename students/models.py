@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core import destatis, texts
-from core.models import Institution, Keyed, Message, Person, Term, Tracked
+from core.models import Institution, Keyed, Message, Person, Term, Tracked, once
 from core.text import matching
 from curriculum.models import Program, Subject, weighted
 
@@ -178,7 +178,7 @@ class Study(Tracked, models.Model):
     def missing(self):
         """What still blocks the enrolment of an admitted applicant."""
         reasons = self.person.missing()
-        registration = self.terms.filter(term=self.start_term).first()
+        registration = next((t for t in self.terms.all() if t.term_id == self.start_term_id), None)
         if not registration:
             reasons.insert(0, 'Studienplatz noch nicht angenommen')
         elif not registration.paid:
@@ -206,11 +206,11 @@ class Study(Tracked, models.Model):
     def record(self):
         """Credited participations, one per module, a graded one where there is one. Exams and theses count once released."""
         best = {}
-        rows = (
+        rows = once(('record', self.pk), lambda: list(
             self.participations.filter(passed=True, module__isnull=False)
             .exclude(course__kind__in=['exam', 'thesis'], course__released=None)
             .select_related('module', 'course__term')
-        )
+        ))
         for p in rows:
             if p.grade is not None or p.module_id not in best:
                 best[p.module_id] = p

@@ -89,7 +89,9 @@ class StudentsConfig(Tile, AppConfig):
         enrolled = Study.objects.filter(status=Study.Status.ENROLLED)
         found = []
         if 'manage_students' in person.roles:
-            accepted = person.within(Study.objects.filter(status=Study.Status.ADMITTED, terms__term=F('start_term')), 'manage_students').select_related('start_term', 'person', 'program')
+            from admissions.views import papers
+
+            accepted = papers(person.within(Study.objects.filter(status=Study.Status.ADMITTED, terms__term=F('start_term')), 'manage_students')).select_related('start_term')
             terms = defaultdict(lambda: ([], Counter()))  # ready to enrol; what the others wait for
             for s in accepted.order_by('start_term__start'):
                 ready, waiting = terms[s.start_term]

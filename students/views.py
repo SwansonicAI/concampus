@@ -33,7 +33,8 @@ from core.text import fold, handle, matching
 from core.views import SHOWN, preview, without_term
 from courses.models import Course, Format, Participation
 from courses.views import untimed
-from curriculum.models import Module, Program, Subject, coverage
+from admissions.views import papers
+from curriculum.models import Module, Program, Subject, coverage, preload
 from curriculum.views import columns, plan
 from exams.views import exhausted
 from instruments.models import Loan
@@ -142,7 +143,8 @@ def cases(studies, case):
         return studies.filter(fs__gt=F('program__semesters'))
     if case == 'schwerpunkt':
         due = Q(pk__in=[])
-        for program in Program.objects.filter(pk__in=studies.values('program')):
+        preload(programs := list(Program.objects.filter(pk__in=studies.values('program'))))
+        for program in programs:
             if choices := program.choices():
                 due |= Q(program=program, fs__gte=min(c.first or 99 for c in choices))
         return studies.filter(due, focus=None)
@@ -496,7 +498,7 @@ def enrol(request, pk):
 def enrol_many(request):
     """Immatrikulation of the ticked applicants whose places are taken up and complete."""
     studies = request.user.within(Study.objects.filter(pk__in=request.POST.getlist('study'), status=Study.Status.ADMITTED), 'manage_students')
-    ready = [s for s in studies.select_related('person', 'program', 'subject', 'start_term').order_by('person__last_name') if not s.missing()]
+    ready = [s for s in papers(studies).select_related('subject', 'start_term').order_by('person__last_name') if not s.missing()]
     back = request.POST.get('next', '')
     back = back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else reverse('admissions:board')
     if not ready:

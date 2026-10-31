@@ -44,7 +44,7 @@ def home(request):
     day = dates.day(request.GET.get('tag', '')) or today
     bookings = agenda(person)
     marked = busy(bookings, today)
-    shown = list(bookings.filter(start__date=day).select_related('room', 'course', 'category').prefetch_related('participants'))
+    shown = list(bookings.filter(**dates.starting(day)).select_related('room', 'course', 'category').prefetch_related('participants'))
     for b in shown:
         b.clash = any(o is not b and o.start < b.end and b.start < o.end for o in shown)
     moves(shown)
@@ -97,6 +97,7 @@ def account(request):
 
 
 @login_not_required
+@transaction.atomic  # a GET, but a change with its history
 def confirm_email(request, token):
     """A new sign-in address, opened from the link sent to it: within three days, and still nobody else's."""
     try:

@@ -23,7 +23,7 @@ from core.forms import again, sent
 from core.access import CODENAMES, require
 from core.apps import plural
 from core.history import tables
-from core.models import Consent, Institution, Message, Office, Term
+from core.models import Consent, Institution, Message, Office, Term, once
 from core.text import matching, untimed
 from core.templatetags.marks import mark
 from core.views import preview
@@ -31,6 +31,7 @@ from courses import panel
 from courses.forms import SlotForm, substitutes
 from courses.models import Course, Participation, marked
 from rooms.views import ics
+from instruments.models import Loan
 from curriculum.models import Subject
 from students.models import Document, DocumentType, Study, StudyTerm
 from .forms import AcceptForm, ApplicationForm, DetailsForm, EntranceForm, SignupForm
@@ -68,15 +69,24 @@ def stages():
 
 def document_types():
     """The kinds of documents an application can ask for, each with its Hauptfächer; fetch once for many studies."""
-    return list(DocumentType.objects.exclude(condition=Condition.NEVER).prefetch_related('subjects'))
+    return once('document_types', lambda: list(DocumentType.objects.exclude(condition=Condition.NEVER).prefetch_related('subjects')))
+
+
+def papers(studies):
+    """The studies with what Study.missing() and checklist() read, fetched at once for many: loans still out, documents,
+    the person's other studies, the registrations, the audition stages."""
+    return studies.select_related('person', 'program').prefetch_related(
+        Prefetch('person__loans', Loan.objects.filter(returned=None).select_related('instrument')), 'person__documents', 'person__studies', 'terms',
+        Prefetch('participations', stages(), to_attr='stages'),
+    )
 
 
 def checklist(study, types=None):
     """What a complete application holds, as the document types say: [{kind, label, note, required, documents}]. What
     holds for all of a person's applications, like a CV, counts once handed in with any of them. Reads
-    `study.person.documents.all()`; prefetch them for many studies."""
+    `study.person.documents.all()` and `study.person.studies.all()`; prefetch them for many studies."""
     person, handed, borrowed, today = study.person, defaultdict(list), defaultdict(list), timezone.localdate()
-    same = {pk for pk, subject in person.studies.values_list('pk', 'subject') if subject == study.subject_id and pk != study.pk}  # the same Hauptfach elsewhere
+    same = {s.pk for s in person.studies.all() if s.subject_id == study.subject_id and s.pk != study.pk}  # the same Hauptfach elsewhere
     types = document_types() if types is None else types
     shared = {t.key for t in types if t.shared}
     for d in person.documents.all():
@@ -100,7 +110,7 @@ def checklist(study, types=None):
             'enrolment': t.condition in DocumentType.ENROLMENT,  # due by the Immatrikulation, not with the application
             'reusable': [d for d in person.documents.all() if d.kind_id == t.key and d.study_id in same] if t.condition == Condition.VIDEO and not handed[t.key] else [],
         }
-        for t in types if applies.get(t.condition) or t.condition == Condition.SUBJECTS and study.subject in t.subjects.all()
+        for t in types if applies.get(t.condition) or t.condition == Condition.SUBJECTS and study.subject_id in {s.pk for s in t.subjects.all()}
     ]
 
 
@@ -249,7 +259,7 @@ def board(request):
     studies = ranked(
         request.user.within(Study.objects.filter(start_term=term, status__in=BOARD), 'view_applications').select_related('person', 'program', 'subject')
         .annotate(slot=Min('participations__slot', filter=Q(participations__slot__gte=timezone.now(), participations__course__kind=Course.Kind.AUDITION)))
-        .prefetch_related(Prefetch('participations', stages(), to_attr='stages'), 'person__documents')
+        .prefetch_related(Prefetch('participations', stages(), to_attr='stages'), 'person__documents', 'person__studies')
     )
     subject, q = request.GET.get('fach', ''), request.GET.get('q', '').strip()
     if subject.isdigit():
@@ -271,8 +281,8 @@ def board(request):
     for s in decidable:
         s.verb = VERBS.get(s.advice)
     accepted = (  # places taken up, waiting for the Immatrikulation
-        request.user.within(Study.objects.filter(start_term=term, status=Study.Status.ADMITTED, terms__term=F('start_term')), 'manage_students')
-        .select_related('person', 'program', 'subject').order_by('person__last_name')
+        papers(request.user.within(Study.objects.filter(start_term=term, status=Study.Status.ADMITTED, terms__term=F('start_term')), 'manage_students'))
+        .select_related('subject').order_by('person__last_name')
     )
     for s in accepted:
         s.waiting = s.missing()
