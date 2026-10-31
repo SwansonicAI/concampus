@@ -9,7 +9,7 @@
 <p class="lead">Übezeit am {{ on|date:"l, j.n." }}: noch {{ left|floatformat:"-1" }} von {{ rules.student_daily_hours }} Stunden. Was in den nächsten {{ rules.last_minute_hours }} Stunden beginnt, zählt nicht dazu.</p>
 {% endif %}
 {% if booking.pk and booking.start < now %}<p class="lead">Läuft seit {{ booking.start|time:"H:i" }}: nur das Ende lässt sich noch ändern.</p>{% endif %}
-{% if booking.requested %}<p class="lead"><span class="badge wait">Angefragt</span> Der Raum wird zentral vergeben; die Anfrage wartet auf Bestätigung.</p>{% endif %}
+{% if booking.pk and booking.requested %}<p class="lead"><span class="badge wait">Angefragt</span> Der Raum wird zentral vergeben; die Anfrage wartet auf Bestätigung.</p>{% endif %}
 <div class="cols">
   <form method="post" class="form" id="buchung">
     {% csrf_token %}

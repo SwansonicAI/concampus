@@ -416,8 +416,17 @@ button.chip { background: none; font: inherit; font-size: 12px; cursor: pointer;
 .prow .room { position: sticky; left: 0; z-index: 2; display: flex; flex-direction: column; justify-content: center; padding: 4px 12px 4px 0; background: #fff; color: var(--ink); line-height: 1.25; }
 .prow .room small { color: var(--muted); }
 .hour { padding: 6px 4px; }
-.slot:hover { background: var(--soft); }
-.slot.picked { background: var(--accent-pale); }
+.prow .shut { cursor: not-allowed; }  /* over, too far ahead, or not one's to book: pointing says why */
+.pick { z-index: 2; margin: 4px 1px; padding: 3px 7px; overflow: hidden; border: 1px dashed var(--accent); border-radius: var(--radius); background: var(--accent-pale); color: var(--accent-dark); font-size: 12px; font-weight: 600; line-height: 1.3; white-space: nowrap; pointer-events: none; }  /* the time about to be booked */
+a.pick { pointer-events: auto; }
+a.pick:hover { text-decoration: none; }
+.quick { width: 340px; }
+.brief > b { display: block; font-size: 15px; }
+.brief > .muted { margin-bottom: 4px; }
+.brief > div, .brief > .errorlist { margin-top: 10px; }
+.brief > div:not(.inline, .actions) label { display: grid; gap: 4px; font-size: 14px; font-weight: 600; }
+.brief select, .brief input[name=title] { width: 100%; }
+.brief > .actions { margin-top: 16px; }
 .booking {
   z-index: 1;
   margin: 4px 1px;
@@ -556,6 +565,8 @@ a.block:hover { background: var(--accent-pale); text-decoration: none; }
   .agenda a { grid-template-columns: 92px 1fr; }
   .agenda .where { grid-column: 2; }
   .prow { --rooms: 112px; min-width: 980px; }
+  .quick { top: auto !important; bottom: 0; left: 0 !important; width: 100%; max-width: none; border-width: 1px 0 0; border-radius: 0; }  /* a sheet from the bottom */
+  .quick::before { display: none; }
   .prow .room { padding-right: 8px; }
   .weekgrid { display: none; }  /* a phone gets the week as a list, day by day */
   .weeklist { display: grid; gap: 6px; }

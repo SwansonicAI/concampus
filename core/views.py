@@ -505,7 +505,7 @@ def jumps(roles, day, time):
     found = [hit(f'Raumplan am {label}', f"{reverse('rooms:index')}?tag={day:%Y-%m-%d}", 'Räume')]
     if time:
         end = (datetime.combine(day, time) + timedelta(hours=1)).time()
-        found.append(hit(f'Freie Räume am {label}, {time:%H:%M}–{end:%H:%M} Uhr', f"{reverse('rooms:find')}?day={day:%d.%m.%Y}&start={time:%H:%M}&end={end:%H:%M}", 'Räume'))
+        found.append(hit(f'Freie Räume am {label}, {time:%H:%M}–{end:%H:%M} Uhr', f"{reverse('rooms:index')}?tag={day:%Y-%m-%d}&von={time:%H:%M}&bis={end:%H:%M}", 'Räume'))
     if roles & {'teacher', 'student'}:
         found.append(hit(f'Stundenplan, Woche vom {date_format(day - timedelta(days=day.weekday()), "j. F")}', f"{reverse('courses:timetable')}?tag={day:%Y-%m-%d}", 'Lehre'))
     return found

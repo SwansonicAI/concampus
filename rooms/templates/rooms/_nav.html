@@ -1,7 +1,6 @@
 {% with here=request.resolver_match.url_name %}
 <nav class="subnav">
-  <a href="{% url 'rooms:index' %}" class="{% if here == 'index' or here == 'room' %}on{% endif %}">Raumplan</a>
-  <a href="{% url 'rooms:find' %}" class="{% if here == 'find' or here == 'new' %}on{% endif %}">Raum buchen</a>
+  <a href="{% url 'rooms:index' %}" class="{% if here == 'index' or here == 'room' or here == 'new' %}on{% endif %}">Raumplan</a>
   <a href="{% url 'rooms:mine' %}" class="{% if here == 'mine' or here == 'booking' %}on{% endif %}">Meine Buchungen</a>
   <a href="{% url 'rooms:events' %}" class="{% if here == 'events' %}on{% endif %}">Veranstaltungen</a>
   {% if 'manage_bookings' in user.roles %}<a href="{% url 'rooms:requests' %}" class="{% if here == 'requests' %}on{% endif %}">Anfragen</a>{% endif %}

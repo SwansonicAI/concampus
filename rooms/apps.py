@@ -22,8 +22,7 @@ class RoomsConfig(Tile, AppConfig):
         if not self.title(person.roles):
             return []
         return [
-            feature('Raumplan', reverse('rooms:index'), 'belegung räume heute kalender tagesplan institut gebäude'),
-            feature('Raum buchen', reverse('rooms:find'), 'frei freier raum finden suchen verfügbar buchung reservieren üben überaum kammermusik probe'),
+            feature('Raumplan', reverse('rooms:index'), 'belegung räume heute kalender tagesplan institut gebäude raum buchen frei freier finden suchen verfügbar buchung reservieren üben überaum kammermusik probe'),
             feature('Meine Buchungen', reverse('rooms:mine'), 'stornieren übezeit kontingent'),
             feature('Veranstaltungen', reverse('rooms:events'), 'konzert klassenabend meisterkurs vortrag programm'),
             feature('Kalender abonnieren', f"{reverse('rooms:mine')}#kalender", 'ical ics outlook google apple handy feed'),

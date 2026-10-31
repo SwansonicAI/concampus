@@ -1,6 +1,6 @@
 import uuid
 from collections import defaultdict
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 from django import forms
 from django.db.models import Min, Q
@@ -23,6 +23,24 @@ def bookable(person):
     if person.roles & {'teacher', 'student'}:
         rooms |= Room.objects.filter(institutes__in=person.institutes()).exclude(function__central=True)
     return rooms.distinct()
+
+
+def categories(person):
+    """What a person books: everything with the right to book any room, else what teachers or students book."""
+    if 'book_any_room' in person.roles:
+        return BookingCategory.objects.all()
+    return BookingCategory.objects.filter(**{'teachers' if 'teacher' in person.roles else 'students': True})
+
+
+def horizon(person):
+    """How many hours ahead a person books: teachers as the Hochschule says, students as far as the furthest of their
+    categories reaches; None for an office that books any room."""
+    rules, roles = Institution.get(), person.roles
+    if 'book_any_room' in roles:
+        return None
+    if 'teacher' in roles:
+        return rules.teacher_ahead_days * 24
+    return max((c.ahead_hours or rules.student_ahead_hours for c in categories(person)), default=0)
 
 
 def quota(person, day, exclude=None):
@@ -129,10 +147,7 @@ class BookingForm(forms.ModelForm):
         self.fields['room'].recent = list(dict.fromkeys(lately))[:3]
         if not self.instance.pk and not self.initial.get('room'):  # practice is mostly in the same room
             self.initial['room'] = next(iter(self.fields['room'].recent), None)
-        allowed = BookingCategory.objects.all()
-        if not self.office:
-            allowed = allowed.filter(teachers=True) if 'teacher' in roles else allowed.filter(students=True)
-        self.fields['category'].queryset = allowed | BookingCategory.objects.filter(key=self.instance.category_id)  # never silently changed
+        self.fields['category'].queryset = categories(person) | BookingCategory.objects.filter(key=self.instance.category_id)  # never silently changed
         self.fields['category'].empty_label = None
         groups = {}  # what a category is: teaching, an event, a service, a closure
         for c in self.fields['category'].queryset:
@@ -172,6 +187,15 @@ class BookingForm(forms.ModelForm):
                 self.fields['participants'].help_text = 'Mit einem Ensemble nehmen seine Mitglieder teil; hier nur, wer dazukommt.'
         if self.student or self.instance.pk:
             del self.fields['repeat_until']
+
+    def brief(self):
+        """What booking beside the room plan asks (rooms/_quick.html): the time, the category, the ensemble; the title
+        only of teachers and offices, a rehearsal taking its ensemble's."""
+        return ['begin', 'until', 'category', 'ensemble'] + ([] if self.student else ['title'])
+
+    def rest(self):
+        """The fields booking beside the room plan does not ask, sent along as they are."""
+        return [field for field in self if field.name not in self.brief()]
 
     def clean(self):
         data = super().clean()
@@ -305,14 +329,18 @@ class CancelForm(forms.Form):
 
 
 class FindForm(forms.Form):
-    day = DayField(label='Tag')
-    start = ClockField(label='Von')
-    end = ClockField(label='Bis')
-    seats = forms.IntegerField(label='Personen', min_value=1, required=False)
-    equipment = forms.CharField(label='Ausstattung', required=False, widget=forms.TextInput(attrs={'placeholder': 'z. B. Flügel, Orgel'}))
+    """The room plan's filter: the rooms free from–until on the day it shows, for so many, with such equipment; „Von“
+    alone asks for an hour."""
+
+    von = ClockField(label='Frei von', required=False)
+    bis = ClockField(label='bis', required=False)
+    personen = forms.IntegerField(label='Personen', min_value=1, required=False, widget=forms.TextInput(attrs={'inputmode': 'numeric', 'size': 4}))
+    ausstattung = forms.CharField(label='Ausstattung', required=False, widget=forms.TextInput(attrs={'type': 'search', 'placeholder': 'z. B. Flügel, Orgel'}))
 
     def clean(self):
         data = super().clean()
-        if data.get('start') and data.get('end') and data['end'] <= data['start']:
+        if data.get('von') and not data.get('bis'):
+            data['bis'] = (datetime.combine(date.today(), data['von']) + timedelta(hours=1)).time()
+        if data.get('von') and data['bis'] <= data['von']:
             raise forms.ValidationError('„Bis“ muss nach „Von“ liegen.')
         return data

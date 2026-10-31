@@ -667,7 +667,7 @@ async function swap(url) {
   document.querySelector('main').replaceWith(main);
   history.replaceState(history.state, '', url);
   init(main);
-  const again = field.name && main.querySelector(`[name="${field.name}"]`);
+  const again = field.name ? main.querySelector(`[name="${field.name}"]`) : null;
   again?.focus();
   if (again?.type === 'search') again.setSelectionRange(typed.length, typed.length);
 }
@@ -832,7 +832,7 @@ if (drawer) {
 
   document.addEventListener('click', event => {
     const link = event.target.closest('a[href]');
-    if (!link || link === page || link.target || link.hasAttribute('download') || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    if (!link || event.defaultPrevented || link === page || link.target || link.hasAttribute('download') || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const inside = drawer.contains(link);
     if (!inside && !link.closest('[data-panel]')) return;
     const url = new URL(link.getAttribute('href'), inside ? page.href : location.href);
@@ -856,33 +856,96 @@ if (drawer) {
     }
   });
 
-  // Room plan: dragging across free time books exactly that span; a click books an hour.
-  let pick = null;
+  // Room plan: the free time one may book shows where the pointer is, an hour from there as far as it is free; a drag
+  // stretches it. A click, or letting go, asks beside it for the rest (rooms/_quick.html) and books in place; one's own
+  // bookings open the same way, to move or cancel. „Weitere Angaben“ takes what is filled in to the whole form.
+  const quick = Object.assign(document.createElement('div'), {className: 'explainer quick', popover: 'auto'});
+  const pick = Object.assign(document.createElement('span'), {className: 'pick'});
+  document.body.append(quick);
+  const minutes = slot => { const [h, m] = new URL(slot.href).searchParams.get('start').slice(11).split(':'); return h * 60 + +m; };
+  const clock = n => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`;
+  const run = (a, b) => {  // the slots from a towards b, as long as no booking comes between
+    const slots = [...a.parentElement.querySelectorAll('.slot')], from = slots.indexOf(a), to = slots.indexOf(b), step = to < from ? -1 : 1;
+    let n = from;
+    while (n !== to && Math.abs(minutes(slots[n + step]) - minutes(slots[n])) === 30) n += step;
+    return slots.slice(Math.min(from, n), Math.max(from, n) + 1);
+  };
+  const hour = slot => { const slots = [...slot.parentElement.querySelectorAll('.slot')]; return run(slot, slots[slots.indexOf(slot) + 1] ?? slot); };
+  let range = null, held = null, dragged = false;
+  const mark = slots => {
+    range = slots;
+    pick.style.gridColumn = `${slots[0].style.gridColumnStart} / ${slots.at(-1).style.gridColumnEnd}`;
+    pick.textContent = `${clock(minutes(slots[0]))}–${clock(minutes(slots.at(-1)) + 30)}`;
+    slots[0].parentElement.append(pick);
+  };
+  const reveal = () => {  // a form taller than the room below its time: the page moves up, the form with it
+    const over = quick.getBoundingClientRect().bottom + 16 - innerHeight;
+    if (over > 0) scrollBy(0, over);
+  };
+  const fill = (html, anchor) => {
+    quick.innerHTML = html;
+    quick.anchor = anchor;
+    init(quick);
+    quick.matches(':popover-open') ? (place(quick), reveal()) : quick.showPopover();
+    quick.querySelector('.btn').focus({preventScroll: true});
+  };
+  const open = async (url, anchor) => fill(await (await fetch(url, {headers: {'X-Panel': '1', 'X-Quick': '1'}})).text(), anchor);
+  const book = () => {
+    const url = new URL(range[0].href);
+    url.searchParams.set('ende', `${url.searchParams.get('start').slice(0, 11)}${clock(minutes(range.at(-1)) + 30)}`);
+    open(url, pick);
+  };
+  quick.addEventListener('beforetoggle', event => {
+    if (event.newState === 'closed') pick.remove();
+  });
+  quick.addEventListener('toggle', event => event.newState === 'open' && reveal());
+  document.addEventListener('pointerover', event => {
+    const slot = event.target.closest('.slot');
+    if (!slot || event.pointerType !== 'mouse' || quick.matches(':popover-open')) return;
+    if (!held) return mark(hour(slot));
+    if (slot.parentElement !== held.parentElement) return;
+    dragged = true;
+    mark(run(held, slot));
+  });
+  document.addEventListener('pointerout', event => {
+    if (!held && event.target.closest('.slot') && !event.relatedTarget?.closest('.slot') && !quick.matches(':popover-open')) pick.remove();
+  });
   document.addEventListener('pointerdown', event => {
     const slot = event.target.closest('.slot');
     if (!slot || event.pointerType !== 'mouse' || event.button) return;
     event.preventDefault();  // neither drag the link nor select text
-    pick = slot;
-  });
-  document.addEventListener('pointerover', event => {
-    const slot = event.target.closest('.slot');
-    if (!pick || slot?.parentElement !== pick.parentElement) return;
-    const slots = [...slot.parentElement.querySelectorAll('.slot')];
-    const [from, to] = [slots.indexOf(pick), slots.indexOf(slot)].sort((a, b) => a - b);
-    slots.forEach((s, n) => s.classList.toggle('picked', n >= from && n <= to));
+    held = slot;
   });
   document.addEventListener('pointerup', () => {
-    if (!pick) return;
-    const picked = [...pick.parentElement.querySelectorAll('.picked')];
-    picked.forEach(s => s.classList.remove('picked'));
-    pick = null;
-    if (picked.length < 2) return;
-    const url = new URL(picked[0].href);
-    const [day, time] = new URL(picked.at(-1).href).searchParams.get('start').split('T');
-    const [hours, minutes] = time.split(':').map(Number);
-    const end = hours * 60 + minutes + 30;
-    url.searchParams.set('ende', `${day}T${String(Math.floor(end / 60)).padStart(2, '0')}:${String(end % 60).padStart(2, '0')}`);
-    show(url);
+    if (held && dragged) {
+      book();
+      setTimeout(() => { dragged = false; });  // after the click that may follow
+    }
+    held = null;
+  });
+  document.addEventListener('click', event => {  // before the side panel takes the link
+    const link = event.target.closest('.plan :is(.slot, .pick, [data-quick])');
+    if (!link || event.ctrlKey || event.metaKey || event.shiftKey) return;
+    event.preventDefault();
+    if (dragged) return;  // the end of a drag: already asked
+    if (!link.matches('.slot')) return open(link.href, link);
+    mark(hour(link));
+    book();
+  }, true);
+  quick.addEventListener('submit', async event => {
+    event.preventDefault();
+    const form = event.target, data = new FormData(form, event.submitter);
+    const url = new URL(event.submitter?.getAttribute('formaction') || form.getAttribute('action'), location.href);
+    if (data.has('mehr')) {
+      quick.hidePopover();
+      return show(url, {method: 'post', body: data});
+    }
+    const response = await fetch(url, {method: 'post', body: data, headers: {'X-Panel': '1', 'X-Quick': '1'}});
+    if (response.status !== 204) return fill(await response.text(), quick.anchor);
+    quick.hidePopover();
+    const top = document.querySelector('.plan').getBoundingClientRect().top;
+    await swap(new URL(location.href));
+    scrollBy(0, document.querySelector('.plan').getBoundingClientRect().top - top);  // the plan stays where it was, the message above it
   });
 
   // Keys: Ctrl+K or / searches, Esc closes the panel, and links marked data-key answer to their key.

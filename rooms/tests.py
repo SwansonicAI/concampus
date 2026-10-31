@@ -1,4 +1,6 @@
+from collections import defaultdict
 from datetime import datetime, time, timedelta
+from html.parser import HTMLParser
 
 from django.db.models import Q
 from django.test import Client
@@ -23,6 +25,25 @@ def slot(hours, minutes=60):
 
 def times(start, minutes=60):
     return {'day': f'{start:%d.%m.%Y}', 'begin': f'{start:%H:%M}', 'until': f'{start + timedelta(minutes=minutes):%H:%M}'}
+
+
+def sent(response, **changed):
+    """What a browser sends of the form in `response`: its inputs and the options selected, with `changed`."""
+    data, select = defaultdict(list), None
+
+    class Reader(HTMLParser):
+        def handle_starttag(self, tag, attrs):
+            nonlocal select
+            found = dict(attrs)
+            if tag == 'input' and 'name' in found:
+                data[found['name']].append(found.get('value') or '')
+            elif tag == 'select':
+                select = found['name']
+            elif tag == 'option' and 'selected' in found:
+                data[select].append(found['value'])
+
+    Reader().feed(response.content.decode())
+    return {**data, **changed}
 
 
 class TeacherTest(Seeded):
@@ -134,8 +155,22 @@ class BookingRulesTest(Seeded):
         self.refused(self.book(**times(start + timedelta(hours=1), 240)), 'höchstens 4 Stunden am Tag')
         self.assertEqual(flashes(self.book(**times(slot(1, 45), 45), follow=True)), ['Buchung gespeichert. Sie beginnt in weniger als 3 Stunden und zählt deshalb nicht zu Ihren 4 Stunden am Tag.'])
 
-    def test_free_rooms_for_an_hour(self):
-        self.assertTrue(self.login('student').get('/raeume/finden/', {'day': 'morgen', 'start': '10:00', 'end': '11:00'}).context['rooms'])
+    def test_found_booked_and_moved_beside_the_plan(self):
+        """The plan's filter finds the room; beyond the 24 hours of practice, a click books a rehearsal of Mei's ensemble,
+        which moves later without losing who comes."""
+        start, room, quick = slot(26, 120), Room.objects.get(name='FH 324'), {'X-Quick': '1', 'X-Panel': '1'}
+        rooms = self.student.get('/raeume/', {'tag': f'{start:%Y-%m-%d}', 'von': f'{start:%H:%M}', 'personen': 3}).context['rooms']
+        self.assertIn(room, rooms)
+        self.assertTrue(all(r.capacity >= 3 for r in rooms))
+        asked = self.student.get('/raeume/buchen/', {'raum': room.pk, 'start': f'{start:%Y-%m-%dT%H:%M}', 'ende': f'{start + timedelta(hours=2):%Y-%m-%dT%H:%M}'}, headers=quick)
+        self.assertEqual(self.student.post('/raeume/buchen/', sent(asked), headers=quick).status_code, 204)
+        rehearsal = Booking.objects.get(person=self.mei, room=room, start=start, category='kammermusik')
+        members = set(rehearsal.participants.all())
+        self.assertTrue(members)
+        moving = self.student.get(f'/raeume/buchung/{rehearsal.pk}/', headers=quick)
+        self.student.post(f'/raeume/buchung/{rehearsal.pk}/', sent(moving, until=f'{start + timedelta(hours=1):%H:%M}'), headers=quick)
+        rehearsal.refresh_from_db()
+        self.assertEqual((rehearsal.end, set(rehearsal.participants.all())), (start + timedelta(hours=1), members))
 
     def test_rooms_and_categories_students_may_not_book(self):
         self.refused(self.book(room=Room.objects.get(name='Festsaal').pk, **times(slot(5))), 'gültige Auswahl')

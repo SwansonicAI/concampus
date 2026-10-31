@@ -6,28 +6,33 @@
   <h1>Raumplan</h1>
   <form class="actions">
     <input type="hidden" name="raeume" value="{{ group }}">
+    {% for field in finding %}{% if field.value %}<input type="hidden" name="{{ field.html_name }}" value="{{ field.value }}">{% endif %}{% endfor %}
     <a class="btn ghost" href="{% querystring tag=prev|date:'Y-m-d' %}" data-key="ArrowLeft" title="Vorheriger Tag (←)"><i class="arrow left"></i></a>
     <input name="tag" value="{{ day|date:'D d.m.Y' }}" data-day autocomplete="off" size="14" aria-label="Datum, z. B. morgen, fr oder 12.11.">
     <a class="btn ghost" href="{% querystring tag=next|date:'Y-m-d' %}" data-key="ArrowRight" title="Nächster Tag (→)"><i class="arrow"></i></a>
     <a class="btn ghost" href="{% querystring tag=None %}" data-key="h" title="Heute (H)">Heute</a>
   </form>
 </div>
-<p class="lead">{{ day|date:"l, j. F Y" }}{% if left is not None %} · Übezeit: noch {{ left|floatformat:"-1" }} von {{ institution.student_daily_hours }} Std.{% endif %}</p>
+<p class="lead">{{ day|date:"l, j. F Y" }}{% if left is not None %} · Übezeit: noch {{ left|floatformat:"-1" }} von {{ institution.student_daily_hours }} Std.{% endif %}{% for category, until in reach %} · {{ category }} bis {{ until|date:"D j.n., H:i" }} Uhr{% endfor %}</p>
 {% include "core/_days.html" %}
-<form class="toolbar">
+<form class="toolbar" onchange="this.requestSubmit()">
   <input type="hidden" name="tag" value="{{ day|date:'Y-m-d' }}">
-  <label class="inline">Räume
-    <select name="raeume" onchange="this.form.requestSubmit()">
-      {% for heading, options in groups %}
-      {% if heading %}<optgroup label="{{ heading }}">{% endif %}
-      {% for value, label in options %}<option value="{{ value }}"{% if value == group %} selected{% endif %}>{{ label }}</option>{% endfor %}
-      {% if heading %}</optgroup>{% endif %}
-      {% endfor %}
-    </select>
-  </label>
-  <div class="legend"><span class="legend-items">{% for tone, label in tones %}<span class="legend-item"><span class="booking {{ tone }}"></span>{{ label }}</span>{% endfor %}{% if hidden %}<span class="legend-item"><span class="booking taken"></span>belegt</span>{% endif %}<span class="legend-item"><span class="booking mine"></span>Ihre Buchung</span></span></div>
-  <small class="muted">Freie Zeit anklicken oder ziehen, um zu buchen · ← → wechselt den Tag</small>
+  <div class="inline">
+    <label>Räume
+      <select name="raeume">
+        {% for heading, options in groups %}
+        {% if heading %}<optgroup label="{{ heading }}">{% endif %}
+        {% for value, label in options %}<option value="{{ value }}"{% if value == group %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        {% if heading %}</optgroup>{% endif %}
+        {% endfor %}
+      </select>
+    </label>
+    {% for field in finding %}<label>{{ field.label }}{{ field }}</label>{% endfor %}
+    {% if found %}<a class="btn ghost" href="{% querystring von=None bis=None personen=None ausstattung=None %}">Filter aufheben</a>{% endif %}
+  </div>
+  {% if tones or hidden or mine %}<div class="legend"><span class="legend-items">{% for tone, label in tones %}<span class="legend-item"><span class="booking {{ tone }}"></span>{{ label }}</span>{% endfor %}{% if hidden %}<span class="legend-item"><span class="booking taken"></span>belegt</span>{% endif %}{% if mine %}<span class="legend-item"><span class="booking mine"></span>Ihre Buchung</span>{% endif %}</span></div>{% endif %}
 </form>
+{{ finding.non_field_errors }}
 <div class="plan" data-panel>
   <div class="prow hours">
     <span class="room"></span>
@@ -35,16 +40,19 @@
   </div>
   {% for room in rooms %}
   <div class="prow">
-    <a class="room" href="{% url 'rooms:room' room.pk %}?tag={{ day|date:'Y-m-d' }}" title="{{ room.purpose }}"><b>{{ room.name }}</b><small>{{ room.purpose|default:room.building }} · {{ room.capacity }}&nbsp;Pl.</small></a>
-    {% if room.bookable %}{% for columns, time in slots %}<a class="slot" style="grid-column: {{ columns }}" href="{% url 'rooms:new' %}?raum={{ room.pk }}&amp;start={{ day|date:'Y-m-d' }}T{{ time }}" title="{{ room.name }}, {{ time }} Uhr buchen"></a>{% endfor %}{% endif %}
+    <a class="room" href="{% url 'rooms:room' room.pk %}?tag={{ day|date:'Y-m-d' }}" title="{{ room.purpose }}"><b>{{ room.name }}</b><small>{% if room.away %}<span class="caution">{% if room.away.end <= found.start %}direkt aus{% else %}direkt weiter in{% endif %} {{ room.away.room.building }}</span>{% else %}{{ room.purpose|default:room.building }} · {{ room.capacity }}&nbsp;Pl.{% endif %}</small></a>
+    {% for columns, why in room.shut %}<span class="shut" style="grid-column: {{ columns }}"{% if why %} title="{{ why }}"{% endif %}></span>{% endfor %}
+    {% for columns, time in room.slots %}<a class="slot" style="grid-column: {{ columns }}" href="{% url 'rooms:new' %}?raum={{ room.pk }}&amp;start={{ day|date:'Y-m-d' }}T{{ time }}" aria-label="{{ room.name }}, {{ time }} Uhr {% if room.asked %}anfragen{% else %}buchen{% endif %}"></a>{% endfor %}
+    {% if room.span %}<a class="pick" style="grid-column: {{ room.span }}" href="{% url 'rooms:new' %}?raum={{ room.pk }}&amp;start={{ found.start|date:'Y-m-d\TH:i' }}&amp;ende={{ found.end|date:'Y-m-d\TH:i' }}">{{ found.start|time:"H:i" }}–{{ found.end|time:"H:i" }}</a>{% endif %}
     {% for b in room.day %}
     {% if b.hidden %}<span class="booking taken" style="grid-column: {{ b.columns }}" title="belegt, {{ b.start|time:'H:i' }}–{{ b.end|time:'H:i' }}"></span>
-    {% else %}<a class="booking {{ b.tone }}{% if b.person_id == user.pk %} mine{% endif %}" style="grid-column: {{ b.columns }}" href="{% if b.course and not b.editable %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}" title="{{ b.start|time:'H:i' }}–{{ b.end|time:'H:i' }} · {{ b.get_category_display }} · {{ b.label }} · {{ b.person }}">{{ b.label }}</a>{% endif %}
+    {% else %}<a class="booking {{ b.tone }}{% if b.person_id == user.pk %} mine{% endif %}" style="grid-column: {{ b.columns }}" href="{% if b.course and not b.editable %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}"{% if b.quick %} data-quick{% endif %} title="{{ b.start|time:'H:i' }}–{{ b.end|time:'H:i' }} · {{ b.get_category_display }} · {{ b.label }} · {{ b.person }}">{{ b.label }}</a>{% endif %}
     {% endfor %}
     {% if now %}<i class="now" style="grid-column: {{ now }}"></i>{% endif %}
   </div>
   {% empty %}
-  <p class="empty">Keine Räume in dieser Auswahl.</p>
+  <p class="empty">{% if found %}Kein passender Raum frei. Andere Zeit oder weniger Ausstattung versuchen.{% else %}Keine Räume in dieser Auswahl.{% endif %}</p>
   {% endfor %}
 </div>
+<p class="muted"><small>Freie Zeit anklicken oder ziehen, um zu buchen · ← → wechselt den Tag</small></p>
 {% endblock %}

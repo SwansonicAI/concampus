@@ -1,0 +1,25 @@
+<form method="post" action="{{ request.get_full_path }}" class="brief">
+  {% csrf_token %}
+  <b>{% if booking.pk %}{{ booking.label }}{% else %}{{ form.instance.room }}{% endif %}</b>
+  <p class="muted"><small>{% if booking.pk %}{{ booking.room }}{% else %}{{ form.instance.room.purpose|default:form.instance.room.building }}{% endif %} · {{ on|date:"l, j.n." }}</small></p>
+  <div class="inline">
+    <label>{{ form.begin.label }}{{ form.begin }}</label>
+    <label>{{ form.until.label }}{{ form.until }}</label>
+  </div>
+  <div><label>{{ form.category.label }}{{ form.category }}</label></div>
+  {% if 'ensemble' in form.fields %}<div><label>{{ form.ensemble.label }}{{ form.ensemble }}</label></div>{% endif %}
+  {% if 'title' in form.brief %}<div><label>{{ form.title.label }}{{ form.title }}</label></div>{% endif %}
+  {% for field in form.rest %}{{ field.as_hidden }}{% endfor %}
+  {{ form.non_field_errors }}{% for field in form %}{{ field.errors }}{% endfor %}
+  {% if form.instance.room_id in form.fields.room.asked %}<p class="muted"><small>Wird zentral vergeben: Sie fragen an, die Antwort kommt ins Postfach.</small></p>
+  {% elif left is not None and form.instance.category.quota %}<p class="muted"><small>Übezeit am {{ on|date:"l" }}: noch {{ left|floatformat:"-1" }} von {{ rules.student_daily_hours }} Std.</small></p>{% endif %}
+  <div class="actions">
+    {% if booking.pk %}<button class="btn">Speichern</button><button class="btn ghost" formaction="{% url 'rooms:delete' booking.pk %}" data-confirm="Wirklich stornieren?">Stornieren</button>
+    {% else %}<button class="btn">{% if form.instance.room_id in form.fields.room.asked %}Anfragen{% else %}Buchen{% endif %}</button>{% endif %}
+    <button class="link" name="mehr" value="1">Weitere Angaben</button>
+  </div>
+  {% if instead %}
+  <p class="muted"><small>Stattdessen</small></p>
+  <div class="actions">{% for r in instead.rooms %}<button class="btn ghost small" name="instead" value="raum:{{ r.pk }}" title="{{ r.purpose }}">{{ r.name }}</button>{% endfor %}{% if instead.later %}<button class="btn ghost small" name="instead" value="zeit:{{ instead.later.0|time:'H:i' }}-{{ instead.later.1|time:'H:i' }}">{{ instead.later.0|time:"H:i" }}–{{ instead.later.1|time:"H:i" }} Uhr</button>{% endif %}</div>
+  {% endif %}
+</form>

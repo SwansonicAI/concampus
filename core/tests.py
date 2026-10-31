@@ -83,7 +83,7 @@ class SmokeTest(Seeded):
             f'/aufnahme/pruefung/{audition.pk}/', f'/aufnahme/pruefung/{audition.pk}/sichtung/',
             f'/aufnahme/bewerbung/{applicant.pk}/', f'/aufnahme/bewerbung/{admitted.pk}/',
             '/raeume/', '/raeume/?raeume=alle', '/raeume/veranstaltungen/', f'/raeume/{room.pk}/', '/raeume/meine/', '/raeume/buchen/',
-            f'/raeume/buchung/{booking.pk}/', '/raeume/finden/',
+            f'/raeume/buchung/{booking.pk}/', '/raeume/?von=10:00&personen=4',
             f'/verlauf/core.person/{student.person_id}/', f'/verlauf/courses.course/{exam.pk}/',
             *[f'/postfach/{d.message_id}/brief/' for d in Document.objects.filter(message__isnull=False)[:3]],
         ]
@@ -282,7 +282,7 @@ class SearchTest(Seeded):
     def test_palette_finds_features_dates_and_people(self):
         student = self.login('student')
         r = student.get('/suche/', {'q': 'raum'}, headers={'X-Fragment': '1'})
-        self.assertIn('Raum buchen', r.text)
+        self.assertIn('Raumplan', r.text)
         self.assertNotIn('<html', r.text)
         self.assertIn('Freie Räume am', student.get('/suche/', {'q': 'fr 14'}, headers={'X-Fragment': '1'}).text)
         self.assertIn('Köhler', self.login('asa').get('/suche/', {'q': 'KOEHLER'}, headers={'X-Fragment': '1'}).text)
@@ -388,7 +388,7 @@ class FreshInstallTest(Empty):
         '/', '/postfach/', '/suche/?q=a', '/studierende/liste/', '/studierende/rueckmeldung/', '/studiengaenge/', '/lehre/verzeichnis/',
         '/lehre/meine/', '/lehre/stundenplan/', '/lehre/deputat/', '/lehre/semesterwechsel/', '/lehre/neu/', '/pruefungen/', '/pruefungen/neu/',
         '/pruefungen/anerkennung/', '/aufnahme/bewerbungen/', '/aufnahme/kommissionen/', '/aufnahme/meine/', '/aufnahme/bewerben/',
-        '/raeume/', '/raeume/finden/', '/raeume/buchen/', '/raeume/meine/', '/raeume/veranstaltungen/', '/einstellungen/',
+        '/raeume/', '/raeume/?von=10:00&personen=4', '/raeume/buchen/', '/raeume/meine/', '/raeume/veranstaltungen/', '/einstellungen/',
         '/einstellungen/texte/', '/einstellungen/semester/', '/einstellungen/semester/neu/', '/einstellungen/eignungspruefungen/neu/',
         '/auswertungen/', '/auswertungen/abfrage/', '/auswertungen/abfrage/?was=bewerbungen&nach=studienjahr', '/auswertungen/datensaetze/',
     ]
