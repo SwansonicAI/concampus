@@ -1,0 +1,29 @@
+# Each week a pull request for each kind of dependency with newer versions, tested by the workflow; merged, it is deployed.
+# The packages from requirements.in into requirements.txt with their hashes, the images by digest, the actions by commit.
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      python:  # together: lxml and xmlsec only load with the same libxml2
+        patterns: ['*']
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      - dependency-name: python  # a new Python is a change of its own, in the workflow too
+        update-types: [version-update:semver-major, version-update:semver-minor]
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ['*']

@@ -3,6 +3,10 @@ name: Test and deploy
 on:
   push:
     branches: [main]
+  pull_request:  # tested only, Dependabot's among them
+
+permissions:
+  contents: read
 
 env:
   SERVER: 46.224.56.49
@@ -22,16 +26,17 @@ jobs:
     env:
       DATABASE_URL: postgresql://postgres:postgres@localhost/postgres
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v6
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09  # v5.1.0
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
           python-version: '3.12'
           cache: pip
-      - run: pip install -r requirements.txt
+      - run: pip install --require-hashes -r requirements.txt
       - run: python manage.py test
 
   deploy:
     needs: test
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     concurrency: deploy
     steps:

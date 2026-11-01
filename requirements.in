@@ -1,0 +1,8 @@
+Django
+gunicorn
+lxml
+psycopg[binary]
+python3-saml
+tblib  # the tracebacks from the tests' parallel processes (core/testing.py)
+tzdata  # Windows has no time zone database of its own
+whitenoise
