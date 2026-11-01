@@ -31,7 +31,7 @@ COOKIE = 'saml'  # the request's id until the answer comes back, on a POST from 
 def provider():
     """The identity provider's entity, addresses and certificate, from its metadata, read once a process."""
     source = settings.SAML['idp']
-    return Metadata.parse_remote(source) if source.startswith('https://') else Metadata.parse(Path(source).read_text(encoding='utf-8'))
+    return Metadata.parse_remote(source, timeout=10) if source.startswith('https://') else Metadata.parse(Path(source).read_text(encoding='utf-8'))
 
 
 def config(request):
