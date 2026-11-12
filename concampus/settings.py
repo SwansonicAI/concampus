@@ -11,19 +11,30 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
 import os
+import sys
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+APPS_DIR = BASE_DIR / 'apps'
+sys.path.insert(0, str(APPS_DIR))  # the apps import by their own names (`from students.models import ...`), as the migrations do
+
+# In development a .env beside manage.py fills what the environment lacks; on the server compose reads it (.dockerignore keeps it out of the image).
+if (env := BASE_DIR / '.env').exists():
+    for line in env.read_text().splitlines():
+        key, _, value = line.partition('=')
+        if key.strip() and not key.startswith('#'):
+            os.environ.setdefault(key.strip(), value.strip())
 
 
-# A server sets its key, hosts and database in the environment; without a key this is development.
+# A server sets its key, hosts and database in the environment; DEBUG=1 only in development and the tests, where a
+# missing key falls back to an insecure one. Without DEBUG=1 a missing key stops the start.
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-%)0d+-lm(h92#hmxl_=l)4@d8&st)!27uy&)n1gcm$0ye5vt*=')
+DEBUG = os.environ.get('DEBUG') == '1'
 
-DEBUG = 'SECRET_KEY' not in os.environ
+SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-%)0d+-lm(h92#hmxl_=l)4@d8&st)!27uy&)n1gcm$0ye5vt*=') if DEBUG else os.environ['SECRET_KEY']
 # Accounts the login page offers without a password, to see ConCampus as each kind of user; only in development and on the demo server.
 DEMO = [
     'student', 'promotion', 'bewerbung', 'absolvent', 'lehre', 'korrepetition', 'asa', 'pruefungsamt', 'pruefungsausschuss', 'dekanat', 'dekanatsreferat',

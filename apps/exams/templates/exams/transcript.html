@@ -1,0 +1,52 @@
+{% extends base %}
+{% block title %}{% if complete %}Zeugnis{% else %}Leistungsübersicht{% endif %} {{ study.person.name }}{% endblock %}
+{% block content %}
+<div class="document">
+  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button>{% if study.issued %}<a class="btn ghost" href="{% url 'exams:certificate' study.pk %}">Urkunde</a>{% endif %}{% if supplement %}<a class="btn ghost" href="{% url 'exams:supplement' study.pk %}">Diploma Supplement</a>{% endif %}</p>
+  {% include "core/_letterhead.html" with office=sender %}
+  <h1>{% if complete %}Zeugnis{% else %}Leistungsübersicht{% endif %}</h1>
+  {% if complete and not study.issued %}<p class="fail"><b>Entwurf: noch nicht ausgestellt.</b></p>{% endif %}
+  {% if copy %}<p class="muted"><small>Abschrift zur Information. Gültig ist das unterschriebene und gesiegelte Zeugnis.</small></p>{% endif %}
+  <dl class="facts">
+    <dt>Name</dt><dd><b>{{ study.person.legal_name }}</b>{% if study.person.birth_name %}, geb. {{ study.person.birth_name }}{% endif %}</dd>
+    <dt>Geboren</dt><dd>{{ study.person.birth_date|date:"j. F Y" }}{% if study.person.birth_place %} in {{ study.person.birth_place }}{% endif %}</dd>
+    <dt>Matrikelnummer</dt><dd>{{ study.person.matriculation|default:"–" }}</dd>
+    <dt>Studiengang</dt><dd>{{ study.program.title }}, Prüfungsordnung {{ study.program.version }}</dd>
+    <dt>Hauptfach</dt><dd>{{ study.subject }}</dd>
+    {% if study.focus %}<dt>Schwerpunkt</dt><dd>{{ study.focus.title }}</dd>{% endif %}
+    {% if thesis %}<dt>Abschlussarbeit</dt><dd>{{ thesis }}</dd>{% endif %}
+    {% if complete %}<dt>Datum der letzten Prüfungsleistung</dt><dd>{{ completed|date:"j. F Y"|default:"–" }}, das Datum des Zeugnisses</dd>
+    <dt>Ausgefertigt am</dt><dd>{% if study.issued %}{{ study.issued|date:"j. F Y" }}{% else %}noch nicht{% endif %}</dd>{% endif %}
+  </dl>
+  {% if issue %}<form method="post" action="{% url 'exams:issue' study.pk %}" class="no-print panel" style="margin-top: 16px">{% csrf_token %}<p style="margin-top: 0">Alle Leistungen sind erbracht. Ausgestellt, erhält {{ study.person.first_name }} {{ study.person.last_name }} Bescheid und Abschriften von Zeugnis, Urkunde und Diploma Supplement; die Exmatrikulation folgt.</p><button class="btn" data-confirm="Zeugnis ausstellen?">Zeugnis ausstellen</button></form>{% endif %}
+  <section>
+    <table>
+      <thead><tr><th>Modul</th><th>Titel</th><th class="num">CP</th><th class="num">Gewicht</th><th class="num">Note</th></tr></thead>
+      <tbody>
+        {% for r in rows %}
+        {% if r.kind == 'part' %}
+        {% for i in r.items %}{% if not complete %}{% for f in i.failures %}<tr><td></td><td class="muted">{{ i.title }}, {{ forloop.counter }}. Versuch, {{ f.course.term }}</td><td></td><td></td><td class="num fail">{% if f.grade is not None %}{{ f.grade|floatformat:1 }}{% else %}nicht bestanden{% endif %}{% if f.remark %} {{ f.remark|upper }}{% endif %}</td></tr>{% endfor %}{% endif %}{% if i.done and not i.excused %}<tr><td></td><td class="muted">{{ i.title }}{% if i.semester %}, {{ i.semester }}. Semester{% endif %}</td><td></td><td class="num muted">{% if i.weight %}{{ i.weight|floatformat:"-2" }}{% endif %}</td><td class="num muted">{% if i.grade is not None %}{{ i.grade|floatformat:1 }}{% else %}bestanden{% endif %}</td></tr>{% endif %}{% endfor %}
+        {% else %}
+        <tr>
+          <td class="nowrap"><b>{% firstof r.node.code r.choice.code %}</b></td>
+          <td><b>{% if r.choice %}{{ r.choice.title }}: {% endif %}{{ r.node.title }}</b>{% if not r.node.done %} <small class="muted">({% if r.node.earned >= r.node.credits %}Prüfung offen{% else %}laufend{% endif %})</small>{% endif %}</td>
+          <td class="num">{{ r.node.earned }}{% if r.node.earned != r.node.credits %} / {{ r.node.credits }}{% endif %}</td>
+          <td class="num">{% if r.choice %}{{ r.choice.weight|floatformat:"-2" }}{% elif r.node.weight %}{{ r.node.weight|floatformat:"-2" }}{% endif %}</td>
+          <td class="num"><b>{% if r.node.done and r.kind != 'group' %}{{ r.node.grade|default_if_none:"bestanden" }}{% endif %}</b></td>
+        </tr>
+        {% endif %}
+        {% empty %}<tr><td colspan="5" class="empty">Noch keine Leistungen.</td></tr>
+        {% endfor %}
+        <tr class="total"><td colspan="2">Summe</td><td class="num">{{ earned }} / {{ total }}</td><td></td><td class="num">{{ average|default:"–" }}{% if average and not complete %}<br><small class="muted">vorläufig</small>{% endif %}</td></tr>
+      </tbody>
+    </table>
+  </section>
+  <p class="muted" style="margin-top: 16px"><small>Die Gesamtnote ist das gewichtete Mittel der Modulnoten nach dem Studienplan, {% if study.program.rounding == 'cut' %}nach der ersten Nachkommastelle abgeschnitten{% else %}auf eine Nachkommastelle kaufmännisch gerundet{% endif %}. Unbenotete Module gehen nicht ein.</small></p>
+  {% if complete %}
+  <p style="margin-top: 24px">Gesamtnote: <b>{{ average }} ({{ verbal }}){% if honours %}, mit Auszeichnung{% endif %}</b></p>
+  {% elif average %}
+  <p style="margin-top: 24px">Vorläufige Durchschnittsnote: <b>{{ average }}</b>, berechnet aus Modulen mit {{ covered }} % des Gewichts der Gesamtnote.</p>
+  {% endif %}
+  <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{% if complete and completed %}{{ completed|date:"j. F Y" }}{% else %}{{ today|date:"j. F Y" }}{% endif %}</span>{% if complete %}{% for name in signature.splitlines %}<span>{{ name }}</span>{% endfor %}{% else %}<span>{{ sender }}</span>{% endif %}</div>
+</div>
+{% endblock %}

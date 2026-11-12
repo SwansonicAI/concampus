@@ -1,0 +1,41 @@
+from django.urls import path
+
+from .views import catalogue, dates, groups, load, mine, participants, registration, rollover, timetable
+
+app_name = 'courses'
+urlpatterns = [
+    path('', catalogue.index, name='index'),
+    path('verzeichnis/', catalogue.catalogue, name='catalogue'),
+    path('meine/', mine.mine, name='mine'),
+    path('stundenplan/', timetable.timetable, name='timetable'),
+    path('deputat/', load.load, name='load'),
+    path('semesterwechsel/', rollover.rollover, name='rollover'),
+    path('pruefende/uebernehmen/', rollover.appoint_again, name='appoint_again'),
+    path('eignungspruefungen/uebernehmen/', rollover.auditions_again, name='auditions_again'),
+    path('neu/', catalogue.edit, name='new'),
+    path('<int:pk>/', catalogue.course, name='course'),
+    path('<int:pk>/bearbeiten/', catalogue.edit, name='edit'),
+    path('<int:pk>/hinzufuegen/', participants.add, name='add'),
+    path('<int:pk>/austragen/', participants.drop, name='drop'),
+    path('<int:pk>/teilnehmende/', participants.roster, name='roster'),
+    path('<int:pk>/nachricht/', participants.write, name='write'),
+    path('<int:pk>/anmelden/', registration.register, name='register'),
+    path('<int:pk>/planen/', dates.plan, name='plan'),
+    path('<int:pk>/unterrichtszeiten/', dates.lessons, name='lessons'),
+    path('teilnahme/<int:pk>/abmelden/', registration.withdraw, name='withdraw'),
+    path('teilnahme/<int:pk>/wechseln/', registration.switch, name='switch'),
+    path('<int:pk>/gruppe/', groups.group, name='group'),
+    path('<int:pk>/gruppe/<int:number>/', groups.group, name='group'),
+    path('<int:pk>/gruppen/verschieben/', groups.regroup, name='regroup'),
+    path('<int:pk>/gruppen/verteilen/', groups.distribute, name='distribute'),
+    path('<int:pk>/termin/', dates.date, name='date'),
+    path('<int:pk>/rueckmeldung/', dates.reply, name='reply'),
+    path('<int:pk>/entfaellt/', dates.cancel, name='cancel'),
+    path('<int:pk>/loeschen/', catalogue.remove, name='remove'),
+    path('<int:pk>/ensemble/', groups.ensemble, name='ensemble'),
+    path('<int:pk>/befangen/', participants.recuse, name='recuse'),
+    path('ensemble/<int:pk>/', groups.coach, name='coach'),
+    path('ensemble/<int:pk>/zurueckziehen/', groups.disband, name='disband'),
+    path('anfrage/<int:pk>/', registration.choose, name='choose'),
+    path('anfrage/<int:pk>/zurueckziehen/', registration.retract, name='retract'),
+]

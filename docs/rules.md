@@ -6,10 +6,14 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 
 ## Sources
 
+The sources below are those of the demo, the HfM Weimar in Thüringen. ConCampus is for any German Musikhochschule:
+where a rule differs between Hochschulen or Länder, the Hochschule sets it under Einstellungen, and the defaults are the
+demo's values. Federal law (VwVfG, SGB V, AufenthG, BAföG, Destatis) is in the code.
+
 - **RPSO 2026**: Rahmenstudien- und Prüfungsordnung, Verkündungsblatt 1/2026, for everyone enrolled on 1.4.2026
   (§ 25). <https://www.hfm-weimar.de/fileadmin/user_upload/Studienplaene_und_Ordnungen/Studien-_und_Pruefungsordnungen/RPSO_2026.pdf>
 - **EPO**: Eignungsprüfungsordnung of 25.10.2024, as amended 19.09.2025.
-- **ThürLVVO**: Thüringer Lehrverpflichtungsverordnung, as amended 2025.
+- **ThürLVVO**: Thüringer Lehrverpflichtungsverordnung, as amended 2025: the demo's values; each Land has its own, set under Einstellungen.
 - **VwVfG**: Verwaltungsverfahrensgesetz (federal text; Thüringen's ThürVwVfG to be confirmed, see the end).
 - **AufenthG**, **SGB V** (§ 199a, Studierendenmeldeverfahren).
 - **KMK/HRK**: Diploma Supplement model, section 8 in the 2018 wording.
@@ -21,14 +25,14 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 | Rule | Source | Code | Set in |
 |---|---|---|---|
 | Exam mean of the examiners rounded kaufmännisch to one decimal | RPSO § 15 Abs. 2 | `courses/panel.py` `result()`, `rule()` | Einstellungen › Studiengänge (Mittel der Prüfenden) |
-| Audition mean cut after the first decimal | EPO § 6 Abs. 4 | `courses/panel.py` `rounding()` | code |
+| Audition mean cut after the first decimal | EPO § 6 Abs. 4 | `courses/panel.py` `rounding()` | Einstellungen › Hochschule (Mittel der Kommission) |
 | Module grades and Gesamtnote rounded kaufmännisch; areas between them (Vertiefung) keep their exact mean | RPSO § 15 Abs. 4 | `curriculum/models.py` `weighted()`, `Program.curriculum()` | Einstellungen › Studiengänge (Modul- und Gesamtnoten) |
-| Thesis: Gutachten more than 1,0 apart or one failing → a third; grade the mean of the two better | RPSO § 15 Abs. 2 | `courses/panel.py` `disputed()`, `result()` | code |
+| Thesis: Gutachten more than 1,0 apart or one failing → a third; grade the mean of the two better | RPSO § 15 Abs. 2 | `courses/panel.py` `disputed()`, `result()` | Einstellungen › Hochschule (Drittes Gutachten ab Abstand über); the mean of the two better: code |
 | Examiners see the others' marks only once all have marked, whatever office they also hold; then theirs is locked, the text of a Gutachten too | practice | `courses/panel.py` `blind()`, `marks()` | code |
 | A Gutachten without its grade is a draft its author alone sees; with the grade it is handed in | RPSO § 15 | `courses/panel.py` `marks()`, `exams/views.py` `exam()` | code |
 | Released again after a correction, only whose result changed hears of it, a final fail by a new Bescheid; the Widerspruchsfrist runs from each one's own notice | VwVfG § 41 | `exams/views.py` `release()`, `told_now()`, `exhausted()` | code |
 | A mark set by hand differs from the panel's only with a reason, by the Prüfungsausschuss | practice | `courses/panel.py` `marks()` (`correct`) | Einstellungen › Ämter (`correct_scores`) |
-| The office copies examiners' marks only once the signed Protokoll is in, on paper or as a scan; the sheet says who copied | practice | `courses/panel.py` `marks()`, `exams/views.py` `exam()`, `protocol()` | code |
+| The office copies examiners' marks only once the signed Protokoll is in, on paper or as a scan; the sheet says who copied | practice | `courses/panel.py` `marks()`, `exams/views/exam.py` `exam()`, `protocol()` | Einstellungen › Hochschule (Wertungen erst nach dem Protokoll) |
 | A Befangenheit takes the examiner out of the mean; a substitute marks in their place | § 21 VwVfG | `courses/panel.py` `sheet()`, `courses/views.py` `recuse()` | code |
 | Honours up to a Gesamtnote | per Studiengang | `exams/views.py` `achievements()` | Einstellungen › Studiengänge |
 
@@ -36,10 +40,10 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 
 | Rule | Source | Code | Set in |
 |---|---|---|---|
-| Artistic exam in the Haupt- or Schwerpunktfach: three to eight examiners | RPSO § 17 Abs. 3 | `courses/models.py` `Course.shortfall` | code |
+| Artistic exam in the Haupt- or Schwerpunktfach: three to eight examiners | RPSO § 17 Abs. 3 | `courses/models.py` `Course.shortfall` | Einstellungen › Hochschule (Prüfende im Hauptfach) |
 | Oral or practical exam: two examiners, or one with a Beisitz | RPSO § 17 Abs. 3 | same | code |
-| Final and repeat exams: at least two, one of them a professor | RPSO § 17 Abs. 5 | same | code |
-| Audition commission: three for the Hauptfach, two for other parts | EPO § 3 Abs. 4 | same | code |
+| Final and repeat exams: at least two, one of them a professor | RPSO § 17 Abs. 5 | same | Einstellungen › Hochschule (Prüfende in Abschluss- und Wiederholungsprüfungen, Professur) |
+| Audition commission: three for the Hauptfach, two for other parts | EPO § 3 Abs. 4 | same | Einstellungen › Hochschule (Kommission) |
 | Examiners appointed per Studienjahr and subject; others are flagged, not refused | EPO § 3 Abs. 2, RPSO § 17 | `courses/models.py` `Appointment`, `Course.panels()` | Einstellungen › Bestellte Prüfende |
 
 ## Attempts, withdrawal, compensation
@@ -57,11 +61,13 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 | Rule | Source | Code | Set in |
 |---|---|---|---|
 | A Frist ending on a Saturday, Sunday or public holiday ends on the next working day | § 31 Abs. 3 VwVfG | `core/dates.py` `working()`, used for theses and the Widerspruchsfrist | Einstellungen › Unterrichtsfreie Tage (Feiertag) |
-| Results due: oral and practical exams a week after, Klausuren six weeks | RPSO § 13 Abs. 7 | `exams/apps.py` `graded_by()` | code |
-| Gutachten due eight weeks after submission | RPSO § 13 Abs. 11 | `exams/apps.py`, `exams/views.py` `exam()` | code |
+| Results due: oral and practical exams a week after, Klausuren six weeks | RPSO § 13 Abs. 7 | `exams/apps.py` `graded_by()` | Einstellungen › Hochschule (Ergebnisse nach) |
+| Gutachten due eight weeks after submission | RPSO § 13 Abs. 11 | `exams/apps.py`, `exams/views/exam.py` `exam()` | Einstellungen › Hochschule (Gutachten nach) |
+| Thesis registration warns of credits and modules the plan names before it | Studienplan | `exams/views/thesis.py` `unmet()` | Einstellungen › Module (Voraussetzung, Voraussetzung (CP)) |
+| Whoever failed an exam is registered for the next one, without Anmeldung | RPSO § 19 | `exams/views/exam.py` `register_resits()` | Einstellungen › Hochschule (Wiederholung ohne Anmeldung) |
 | Thesis due after the weeks the Prüfungsordnung allows | per Studiengang | `exams/views.py` `thesis()` | Einstellungen › Studiengänge (Bearbeitungszeit) |
 | Thesis handed in with the Selbstständigkeitserklärung, KI included | RPSO § 14 Abs. 8 | `exams/views.py` `submit()` | code |
-| Zeugnis due four weeks after the last result; after three months more the Prüfungsausschuss hears | practice | `exams/apps.py` | code |
+| Zeugnis due four weeks after the last result; after three months more the office that corrects scores hears | practice | `exams/apps.py` | Einstellungen › Hochschule (Zeugnis nach, Überfälliges Zeugnis melden nach) |
 | Widerspruch within a month of Bekanntgabe | VwVfG, § 70 VwGO | `exams/views.py` `exhausted()`, Baustein „Rechtsbehelfsbelehrung“ | Einstellungen › Texte |
 | A video round is rated by its own date, after the Bewerbungsschluss | practice | `courses/models.py` `Course.marks_by`, `courses/forms.py` `AuditionForm` | Einstellungen › Eignungsprüfungen |
 | Offer of a place accepted within some days, else it goes down the Nachrückliste | practice | `admissions/views.py` `accept_by()` | Einstellungen › Hochschule |
@@ -83,13 +89,13 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 |---|---|---|---|
 | A new PO-Version applies from its semester; who starts before then starts in the one before | Prüfungsordnung | `curriculum/models.py` `Program.current()` | Einstellungen › Studiengänge (Gilt ab) |
 | The Immatrikulationsbescheinigung also as the version of § 9 BAföG, with the start of the study, the first enrolment and the Regelstudienzeit; it stands in for Formblatt 2 | BAföG § 9, Formblatt 2 Teil C | `students/views.py` `certificate()` | code |
-| Immatrikulation once the place is accepted, the fee paid, the insurer's report in and the HZB on record | ThürHG, § 199a SGB V | `students/models.py` `Study.missing()` | code |
+| Immatrikulation once the place is accepted, the fee paid, the insurer's report in and the HZB on record | Landeshochschulgesetz, § 199a SGB V | `students/models.py` `Study.missing()` | code |
 | An insurer's report is booked to the one person applying or studying here born that day with its first name and surname or birth name; otherwise the student office books or drops it. Arrears (M12) hold the Rückmeldung back until the insurer reports them paid (M13) | § 199a SGB V | `students/smv.py` `match()`, `book()`; `core/models.py` `Person.missing()` | code |
 | The insurer hears when someone's first study here begins (M20) and their last ends (M30), not of a change of subject; only for the statutorily insured. After a change of insurer, the new one hears from the day it insures | § 199a SGB V, Gemeinsame Grundsätze | `students/models.py` `Study.set_status()`, `students/smv.py` `tell()`, `book()` | code |
-| An HZB from a school abroad is assessed; German proved where it is not in German; an APS certificate for China, India, Vietnam; both by the Immatrikulation | ThürHG, KMK | `core/models.py` `Person.abroad`, `needs_german`, `needs_aps`; `core/destatis.py` | Einstellungen › Unterlagenarten |
+| An HZB from a school abroad is assessed; German proved where it is not in German; an APS certificate for China, India, Vietnam; both by the Immatrikulation | Landeshochschulgesetz, KMK, Auswärtiges Amt (APS) | `core/models.py` `Person.abroad`, `needs_german`, `needs_aps`; `core/destatis.py` | Einstellungen › Unterlagenarten |
 | Prüfungsprogramm, Wunschlehrer:in and Korrepetition can be changed until the application's deadline; an application can be withdrawn while it runs or from the Nachrückliste, its appointments freed | Hochschule | `admissions/views.py` `details()`, `retract()` | code |
 | A changed weekly lesson time replaces the weekly series only; make-up lessons and dates called off stay; it is refused where teacher or student are elsewhere, the way between buildings included | Hochschule | `courses/views.py` `lessons()` | code |
-| Ermäßigungen are entered for the semester being planned, and carried over in the Semesterwechsel, a Freisemester excepted; last year's bestellte Prüfende are taken over in one step | ThürLVVO § 8, EPO § 3 | `courses/views.py` `carry()`, `appoint_again()` | Einstellungen › Ermäßigungen, › Bestellte Prüfende |
+| Ermäßigungen are entered for the semester being planned, and carried over in the Semesterwechsel, a Freistellung excepted; last year's bestellte Prüfende are taken over in one step | Lehrverpflichtungsverordnung, EPO § 3 | `courses/views.py` `carry()`, `appoint_again()` | Einstellungen › Ermäßigungen, › Bestellte Prüfende |
 | A new semester is proposed as the same one a year on, in planning, with the latest fees; it may not overlap another, its teaching lies inside it and the Rückmeldung before it | Hochschule | `setup/editors.py` `new_term()`, `core/models.py` `Term.clean()` | Einstellungen › Semester |
 | A Lehrform can be without room dates (Projekt, Praktikum): its teachers are not asked to plan any | Hochschule | `courses/models.py` `Format.dated` | Einstellungen › Lehrformen |
 | The number after a Lehrform in a Studienplan is minutes per week („E 90“) or SWS („E 2“), as its Studiengang says; the plan's explanation and the Deputat read it so | Studienplan | `curriculum/models.py` `Program.weekly`, `courses/views.py` `minutes()` | Einstellungen › Studiengänge (Umfang im Studienplan) |
@@ -103,17 +109,18 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 | A group's places are at most the seats of its room | Hochschule | `courses/forms.py` `GroupForm.clean()` | Räume (Plätze) |
 | An ensemble is taken back by a member while registration runs and nobody coaches it; its members are told | Hochschule | `courses/views.py` `disband()` | code |
 | The Immatrikulationsbescheinigung of the coming semester once its Rückmeldung is paid | Hochschule | `students/views.py` `certificate()` | code |
-| What the Immatrikulation needs (the HZB, a Sprachnachweis, an APS certificate) is handed in until then, after the offer too | Immatrikulationsordnung | `admissions/views.py` `entrance()`, `upload()`, `owed()` | Einstellungen › Unterlagenarten |
+| What the Immatrikulation needs (the HZB, a Sprachnachweis, an APS certificate) is handed in until then, after the offer too | Immatrikulationsordnung | `admissions/views.py` `entrance()`, `upload()`, `owed()` | Einstellungen › Unterlagenarten (Bis zur Immatrikulation) |
 | Each kind of document takes up to 5 files of 20 MB each unless set otherwise; the video one file of 1.5 GB, which may be taken over into another application in the same Hauptfach | Hochschule | `students/models.py` `DocumentType.size`, `max_files`; `admissions/views.py` `upload()`, `reuse()` | Einstellungen › Unterlagenarten |
-| Semesterbeitrag in three parts, which add up | HfM fees page | `core/models.py` `Term.parts`, `clean()` | Einstellungen › Semester |
-| A newcomer's first Semesterbeitrag is due by the Rückmeldefrist, or, offered the place late, the days to accept and as many again | Hochschule | `students/models.py` `Study.fee_due` | Einstellungen › Hochschule (Frist zur Annahme) |
+| Semesterbeitrag in parts, which add up | Land and Hochschule (demo: HfM fees page) | `core/models.py` `Term.parts`, `clean()` | Einstellungen › Semester (Aufteilung) |
+| A newcomer's first Semesterbeitrag is due by the Rückmeldefrist, or, offered the place late, the days to accept and the days to pay | Hochschule | `students/models.py` `Study.fee_due` | Einstellungen › Hochschule (Frist zur Annahme, Zahlungsfrist nach Annahme) |
+| An overdue instrument loan holds back Rückmeldung and Immatrikulation | Hochschule | `core/models.py` `Person.missing()` | Einstellungen › Hochschule (Überfällige Leihe) |
 | Payments from a bank statement are booked once checked one by one; a payment booked by mistake is taken back and the person told | Hochschule | `students/views.py` `reregistration()`, `unpay()` | code |
 | Without Rückmeldung after the Nachfrist: reason 7, after a preview; whose Zeugnis is issued or Prüfungsanspruch lost leaves on that ground, one by one | Immatrikulationsordnung | `students/views.py` `reregistration()` | code |
 | A Fachwechsel by Bescheid, after a preview; credits for what was passed on application | Immatrikulationsordnung, RPSO | `students/views.py` `change()` | Einstellungen › Texte |
 | An Urlaubssemester taken back by Bescheid; an office entry beyond the rule says so before it is made | Immatrikulationsordnung | `students/views.py` `leave()` | Einstellungen › Texte |
 | Rückmeldung within its window; in the Nachfrist with the Säumnisgebühr; after it, Exmatrikulation | Immatrikulationsordnung | `students/views.py` `reregistration()` | Einstellungen › Semester, › Hochschule |
-| Urlaubssemester asked for in the Rückmeldung window, at most two in the rule, in the first semester only for illness or Mutterschutz; the office decides beyond, reminded | Immatrikulationsordnung | `students/views.py` `leave()`, `students/models.py` `LEAVE_TERMS`, `FIRST_TERM_LEAVES` | code |
-| Exmatrikulation names the last day enrolled; after a final fail the day the Bescheid became final, at the earliest the day before this semester | ThürHG | `students/views.py` `leaving_day()`, `exmatriculate()` | code |
+| Urlaubssemester asked for in the Rückmeldung window, at most two in the rule, in the first semester only for illness or Mutterschutz; the office decides beyond, reminded | Immatrikulationsordnung | `students/views/enrolment.py` `leave()`, `students/models.py` `FIRST_TERM_LEAVES` | Einstellungen › Hochschule (Urlaubssemester, erstes Fachsemester) |
+| Exmatrikulation names the last day enrolled; after a final fail the day the Bescheid became final, at the earliest the day before this semester | Landeshochschulgesetz | `students/views.py` `leaving_day()`, `exmatriculate()` | code |
 | A semester paid for and left before it began stays on record, counted nowhere, its fee refunded by the Studierendenwerk | HfM fees page | `students/models.py` `StudyTerm.withdrawn`, Baustein „Erstattung“ | Einstellungen › Texte |
 | A residence permit holder is told to inform the Ausländerbehörde within two weeks | § 82 Abs. 6 AufenthG | `core/models.py` `Person.permit`, Baustein „Ausländerbehörde“ | Einstellungen › Texte |
 | The Schwerpunkt is the student's choice until it begins, confirmed once more; after that the office records it, with its ground, by Bescheid | Studienplan | `students/views.py` `focus()` | code |
@@ -131,11 +138,11 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 
 | Rule | Source | Code | Set in |
 |---|---|---|---|
-| One SWS of artistic teaching is 60 minutes; individual lessons count per student by the minutes their plan gives | ThürLVVO § 2 Abs. 2, § 5 Abs. 1 | `courses/views.py` `sws()`, `minutes()` | Einstellungen › Module (form, e.g. „E 90“) |
-| Lehrverpflichtung 18 LVS artistic, 9 academic professors | ThürLVVO § 4 | `core/models.py` `Person.obligation` | Einstellungen › Konten |
-| Balanced over three Studienjahre, never under half in a term | ThürLVVO § 7 | `courses/views.py` `loads()` | Einstellungen › Hochschule (Deputatskonto ab) |
-| Reductions by function, one per person | ThürLVVO § 8 | `courses/models.py` `Reduction` | Einstellungen › Ermäßigungen |
-| A Freisemester sets the whole Lehrverpflichtung aside; courses planned for it are flagged | Hochschule | `courses/views.py` `rollover()` | Einstellungen › Ermäßigungen |
+| Individual lessons count per student by the minutes their plan gives, so many minutes to an SWS (Thüringen: 60) | Lehrverpflichtungsverordnung (ThürLVVO § 2 Abs. 2, § 5 Abs. 1) | `courses/views/load.py` `sws()`, `minutes()`; `courses/views/dates.py` `lessons()` | Einstellungen › Hochschule (Minuten Einzelunterricht je SWS), › Module (form, e.g. „E 90“) |
+| Lehrverpflichtung per person (Thüringen: 18 LVS artistic, 9 academic professors) | Lehrverpflichtungsverordnung (ThürLVVO § 4) | `core/models.py` `Person.obligation` | Einstellungen › Konten |
+| Balanced over an Ausgleichszeitraum, flagged under a share in a term (Thüringen: three Studienjahre, half) | Lehrverpflichtungsverordnung (ThürLVVO § 7) | `courses/views/load.py` `loads()` | Einstellungen › Hochschule (Deputatskonto ab, Ausgleichszeitraum, Mindestens je Semester) |
+| Reductions by ground, each with the most it allows in % of the Lehrverpflichtung or in LVS | Lehrverpflichtungsverordnung (ThürLVVO § 8, § 10) | `courses/models.py` `ReductionGround`, `setup/editors.py` `ReductionForm` | Einstellungen › Ermäßigungsgründe, › Ermäßigungen |
+| A Freistellung (e.g. Freisemester) is for its semester alone: not carried over; courses planned for the person are flagged | Hochschule | `courses/views/rollover.py` `rollover()`, `carry()` | Einstellungen › Ermäßigungsgründe (Freistellung) |
 | A lesson class of a coming semester not yet filled counts as many students as it had | Hochschule | `courses/views.py` `sws()` | – |
 
 ## Semesterwechsel
@@ -161,6 +168,8 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 | Rule | Source | Code | Set in |
 |---|---|---|---|
 | Students book practice up to some hours a day, some hours ahead | house rules | `rooms/forms.py` `BookingForm` | Einstellungen › Hochschule, › Buchungskategorien |
+| Rooms are shown and booked between opening hours | house rules | `rooms/plans.py`, `rooms/views.py` `index()` | Einstellungen › Hochschule (Räume ab, bis) |
+| Dates in two buildings closer than the way between them are noted in the timetable | Hochschule | `rooms/plans.py` `walk()`, `courses/views/timetable.py` | Einstellungen › Hochschule (Weg zwischen Gebäuden) |
 | What starts within the short notice is free of the quota, for at most that long | house rules | same | Einstellungen › Hochschule (Kurzfristig ohne Kontingent) |
 
 ## Data kept
@@ -169,7 +178,7 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 |---|---|---|---|
 | Applications that came to nothing: documents deleted and people made anonymous after a period | GDPR Art. 5(1)(e) | `admissions/retention.py`, `core/management/commands/prune.py` | Einstellungen › Hochschule (Löschfrist) |
 | Health data (phoniatric report) deleted once the application is decided | GDPR Art. 9 | same | Einstellungen › Unterlagenarten (Gesundheitsdaten) |
-| A former student's file is offered to the archive some years after the last Exmatrikulation, cut down to the Grunddaten once assessed, those anonymised years later | Thüringer Aufbewahrungsrichtlinie, ThürArchivG | `students/disposal.py` | Einstellungen › Hochschule (Aufbewahrung) |
+| A former student's file is offered to the archive some years after the last Exmatrikulation, cut down to the Grunddaten once assessed, those anonymised years later | Landesarchivgesetz (demo: ThürArchivG, Thüringer Aufbewahrungsrichtlinie) | `students/disposal.py` | Einstellungen › Hochschule (Aufbewahrung) |
 | Files with personal data that leave are logged, the log kept two years | GDPR Art. 5(2) | `core/models.py` `Export` | code |
 | Former staff: the day the account is deactivated is kept; some years later the record is cut down to the name, which stays on what they taught and examined, then made anonymous after the period of the Grunddaten | GDPR Art. 5(1)(e) | `core/departure.py`, `setup/editors.py` `AccountForm` | Einstellungen › Hochschule (Aufbewahrung) |
 | While processing is restricted, nothing of the person is deleted | GDPR Art. 18 | `Person.restriction`; `students/disposal.py`, `admissions/retention.py`, `core/departure.py` | the office, on request |
@@ -193,8 +202,8 @@ or it needs a code change. Who sees which data is in `docs/privacy.md`.
 
 | Rule | Source | Code | Set in |
 |---|---|---|---|
-| ConCampus has its own accessibility statement, reached from every page | ThürBarrWebG | `core/views.py` `accessibility()` | Einstellungen › Texte (Bausteine „Barrierefreiheit“) |
-| A reported barrier is answered within 30 days, then marked; deleted a year later | ThürBarrWebG (deadline to confirm) | `core/models.py` `Feedback` | code |
+| ConCampus has its own accessibility statement, reached from every page | Landesgesetz (demo: ThürBarrWebG) | `core/views.py` `accessibility()` | Einstellungen › Texte (Bausteine „Barrierefreiheit“; the defaults leave the Durchsetzungsstelle and the Selbstbewertung to fill in) |
+| A reported barrier is answered within 30 days, then marked; deleted a year later | Landesgesetz (demo: ThürBarrWebG) | `core/models.py` `Feedback` | Einstellungen › Hochschule (Antwort auf gemeldete Barrieren); deletion: code |
 
 ## For the Hochschule to confirm
 

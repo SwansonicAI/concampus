@@ -1,0 +1,41 @@
+{% extends base %}
+{% load texts %}
+{% block title %}Anmelden{% endblock %}
+{% block content %}
+<div class="cols">
+  <div>
+    <h1>Anmelden</h1>
+    <p class="lead">{% text 'anmeldung' %}</p>
+    {% if sso %}<p><a class="btn" href="{% url 'sso' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Mit dem Hochschulkonto anmelden</a></p>
+    <p class="muted">Ohne Hochschulkonto, etwa für eine Bewerbung: mit Benutzername und Passwort.</p>{% endif %}
+    <form method="post" class="form">
+      {% csrf_token %}
+      {{ form.non_field_errors }}
+      <div><label for="id_username">Benutzername oder E-Mail-Adresse</label>{{ form.username }}</div>
+      <div><label for="id_password">Passwort</label>{{ form.password }}</div>
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="actions"><button class="btn">Anmelden</button><a href="{% url 'password_reset' %}">Passwort vergessen?</a></div>
+    </form>
+    {% if demo %}
+    <p class="demo-entry"><button type="button" class="btn ghost small" onclick="document.getElementById('demo').showModal()">Demo-Profil wählen</button></p>
+    <dialog id="demo" class="demo" aria-labelledby="demo-title" onclick="event.target === this && this.close()">
+      <div class="head"><h2 id="demo-title">Demo-Profil wählen</h2><form method="dialog"><button class="link">Schließen</button></form></div>
+      <p class="muted">Ohne Passwort anmelden und ConCampus mit den Augen dieser Person sehen.</p>
+      <div class="people" onsubmit="this.setAttribute('aria-busy', 'true'); (event.submitter.lastElementChild || event.submitter).textContent = 'Wird geöffnet …'">
+        {% for role, people in demo %}<form method="post" action="{% url 'demo' %}">{% csrf_token %}
+          {% if people|length > 1 %}<label><b>{{ role }}</b><select name="konto">{% for person, detail in people %}<option value="{{ person.username }}">{{ person }}{% if detail %} · {{ detail }}{% endif %}</option>{% endfor %}</select></label><button class="btn small">Öffnen</button>
+          {% else %}{% with person=people.0.0 %}<button name="konto" value="{{ person.username }}"><b>{{ role }}</b><span class="muted">{{ person }}</span></button>{% endwith %}{% endif %}
+        </form>{% endfor %}
+      </div>
+    </dialog>
+    {% endif %}
+  </div>
+  <div>
+    {% if institution.signup %}<section>
+      <h2>Bewerben</h2>
+      <p>Sie möchten an der {{ institution.name }} studieren? Legen Sie ein Konto an und bewerben Sie sich für die Eignungsprüfung.</p>
+      <p><a class="more" href="{% url 'admissions:signup' %}">Konto anlegen</a></p>
+    </section>{% endif %}
+  </div>
+</div>
+{% endblock %}
