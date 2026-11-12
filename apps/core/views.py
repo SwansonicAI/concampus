@@ -42,13 +42,8 @@ from .text import fold, matching, words
 
 def home(request):
     person, today = request.user, timezone.localdate()
-    day = dates.day(request.GET.get('tag', '')) or today
-    bookings = agenda(person)
-    marked = busy(bookings, today)
-    shown = list(bookings.filter(**dates.starting(day)).select_related('room', 'course', 'category').prefetch_related('participants'))
-    for b in shown:
-        b.clash = any(o is not b and o.start < b.end and b.start < o.end for o in shown)
-    moves(shown)
+    monday = today - timedelta(days=today.weekday())  # four whole weeks, this one first; a day opens in the side panel (day)
+    marked = busy(agenda(person), monday, 28)
     apps = tiles(person)
     titles = dict(apps)
     tasks = sorted(  # from every app, also one without a tile for the person, such as their own loan or stay abroad
@@ -61,12 +56,21 @@ def home(request):
         'soon': today + timedelta(days=7),
         'tasks': tasks,
         'tiles': [{'app': app, 'title': title, 'figure': app.figure(person)} for app, title in apps],
-        'day': day,
         'calendar': bool(marked),
-        'days': strip(today, day, marked),
-        'agenda': shown, 'now': timezone.now(),
+        'days': strip(monday, today, marked, 28),
         'letters': person.messages.filter(read=None)[:3],
     })
+
+
+def day(request):
+    """One's appointments on a day, with clashes and the moves between buildings."""
+    person, today = request.user, timezone.localdate()
+    day = dates.day(request.GET.get('tag', '')) or today
+    shown = list(agenda(person).filter(**dates.starting(day)).select_related('room', 'course', 'category').prefetch_related('participants'))
+    for b in shown:
+        b.clash = any(o is not b and o.start < b.end and b.start < o.end for o in shown)
+    moves(shown)
+    return render(request, 'core/day.html', {'day': day, 'today': today, 'agenda': shown, 'now': timezone.now()})
 
 
 def inbox(request):

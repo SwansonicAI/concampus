@@ -10,6 +10,7 @@ urlpatterns = [
     path('logo/', views.logo, name='logo'),
     path('suche/', views.search, name='search'),
     path('datum/', views.when, name='when'),
+    path('termine/', views.day, name='day'),
     path('orte/', views.towns, name='towns'),
     path('konto/', views.account, name='account'),
     path('konto/sso/', sso.begin, name='sso'),

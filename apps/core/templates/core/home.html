@@ -1,10 +1,23 @@
 {% extends base %}
 {% block title %}Start{% endblock %}
 {% block content %}
-<p class="eyebrow">{% now "l, j. F Y" %}{% if term %} · {{ term }}{% endif %}</p>
+{% if term %}<p class="eyebrow">{{ term }}</p>{% endif %}
 <h1>Guten Tag, {{ user.first_name|default:user.username }}</h1>
 
-<section style="margin-top: 8px">
+<div{% if calendar %} class="cols calendar"{% endif %} style="margin-top: 8px">
+{% if calendar %}
+<section>
+  <h2>Termine</h2>
+  <nav class="month" data-panel>
+    {% with first=days.0.date last=days|last %}<p>{% if first.month != last.date.month %}{{ first|date:"F" }} – {% endif %}{{ last.date|date:"F Y" }}</p>{% endwith %}
+    {% for d in days|slice:":7" %}<small>{{ d.date|date:"D" }}</small>{% endfor %}
+    {% for d in days %}<a class="day{% if d.busy %} busy{% endif %}{% if d.on %} on{% endif %}{% if d.date < today %} past{% endif %}" href="{% url 'day' %}?tag={{ d.date|date:'Y-m-d' }}"><small>{% if d.date.day == 1 %}{{ d.date|date:"M" }}{% endif %}</small><b>{{ d.date|date:"j" }}</b></a>{% endfor %}
+  </nav>
+</section>
+{% endif %}
+
+<div>
+<section>
   <h2>Zu erledigen</h2>
   {% if tasks %}
   <ul class="todo">
@@ -21,24 +34,16 @@
   {% endif %}
 </section>
 
-{% if calendar %}
+{% if letters %}
 <section>
-  <h2>Termine</h2>
-  {% include "core/_days.html" %}
-  <ul class="todo agenda" data-panel>
-    {% for b in agenda %}
-    <li{% if b.end < now %} class="past"{% endif %}><a href="{% if b.course and b.person_id != user.pk %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}">
-      <span class="due">{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</span>
-      <span class="what">{{ b.label }}{% if b.course.kind == 'lesson' %}{% for p in b.participants.all %}{% if p != user %} <span class="muted">· {{ p }}</span>{% endif %}{% endfor %}{% endif %}{% if b.clash %} <span class="badge no">Überschneidung</span>{% endif %}{% if b.move %} <span class="badge wait">direkt aus {{ b.move }}</span>{% endif %}</span>
-      <span class="where">{{ b.room }} · {{ b.room.building }}</span>
-    </a></li>
-    {% empty %}
-    <li class="empty">Keine Termine am {{ day|date:"l, j. F" }}.</li>
-    {% endfor %}
+  <h2>Ungelesen im Postfach</h2>
+  <ul class="todo">
+    {% for m in letters %}<li><a href="{{ m.get_absolute_url }}"><span class="what">{{ m.subject }}</span><span class="where">Postfach</span><span class="due">{{ m.created|date:"j.n.Y" }}</span></a></li>{% endfor %}
   </ul>
-  {% if agenda and day >= today and 'teacher' in user.roles %}<p><a class="more" href="{% url 'rooms:day_off' %}?tag={{ day|date:'Y-m-d' }}">Krank? Alle eigenen Termine des Tages absagen</a></p>{% endif %}
 </section>
 {% endif %}
+</div>
+</div>
 
 <section>
   <h2>Anwendungen</h2>
@@ -51,13 +56,4 @@
     {% endfor %}
   </div>
 </section>
-
-{% if letters %}
-<section>
-  <h2>Ungelesen im Postfach</h2>
-  <ul class="todo">
-    {% for m in letters %}<li><a href="{{ m.get_absolute_url }}"><span class="what">{{ m.subject }}</span><span class="where">Postfach</span><span class="due">{{ m.created|date:"j.n.Y" }}</span></a></li>{% endfor %}
-  </ul>
-</section>
-{% endif %}
 {% endblock %}

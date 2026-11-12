@@ -1,0 +1,17 @@
+{% extends base %}
+{% block title %}Termine am {{ day|date:"j. F" }}{% endblock %}
+{% block content %}
+<h1>{{ day|date:"l, j. F" }}</h1>
+<ul class="todo agenda">
+  {% for b in agenda %}
+  <li{% if b.end < now %} class="past"{% endif %}><a href="{% if b.course and b.person_id != user.pk %}{{ b.course.get_absolute_url }}{% else %}{% url 'rooms:booking' b.pk %}{% endif %}">
+    <span class="due">{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</span>
+    <span class="what">{{ b.label }}{% if b.course.kind == 'lesson' %}{% for p in b.participants.all %}{% if p != user %} <span class="muted">· {{ p }}</span>{% endif %}{% endfor %}{% endif %}{% if b.clash %} <span class="badge no">Überschneidung</span>{% endif %}{% if b.move %} <span class="badge wait">direkt aus {{ b.move }}</span>{% endif %}</span>
+    <span class="where">{{ b.room }} · {{ b.room.building }}</span>
+  </a></li>
+  {% empty %}
+  <li class="empty">Keine Termine.</li>
+  {% endfor %}
+</ul>
+{% if agenda and day >= today and 'teacher' in user.roles %}<p><a class="more" href="{% url 'rooms:day_off' %}?tag={{ day|date:'Y-m-d' }}">Krank? Alle eigenen Termine des Tages absagen</a></p>{% endif %}
+{% endblock %}

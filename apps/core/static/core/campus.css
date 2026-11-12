@@ -229,6 +229,8 @@ main[aria-busy] .results .empty { visibility: hidden; }
 .agenda .due { min-width: 0; color: var(--ink); text-align: left; }
 .agenda .empty { padding: 14px 4px; border-bottom: 1px solid var(--line); }
 .agenda .past a { color: var(--muted); }
+.cols .todo a { grid-template-columns: minmax(0, 1fr) auto; row-gap: 2px; }  /* half width: where under what */
+.cols .todo .where { grid-row: 2; }
 .demo-entry { margin-top: 32px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 15px; }
 dialog.demo { width: min(760px,calc(100vw - 32px)); padding: 28px 32px 32px; border: 0; border-radius: var(--radius); }
 dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
@@ -243,7 +245,7 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .demo .people[aria-busy] button { pointer-events: none; }
 @container (max-width: 880px) { .cols { grid-template-columns: minmax(0, 1fr); } .cols > .before { order: -1; } }  /* the side panel stacks what sits side by side on a page; what to read before a form goes above it */
 .calm { color: var(--muted); }
-.launch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.launch { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
 .app { display: flex; gap: 16px; align-items: center; padding: 18px 20px; border: 1px solid var(--line); color: var(--ink); }
 .app:hover { border-color: var(--accent); text-decoration: none; }
 .app svg { flex: none; width: 34px; height: 34px; fill: none; stroke: var(--accent); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
@@ -258,6 +260,14 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .day.busy b { color: var(--accent); font-weight: 700; }
 .day.on b { text-decoration: underline; text-decoration-thickness: 2px; text-underline-offset: 4px; }
 .day:hover { text-decoration: none; }
+.month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); row-gap: 2px; padding-top: 10px; border-top: 2px solid var(--ink); text-align: center; }  /* the start page's four weeks */
+.month > p { grid-column: 1 / -1; margin: 0 0 8px; color: var(--muted); font-size: 13px; text-align: left; }
+.month > small { color: var(--muted); font-size: 12px; }
+.month .day { min-width: 0; padding: 3px 0; }
+.month .day b { font-size: 15px; }
+.month .day small { height: 12px; color: var(--muted); font-size: 10px; line-height: 12px; }
+.month .past b { color: var(--muted); font-weight: 400; }
+.cols.calendar { grid-template-columns: minmax(0, 340px) minmax(0, 1fr); gap: 64px; }
 
 
 /* Figures */
@@ -541,7 +551,7 @@ a.block:hover { background: var(--accent-pale); text-decoration: none; }
 
 @media (max-width: 1100px) {
   .launch, .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cols, .review { grid-template-columns: 1fr; }
+  .cols, .cols.calendar, .review { grid-template-columns: 1fr; }
   .cols > .before { order: -1; }
   .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

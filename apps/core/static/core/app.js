@@ -842,6 +842,13 @@ if (drawer) {
     if (!inside) opener = link;
     show(url);
   });
+  // A click beside the open panel closes it, unless it does something on the page underneath or ends a text selection;
+  // close() asks first if the panel holds changes not saved.
+  document.addEventListener('click', event => {
+    if (!drawer.classList.contains('open') || drawer.contains(event.target) || event.defaultPrevented) return;
+    if (event.target.closest('a[href], button, input, select, textarea, label, summary, [popover]') || getSelection().toString()) return;
+    close();
+  });
   document.addEventListener('submit', event => {
     const form = event.target;
     if (!drawer.contains(form) || form.matches('[data-upload]')) return;  // uploads go their own way, with progress
