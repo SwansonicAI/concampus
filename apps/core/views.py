@@ -13,7 +13,7 @@ from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Case, Exists, F, Min, OuterRef, Q, When, Window
 from django.db.models.functions import RowNumber
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import resolve, reverse
 from django.utils import timezone
@@ -38,7 +38,7 @@ from .history import because, describe, former, restore, tables
 from .dates import months_before
 from .keys import DISTRICTS, replaced
 from .models import Change, Consent, Export, Institution, Key, Message, Office, Person, Term, Tracked, limited
-from .text import fold, matching, words
+from .text import fit, fold, matching, meant, words
 
 
 def home(request):
@@ -392,8 +392,11 @@ def towns(request):
 def search(request):
     """One box for everything: places in the apps, dates, and every record the person may see."""
     q = request.GET.get('q', '').strip()
-    fragment = request.headers.get('X-Fragment')  # the list that opens under the search box
-    groups = [(label, hits) for label, hits in found(request.user, q, 6 if fragment else 30) if hits]
+    fragment = request.headers.get('X-Fragment')  # the palette's list
+    quick = 'schnell' in request.GET  # the palette's first answer, at once: the records follow
+    groups = [(label, hits) for label, hits in found(request.user, q, 6 if fragment else 30, quick) if hits]
+    if quick and not groups:  # not „Nichts gefunden“ before the records are in
+        return HttpResponse()
     return render(request, 'core/_found.html' if fragment else 'core/search.html', {'q': q, 'groups': groups, 'fragment': fragment})
 
 
@@ -437,7 +440,8 @@ def ranked(queryset, q, *fields, limit, names=''):
     return first + list(rest)
 
 
-def found(person, q, limit):
+def found(person, q, limit, quick=False):
+    """(label, hits) of everything the search finds; `quick`: the dates and places only, which need no records."""
     roles, sought = person.roles, words(q)
     groups = []
     if q and roles - {'applicant', 'alumni'} and (when := dates.moment(q)):
@@ -446,13 +450,18 @@ def found(person, q, limit):
     places = [(f, app.title(roles) or app.verbose_name) for app in tile_apps() for f in app.features(person)]
     places += [(feature('Startseite', reverse('home'), 'aufgaben zu erledigen übersicht'), ''), (feature('Postfach', reverse('inbox'), 'nachrichten bescheide mitteilungen'), ''),
                (feature('Mein Konto', reverse('account'), 'anschrift adresse telefon kontaktdaten umzug e-mail einwilligungen anmeldungen meine daten'), ''),
-               (feature('Passwort ändern', reverse('password_change'), 'kennwort passwort neu sicherheit'), '')]
+               (feature('Passwort ändern', reverse('password_change'), 'kennwort passwort sicherheit'), ''),
+               (feature('Meine Daten herunterladen', reverse('copy'), 'kopie auskunft dsgvo datenschutz'), '')]
     if person.is_superuser:
         places.append((feature('Datenpflege', reverse('admin:index'), 'admin stammdaten verwaltung'), ''))
-    groups.append(('Funktionen', [
-        hit(f['title'], f['url'], app) for f, app in places if all(w in fold(f"{f['title']} {f['words']} {app}") for w in sought)
-    ][:limit if q else None]))  # an empty box lists everything the person can do
-    if len(q) < 2:
+    # the best fit first, of those that fit the most words, at least half; an empty box lists everything the person can do
+    meaning = meant(q)
+    fits = sorted(((fit(meaning, f['title'], f"{f['words']} {app}"), f, app) for f, app in places), key=lambda s: s[0], reverse=True)
+    most = fits[0][0][0] if fits else 0
+    fits = [(score, f, app) for (n, score), f, app in fits if not meaning or n == most > 0 and 2 * n >= len(meaning)][:limit if q else None]
+    groups.append(functions := ('Funktionen', [hit(f['title'], f['url'], app) for _, f, app in fits]))
+    weak = fits and fits[0][0] < 3 * len(meaning)  # bits of words only, as a name may hold them: after the records
+    if len(q) < 2 or quick:
         return groups
     if roles & {'view_files', 'manage_students', 'view_applications', 'teacher'}:  # only the files and applications the person may open
         seen = Q(teacher=person) & ~Q(status__in=Study.APPLICATION) if 'teacher' in roles else Q(pk=None)
@@ -521,6 +530,8 @@ def found(person, q, limit):
             for b in list(nearest.values())[:limit]
         ]))
     groups.append(('Postfach', [hit(m.subject, m.get_absolute_url(), date_format(m.created, 'j.n.Y')) for m in matching(person.messages.all(), q, 'subject', 'body')[:limit]]))
+    if weak:
+        groups.append(groups.pop(groups.index(functions)))
     return groups
 
 

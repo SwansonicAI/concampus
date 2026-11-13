@@ -25,12 +25,20 @@ class RoomsConfig(Tile, AppConfig):
     def features(self, person):
         if not self.title(person.roles):
             return []
-        return [
+        found = [
             feature('Raumplan', reverse('rooms:index'), 'belegung räume heute kalender tagesplan institut gebäude raum buchen frei freier finden suchen verfügbar buchung reservieren üben überaum kammermusik probe'),
+            feature('Raum buchen', reverse('rooms:new'), 'überaum übezeit probe'),
             feature('Meine Buchungen', reverse('rooms:mine'), 'stornieren übezeit kontingent'),
+            feature('Termine eines Tages absagen', reverse('rooms:day_off'), 'krank unterricht entfällt'),
             feature('Veranstaltungen', reverse('rooms:events'), 'konzert klassenabend meisterkurs vortrag programm'),
             feature('Kalender abonnieren', f"{reverse('rooms:mine')}#kalender", 'ical ics outlook google apple handy feed'),
         ]
+        if 'manage_bookings' in person.roles:
+            found += [
+                feature('Veranstaltung anlegen', f"{reverse('rooms:new')}?kategorie=konzert", 'konzert klassenabend'),
+                feature('Raumanfragen', reverse('rooms:requests'), 'entscheiden'),
+            ]
+        return found
 
     def figure(self, person):
         from django.utils import timezone

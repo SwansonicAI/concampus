@@ -55,7 +55,7 @@ class ExamsConfig(Tile, AppConfig):
         if roles & {'manage_exams', 'decide_results', 'teacher'}:
             found.append(feature('Prüfungen', reverse('exams:index'), 'prüfungsplan kommission noten eintragen bewerten freigabe'))
         if 'manage_exams' in roles:
-            found.append(feature('Prüfung anlegen', reverse('exams:new'), 'neue prüfung erstellen'))
+            found.append(feature('Prüfung anlegen', reverse('exams:new')))
         if 'recognise' in roles:
             found.append(feature('Anerkennung', reverse('exams:recognition'), 'anrechnung externe leistungen hochschulwechsel'))
         if 'student' in roles:

@@ -25,11 +25,25 @@ class SetupConfig(Tile, AppConfig):
     def features(self, person):
         from .views import usable
 
-        found = [feature(e.title, reverse('setup:list', args=[e.key]), f'einstellungen pflegen anlegen {e.words}') for e in usable(person)]
+        found = [feature('Einstellungen', reverse('setup:index'), 'pflegen')] if self.title(person.roles) else []
+        for e in usable(person):
+            found.append(feature(e.title, reverse('setup:list', args=[e.key]), f'einstellungen pflegen {e.words}'))
+            if e.creatable:
+                found.append(feature(f'{e.title}: neu anlegen', reverse('setup:new', args=[e.key]), f'einstellungen {e.words}'))
         if 'manage_accounts' in person.roles:
-            found.append(feature('Rechte im Überblick', reverse('setup:rights'), 'wer darf was berechtigungen rollen ämter zugriff'))
+            found += [
+                feature('Rechte im Überblick', reverse('setup:rights'), 'wer darf was berechtigungen rollen ämter zugriff'),
+                feature('Freigaben', reverse('setup:approvals'), 'rechte mitgliedschaften bestätigen vier augen'),
+                feature('Exporte', reverse('setup:exports'), 'protokoll personenbezogene daten datei'),
+                feature('Anmeldungen', reverse('setup:sign_ins'), 'login fehlversuche protokoll sicherheit'),
+            ]
         if 'manage_institution' in person.roles:
-            found.append(feature('Texte', reverse('setup:texts'), 'einstellungen bescheide nachrichten briefe vorlagen formulierung rechtsbehelfsbelehrung'))
+            found += [
+                feature('Texte', reverse('setup:texts'), 'einstellungen bescheide nachrichten briefe vorlagen formulierung rechtsbehelfsbelehrung'),
+                feature('Barrierefreiheit', reverse('setup:feedback'), 'barrieren rückmeldungen beantworten'),
+            ]
+        if person.roles & {'manage_institution', 'manage_students'}:
+            found.append(feature('Amtliche Verzeichnisse', reverse('setup:keys'), 'schlüssel destatis staaten kreise'))
         return found
 
     def tasks(self, person):

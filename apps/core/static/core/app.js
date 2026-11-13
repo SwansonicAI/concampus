@@ -597,31 +597,40 @@ function dated(input) {
   });
 }
 
-// Search palette: results while typing, arrow keys to choose, Enter to go.
-const search = document.querySelector('.search');
-if (search) {
-  const input = search.querySelector('input');
-  const list = Object.assign(document.createElement('div'), {className: 'palette'});
-  search.append(list);
+// Search palette: the box in the bar, Ctrl+K or / opens it in the middle of the page. Results while typing, the best
+// first and chosen; arrow keys choose another, Enter goes there, also before the results for the last letters are in.
+const finder = document.querySelector('.finder');
+if (finder) {
+  const form = finder.querySelector('form'), input = form.querySelector('input'), list = finder.querySelector('.palette');
   let timer, shown = null;
-  const load = () => {
-    clearTimeout(timer);
-    timer = setTimeout(async () => {
-      const q = input.value.trim();
-      if (q !== shown) {
-        if (list.querySelector('.empty')) search.classList.remove('open');  // not the last query's „Nichts gefunden“ meanwhile
-        const response = await fetch(`${search.action}?q=${encodeURIComponent(q)}`, {headers: {'X-Fragment': '1'}});
-        if (q !== input.value.trim()) return;  // typing went on
-        list.innerHTML = await response.text();
-        list.querySelector('a')?.classList.add('on');
-        shown = q;
-      }
-      search.classList.toggle('open', Boolean(list.textContent.trim()));
-    }, 90);
+  const render = (q, html) => {  // the chosen stays chosen when the records come in
+    const on = shown === q && list.querySelector('a.on')?.getAttribute('href');
+    list.innerHTML = html;
+    const links = [...list.querySelectorAll('a')];
+    (links.find(a => a.getAttribute('href') === on) || links[0])?.classList.add('on');
+    shown = q;
   };
-  input.addEventListener('focus', load);
-  input.addEventListener('input', load);
-  input.addEventListener('keydown', event => {
+  const show = async () => {  // the places at once, the records after; false if typing went on meanwhile
+    clearTimeout(timer);
+    const q = input.value.trim();
+    if (q === shown) return true;
+    const ask = quick => fetch(`${form.action}?q=${encodeURIComponent(q)}${quick ? '&schnell' : ''}`, {headers: {'X-Fragment': '1'}}).then(r => r.text());
+    const all = ask(false), first = await ask(true);
+    if (q !== input.value.trim()) return false;
+    render(q, first);
+    all.then(html => q === input.value.trim() && render(q, html));
+    return true;
+  };
+  document.querySelector('.search').addEventListener('click', () => {
+    finder.showModal();
+    input.select();  // what was sought last, replaced by typing
+    show();
+  });
+  input.addEventListener('input', () => {
+    clearTimeout(timer);
+    timer = setTimeout(show, 60);
+  });
+  input.addEventListener('keydown', async event => {
     const links = [...list.querySelectorAll('a')];
     const at = links.findIndex(a => a.classList.contains('on'));
     if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && links.length) {
@@ -629,15 +638,15 @@ if (search) {
       const next = links[(at + (event.key === 'ArrowDown' ? 1 : -1) + links.length) % links.length];
       links.forEach(a => a.classList.toggle('on', a === next));
       next.scrollIntoView({block: 'nearest'});
-    } else if (event.key === 'Enter' && at >= 0 && search.classList.contains('open') && shown === input.value.trim()) {
+    } else if (event.key === 'Enter') {
       event.preventDefault();
-      location.href = links[at].href;
-    } else if (event.key === 'Escape') {
-      search.classList.remove('open');
-      input.blur();
+      if (await show()) {
+        const chosen = list.querySelector('a.on');
+        chosen ? location.href = chosen.href : form.submit();
+      }
     }
   });
-  document.addEventListener('click', event => search.contains(event.target) || search.classList.remove('open'));
+  finder.addEventListener('click', event => event.target === finder && finder.close());  // a click beside it
 }
 
 // Filters apply in place: a pause in typing or a new choice updates the page without reloading it, cursor included.
@@ -735,13 +744,11 @@ document.addEventListener('click', event => {
   else if (cancel && !cancel.closest('.drawer')) document.querySelectorAll('form[data-dirty]').forEach(form => delete form.dataset.dirty);
 });
 
-// The account menu closes on Escape or a click elsewhere, and gives way to the search's results.
+// The account menu closes on Escape or a click elsewhere.
 const menu = document.querySelector('details.menu');
 if (menu) {
   document.addEventListener('click', event => menu.open && !menu.contains(event.target) && menu.removeAttribute('open'));
   document.addEventListener('keydown', event => event.key === 'Escape' && menu.open && menu.removeAttribute('open'));
-  menu.addEventListener('toggle', () => menu.open && document.querySelector('.search')?.classList.remove('open'));
-  document.querySelector('.search input')?.addEventListener('focus', () => menu.removeAttribute('open'));
 }
 
 // Side panel: details open beside the page instead of replacing it. Each page opened within it is a step back can
@@ -960,8 +967,8 @@ if (drawer) {
     const typing = event.target.closest('input, select, textarea');
     if ((event.key === 'k' && (event.ctrlKey || event.metaKey)) || (event.key === '/' && !typing)) {
       event.preventDefault();
-      search?.querySelector('input').focus();
-    } else if (event.key === 'Escape' && !search?.contains(event.target)) {
+      finder.open || document.querySelector('.search').click();
+    } else if (event.key === 'Escape' && !finder.contains(event.target)) {
       close();
     } else if (!typing && !event.ctrlKey && !event.metaKey && !event.altKey) {
       const scope = drawer.classList.contains('open') ? body : document.querySelector('main');

@@ -62,7 +62,7 @@ class CoursesConfig(Tile, AppConfig):
                 feature('Stundenplan', reverse('courses:timetable'), 'woche kalender termine'),
             ]
         if 'manage_courses' in roles:
-            found.append(feature('Neue Veranstaltung', reverse('courses:new'), 'anlegen erstellen kurs'))
+            found.append(feature('Neue Veranstaltung', reverse('courses:new'), 'lehrveranstaltung einzelunterricht klasse'))
         if roles & {'view_teaching_load', 'teacher'}:
             found.append(feature('Deputat', reverse('courses:load'), 'lehrverpflichtung sws lehrende auslastung'))
         if roles & {'roll_over', 'publish_term'}:

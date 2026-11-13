@@ -295,6 +295,8 @@ class SearchTest(Seeded):
         groups = dict(found(Person.objects.get(username='student'), 'Studienpläne', 30))  # open to all, not only offices
         self.assertLessEqual({'Studiengänge', 'Mein Studienplan Violine'}, {h['title'] for h in groups['Funktionen']})
         self.assertEqual(len(groups['Studiengänge']), Program.objects.count())
+        for q in ['create course', 'Kurs anlegen', 'craete cousre']:  # in English, in German, misspelt: the best first
+            self.assertEqual(dict(found(Person.objects.get(username='institut'), q, 6))['Funktionen'][0]['title'], 'Neue Veranstaltung')
         rooms = {h['title'] for h in dict(found(Person.objects.get(username='lehre'), 'Räume Orgel', 30))['Räume']}
         self.assertLessEqual(set(Room.objects.filter(purpose__icontains='orgel').values_list('name', flat=True)), rooms)
         self.assertLess(len(rooms), Room.objects.count())

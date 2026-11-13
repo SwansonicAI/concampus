@@ -18,7 +18,7 @@
     </a>
     {% if user.is_authenticated %}
     <div class="me">
-      <form action="{% url 'search' %}" class="search" role="search"><input type="search" name="q" placeholder="Suchen …" aria-label="Suchen" title="Strg+K oder /" autocomplete="off"></form>
+      <button type="button" class="search" title="Strg+K oder /">Suchen …<kbd>Strg K</kbd></button>
       <a href="{% url 'inbox' %}">Postfach{% if unread %}<span class="count">{{ unread }}</span>{% endif %}</a>
       <details class="menu">
         <summary>{{ user.first_name|default:user.username }}</summary>
@@ -64,6 +64,11 @@
   </div>
   <div class="drawer-body"></div>
 </aside>
+<dialog class="finder" aria-label="Suchen">
+  <form action="{% url 'search' %}" role="search"><input type="search" name="q" placeholder="Seite, Person, Veranstaltung, Raum, Datum …" aria-label="Suchen" autocomplete="off"></form>
+  <div class="palette"></div>
+  <p class="keys"><kbd>↑</kbd><kbd>↓</kbd> wählen <kbd>↵</kbd> öffnen <kbd>Esc</kbd> schließen</p>
+</dialog>
 {% endif %}
 </body>
 </html>
