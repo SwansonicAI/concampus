@@ -28,8 +28,10 @@ def disposal(request):
             n = Disposal.objects.filter(assessed__isnull=False, reduced=None).update(assessed=None, archival=None, assessed_by=None)
             messages.success(request, f'{plural(n, "Bewertung", "Bewertungen")} zurückgenommen; die Akten sind wieder angeboten.')
         elif (archival := request.POST.get('archivwuerdig')) and 'assess_files' in roles:
-            n = assess(request.POST.getlist('person'), archival == 'ja', request.user)
-            messages.success(request, f'{plural(n, "Akte", "Akten")} bewertet; heute Nacht werden sie bis auf die Grunddaten gelöscht.')
+            if n := assess(request.POST.getlist('person'), archival == 'ja', request.user):
+                messages.success(request, f'{plural(n, "Akte", "Akten")} bewertet; heute Nacht werden sie bis auf die Grunddaten gelöscht.')
+            else:
+                messages.error(request, 'Bitte die Akten ankreuzen, die bewertet werden.')
         return redirect('students:disposal')
     last = {p.pk: p.last for p in due().annotate(last=Max('studies__since'))}
     done = Disposal.objects.exclude(assessed=None).values('assessed__year').annotate(n=Count('pk'), kept=Count('pk', filter=Q(archival=True))).order_by('-assessed__year')

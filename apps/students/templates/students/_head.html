@@ -30,7 +30,7 @@
   <div class="stat"><b>{{ earned }} / {{ total }}</b><span>ECTS erworben</span><div class="bar"><i style="width: {% widthratio earned total 100 %}%"></i></div></div>
   {% if study.status == 'graduated' and average %}<div class="stat"><b>{{ average|floatformat:1 }}</b><span>Gesamtnote</span></div>{% endif %}
   {% endif %}
-  {% with fs=study.semester hs=study.university_semester rsz=study.program.semesters %}
+  {% with fs=study.semester hs=study.university_semester rsz=study.program.semesters %}{% if study.status != 'guest' %}
   <div class="stat"><b>{{ fs }} / {{ rsz }}</b><span>Fachsemester der Regelstudienzeit{% if hs != fs %} · {{ hs }}. Hochschulsemester{% endif %}{% if fs > rsz and study.status == 'enrolled' %}<br><span class="fail">über der Regelstudienzeit</span>{% endif %}</span><div class="bar"><i style="width: {% widthratio fs rsz 100 %}%"></i></div></div>
-  {% endwith %}
+  {% endif %}{% endwith %}
 </div>

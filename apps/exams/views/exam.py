@@ -270,7 +270,7 @@ def plan(request, pk):
     except ValidationError as error:
         messages.error(request, ' '.join(error.messages))
     else:
-        messages.success(request, f'{len(rows)} Termine vergeben und Einladungen versandt.')
+        messages.success(request, f'{plural(len(rows), "Termin", "Termine")} vergeben, {plural(len(rows), "Einladung", "Einladungen")} versandt.')
     return redirect(course)
 
 

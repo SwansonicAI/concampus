@@ -208,7 +208,7 @@ def grant(request):
         if limit and a.hours > limit:
             beyond.append(a.person.last_name)
     if granted:
-        messages.success(request, f'{plural(granted, "Lehrauftrag", "Lehraufträge")} erteilt; die Bescheide sind im Postfach.')
+        messages.success(request, f'{plural(granted, "Lehrauftrag", "Lehraufträge")} erteilt; {"der Bescheid ist" if granted == 1 else "die Bescheide sind"} im Postfach.')
     else:
         messages.error(request, 'Nichts erteilt: ohne Lehrveranstaltung kein Lehrauftrag.')
     if beyond:

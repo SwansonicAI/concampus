@@ -19,6 +19,7 @@ from core.shortcuts import without_term
 from core.text import matching
 from curriculum.models import Module, Program
 from rooms.models import Booking
+from rooms.views import ROOMS
 from students.models import Study
 from .. import moodle, panel
 from ..forms import AddForm, CourseForm, DateForm, EnsembleForm, Lessons, PlanForm, TeachingForm
@@ -267,6 +268,7 @@ def course(request, pk):
         'modules': credited(course, studied), 'studied': studied,
         'moodle': moodle.place(course) if staffed or office or any(not p.waiting for p in own) else None,  # whoever has a place there
         'bookings': upcoming.select_related('room', 'category', 'group').prefetch_related('participants', 'absent')[:8],
+        'rooms': bool(person.roles & set(ROOMS)),  # applicants and former students see no room's plan
         'plan': PlanForm(sent(request, 'plan'), person=person, course=course) if staffed and running and not course.cancelled and course.kind != Course.Kind.LESSON else None,
         'date': DateForm(sent(request, 'date'), person=person, course=course) if staffed and running and not course.cancelled else None,
         'lessons': timetable,

@@ -161,7 +161,7 @@ class Institution(Tracked, models.Model):
     region = KeyField('Kreis', max_length=5, keys=DISTRICTS, blank=True, help_text='Sitz der Hochschule, für die amtliche Statistik.')
     report_id = models.CharField('BerichtseinheitID', max_length=8, blank=True, help_text='Vom Statistischen Landesamt vergeben, für die Lieferung.')
     accept_days = models.PositiveSmallIntegerField('Frist zur Annahme eines Studienplatzes (Tage)', default=14)
-    late_fee = models.DecimalField('Säumnisgebühr', max_digits=6, decimal_places=2, default=15, help_text='Zum Semesterbeitrag, wer sich in der Nachfrist zurückmeldet.')
+    late_fee = models.DecimalField('Säumnisgebühr', max_digits=6, decimal_places=2, default=15, validators=[MinValueValidator(0)], help_text='Zum Semesterbeitrag, wer sich in der Nachfrist zurückmeldet.')
     payee = models.CharField('Zahlungsempfänger', max_length=120, blank=True, help_text='Für den Semesterbeitrag; leer: der Name der Hochschule.')
     iban = models.CharField('IBAN', max_length=34, blank=True, help_text='Studierende überweisen dorthin, mit ihrer Matrikelnummer im Verwendungszweck.')
     bic = models.CharField('BIC', max_length=11, blank=True)
@@ -198,7 +198,7 @@ class Institution(Tracked, models.Model):
         'Arbeitsstunden je CP', null=True, blank=True, help_text='Wie die Prüfungsordnung einen Leistungspunkt rechnet, meist 30; leer: im Studienplan nicht genannt.',
     )
     long_fee = models.DecimalField(
-        'Langzeitstudiengebühr', max_digits=7, decimal_places=2, default=0,
+        'Langzeitstudiengebühr', max_digits=7, decimal_places=2, default=0, validators=[MinValueValidator(0)],
         help_text='Je Semester, wer die Regelstudienzeit um mehr als die erlaubten Semester überschreitet; 0: keine.',
     )
     long_fee_grace = models.PositiveSmallIntegerField(
@@ -229,7 +229,7 @@ class Institution(Tracked, models.Model):
         help_text='Weniger Lehre der Lehrverpflichtung in einem Semester wird im Deputat markiert; leer: nicht.',
     )
     assignment_max = models.DecimalField(
-        'Lehrauftrag höchstens (SWS)', max_digits=4, decimal_places=1, null=True, blank=True,
+        'Lehrauftrag höchstens (SWS)', max_digits=4, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)],
         help_text='Je Person und Semester; darüber warnt ConCampus beim Erteilen, denn viel Lehre im Auftrag kann als Beschäftigung gelten. Leer: ohne Grenze.',
     )
     lesson_minutes = models.PositiveSmallIntegerField(
@@ -240,7 +240,7 @@ class Institution(Tracked, models.Model):
     final_panel = models.PositiveSmallIntegerField('Prüfende in Abschluss- und Wiederholungsprüfungen mindestens', default=2)
     final_professor = models.BooleanField('Darunter eine Professur', default=True, help_text='In Abschluss- und Wiederholungsprüfungen.')
     thesis_gap = models.DecimalField(
-        'Drittes Gutachten ab Abstand über', max_digits=2, decimal_places=1, null=True, blank=True, default=1,
+        'Drittes Gutachten ab Abstand über', max_digits=2, decimal_places=1, null=True, blank=True, default=1, validators=[MinValueValidator(0)],
         help_text='Liegen die zwei Noten einer Abschlussarbeit weiter auseinander oder lautet eine auf nicht bestanden, braucht es ein drittes Gutachten; die Note ist dann das Mittel der zwei besseren. Leer: nur bei nicht bestanden.',
     )
     oral_results_days = models.PositiveSmallIntegerField('Ergebnisse mündlicher und praktischer Prüfungen nach (Tagen)', default=7)
@@ -711,7 +711,7 @@ class Term(Tracked, models.Model):
     reregistration_start = models.DateField('Rückmeldung ab')
     deadline = models.DateField('Rückmeldefrist')
     late_deadline = models.DateField('Nachfrist bis', null=True, blank=True, help_text='Rückmeldung mit Säumnisgebühr; leer: keine Nachfrist.')
-    fee = models.DecimalField('Semesterbeitrag', max_digits=7, decimal_places=2)
+    fee = models.DecimalField('Semesterbeitrag', max_digits=7, decimal_places=2, validators=[MinValueValidator(0)])
     fee_parts = models.TextField(
         'Aufteilung', blank=True,
         help_text='Die Teile, wie sie Bescheide nennen und wie Erstattungen sie brauchen, je Zeile wohin und wie viel, z. B. „Studierendenwerk 75,00“; '

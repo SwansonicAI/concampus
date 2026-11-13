@@ -153,6 +153,9 @@ class StatusTest(Seeded):
         self.assertIn('Teilzeit eingetragen', flashes(asa.post(f'/studierende/{study.pk}/teilzeit/', follow=True))[0])
         registration = StudyTerm.objects.get(study=study, term=term)
         self.assertIn('lernzeitmodell/teilzeit', xhochschule.enrolment(study, term, registration, 1, first_enrolment(study.person), ('x', 'https://x')).decode())
+        asa.post(f'/studierende/{study.pk}/urlaub/', {'reason': '1'})
+        registration.refresh_from_db()
+        self.assertEqual((registration.leave, registration.part_time), (True, False))  # on leave: neither full nor part time
         asa.post('/studierende/gasthoerende/', {
             'status': 'second', 'first_name': 'Zora', 'last_name': 'Zweit', 'email': 'zora@uni-jena.de', 'birth_date': '3.4.2001',
             'program': study.program_id, 'subject': study.subject_id, 'home_university': 'Universität Jena', 'home_matriculation': '123456',

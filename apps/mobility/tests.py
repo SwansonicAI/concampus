@@ -1,4 +1,5 @@
 from django.test import Client
+from django.utils import timezone
 
 from core.testing import Seeded, flashes
 from curriculum.models import Module
@@ -26,7 +27,10 @@ class MobilityTest(Seeded):
         student.post(f'/international/{mobility.pk}/', {'unterschreiben': '1'})
         self.assertIn('2 Learning Agreements genehmigen', [t['text'] for t in office.get('/').context['tasks']])  # with the one waiting already
         office.post(f'/international/{mobility.pk}/', {'genehmigen': '1'})
-        office.post(f'/international/{mobility.pk}/', {'partner': '1', 'am': '20.11.2026'})
+        office.post(f'/international/{mobility.pk}/', {'partner': '1', 'am': '1.1.2030'})  # not yet: refused
+        mobility.refresh_from_db()
+        self.assertFalse(mobility.signed)
+        office.post(f'/international/{mobility.pk}/', {'partner': '1', 'am': f'{timezone.localdate():%d.%m.%Y}'})
         mobility.refresh_from_db()
         self.assertTrue(mobility.signed)
         student.post(f'/international/{mobility.pk}/', {'zeile': '1', 'table': 'A', 'title': 'Chamber Music', 'credits': '5'})

@@ -337,6 +337,8 @@ class CourseForm(forms.ModelForm):
             data['allocation'], data['capacity'] = Course.Allocation.STAFF, None
         if data.get('allocation') in (Course.Allocation.STAFF, Course.Allocation.ENSEMBLE):
             data['opens'] = data['deadline'] = None
+        if data.get('opens') and data.get('deadline') and data['deadline'] < data['opens']:
+            self.add_error('deadline', 'Der Anmeldeschluss liegt vor dem Beginn der Anmeldung.')
         return data
 
     def clean_modules(self):

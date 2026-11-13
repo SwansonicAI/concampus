@@ -3,6 +3,7 @@ from copy import copy
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.urls import reverse
 
@@ -292,7 +293,7 @@ class Module(Tracked, models.Model):
         help_text='Abschlussprojekt oder -arbeit: für ihre Prüfungen gilt die Mindestzahl Prüfender aus den Einstellungen der Hochschule.',
     )
     weight = models.DecimalField(
-        'Gewichtung', max_digits=5, decimal_places=2, default=0,
+        'Gewichtung', max_digits=5, decimal_places=2, default=0, validators=[MinValueValidator(0)],
         help_text='Anteil an der Note des übergeordneten Moduls, bei Modulen der obersten Ebene an der Gesamtnote. 0 zählt nicht.',
     )
     description = models.TextField('Beschreibung', blank=True)

@@ -119,7 +119,7 @@ def plan(request, pk):
             'Reihenfolge: ' + ', '.join(f'{t:%H:%M} {p.study.person.name}' for t, p in zip(times, rows)) + '.',
             'Einzelne Termine lassen sich danach verlegen, mit neuer Einladung.',
         ]
-        return preview(request, f'Termine: {course.title}', [('Einladung', [p.study.person for p in rows], letter)], f'{len(rows)} Termine vergeben und einladen', course.get_absolute_url(), notes)
+        return preview(request, f'Termine: {course.title}', [('Einladung', [p.study.person for p in rows], letter)], f'{plural(len(rows), "Termin", "Termine")} vergeben und einladen', course.get_absolute_url(), notes)
     if form.is_valid() and rows:
         try:
             panel.schedule(course, rows, form.cleaned_data['start'], form.cleaned_data['minutes'], form.cleaned_data['room'], request.user, form.cleaned_data['pause'])

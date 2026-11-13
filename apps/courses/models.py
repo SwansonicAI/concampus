@@ -2,6 +2,7 @@ from datetime import timedelta
 from operator import attrgetter
 
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.urls import reverse
 from django.utils import timezone
@@ -106,7 +107,7 @@ class Course(Tracked, models.Model):
     assessor = models.ForeignKey(
         Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Beisitz', help_text='Führt das Protokoll, wo nur eine Person prüft.',
     )
-    hours = models.DecimalField('SWS', max_digits=4, decimal_places=1, null=True, blank=True, help_text='Bei Einzelunterricht je Teilnahme.')
+    hours = models.DecimalField('SWS', max_digits=4, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)], help_text='Bei Einzelunterricht je Teilnahme.')
     capacity = models.PositiveSmallIntegerField('Plätze', null=True, blank=True)
     allocation = models.CharField('Platzvergabe', max_length=8, choices=Allocation, default=Allocation.ORDER)
     opens = models.DateField('Anmeldung ab', null=True, blank=True, help_text='Erster Tag der Anmeldung; leer: sofort.')
@@ -117,7 +118,7 @@ class Course(Tracked, models.Model):
                   'mit Lehrenden und Zeit, und trägt nach der Rückmeldung ihre Mitglieder ein.',
     )
     pass_mark = models.DecimalField(
-        'Bestehensgrenze', max_digits=4, decimal_places=1, null=True, blank=True,
+        'Bestehensgrenze', max_digits=4, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)],
         help_text='Gesetzt: Punkte, bestanden ab dieser Grenze. Leer: Noten, bestanden bis 4,0.',
     )
     max_points = models.PositiveSmallIntegerField('Höchstpunktzahl', null=True, blank=True, help_text='Bei Punkten: so viele gibt jedes Mitglied höchstens.')
@@ -557,7 +558,7 @@ class ReductionGround(Tracked, models.Model):
 
     name = models.CharField('Name', max_length=80, unique=True)
     share = models.PositiveSmallIntegerField('Höchstens (%)', null=True, blank=True, help_text='Der Lehrverpflichtung; leer: ohne Grenze.')
-    hours = models.DecimalField('Höchstens (LVS)', max_digits=4, decimal_places=1, null=True, blank=True)
+    hours = models.DecimalField('Höchstens (LVS)', max_digits=4, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)])
     leave = models.BooleanField(
         'Freistellung', default=False,
         help_text='Für ein Semester ohne Lehre, etwa ein Freisemester: der Semesterwechsel übernimmt sie nicht und nennt Lehrveranstaltungen der Person darin.',
@@ -584,7 +585,7 @@ class Reduction(Tracked, models.Model):
     person = models.ForeignKey(Person, models.CASCADE, related_name='reductions', verbose_name='Lehrperson')
     term = models.ForeignKey(Term, models.PROTECT, related_name='reductions', verbose_name='Semester')
     ground = models.ForeignKey(ReductionGround, models.PROTECT, null=True, related_name='reductions', verbose_name='Grund')  # null: only for rows from before grounds were records
-    hours = models.DecimalField('Ermäßigung (LVS)', max_digits=4, decimal_places=1)
+    hours = models.DecimalField('Ermäßigung (LVS)', max_digits=4, decimal_places=1, validators=[MinValueValidator(0)])
     note = models.CharField('Notiz', max_length=200, blank=True, help_text='Z. B. die Aufgabe oder der Beschluss des Präsidiums.')
 
     class Meta:
@@ -609,7 +610,7 @@ class Post(Tracked, models.Model):
     capabilities = ('manage_staff',)
 
     name = models.CharField('Stellenart', max_length=120, unique=True, help_text='Z. B. „Professur, künstlerisches Fach“.')
-    hours = models.DecimalField('Lehrverpflichtung (LVS)', max_digits=4, decimal_places=1)
+    hours = models.DecimalField('Lehrverpflichtung (LVS)', max_digits=4, decimal_places=1, validators=[MinValueValidator(0)])
     basis = models.CharField('Rechtsgrundlage', max_length=120, blank=True, help_text='Z. B. „ThürLVVO § 4 Abs. 1 Nr. 1“.')
 
     class Meta:
@@ -633,7 +634,7 @@ class Obligation(Tracked, models.Model):
     person = models.ForeignKey(Person, models.CASCADE, related_name='obligations', verbose_name='Lehrperson')
     term = models.ForeignKey(Term, models.PROTECT, related_name='obligations', verbose_name='Ab Semester')
     post = models.ForeignKey(Post, models.PROTECT, null=True, blank=True, related_name='obligations', verbose_name='Stellenart')
-    hours = models.DecimalField('Lehrverpflichtung (LVS)', max_digits=4, decimal_places=1)
+    hours = models.DecimalField('Lehrverpflichtung (LVS)', max_digits=4, decimal_places=1, validators=[MinValueValidator(0)])
     basis = models.CharField('Notiz', max_length=200, blank=True, help_text='Z. B. „Arbeitsvertrag vom 1.10.2026“.')
 
     class Meta:
@@ -663,7 +664,7 @@ class Rate(Tracked, models.Model):
     capabilities = ('grant_assignments',)
 
     name = models.CharField('Vergütungsstufe', max_length=80, unique=True, help_text='Z. B. „Stufe II: mit abgeschlossenem Hochschulstudium“.')
-    euros = models.DecimalField('Je LVS (€)', max_digits=6, decimal_places=2)
+    euros = models.DecimalField('Je LVS (€)', max_digits=6, decimal_places=2, validators=[MinValueValidator(0)])
 
     class Meta:
         ordering = ['euros']
@@ -691,7 +692,7 @@ class Assignment(Tracked, models.Model):
     person = models.ForeignKey(Person, models.CASCADE, related_name='assignments', verbose_name='Lehrbeauftragte:r')
     term = models.ForeignKey(Term, models.PROTECT, related_name='assignments', verbose_name='Semester')
     courses = models.ManyToManyField(Course, blank=True, related_name='assignments', verbose_name='Lehrveranstaltungen')
-    hours = models.DecimalField('Vereinbart (SWS)', max_digits=4, decimal_places=1)
+    hours = models.DecimalField('Vereinbart (SWS)', max_digits=4, decimal_places=1, validators=[MinValueValidator(0)])
     rate = models.ForeignKey(Rate, models.PROTECT, null=True, blank=True, related_name='assignments', verbose_name='Vergütungsstufe')
     status = models.CharField('Stand', max_length=10, choices=Status, default=Status.PROPOSED)
     proposed_by = models.ForeignKey(Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Vorgeschlagen von')
@@ -701,7 +702,7 @@ class Assignment(Tracked, models.Model):
     accepted = models.DateTimeField('Angenommen am', null=True, blank=True)
     withdrawn_on = models.DateField('Zurückgezogen am', null=True, blank=True, help_text='Bis dahin gehaltene Stunden werden vergütet.')
     note = models.CharField('Notiz', max_length=200, blank=True, help_text='Z. B. der Grund eines Rückzugs.')
-    held = models.DecimalField('Gehalten (LVS)', max_digits=5, decimal_places=1, null=True, blank=True, help_text='Nach dem Semester, für die Vergütung.')
+    held = models.DecimalField('Gehalten (LVS)', max_digits=5, decimal_places=1, null=True, blank=True, validators=[MinValueValidator(0)], help_text='Nach dem Semester, für die Vergütung.')
     affirmed = models.DateTimeField('Von der Person bestätigt', null=True, blank=True)
     settled_by = models.ForeignKey(Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Stunden bestätigt von')
     settled_on = models.DateField('Stunden bestätigt am', null=True, blank=True)

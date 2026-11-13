@@ -146,7 +146,7 @@
         {% if course.kind == 'lesson' and staffed %}<td>{% for p in b.participants.all %}{{ p.first_name }} {{ p.last_name }}{% if p in b.absent.all %} <span class="badge wait">abgemeldet</span>{% endif %}{% endfor %}</td>
         {% elif course.allocation == 'ensemble' %}<td>{{ b.title|default:"alle" }}</td>{% elif groups and staffed %}<td>{% if b.group %}Gruppe {{ b.group.number }}{% else %}alle{% endif %}</td>{% endif %}
         {% if not staffed and user in b.participants.all and b.category.blocks %}<td><form method="post" action="{% url 'rooms:absent' b.pk %}">{% csrf_token %}{% if user in b.absent.all %}<span class="badge wait">abgemeldet</span> <button class="link" name="zurueck" value="1"><small>zurücknehmen</small></button>{% else %}<button class="link" data-confirm="Für diesen Termin abmelden?"><small>abmelden</small></button>{% endif %}</form></td>{% endif %}
-        <td>{% if b.category.blocks %}<a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a>{% else %}<span class="badge no">{{ b.category }}</span>{% endif %}</td>
+        <td>{% if b.category.blocks and rooms %}<a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a>{% elif b.category.blocks %}{{ b.room }}{% else %}<span class="badge no">{{ b.category }}</span>{% endif %}</td>
       </tr>
       {% empty %}<tr><td class="empty">{% if groups and not own %}Je nach Gruppe.{% else %}Noch keine Termine.{% endif %}</td></tr>{% endfor %}
     </table>

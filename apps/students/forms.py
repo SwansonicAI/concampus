@@ -39,6 +39,8 @@ class GuestForm(forms.Form):
         data = super().clean()
         if data.get('status') == Study.Status.SECOND and not data.get('home_university'):
             self.add_error('home_university', 'Bei Zweithörenden: wo sie immatrikuliert sind.')
+        if (program := data.get('program')) and data.get('subject') and program.subjects.exists() and not program.subjects.filter(pk=data['subject'].pk).exists():
+            self.add_error('subject', f'{program} bietet das Hauptfach {data["subject"]} nicht an.')
         return data
 
 

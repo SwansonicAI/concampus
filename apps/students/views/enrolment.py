@@ -125,7 +125,8 @@ def leave(request, pk):
         Document.hand_in(study, DocumentType.system('attest'), file, Consent.give(study.person, 'zum Urlaubssemester', request.user))
     registration, _ = StudyTerm.objects.get_or_create(study=study, term=term)
     registration.leave, registration.leave_reason = leave, reason
-    registration.save(update_fields=['leave', 'leave_reason'])
+    registration.part_time = registration.part_time and not leave  # a semester on leave is neither full nor part time
+    registration.save(update_fields=['leave', 'leave_reason', 'part_time'])
     if leave:
         study.notify('beurlaubung', study.get_absolute_url(), rueckmeldesemester=term, grund=dict(LEAVES)[reason])
     else:

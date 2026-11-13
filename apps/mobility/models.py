@@ -3,6 +3,7 @@ with their Learning Agreements. Shaped after Erasmus Without Paper, so that its 
 them: a Partner is its HEI, an Agreement its IIA, a Mobility with its Components its outgoing mobility and Online
 Learning Agreement."""
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
 
@@ -162,7 +163,7 @@ class Component(Tracked, models.Model):
     table = models.CharField('Tabelle', max_length=1, choices=Table)
     title = models.CharField('Lehrveranstaltung', max_length=200, blank=True)
     code = models.CharField('Kürzel dort', max_length=40, blank=True)
-    credits = models.DecimalField('ECTS', max_digits=4, decimal_places=1)
+    credits = models.DecimalField('ECTS', max_digits=4, decimal_places=1, validators=[MinValueValidator(0)])
     module = models.ForeignKey(Module, models.PROTECT, null=True, blank=True, related_name='+', verbose_name='Modul')
 
     class Meta:

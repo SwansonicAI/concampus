@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import timedelta
 from pathlib import Path
 
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils.formats import number_format
 from django.urls import reverse
@@ -322,7 +323,7 @@ class Fee(Tracked, models.Model):
         SECOND = Study.Status.SECOND.value, 'Zweithörende'
 
     name = models.CharField('Bezeichnung', max_length=80, help_text='Wie der Bescheid und die Rückmeldung sie nennen, etwa „Gebühr Weiterbildungsstudium“.')
-    amount = models.DecimalField('Betrag je Semester', max_digits=7, decimal_places=2)
+    amount = models.DecimalField('Betrag je Semester', max_digits=7, decimal_places=2, validators=[MinValueValidator(0)])
     who = models.CharField('Von', max_length=10, choices=Who, default=Who.ENROLLED)
     programs = models.ManyToManyField(Program, blank=True, related_name='fees', verbose_name='Nur in den Studiengängen', help_text='Leer: in allen.')
 
@@ -376,7 +377,7 @@ class DocumentType(Tracked, Keyed):
     )
     note = models.TextField('Hinweis für Bewerbende', blank=True)
     amount = models.DecimalField(
-        'Zu überweisen', max_digits=7, decimal_places=2, null=True, blank=True,
+        'Zu überweisen', max_digits=7, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)],
         help_text='Für einen Zahlungsbeleg, etwa die Prüfungsgebühr: Bewerbende sehen Betrag und Bankverbindung der Hochschule.',
     )
     file_types = models.CharField('Dateitypen', max_length=120, blank=True, help_text='Endungen, z. B. „.pdf, .jpg“; leer: PDF und Bilder.')

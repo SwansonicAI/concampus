@@ -132,7 +132,7 @@ def rollover(request):
     load = loads(target, person) if 'view_teaching_load' in person.roles else []
     staffed = Person.objects.filter(teaching__in=live).exclude(employment=Person.Employment.LEHRAUFTRAG).distinct()
     return render(request, 'courses/rollover.html', {
-        'target': target, 'rows': rows, 'planner': 'roll_over' in person.roles, 'publisher': 'publish_term' in person.roles,
+        'target': target, 'rows': rows, 'planner': 'roll_over' in person.roles, 'publisher': 'publish_term' in person.roles, 'creating': 'manage_courses' in person.roles,
         'institutes': Institute.objects.all(), 'areas': Area.objects.all(), 'institute': institute, 'area': area, 'kind': kind, 'q': q,
         'planned': planned.count(), 'confirmed': live.exclude(confirmed=None).count(), 'dropped': planned.exclude(cancelled=None).select_related('origin'),
         'waiting': Person.objects.filter(teaching__in=waiting).annotate(n=Count('teaching', filter=Q(teaching__in=waiting))).order_by('last_name'),

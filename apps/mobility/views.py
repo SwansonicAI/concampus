@@ -105,12 +105,12 @@ def act(request, found, own, office, editing):
         found.save(update_fields=['signed_here', 'signed_here_by'])
         messages.success(request, 'Für die Hochschule genehmigt; nun die Partnerhochschule.')
     elif 'partner' in post and office and found.signed_here:
-        if day := dates.day(post.get('am', '')):
+        if (day := dates.day(post.get('am', ''))) and day <= timezone.localdate():  # approved already, not some day
             found.signed_partner = day
             found.save(update_fields=['signed_partner'])
             messages.success(request, f'Genehmigung der {found.partner} vom {date_format(day, "j.n.Y")} vermerkt.')
         else:
-            messages.error(request, 'Bitte den Tag angeben, an dem die Partnerhochschule genehmigt hat.')
+            messages.error(request, 'Bitte den Tag angeben, an dem die Partnerhochschule genehmigt hat, heute oder früher.')
     elif (status := post.get('stand')) in Mobility.Status.values and office:
         found.status = status
         found.save(update_fields=['status'])
