@@ -34,12 +34,12 @@ from .apps import feature, plural, tile_apps, tiles
 from .backends import address
 from .days import busy, strip
 from .dossier import dossier
-from .forms import ContactForm, EmailForm, FeedbackForm
+from .forms import AskForm, ContactForm, EmailForm, FeedbackForm
 from .greetings import greeting
 from .history import because, describe, former, restore, tables
 from .dates import months_before
 from .keys import DISTRICTS, replaced
-from .models import Change, Consent, Export, Institution, Key, Message, Office, Person, Term, Tracked, limited
+from .models import AccessRequest, Change, Consent, Export, Institution, Key, Message, Office, Person, Term, Tracked, limited
 from .index import find
 from .text import fit, fold, matching, meant, words
 
@@ -356,13 +356,32 @@ def denied(request, exception):
     for o in Office.objects.filter(permissions__codename__in=roles).distinct().prefetch_related('permissions', 'institutes', 'programs'):
         for c in o.marks.keys() & set(roles):
             holding.setdefault(c, []).append(o)
-    needed = [c for c in roles if c in CODENAMES]
+    needed, staff = [c for c in roles if c in CODENAMES], request.user.is_authenticated and not request.user.roles & ASKING
     return render(request, '403.html', {
         'trail': [(None, back or reverse('home'))],  # the menu stays where one came from, not on the page refused
         'reason': str(exception), 'roles': roles, 'who': [access.ROLES[r] for r in roles if r in access.ROLES], 'several': len(needed) > 1,
         'areas': areas({c: holding.get(c, []) for c in needed}, every=False), 'inside': bool(getattr(request.user, 'roles', set()) - OUTSIDE),
-        'accounts': Office.holding('manage_accounts', linked=True), 'back': back,
+        'accounts': Office.holding('manage_accounts', linked=True), 'back': back, 'staff': staff,
+        'asked': {a.capability: a for a in request.user.access_requests.all()} if staff else {},
     }, status=403)
+
+
+ASKING = {'student', 'applicant', 'alumni'}  # who asks for no Berechtigung: those who study, or did, or want to
+
+
+@require_POST
+def ask(request):
+    """A Berechtigung asked for from Kein Zugriff, by whoever works here; asked again, what for and until when change."""
+    c, form = request.POST.get('berechtigung', ''), AskForm(request.POST)
+    if c not in CODENAMES or request.user.roles & ASKING or c in request.user.roles:
+        raise PermissionDenied
+    if form.is_valid():
+        AccessRequest.objects.update_or_create(person=request.user, capability=c, defaults=form.cleaned_data)
+        messages.success(request, f'„{access.SHORT[c]}“ beantragt. Die Entscheidung kommt ins Postfach.')
+    else:
+        messages.error(request, 'Nicht beantragt: bitte angeben, wofür, und das Datum etwa als 31.3.2027.')
+    back = request.POST.get('next', '')
+    return redirect(back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else 'home')
 
 
 def when(request):

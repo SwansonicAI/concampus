@@ -15,10 +15,10 @@ from django.utils.encoding import force_bytes
 from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_encode
 from django.views.decorators.http import require_POST
 
-from core.access import CODENAMES, EVERYWHERE, LOCK, SENSITIVE, SHORT, Refused, areas, kept, require
+from core.access import CAPABILITIES, CODENAMES, EVERYWHERE, LOCK, SENSITIVE, SHORT, Refused, areas, kept, require
 from core.history import because
 from core.keys import Edition, Key, review
-from core.models import Export, Feedback, Grant, Membership, Office, Person, SignIn, Text, limited, waiting
+from core.models import AccessRequest, Export, Feedback, Grant, Membership, Office, Person, SignIn, Text, limited, waiting
 from core.text import matching
 from core.texts import TEXTS, Values, basics, mail, wording
 from core.shortcuts import SHOWN
@@ -27,9 +27,22 @@ from .editors import EDITORS, formfield
 
 @require('manage_accounts')
 def approvals(request):
-    """Rights given and offices joined that wait for a second person: whoever entered one cannot confirm it."""
+    """Berechtigungen asked for, to grant through an office that holds them or turn down saying why; and sensitive ones
+    given and offices joined that wait for a second person: whoever entered one cannot confirm it, nobody their own."""
+    if request.POST.get('art') == 'antrag':
+        asked = get_object_or_404(AccessRequest.objects.exclude(person=request.user).select_related('person'), pk=request.POST.get('id'))
+        if request.POST.get('decision') == 'yes':
+            office = get_object_or_404(holding(asked.capability), pk=request.POST.get('amt'))
+            later = asked.grant(office, request.user)
+            messages.success(request, f'{asked.person} gehört zum Amt {office}' + (', sobald eine zweite Person es bestätigt.' if later else '.'))
+        elif why := request.POST.get('begruendung', '').strip():
+            asked.refuse(request.user, why[:300])
+            messages.success(request, f'Abgelehnt: {asked}.')
+        else:
+            messages.error(request, 'Bitte angeben, warum nicht.')
+        return redirect('setup:approvals')
     if request.method == 'POST':
-        model = {'recht': Grant, 'mitglied': Membership}.get(request.POST.get('art'))
+        model ={'recht': Grant, 'mitglied': Membership}.get(request.POST.get('art'))
         mine = {'confirmed_by': None} if model is Membership else {}
         pending = get_object_or_404(model.objects.exclude(by=request.user).exclude(**({'person': request.user} if model is Membership else {})), pk=request.POST.get('id'), **mine) if model else None
         if pending is None:
@@ -41,9 +54,18 @@ def approvals(request):
             pending.delete()
             messages.success(request, f'Abgelehnt: {pending}.')
         return redirect('setup:approvals')
+    asks = list(AccessRequest.objects.select_related('person'))
+    labels = dict(c for _, group in CAPABILITIES for c in group)
+    for a in asks:  # the offices that hold it, those for the person's own Institut first
+        a.short, a.label = SHORT.get(a.capability, a.capability), labels.get(a.capability, '')
+        a.offices = sorted(holding(a.capability), key=lambda o: (a.person.institute_id not in {i.pk for i in o.institutes.all()}, o.name))
     return render(request, 'setup/approvals.html', {
-        'grants': Grant.objects.select_related('office', 'by'), 'members': Membership.objects.filter(confirmed_by=None).select_related('person', 'office', 'by'),
+        'asks': asks, 'grants': Grant.objects.select_related('office', 'by'), 'members': Membership.objects.filter(confirmed_by=None).select_related('person', 'office', 'by'),
     })
+
+
+def holding(capability):
+    return Office.objects.filter(permissions__codename=capability).prefetch_related('permissions', 'institutes', 'programs').distinct()
 
 
 @require('manage_accounts')

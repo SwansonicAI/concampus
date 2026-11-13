@@ -428,7 +428,12 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .rights li.off, .matrix tr.off td:first-child { color: var(--muted); }
 .rights ul + ul { margin-top: 14px; }
 .rights li.holder { align-items: flex-start; padding-left: 24px; }
-.rights li.holder .check { margin-top: 3px; }  /* on Kein Zugriff: the offices that hold the right above */
+.rights li.holder .check { margin-top: 3px; }
+.rights .ask { margin: 12px 0 0 24px; font-size: 14px; }
+.rights .ask summary { color: var(--accent); font-weight: 600; cursor: pointer; }
+.rights .ask form { display: grid; gap: 10px; margin-top: 10px; }
+.rights .ask label { display: grid; gap: 4px; font-weight: 600; }
+.rights .ask input { width: 100%; }  /* on Kein Zugriff: the offices that hold the right above */
 .legend .check { flex: none; }
 .areas { white-space: nowrap; }
 .areas svg { width: 20px; height: 20px; margin-right: 6px; stroke: var(--muted); vertical-align: middle; }

@@ -266,6 +266,16 @@ TEXTS = {
         '{von} hat Sie bestellt, in „{pruefung}“ {kandidat} an Stelle von {fuer} zu werten, die oder der befangen ist. Sie sehen und werten nur diese Person.',
         ('pruefung', 'kandidat', 'fuer', 'von'),
     ),
+    'berechtigung_erteilt': Spec(
+        NACHRICHT, 'Antrag auf eine Berechtigung bewilligt', 'Bewilligt: {berechtigung}',
+        '{von} hat Ihren Antrag auf „{berechtigung}“ bewilligt: Sie gehören zum Amt {amt}{bis}{ab}.',
+        ('berechtigung', 'amt', 'bis', 'ab', 'von'),
+    ),
+    'berechtigung_abgelehnt': Spec(
+        NACHRICHT, 'Antrag auf eine Berechtigung abgelehnt', 'Abgelehnt: {berechtigung}',
+        '{von} hat Ihren Antrag auf „{berechtigung}“ abgelehnt. Begründung: {begruendung}',
+        ('berechtigung', 'begruendung', 'von'),
+    ),
     'abwesenheit': Spec(
         NACHRICHT, 'Abmeldung von einem Termin', 'Abgemeldet: {veranstaltung}', '{von} kommt nicht zu „{veranstaltung}“ am {termin}.',
         ('veranstaltung', 'termin', 'von'),

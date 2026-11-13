@@ -20,6 +20,7 @@ urlpatterns = [
     path('konto/daten/', views.copy, name='copy'),
     path('konto/adresse/<str:token>/', views.confirm_email, name='confirm_email'),
     path('konto/einwilligung/<int:pk>/widerruf/', views.revoke, name='revoke'),
+    path('konto/beantragen/', views.ask, name='ask'),
     path('personen/', views.directory, name='directory'),
     path('personen/<int:pk>/', views.colleague, name='colleague'),
     path('aemter/<int:pk>/', views.office, name='office'),

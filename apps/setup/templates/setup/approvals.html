@@ -6,6 +6,18 @@
 <table>
   <thead><tr><th>Änderung</th><th>Eingetragen</th><th></th></tr></thead>
   <tbody>
+    {% for a in asks %}
+    <tr>
+      <td><b>{{ a.person }}</b> beantragt <span title="{{ a.label }}">„{{ a.short }}“</span>{% if a.until %}, bis {{ a.until|date:"j.n.Y" }}{% endif %}<br><small class="muted">{{ a.reason }}</small></td>
+      <td><small class="muted">{{ a.created|date:"j.n.Y, H:i" }}</small></td>
+      <td class="num">{% if a.person != user %}
+        <form method="post" class="actions">{% csrf_token %}<input type="hidden" name="art" value="antrag"><input type="hidden" name="id" value="{{ a.pk }}">
+          {% if a.offices %}<select name="amt" aria-label="Ins Amt">{% for o in a.offices %}<option value="{{ o.pk }}">{{ o.name }} · {{ o.marks|length }} Berechtigung{{ o.marks|length|pluralize:"en" }}</option>{% endfor %}</select><button class="btn small" name="decision" value="yes">Aufnehmen</button>{% else %}<small class="muted">Kein Amt hat sie: <a href="{% url 'setup:rights' %}#{{ a.capability }}">einem geben</a></small>{% endif %}
+        </form>
+        <details class="refuse"><summary><small>Ablehnen</small></summary><form method="post" class="actions">{% csrf_token %}<input type="hidden" name="art" value="antrag"><input type="hidden" name="id" value="{{ a.pk }}"><input name="begruendung" required placeholder="Warum nicht?" aria-label="Begründung"><button class="btn ghost small" name="decision" value="no">Ablehnen</button></form></details>
+      {% else %}<small class="muted">entscheidet eine andere Person</small>{% endif %}</td>
+    </tr>
+    {% endfor %}
     {% for g in grants %}
     <tr>
       <td><b>{{ g.office }}</b>: neue Berechtigungen<br><small class="muted">{{ g.labels|join:"; " }}</small></td>
@@ -20,7 +32,7 @@
       <td class="num">{% if m.by != user and m.person != user %}<form method="post" class="actions">{% csrf_token %}<input type="hidden" name="art" value="mitglied"><input type="hidden" name="id" value="{{ m.pk }}"><button class="btn small" name="decision" value="yes">Bestätigen</button><button class="btn ghost small" name="decision" value="no">Ablehnen</button></form>{% else %}<small class="muted">wartet auf eine zweite Person</small>{% endif %}</td>
     </tr>
     {% endfor %}
-    {% if not grants and not members %}<tr><td colspan="3" class="empty">Nichts wartet auf Bestätigung.</td></tr>{% endif %}
+    {% if not asks and not grants and not members %}<tr><td colspan="3" class="empty">Nichts wartet.</td></tr>{% endif %}
   </tbody>
 </table>
 {% endblock %}

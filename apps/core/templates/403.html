@@ -15,6 +15,15 @@
       {% for o in offices %}<li class="holder">{% include "core/_mark.html" with mark=o.mark %}{% if inside or o.email %}<a href="{% url 'office' o.pk %}">{{ o.name }}</a>{% else %}{{ o.name }}{% endif %}</li>
       {% empty %}<li class="holder off">noch kein Amt</li>{% endfor %}
     </ul>
+    {% if staff %}{% if c in asked %}<p class="ask muted"><small>Beantragt, die Entscheidung kommt ins Postfach.</small></p>{% else %}
+    <details class="ask"><summary>Beantragen</summary>
+      <form method="post" action="{% url 'ask' %}" class="form">
+        {% csrf_token %}<input type="hidden" name="berechtigung" value="{{ c }}"><input type="hidden" name="next" value="{{ back }}">
+        <label>Wofür<input name="reason" maxlength="200" required></label>
+        <label>Bis<input name="until" data-day autocomplete="off" placeholder="leer: auf Dauer"></label>
+        <div class="actions"><button class="btn small">Beantragen</button></div>
+      </form>
+    </details>{% endif %}{% endif %}
     {% endfor %}
   </div>
   {% endfor %}

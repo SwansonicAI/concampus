@@ -7,7 +7,16 @@ from django.http import QueryDict
 from django.shortcuts import redirect
 
 from .backends import TRIES, held
-from .models import Feedback, Message, Person
+from .dates import DayField
+from .models import AccessRequest, Feedback, Message, Person
+
+
+class AskForm(forms.ModelForm):
+    until = DayField(required=False)
+
+    class Meta:
+        model = AccessRequest
+        fields = ['reason', 'until']
 
 
 class ComposeForm(forms.Form):

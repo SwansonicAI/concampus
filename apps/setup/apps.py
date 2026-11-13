@@ -52,9 +52,11 @@ class SetupConfig(Tile, AppConfig):
         found = []
         if 'manage_terms' in person.roles and not Term.upcoming():
             found.append(task('Nächstes Semester anlegen', reverse('setup:new', args=['semester'])))
-        if 'manage_accounts' in person.roles:  # rights and offices someone else gave, for this person to confirm
-            from core.models import Grant, Membership
+        if 'manage_accounts' in person.roles:  # Berechtigungen asked for, and sensitive ones someone else gave, for this person to decide
+            from core.models import AccessRequest, Grant, Membership
 
+            if n := AccessRequest.objects.exclude(person=person).count():
+                found.append(task(f'{plural(n, "Antrag", "Anträge")} auf Berechtigungen entscheiden', reverse('setup:approvals')))
             if n := Grant.objects.exclude(by=person).count() + Membership.objects.filter(confirmed_by=None).exclude(by=person).exclude(person=person).count():
                 found.append(task(f'{plural(n, "Änderung", "Änderungen")} der Berechtigungen bestätigen', reverse('setup:approvals')))
         if 'manage_institution' in person.roles:

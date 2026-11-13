@@ -4,7 +4,7 @@ from django.core import mail
 from django.db.models import Count
 from django.test import Client
 
-from core.models import Change, Grant, Membership, Office, Person, Term
+from core.models import AccessRequest, Change, Grant, Membership, Office, Person, Term
 from core.testing import Seeded, flashes
 from curriculum.models import Module, Program, Subject
 from rooms.models import Room
@@ -71,6 +71,15 @@ class EditorTest(Seeded):
 
     def test_people_are_not_deleted_here(self):
         self.assertEqual(self.login('admin').post(f'/einstellungen/konten/{Person.objects.get(username="lehre").pk}/loeschen/').status_code, 404)
+
+    def test_a_berechtigung_asked_for_comes_through_an_office(self):
+        self.login('dekanatsreferat').post('/konto/beantragen/', {'berechtigung': 'manage_rooms', 'reason': 'Raumplanung', 'until': '31.3.2027'})
+        self.login('campus').post('/einstellungen/freigaben/', {
+            'art': 'antrag', 'id': AccessRequest.objects.get().pk, 'decision': 'yes', 'amt': Office.objects.get(name='Veranstaltungsbüro').pk,
+        })
+        ines = Person.objects.get(username='dekanatsreferat')
+        self.assertIn('manage_rooms', ines.roles)  # until the day asked for
+        self.assertTrue(ines.messages.filter(subject='Bewilligt: Räume pflegen').exists())
 
     def test_an_office_is_what_its_rights_say(self):
         campus = self.login('campus')

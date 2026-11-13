@@ -18,7 +18,7 @@ from django.utils.html import format_html, format_html_join
 from django.utils.text import slugify
 
 from . import destatis
-from .access import CAPABILITIES, CODENAMES, SENSITIVE, areas
+from .access import CAPABILITIES, CODENAMES, SENSITIVE, SHORT, areas
 from .keys import COUNTRIES, DEGREES, DISTRICTS, FIELDS, GERMAN, PLACES, TOWNS, UNIVERSITIES, Edition, Key, KeyField  # noqa: F401, the key lists' models
 
 looked_up = ContextVar('looked_up', default=None)  # what a GET request has looked up: core.middleware.lookups
@@ -1081,4 +1081,49 @@ class Grant(Tracked, models.Model):
         from django.contrib.auth.models import Permission
 
         self.office.permissions.add(*Permission.objects.filter(content_type__model='office', codename__in=self.rights))
+        self.delete()
+
+
+class AccessRequest(Tracked, models.Model):
+    """A Berechtigung asked for from Kein Zugriff, with what for and until when: whoever gives Berechtigungen puts the
+    person in an office that holds it, or turns it down saying why; either way the person hears of it."""
+
+    owner = 'person_id'
+    capabilities = ('manage_accounts',)
+
+    person = models.ForeignKey(Person, models.CASCADE, related_name='access_requests', verbose_name='Person')
+    capability = models.CharField('Berechtigung', max_length=50)
+    reason = models.CharField('Wofür', max_length=200)
+    until = models.DateField('Bis einschließlich', null=True, blank=True, help_text='Leer: auf Dauer.')
+    created = models.DateTimeField('Beantragt am', default=timezone.now)
+
+    class Meta:
+        ordering = ['created']
+        verbose_name = 'Antrag auf eine Berechtigung'
+        verbose_name_plural = 'Anträge auf Berechtigungen'
+
+    def __str__(self):
+        return f'{self.person}: {SHORT.get(self.capability, self.capability)}'
+
+    def grant(self, office, by):
+        """Into the office, until the day asked for; one with a sensitive Berechtigung once a second person confirms it.
+        Whether it waits for that."""
+        from .texts import send
+
+        later = bool(waiting(office.marks, by, self.person))
+        if self.until or later:
+            Membership.objects.create(person=self.person, office=office, until=self.until, note=self.reason, by=by, confirmed_by=None if later else by)
+        else:
+            self.person.groups.add(office)
+        send(
+            'berechtigung_erteilt', self.person, reverse('account'), berechtigung=SHORT[self.capability], amt=office, von=by,
+            bis=f' bis {self.until:%d.%m.%Y}' if self.until else '', ab=', sobald eine zweite Person es bestätigt' if later else '',
+        )
+        self.delete()
+        return later
+
+    def refuse(self, by, why):
+        from .texts import send
+
+        send('berechtigung_abgelehnt', self.person, berechtigung=SHORT[self.capability], begruendung=why, von=by)
         self.delete()
