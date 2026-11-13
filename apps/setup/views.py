@@ -1,4 +1,3 @@
-from collections import defaultdict
 from datetime import timedelta
 
 from django import forms
@@ -15,7 +14,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_encode
 from django.views.decorators.http import require_POST
 
-from core.access import CAPABILITIES, CODENAMES, kept, needs, require
+from core.access import CODENAMES, areas, kept, needs, require
 from core.history import because
 from core.keys import Edition, Key, review
 from core.models import Export, Feedback, Grant, Membership, Office, Person, SignIn, Text, limited
@@ -48,13 +47,13 @@ def approvals(request):
 
 @require('manage_accounts')
 def rights(request):
-    """Who may do what: each right with the offices that hold it, how far, and who is in them, for good or until a day."""
-    holding = defaultdict(list)
-    for o in Office.staffed():
-        o.limit = limited(o)
-        for p in o.permissions.all():
-            holding[p.codename].append(o)
-    return render(request, 'setup/rights.html', {'areas': [(area, [(label, holding[c]) for c, label in group]) for area, group in CAPABILITIES]})
+    """Who may do what, as a table: a row for each right by area, a column for each office with who is in it, a square
+    where it holds the right."""
+    offices = list(Office.staffed())
+    for o in offices:
+        o.limit, o.people = limited(o), [*o.user_set.all(), *(m.person for m in o.standing_in)]
+    held = [o.marks for o in offices]
+    return render(request, 'setup/rights.html', {'offices': offices, 'areas': areas({c: [m.get(c, '') for m in held] for c in CODENAMES})})
 
 
 @require('manage_accounts')

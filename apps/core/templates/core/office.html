@@ -8,6 +8,6 @@
   {% if inside %}<dt>Mitglieder</dt><dd>{% for p in office.user_set.all %}<a href="{% url 'colleague' p.pk %}">{{ p }}</a>{% if p.email %} · <a href="mailto:{{ p.email }}">{{ p.email }}</a>{% endif %}<br>{% endfor %}
     {% for m in office.standing_in %}<a href="{% url 'colleague' m.person_id %}">{{ m.person }}</a> <small class="muted">bis {{ m.until|date:"j.n.Y" }}</small><br>{% endfor %}
     {% if not office.user_set.all and not office.standing_in %}<span class="muted">noch niemand</span>{% endif %}</dd>{% endif %}
-  {% if rights %}<dt>Rechte</dt><dd>{% for area, labels in office.rights %}<b>{{ area }}:</b> {{ labels|join:"; " }}<br>{% empty %}–{% endfor %}</dd>{% endif %}
 </dl>
+{% if areas %}<section><h2>Rechte</h2>{% include "core/_rights.html" %}</section>{% endif %}
 {% endblock %}

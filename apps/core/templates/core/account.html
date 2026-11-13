@@ -22,8 +22,7 @@
         <small class="muted">Elektronisch gilt ein Bescheid am Tag, nachdem Sie ihn im Postfach geöffnet haben, als bekannt gegeben.</small></dd>{% endif %}
       <dt>Zugriffe</dt><dd>{% for s in sign_ins %}{{ s.at|date:"j.n.Y, H:i" }}{% if not s.success %} <span class="badge no">fehlgeschlagen</span>{% endif %}<br>{% endfor %}
         <small class="muted">Die letzten fünf. Waren Sie das nicht, <a href="{% url 'password_change' %}">ändern Sie Ihr Passwort</a>.</small></dd>
-      {% if offices %}<dt>Ämter</dt><dd>{% include "core/_held.html" with rights=True %}
-        <small class="muted">Brauchen Sie weitere Rechte, wenden Sie sich an die Stelle, die Ämter und Rechte vergibt{% if accounts %}: {{ accounts }}{% endif %}.</small></dd>{% endif %}
+      {% if offices %}<dt>Ämter</dt><dd>{% include "core/_held.html" %}</dd>{% endif %}
       {% if consents %}<dt>Einwilligungen</dt><dd>{% for c in consents %}
         <div><details><summary>{{ c }}</summary><small class="muted">{{ c.wording }}</small></details>
         <small class="muted">erteilt am {{ c.given|date:"j.n.Y" }}{% if c.by_id != user.pk %}, auf Papier{% endif %}{% if c.revoked %} · widerrufen am {{ c.revoked|date:"j.n.Y" }}{% endif %}</small>
@@ -34,4 +33,11 @@
     <p><a class="more" href="{% url 'copy' %}">Meine Daten herunterladen</a><br><small class="muted">Alles, was ConCampus über Sie speichert, mit Ihren Unterlagen, als ZIP (Art. 15 DSGVO).</small></p>
   </div>
 </div>
+{% if areas %}
+<section>
+  <h2>Ihre Rechte</h2>
+  {% include "core/_rights.html" %}
+  {% if accounts %}<p class="muted"><small>Weitere Rechte: {{ accounts }}</small></p>{% endif %}
+</section>
+{% endif %}
 {% endblock %}

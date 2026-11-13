@@ -311,7 +311,7 @@ class SearchTest(Seeded):
         self.assertEqual(applicant.get(f'/personen/{wendt.pk}/').status_code, 403)
         self.assertNotContains(applicant.get('/personen/'), wendt.email)
         asa = Office.objects.get(name__startswith='Akademische')  # what an office may do: only for whoever gives rights
-        right = asa.rights[0][1][0]
+        right = asa.permissions.first().name
         self.assertNotContains(self.login('student').get(f'/aemter/{asa.pk}/'), right)
         self.assertContains(self.login('campus').get(f'/aemter/{asa.pk}/'), right)
 

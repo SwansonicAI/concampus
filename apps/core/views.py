@@ -28,6 +28,7 @@ from rooms.models import Booking, BookingCategory, Room
 from rooms.plans import agenda, moves
 from students.models import Document, Study
 from . import dates, texts
+from .access import areas
 from .apps import feature, plural, tile_apps, tiles
 from .backends import address
 from .days import busy, strip
@@ -100,7 +101,7 @@ def account(request):
     return render(request, 'core/account.html', {
         'form': form, 'email_form': email, 'staff': staff, 'office': 'die Personalabteilung' if staff else Office.holding('manage_students', linked=True),
         'consents': person.consents.all(), 'sign_ins': person.sign_ins.all()[:5],
-        'offices': offices, 'accounts': offices and Office.holding('manage_accounts', linked=True),
+        'offices': offices, 'areas': offices and areas(person.marks), 'accounts': offices and Office.holding('manage_accounts', linked=True),
     })
 
 
@@ -401,6 +402,9 @@ def directory(request):
     people; for applicants and alumni the offices with a shared address only."""
     inside, q = bool(request.user.roles - OUTSIDE), request.GET.get('q', '').strip()
     offices = [o for o in (Office.staffed() if inside else Office.staffed().exclude(email='')) if all(w in fold(f'{o.name} {o.remit}') for w in words(q))]
+    rights = 'manage_accounts' in request.user.roles
+    for o in offices if rights else []:
+        o.areas = areas(o.marks)
     people = []
     if inside:
         held = {}
@@ -409,7 +413,7 @@ def directory(request):
                 held.setdefault(p.pk, []).append(o)
         found = find(staff().select_related('institute'), q, 'first_name', 'last_name', 'institute__name', starts=True)
         people = [(p, held.get(p.pk, [])) for p in found.order_by('last_name', 'first_name')]
-    return render(request, 'core/directory.html', {'q': q, 'inside': inside, 'offices': offices, 'people': people, 'rights': 'manage_accounts' in request.user.roles})
+    return render(request, 'core/directory.html', {'q': q, 'inside': inside, 'offices': offices, 'people': people, 'rights': rights})
 
 
 def colleague(request, pk):
@@ -419,9 +423,10 @@ def colleague(request, pk):
         raise PermissionDenied
     person, term = get_object_or_404(staff().select_related('institute'), pk=pk), Term.current()
     courses = person.teaching.filter(term=term, kind__in=[Course.Kind.COURSE, Course.Kind.LESSON], cancelled=None).order_by('title') if term else []
+    rights = 'manage_accounts' in request.user.roles or person == request.user
     return render(request, 'core/colleague.html', {
         'trail': [(None, reverse('directory'))], 'person': person, 'offices': person.offices_held(), 'courses': courses, 'term': term,
-        'rights': 'manage_accounts' in request.user.roles or person == request.user,
+        'areas': rights and areas(person.marks),
     })
 
 
@@ -429,9 +434,9 @@ def office(request, pk):
     """An office's page: how far it reaches, how to reach it, and for everyone inside who is in it; what it may do, only
     to whoever gives rights."""
     inside = bool(request.user.roles - OUTSIDE)
+    office = get_object_or_404(Office.staffed() if inside else Office.staffed().exclude(email=''), pk=pk)
     return render(request, 'core/office.html', {
-        'trail': [(None, reverse('directory'))], 'inside': inside, 'rights': 'manage_accounts' in request.user.roles,
-        'office': get_object_or_404(Office.staffed() if inside else Office.staffed().exclude(email=''), pk=pk),
+        'trail': [(None, reverse('directory'))], 'inside': inside, 'office': office, 'areas': 'manage_accounts' in request.user.roles and areas(office.marks),
     })
 
 

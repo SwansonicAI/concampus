@@ -535,6 +535,11 @@ class Person(Tracked, AbstractUser):
             o.until = until.get(o.pk)
         return offices
 
+    @property
+    def marks(self):
+        """What the person may do, for core.access.areas(): 'part' where only for some Institute or Studiengänge."""
+        return {c: 'part' if r else 'done' for c, r in self.reach.items()}
+
     def everywhere(self, capability):
         return capability in self.reach and self.reach[capability] is None
 
@@ -621,10 +626,10 @@ class Office(Tracked, Group):
         return ', '.join(map(str, [*self.institutes.all(), *self.programs.all()])) or 'ganze Hochschule'
 
     @property
-    def rights(self):
-        """Its rights by area, in the order of core.access.CAPABILITIES: [(area, [label])]."""
-        held = {p.codename for p in self.permissions.all()}
-        return [(area, labels) for area, group in CAPABILITIES if (labels := [label for codename, label in group if codename in held])]
+    def marks(self):
+        """Its rights for core.access.areas(): 'part' where it is limited to some Institute or Studiengänge."""
+        mark = 'part' if self.institutes.all() or self.programs.all() else 'done'
+        return {p.codename: mark for p in self.permissions.all()}
 
     @classmethod
     def holding(cls, capability, program=None, remit=False, linked=False, institute=None):

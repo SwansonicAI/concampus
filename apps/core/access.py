@@ -60,6 +60,37 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
 ]
 CODENAMES = [codename for _, group in CAPABILITIES for codename, _ in group]
 EVERYWHERE = {'manage_reregistration', 'manage_terms', 'manage_institution', 'manage_accounts', 'view_statistics', 'report_statistics', 'dispose_files', 'assess_files', 'manage_mobility'}  # never limited to Institute
+SHORT = {  # each right in a few words under its area, to take in at a glance; CAPABILITIES says it in full
+    'view_students': 'Auflisten und exportieren', 'view_files': 'Studienakten einsehen', 'manage_students': 'Immatrikulieren und Stammdaten',
+    'manage_reregistration': 'Rückmeldung verbuchen', 'message_students': 'Nachrichten senden', 'dispose_files': 'Akten dem Archiv anbieten',
+    'view_applications': 'Bewerbungen einsehen', 'decide_applications': 'Über Bewerbungen entscheiden', 'run_auditions': 'Eignungsprüfungen durchführen',
+    'manage_exams': 'Prüfungen anlegen und planen', 'decide_results': 'Ergebnisse freigeben, Zeugnisse', 'appoint_examiners': 'Prüfende bestellen',
+    'correct_scores': 'Wertungen berichtigen', 'recognise': 'Leistungen anerkennen', 'grant_compensation': 'Nachteilsausgleich gewähren',
+    'manage_courses': 'Veranstaltungen anlegen', 'plan_teaching': 'SWS, Lehrform und Module', 'view_teaching_load': 'Deputat einsehen',
+    'manage_teaching_load': 'Ermäßigungen eintragen', 'roll_over': 'Semesterwechsel', 'publish_term': 'Semester veröffentlichen',
+    'view_curriculum': 'Studiengänge mit Zahlen', 'edit_curriculum': 'Studiengänge bearbeiten',
+    'book_any_room': 'Alle Räume buchen', 'view_bookings': 'Alle Buchungen sehen', 'manage_bookings': 'Buchungen anderer ändern',
+    'manage_rooms': 'Räume pflegen', 'manage_instruments': 'Leihinstrumente',
+    'manage_mobility': 'Partner und Auslandsaufenthalte',
+    'manage_terms': 'Semester pflegen', 'manage_institution': 'Hochschuldaten und Texte', 'manage_accounts': 'Ämter, Rechte und Konten',
+    'view_statistics': 'Auswertungen', 'report_statistics': 'Amtliche Statistik',
+    'assess_files': 'Akten bewerten',
+}
+AREAS = {  # each area's icon: an app's, by its label, or as drawn
+    'Studierende': 'students', 'Aufnahme': 'admissions', 'Prüfungen': 'exams', 'Lehre': 'courses', 'Studiengänge': 'curriculum', 'Räume': 'rooms',
+    'Internationales': 'mobility', 'Verwaltung': 'setup', 'Archiv': 'M3 4h18v4H3zM5 8v12h14V8M10 12h4',
+}
+
+
+def areas(marks=None):
+    """CAPABILITIES to draw: [(area, icon, [(short, label, mark)])]. `marks` ({codename: 'done', or 'part' where limited to
+    some Institute or Studiengänge; for a table, a list of them}) leaves out the areas it holds nothing in."""
+    from django.apps import apps
+
+    return [
+        (area, getattr(apps.app_configs.get(AREAS[area]), 'icon', AREAS[area]), [(SHORT[c], label, (marks or {}).get(c, '')) for c, label in group])
+        for area, group in CAPABILITIES if marks is None or marks.keys() & {c for c, _ in group}
+    ]
 
 
 def kept(form, person, capability):

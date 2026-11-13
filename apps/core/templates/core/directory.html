@@ -7,12 +7,12 @@
 <section>
   <h2>Ämter</h2>
   <table>
-    <thead><tr><th>Amt</th>{% if rights %}<th>Rechte in</th>{% endif %}{% if inside %}<th>Mitglieder</th>{% endif %}<th>E-Mail</th></tr></thead>
+    <thead><tr><th>Amt</th>{% if rights %}<th>Rechte</th>{% endif %}{% if inside %}<th>Mitglieder</th>{% endif %}<th>E-Mail</th></tr></thead>
     <tbody>
       {% for o in offices %}
       <tr>
         <td><a href="{% url 'office' o.pk %}"><b>{{ o.name }}</b></a><br><small class="muted">{{ o.remit }}</small></td>
-        {% if rights %}<td>{% for area, labels in o.rights %}{{ area }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>{% endif %}
+        {% if rights %}<td class="areas">{% for area, icon, held in o.areas %}<svg viewBox="0 0 24 24" role="img" aria-label="{{ area }}"><title>{{ area }}</title><path d="{{ icon }}"/></svg>{% endfor %}</td>{% endif %}
         {% if inside %}<td>{% for p in o.user_set.all %}<a href="{% url 'colleague' p.pk %}">{{ p }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}{% for m in o.standing_in %}{% if o.user_set.all or not forloop.first %}, {% endif %}<a href="{% url 'colleague' m.person_id %}">{{ m.person }}</a> <small class="muted">bis {{ m.until|date:"j.n.Y" }}</small>{% endfor %}</td>{% endif %}
         <td>{% if o.email %}<a href="mailto:{{ o.email }}">{{ o.email }}</a>{% endif %}</td>
       </tr>
