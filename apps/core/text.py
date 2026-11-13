@@ -9,7 +9,7 @@ from django.db.backends.signals import connection_created
 from django.db.models import Func, Q, TextField
 from django.dispatch import receiver
 
-from .synonyms import ACTIONS, STOP, SYNONYMS
+from .synonyms import ACTIONS, MUSIC, STOP, SYNONYMS
 
 
 SPELLED = (('ae', 'a'), ('oe', 'o'), ('ue', 'u'))
@@ -38,9 +38,10 @@ LETTERS = {c: fold(c) for c in map(chr, range(0xC0, 0x250))}  # Latin letters be
 
 
 def stem(word):
-    """A folded word without its ending, so that every form of it matches: plane, planen, plans → plan."""
+    """A folded word without its ending, so that every form of it matches: plane, planen, plans → plan. A double s is
+    the word's own: brass, Kontrabass."""
     for ending in ENDINGS:
-        if word.endswith(ending) and len(word) - len(ending) >= 4:
+        if word.endswith(ending) and len(word) - len(ending) >= 4 and not (ending == 's' and word.endswith('ss')):
             return word[:-len(ending)]
     return word
 
@@ -51,11 +52,22 @@ def words(query):
 
 
 KIN = {}  # each word, as compared, with all words meaning the same
-for line in ACTIONS + SYNONYMS:
+for line in ACTIONS + SYNONYMS + MUSIC:
     for word in (meaning := set(words(line))):
         KIN[word] = KIN.get(word, set()) | meaning
-ACTS = set(words(' '.join(ACTIONS)))
+ACTS, EXACT = set(words(' '.join(ACTIONS))), set(words(' '.join(MUSIC)))
 STOPPED = set(words(' '.join(STOP)))
+
+
+def terms(query):
+    """The words of a search, as words() has them, two the table knows as one taken as one: 'ear training', 'double
+    bass' (SYNONYMS: 'ear-training', 'double-bass')."""
+    raw, found = [fold(word) for word in re.split(r'[\s,;]+', query) if word], []
+    while raw:
+        pair = stem('-'.join(raw[:2])) if len(raw) > 1 else ''
+        found.append(pair if pair in KIN else stem(raw[0]))
+        raw = raw[2:] if pair in KIN else raw[1:]
+    return found
 
 
 def close(a, b):
@@ -80,7 +92,7 @@ def alike(word, typing=False):
 
 def meant(query):
     """The words of a search for a page, each with all it may stand for (alike), without those that carry no meaning."""
-    sought = [w for w in words(query) if w not in STOPPED] or words(query)
+    sought = [w for w in terms(query) if w not in STOPPED] or terms(query)
     return [(w, alike(w, typing=n == len(sought) - 1)) for n, w in enumerate(sought)]
 
 
@@ -142,7 +154,7 @@ def wanted(query, names=''):
     """The words of a search for rows, as compared. Words that name what the rows are (`names`, e.g. 'raum'), or mean
     the same, pick no row: 'Räume' and 'rooms' list them all, 'Raum Orgel' the organ rooms."""
     named = fold(names).split()
-    return [word for word in words(query) if not (len(word) >= 4 and any(name.startswith(form) for name in named for form in KIN.get(word, {word})))]
+    return [word for word in terms(query) if not (len(word) >= 4 and any(name.startswith(form) for name in named for form in KIN.get(word, {word})))]
 
 
 def matching(queryset, query, *fields, names='', starts=False):

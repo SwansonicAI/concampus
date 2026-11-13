@@ -11,7 +11,7 @@ from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.mail import send_mail
 from django.db import transaction
-from django.db.models import Case, Exists, F, Min, OuterRef, Q, When, Window
+from django.db.models import Case, Exists, F, Min, OuterRef, Prefetch, Q, When, Window
 from django.db.models.functions import RowNumber
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -23,7 +23,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from courses.models import Course, Participation
-from curriculum.models import Module, Program
+from curriculum.models import Module, Program, Subject
 from rooms.models import Booking, BookingCategory, Room
 from rooms.plans import agenda, moves
 from students.models import Document, Study
@@ -570,7 +570,7 @@ def found(person, q, limit, quick=False):
         seen |= Q(pk__in=person.within(Study.objects.filter(status__in=Study.APPLICATION).exclude(lapsed), 'view_applications').values('pk'))
         rating = Study.objects.filter(status=Study.Status.APPLIED, participations__course__kind=Course.Kind.AUDITION, participations__course__staff=person)
         seen |= Q(pk__in=rating.values('pk'))  # applications one rates, to their page for the jury
-        studies = find(Study.objects.filter(seen).select_related('person', 'program', 'subject'), q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__matriculation', 'person__email', starts=True)
+        studies = find(Study.objects.filter(seen).select_related('person', 'program', 'subject'), q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__matriculation', 'person__email', 'subject__name', starts=True)  # by name, or by Hauptfach: 'trombone'
         groups.append(('Studierende und Bewerbungen', people(studies, limit, person)))
     if 'teacher' in roles:  # whom one teaches outside one's class, by the course: their file is not one's own
         taught = (
@@ -583,9 +583,15 @@ def found(person, q, limit, quick=False):
         groups.append(('In Ihrem Unterricht', [hit(p.study.person.name, p.course.get_absolute_url(), p.course.title) for p in list(first.values())[:limit]]))
     inside = bool(roles - OUTSIDE)
     if inside:  # whom to ask: who teaches or holds an office, on their page in Personen und Ämter
+        lessons = Prefetch('teaching', Course.objects.filter(kind=Course.Kind.LESSON, subject__isnull=False).select_related('subject'), to_attr='lessons')
+        known = staff().select_related('institute').prefetch_related(lessons)
+        named = ranked(known, q, 'first_name', 'last_name', limit=limit)
+        # then who teaches the Hauptfach sought in Einzelunterricht ('trombone': Posaune), not who sits on its commissions
+        subjects = find(Subject.objects.all(), q, 'name', starts=True)
+        teaching = known.filter(teaching__kind=Course.Kind.LESSON, teaching__subject__in=subjects).exclude(pk__in=[p.pk for p in named]).order_by('last_name')
         groups.append(('Personen', [
-            hit(str(p), reverse('colleague', args=[p.pk]), ' · '.join(filter(None, [p.institute and str(p.institute), p.email])))
-            for p in ranked(staff().select_related('institute'), q, 'first_name', 'last_name', limit=limit)
+            hit(str(p), reverse('colleague', args=[p.pk]), ' · '.join(filter(None, [p.institute and str(p.institute), ', '.join(sorted({str(c.subject) for c in p.lessons})), p.email])))
+            for p in [*named, *teaching[:limit - len(named)]]
         ]))
     offices = []  # and the offices: for applicants and alumni by their shared address only, without who works there
     for o in ranked(Office.objects.prefetch_related('user_set', 'institutes', 'programs'), q, 'name', limit=limit, names='amt'):

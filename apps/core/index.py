@@ -11,7 +11,7 @@ from threading import Lock
 from django.db.models import Case, Value, When
 from django.db.models.signals import post_delete, post_save
 
-from .text import KIN, close, fold, wanted
+from .text import ACTS, EXACT, KIN, close, fold, wanted
 
 FRESH = 60  # seconds an index is read again after
 HEAD = '^'  # before a field's beginning, kept as a word of its own: 'Klavier (Pflichtfach)' begins with 'klavier'
@@ -34,7 +34,7 @@ class Index:
             for field, value in zip(self.fields, values):
                 if value:
                     words = re.findall(r'[\w.]+', text := fold(str(value)))
-                    found[pk] |= {*words, HEAD + text[:60], *(() if field.endswith(NAMES) else (MEANT + w for w in words))}
+                    found[pk] |= {*words, HEAD + text[:60], *(() if field.endswith(NAMES) else (*(MEANT + w for w in words), MEANT + HEAD + text[:60]))}
         return found
 
     def build(self):
@@ -87,25 +87,28 @@ class Index:
         return found
 
     def find(self, words, starts, wide=False):
-        """The rows that hold every word, also `wide` as meant (alike); and those of them a field of which begins with
-        a word, and those that hold one whole, to come first."""
+        """The rows that hold every word: a word of music always also by those meaning the same ('piano' → Klavier),
+        any other only `wide`, as meant (alike); and those of them a field of which begins with a word, or a field not
+        a name with one meaning the same, and those that hold one whole, to come first."""
         with self.lock:
             if not self.built or time.monotonic() - self.built > FRESH:
                 self.build()
             found = None
             for word in words:
-                rows = self.look(word, starts) | (self.alike(word, starts) if wide else set())
+                rows = self.look(word, starts) | (self.alike(word, starts) if wide or word in EXACT else set())
                 found = rows if found is None else found & rows
-            first = set().union(*(self.begun(HEAD + w) for w in words)) & found
+            heads = [HEAD + w for w in words] + [MEANT + HEAD + f for w in words for f in KIN.get(w, ())]
+            first = set().union(*(self.begun(h) for h in heads)) & found
             return found, first, set().union(*(self.at.get(w, ()) for w in words)) & found
 
 
 def find(queryset, query, *fields, names='', starts=False):
     """text.matching(), from memory: the rows of `queryset` that hold every word sought in one of the fields, best
-    first (`_fit`), then in the queryset's order. Words as meant, a letter off or meaning the same, only where nothing
-    the person may see holds them as typed."""
+    first (`_fit`), then in the queryset's order. A word a letter off only where nothing the person may see holds the
+    words as typed; words of doing ('create', 'book') find nothing in records, which have no verbs."""
     if not (sought := wanted(query, names)):
         return queryset.annotate(_fit=Value(0))
+    sought = [w for w in sought if not (w in KIN and KIN[w] <= ACTS)] or sought
     with MAKING:
         if (key := (queryset.model, fields)) not in INDEXES:
             INDEXES[key] = Index(*key)
