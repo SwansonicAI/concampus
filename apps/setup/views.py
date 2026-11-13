@@ -91,7 +91,7 @@ def places(person):
     """(section, title, url, count) of everything under Einstellungen the person keeps up."""
     found = [(e.section, e.title, reverse('setup:list', args=[e.key]), e.objects(person).count()) for e in usable(person)]
     if 'manage_accounts' in person.roles:
-        found.append(('Verwaltung', 'Rechte im Überblick', reverse('setup:rights'), len(CODENAMES)))
+        found.append(('Verwaltung', 'Berechtigungen im Überblick', reverse('setup:rights'), len(CODENAMES)))
     if 'manage_institution' in person.roles:
         found.append(('Verwaltung', 'Texte', reverse('setup:texts'), len(TEXTS)))
     if person.roles & {'manage_institution', 'manage_students'}:
@@ -187,7 +187,7 @@ def edit(request, key, pk=None):
             form.initial |= {'institutes': list(ours)} if 'institutes' in form.fields else {'institute': next(iter(ours))}
     if form.is_valid() and (saved := save(form, request.user, e.capability)):
         obj = saved
-        messages.success(request, f'„{obj}“ gespeichert.' + (' Neue Rechte und Mitgliedschaften gelten, sobald eine zweite Person sie unter „Freigaben“ bestätigt.' if getattr(form, 'pending', False) else ''))
+        messages.success(request, f'„{obj}“ gespeichert.' + (' Neue Berechtigungen und Mitgliedschaften gelten, sobald eine zweite Person sie unter „Freigaben“ bestätigt.' if getattr(form, 'pending', False) else ''))
         return redirect(back(request, e))
     return render(request, 'setup/form.html', {
         'editor': e, 'form': form, 'object': obj, 'back': back(request, e),

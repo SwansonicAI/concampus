@@ -3,41 +3,41 @@
 {% block content %}
 <h1>Personen und Ämter</h1>
 <p class="lead">Wer wofür zuständig ist und wie Sie sie erreichen.</p>
-<form class="toolbar"><div class="inline"><label>Suche<input type="search" name="q" value="{{ q }}" placeholder="{% if inside %}Name, Institut oder Amt{% else %}Amt{% endif %}"></label></div></form>
-<section>
-  <h2>Ämter</h2>
-  <table>
-    <thead><tr><th>Amt</th>{% if rights %}<th>Rechte</th>{% endif %}{% if inside %}<th>Mitglieder</th>{% endif %}<th>E-Mail</th></tr></thead>
-    <tbody>
-      {% for o in offices %}
-      <tr>
-        <td><a href="{% url 'office' o.pk %}"><b>{{ o.name }}</b></a><br><small class="muted">{{ o.remit }}</small></td>
-        {% if rights %}<td class="areas">{% for area, icon, held in o.areas %}<svg viewBox="0 0 24 24" role="img" aria-label="{{ area }}"><title>{{ area }}</title><path d="{{ icon }}"/></svg>{% endfor %}</td>{% endif %}
-        {% if inside %}<td>{% for p in o.user_set.all %}<a href="{% url 'colleague' p.pk %}">{{ p }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}{% for m in o.standing_in %}{% if o.user_set.all or not forloop.first %}, {% endif %}<a href="{% url 'colleague' m.person_id %}">{{ m.person }}</a> <small class="muted">bis {{ m.until|date:"j.n.Y" }}</small>{% endfor %}</td>{% endif %}
-        <td>{% if o.email %}<a href="mailto:{{ o.email }}">{{ o.email }}</a>{% endif %}</td>
-      </tr>
-      {% empty %}<tr><td colspan="4" class="empty">Kein Amt gefunden.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
-{% if inside %}
-<section>
-  <h2>Lehrende und Mitarbeitende</h2>
-  <table>
-    <thead><tr><th>Name</th><th>Institut</th><th>Ämter</th><th>E-Mail</th></tr></thead>
-    <tbody>
-      {% for p, offices in people %}
-      <tr>
-        <td><a href="{% url 'colleague' p.pk %}"><b>{{ p }}</b></a></td>
-        <td>{{ p.institute|default:"" }}</td>
-        <td>{% for o in offices %}<a href="{% url 'office' o.pk %}">{{ o.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-        <td>{% if p.email %}<a href="mailto:{{ p.email }}">{{ p.email }}</a>{% endif %}</td>
-      </tr>
-      {% empty %}<tr><td colspan="4" class="empty">Niemand gefunden.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
+{% if inside %}<nav class="subnav"><a href="{% querystring zeige=None buchstabe=None %}"{% if tab == 'aemter' %} class="on"{% endif %}>Ämter <small class="muted">{{ offices|length }}</small></a><a href="{% querystring zeige='personen' buchstabe=None %}"{% if tab == 'personen' %} class="on"{% endif %}>Personen <small class="muted">{{ counted }}</small></a></nav>{% endif %}
+<form class="toolbar">
+  {% if tab == 'personen' %}<input type="hidden" name="zeige" value="personen">{% endif %}
+  <div class="inline"><label>Suche<input type="search" name="q" value="{{ q }}" placeholder="{% if tab == 'personen' %}Name oder Institut{% else %}Amt oder wofür zuständig{% endif %}"></label></div>
+  {% if tab == 'personen' and not q %}<nav class="filters letters" aria-label="Nach Nachnamen">{% for l in letters %}<a href="{% querystring buchstabe=l %}"{% if l == letter %} class="on" aria-current="true"{% endif %}>{{ l }}</a>{% endfor %}</nav>{% endif %}
+</form>
+{% if tab == 'personen' %}
+<table data-panel>
+  <thead><tr><th>Name</th><th>Institut</th><th>Ämter</th><th>E-Mail</th></tr></thead>
+  <tbody>
+    {% for p, offices in people %}
+    <tr>
+      <td><a href="{% url 'colleague' p.pk %}"><b>{{ p }}</b></a></td>
+      <td>{{ p.institute|default:"" }}</td>
+      <td>{% for o in offices %}<a href="{% url 'office' o.pk %}">{{ o.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+      <td>{% if p.email %}<a href="mailto:{{ p.email }}">{{ p.email }}</a>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="4" class="empty">Niemand gefunden.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<table data-panel>
+  <thead><tr><th>Amt</th><th>Zuständig für</th>{% if inside %}<th>Mitglieder</th>{% endif %}<th>E-Mail</th></tr></thead>
+  <tbody>
+    {% for o in offices %}
+    <tr>
+      <td><a href="{% url 'office' o.pk %}"><b>{{ o.name }}</b></a></td>
+      <td>{{ o.remit }}</td>
+      {% if inside %}<td>{% for p in o.user_set.all %}<a href="{% url 'colleague' p.pk %}">{{ p }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}{% for m in o.standing_in %}{% if o.user_set.all or not forloop.first %}, {% endif %}<a href="{% url 'colleague' m.person_id %}">{{ m.person }}</a> <small class="muted">bis {{ m.until|date:"j.n.Y" }}</small>{% endfor %}</td>{% endif %}
+      <td>{% if o.email %}<a href="mailto:{{ o.email }}">{{ o.email }}</a>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="4" class="empty">Kein Amt gefunden.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
 {% endif %}
 {% endblock %}

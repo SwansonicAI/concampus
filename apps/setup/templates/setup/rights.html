@@ -1,9 +1,9 @@
 {% extends base %}
-{% block title %}Rechte im Überblick{% endblock %}
+{% block title %}Berechtigungen im Überblick{% endblock %}
 {% block content %}
 <p class="eyebrow"><a href="{% url 'setup:index' %}">Einstellungen</a></p>
-<h1>Rechte im Überblick</h1>
-<p class="lead">Ändern unter <a href="{% url 'setup:list' 'aemter' %}">Ämter und Rechte</a>, Mitglieder unter <a href="{% url 'setup:list' 'konten' %}">Konten</a>.</p>
+<h1>Berechtigungen im Überblick</h1>
+<p class="lead">Ändern unter <a href="{% url 'setup:list' 'aemter' %}">Ämter und Berechtigungen</a>, Mitglieder unter <a href="{% url 'setup:list' 'konten' %}">Konten</a>.</p>
 <div class="scroll">
   <table class="matrix">
     <thead>

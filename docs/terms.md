@@ -27,7 +27,8 @@ here (`core/synonyms.py`).
 | Staff who teach | Lehrende; one: Lehrperson; Lehrbeauftragte where it matters | Dozent, Lehrer | Weimar: „Lehrende“ |
 | The teacher in the main subject | Hauptfachlehrer:in; asked for when applying: Wunschlehrer:in | | usual at Musikhochschulen |
 | A teacher's students in their main subject | Klasse | Klasse for Einzelunterricht | |
-| An office of the Hochschule | Amt | Abteilung, Stelle | ConCampus' own: Ämter und Rechte |
+| An office of the Hochschule | Amt | Abteilung, Stelle | ConCampus' own: Ämter und Berechtigungen |
+| What an office may do in ConCampus | Berechtigung | Recht, Rolle | „Ihre Rechte“ reads as legal rights (DSGVO); Berechtigung is the usual word in software |
 
 Not renamed, though they hold old words: the placeholders of the texts (`{veranstaltung}`), which texts the Hochschule
 has edited use, and the URLs (`/aufnahme/`), which messages already sent link to.

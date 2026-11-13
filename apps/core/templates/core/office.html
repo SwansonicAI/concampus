@@ -9,5 +9,5 @@
     {% for m in office.standing_in %}<a href="{% url 'colleague' m.person_id %}">{{ m.person }}</a> <small class="muted">bis {{ m.until|date:"j.n.Y" }}</small><br>{% endfor %}
     {% if not office.user_set.all and not office.standing_in %}<span class="muted">noch niemand</span>{% endif %}</dd>{% endif %}
 </dl>
-{% if areas %}<section><h2>Rechte</h2>{% include "core/_rights.html" %}</section>{% endif %}
+{% if areas %}<section><h2>Berechtigungen</h2>{% include "core/_rights.html" %}</section>{% endif %}
 {% endblock %}

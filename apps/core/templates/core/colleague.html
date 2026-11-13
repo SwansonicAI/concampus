@@ -8,5 +8,5 @@
   {% if offices %}<dt>Ämter</dt><dd>{% include "core/_held.html" %}</dd>{% endif %}
   {% if courses %}<dt>Lehre im {{ term }}</dt><dd>{% for c in courses %}<a href="{{ c.get_absolute_url }}">{{ c.title }}</a><br>{% endfor %}</dd>{% endif %}
 </dl>
-{% if areas %}<section><h2>Rechte</h2>{% include "core/_rights.html" %}</section>{% endif %}
+{% if areas %}<section><h2>Berechtigungen</h2>{% include "core/_rights.html" %}</section>{% endif %}
 {% endblock %}

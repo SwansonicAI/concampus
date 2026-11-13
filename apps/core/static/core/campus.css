@@ -207,6 +207,7 @@ select.cell { padding: 4px 28px 4px 6px; background-position: right 6px center; 
 .filters { display: flex; flex-wrap: wrap; gap: 6px 22px; font-weight: 600; }
 .filters a { color: var(--ink); }
 .filters a.on { color: var(--accent); text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
+.filters.letters { gap: 6px 14px; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
 .toolbar form { display: flex; flex-wrap: wrap; gap: 10px; }
 .panel { padding: 24px; background: var(--soft); }
@@ -423,17 +424,17 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .rights h4 { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; font-size: 16px; }
 :is(.rights, .matrix, .areas) svg { flex: none; width: 22px; height: 22px; fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .rights ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
-.rights li { display: flex; align-items: center; gap: 10px; cursor: help; }
+.rights li { display: flex; align-items: center; gap: 10px; }
 .rights li.off, .matrix tr.off td:first-child { color: var(--muted); }
 .rights ul + ul { margin-top: 14px; }
-.rights li.holder { align-items: flex-start; padding-left: 24px; cursor: auto; }
+.rights li.holder { align-items: flex-start; padding-left: 24px; }
 .rights li.holder .check { margin-top: 3px; }  /* on Kein Zugriff: the offices that hold the right above */
 .legend .check { flex: none; }
 .areas { white-space: nowrap; }
 .areas svg { width: 20px; height: 20px; margin-right: 6px; stroke: var(--muted); vertical-align: middle; }
 .matrix { width: auto; }
 .matrix td { padding: 7px 12px; vertical-align: middle; }
-.matrix td:first-child { min-width: 240px; cursor: help; }
+.matrix td:first-child { min-width: 240px; }
 .matrix td + td { width: 36px; padding: 7px 0; text-align: center; }
 .matrix .check { margin: 0 auto; }
 .matrix tbody tr:not(.area):hover td { background: var(--soft); }
@@ -442,7 +443,6 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .matrix th.office a:hover { color: var(--accent); }
 .matrix thead th { border-bottom: 0; box-shadow: inset 0 -2px 0 var(--ink); }  /* a border would stay behind when the head sticks */
 .matrix .people td { border-bottom: 0; box-shadow: inset 0 -1px 0 var(--ink); color: var(--muted); font-size: 13px; }
-.matrix .people td + td { cursor: help; }
 .matrix tr.area th { padding: 22px 12px 8px; border-bottom: 1px solid var(--ink); }
 .matrix tr.area svg { width: 20px; height: 20px; margin-right: 8px; vertical-align: -5px; }
 @media (min-width: 1100px) {

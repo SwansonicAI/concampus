@@ -3,7 +3,7 @@
 {% block content %}
 <h1>Kein Zugriff</h1>
 {% if roles %}
-<p class="lead">Nur {% if who %}für {{ who|join:", " }}{% if areas %} oder {% endif %}{% endif %}{% if areas %}mit {% if several %}einem dieser Rechte{% else %}diesem Recht{% endif %}{% endif %}.</p>
+<p class="lead">Nur {% if who %}für {{ who|join:", " }}{% if areas %} oder {% endif %}{% endif %}{% if areas %}mit {% if several %}einer dieser Berechtigungen{% else %}dieser Berechtigung{% endif %}{% endif %}.</p>
 {% if areas %}
 <div class="rights">
   {% for area, icon, rights in areas %}
@@ -24,6 +24,6 @@
 {% else %}
 <p class="lead">{{ reason|default:"Diese Seite gehört zu Aufgaben, die Ihr Konto nicht hat."|linebreaksbr }}</p>
 {% endif %}
-{% if user.is_authenticated and accounts %}<p class="muted"><small>Rechte vergibt: {{ accounts }}</small></p>{% endif %}
+{% if user.is_authenticated and accounts %}<p class="muted"><small>Berechtigungen vergibt: {{ accounts }}</small></p>{% endif %}
 <p class="actions">{% if back %}<a class="more" href="{{ back }}">Zurück</a>{% endif %}<a class="more" href="{% url 'home' %}">Zur Startseite</a></p>
 {% endblock %}

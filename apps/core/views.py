@@ -411,18 +411,20 @@ def directory(request):
     people; for applicants and alumni the offices with a shared address only."""
     inside, q = bool(request.user.roles - OUTSIDE), request.GET.get('q', '').strip()
     offices = [o for o in (Office.staffed() if inside else Office.staffed().exclude(email='')) if all(w in fold(f'{o.name} {o.remit}') for w in words(q))]
-    rights = 'manage_accounts' in request.user.roles
-    for o in offices if rights else []:
-        o.areas = areas(o.marks)
-    people = []
-    if inside:
+    people, letters, letter = [], [], ''
+    if inside:  # by the first letter of the last name, A–Z, or all that fit what is searched
         held = {}
         for o in Office.staffed():
             for p in [*o.user_set.all(), *(m.person for m in o.standing_in)]:
                 held.setdefault(p.pk, []).append(o)
-        found = find(staff().select_related('institute'), q, 'first_name', 'last_name', 'institute__name', starts=True)
-        people = [(p, held.get(p.pk, [])) for p in found.order_by('last_name', 'first_name')]
-    return render(request, 'core/directory.html', {'q': q, 'inside': inside, 'offices': offices, 'people': people, 'rights': rights})
+        found = list(find(staff().select_related('institute'), q, 'first_name', 'last_name', 'institute__name', starts=True).order_by('last_name', 'first_name'))
+        letters = sorted({fold(p.last_name[:1]).upper() for p in found})
+        letter = '' if q else request.GET.get('buchstabe', letters[0] if letters else '')
+        people = [(p, held.get(p.pk, [])) for p in found if not letter or fold(p.last_name[:1]).upper() == letter]
+    return render(request, 'core/directory.html', {
+        'q': q, 'inside': inside, 'offices': offices, 'people': people, 'counted': len(found) if inside else 0, 'letters': letters, 'letter': letter,
+        'tab': 'personen' if inside and request.GET.get('zeige') == 'personen' else 'aemter',
+    })
 
 
 def colleague(request, pk):

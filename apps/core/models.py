@@ -10,6 +10,7 @@ from django.core.validators import FileExtensionValidator, MaxValueValidator, Mi
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models, transaction
 from django.db.models.functions import Cast, Concat
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.functional import cached_property
@@ -17,7 +18,7 @@ from django.utils.html import format_html, format_html_join
 from django.utils.text import slugify
 
 from . import destatis
-from .access import CAPABILITIES, CODENAMES
+from .access import CAPABILITIES, CODENAMES, areas
 from .keys import COUNTRIES, DEGREES, DISTRICTS, FIELDS, GERMAN, PLACES, TOWNS, UNIVERSITIES, Edition, Key, KeyField  # noqa: F401, the key lists' models
 
 looked_up = ContextVar('looked_up', default=None)  # what a GET request has looked up: core.middleware.lookups
@@ -229,7 +230,7 @@ class Institution(Tracked, models.Model):
     certificate_weeks = models.PositiveSmallIntegerField('Zeugnis nach (Wochen)', default=4, help_text='Ab dem letzten Ergebnis.')
     certificate_overdue_days = models.PositiveSmallIntegerField(
         'Überfälliges Zeugnis melden nach (Tagen)', null=True, blank=True, default=90,
-        help_text='So lange nach der Frist erfährt das Amt mit dem Recht, Wertungen zu berichtigen, von einem ausstehenden Zeugnis; leer: nie.',
+        help_text='So lange nach der Frist erfährt das Amt mit der Berechtigung, Wertungen zu berichtigen, von einem ausstehenden Zeugnis; leer: nie.',
     )
     protocol_first = models.BooleanField(
         'Wertungen erst nach dem Protokoll', default=True, help_text='Das Amt überträgt die Wertungen der Prüfenden erst, wenn das unterschriebene Protokoll verbucht ist.',
@@ -634,6 +635,11 @@ class Office(Tracked, Group):
     def marks(self):
         return {p.codename: self.mark for p in self.permissions.all()}
 
+    @property
+    def icons(self):
+        """The areas it has rights in, as icons, for the list under Einstellungen."""
+        return render_to_string('core/_areas.html', {'areas': areas(self.marks)})
+
     @classmethod
     def holding(cls, capability, program=None, remit=False, linked=False, institute=None):
         """The offices that hold a capability (or any of several), for sentences like 'Zentral vergeben: …'; with a
@@ -1034,19 +1040,19 @@ class Consent(models.Model):
 
 
 class Grant(Tracked, models.Model):
-    """Rights given to an office, waiting until a second person who keeps accounts confirms them."""
+    """Berechtigungen given to an office, waiting until a second person who keeps accounts confirms them."""
 
     capabilities = ('manage_accounts',)
 
     office = models.ForeignKey(Office, models.CASCADE, related_name='grants', verbose_name='Amt')
-    rights = models.JSONField('Rechte', default=list)
+    rights = models.JSONField('Berechtigungen', default=list)
     by = models.ForeignKey(Person, models.SET_NULL, null=True, related_name='+', verbose_name='Eingetragen von')
     created = models.DateTimeField('Eingetragen am', default=timezone.now)
 
     class Meta:
         ordering = ['-created']
-        verbose_name = 'Rechte für ein Amt'
-        verbose_name_plural = 'Rechte für Ämter'
+        verbose_name = 'Berechtigungen für ein Amt'
+        verbose_name_plural = 'Berechtigungen für Ämter'
 
     def __str__(self):
         return f'{self.office}: {", ".join(self.labels)}'

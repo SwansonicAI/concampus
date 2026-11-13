@@ -88,7 +88,7 @@ def formfield(model_field, **kwargs):
 
 
 class OfficeForm(forms.ModelForm):
-    capabilities = forms.MultipleChoiceField(label='Rechte', choices=CAPABILITIES, widget=forms.CheckboxSelectMultiple, required=False)
+    capabilities = forms.MultipleChoiceField(label='Berechtigungen', choices=CAPABILITIES, widget=forms.CheckboxSelectMultiple, required=False)
 
     class Meta:
         model = Office
@@ -97,7 +97,7 @@ class OfficeForm(forms.ModelForm):
         help_texts = {
             'name': 'Wie es an der Hochschule heißt, z. B. „Studierendensekretariat“.',
             'institutes': 'Leer lassen, wenn das Amt für die ganze Hochschule zuständig ist.',
-            'programs': 'Ebenso. Mit Instituten und Studiengängen gilt jedes Recht für beides.',
+            'programs': 'Ebenso. Mit Instituten und Studiengängen gilt jede Berechtigung für beides.',
         }
         widgets = {'institutes': forms.CheckboxSelectMultiple, 'programs': forms.CheckboxSelectMultiple}
 
@@ -105,7 +105,7 @@ class OfficeForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['capabilities'].help_text = 'Neue Rechte gelten, sobald eine zweite Person sie unter „Freigaben“ bestätigt.'
+        self.fields['capabilities'].help_text = 'Neue Berechtigungen gelten, sobald eine zweite Person sie unter „Freigaben“ bestätigt.'
         if self.instance.pk:
             self.initial['capabilities'] = list(self.instance.permissions.values_list('codename', flat=True))
             members = ', '.join(str(p) for p in self.instance.user_set.order_by('last_name'))
@@ -151,7 +151,7 @@ class AccountForm(forms.ModelForm):
         localized_fields = ['obligation']
         labels = {'groups': 'Ämter', 'is_active': 'Aktiv', 'username': 'Benutzername'}
         help_texts = {
-            'groups': 'Was jemand darf, ergibt sich aus den Rechten der Ämter. Ein neues Amt gilt, sobald eine zweite Person es unter „Freigaben“ bestätigt; befristet unter „Vertretungen und Amtszeiten“.',
+            'groups': 'Was jemand darf, ergibt sich aus den Berechtigungen der Ämter. Ein neues Amt gilt, sobald eine zweite Person es unter „Freigaben“ bestätigt; befristet unter „Vertretungen und Amtszeiten“.',
             'institute': 'Für Lehrende: das Institut, dessen Räume sie buchen.',
             'is_active': 'Ohne Haken ist kein Zugriff möglich; ab dem Tag läuft die Frist für die Daten früherer Beschäftigter (Einstellungen › Hochschule).',
             'username': 'Wie beim Hochschulkonto.',
@@ -320,9 +320,9 @@ EDITORS = {e.key: e for e in [
         words='hochschuldaten anschrift impressum logo farbe erscheinungsbild briefkopf regeln buchungsregeln matrikelnummer fristen löschfristen datenschutz hochschulnummer statistik landesamt',
     ),
     Editor(
-        'aemter', Office, 'Ämter und Rechte', 'manage_accounts', 'Verwaltung', form=OfficeForm,
-        columns=[('Amt', 'name'), ('E-Mail', 'email'), ('Zuständig für', 'remit'), ('Mitglieder', 'user_set')], search=['name'], words='rollen rechte gruppen berechtigungen institut',
-        queryset=lambda: Office.objects.prefetch_related('user_set', 'institutes', 'programs'),
+        'aemter', Office, 'Ämter und Berechtigungen', 'manage_accounts', 'Verwaltung', form=OfficeForm,
+        columns=[('Amt', 'name'), ('Zuständig für', 'remit'), ('Berechtigungen', 'icons'), ('Mitglieder', 'user_set'), ('E-Mail', 'email')], search=['name'], words='rollen rechte gruppen berechtigungen institut',
+        queryset=lambda: Office.objects.prefetch_related('user_set', 'institutes', 'programs', 'permissions'),
     ),
     Editor(
         'konten', Person, 'Konten', 'manage_accounts', 'Verwaltung', form=AccountForm,

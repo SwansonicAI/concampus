@@ -159,7 +159,7 @@ demo's values. Federal law (VwVfG, SGB V, AufenthG, BAföG, Destatis) is in the 
 | Audition times are shown with their order and the end of the day before the invitations go out; one applicant is moved with a new invitation | Hochschule | `admissions/views.py` `plan()`, `move()` | – |
 | Teachers answer before the Vorlesungsverzeichnis is due; publishing waits for courses taken over and teachers asked, and its confirm names what goes | Hochschule | `courses/views.py` `ask()`, `courses/apps.py` | Einstellungen › Semester |
 | A day made unterrichtsfrei after the dates were booked names them, to call off at once; a building closed for a day calls off its bookings, one message a person | Hochschule | `setup/editors.py` `HolidayForm`, `rooms/views.py` `day_off()` | – |
-| The Dekanat publishes, the Referat prepares; courses called off before publishing are deleted | Hochschule | `courses/views.py` `publish()` | Einstellungen › Ämter (Recht „Ein geplantes Semester veröffentlichen“) |
+| The Dekanat publishes, the Referat prepares; courses called off before publishing are deleted | Hochschule | `courses/views.py` `publish()` | Einstellungen › Ämter und Berechtigungen („Ein geplantes Semester veröffentlichen“) |
 | A published course called off stays listed as „entfällt“; its dates are called off, registrations without a result lifted, everyone told why | Hochschule | `courses/views.py` `cancel()` | – |
 | Once a semester is over, its courses are corrected only by the office, with a reason kept in the Verlauf | Hochschule | `courses/views.py` `edit()`, `core/history.py` `because()` | – |
 

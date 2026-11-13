@@ -32,8 +32,8 @@ class SetupConfig(Tile, AppConfig):
                 found.append(feature(f'{e.title}: neu anlegen', reverse('setup:new', args=[e.key]), f'einstellungen {e.words}'))
         if 'manage_accounts' in person.roles:
             found += [
-                feature('Rechte im Überblick', reverse('setup:rights'), 'wer darf was berechtigungen rollen ämter zugriff'),
-                feature('Freigaben', reverse('setup:approvals'), 'rechte mitgliedschaften bestätigen vier augen'),
+                feature('Berechtigungen im Überblick', reverse('setup:rights'), 'wer darf was rechte rollen ämter zugriff'),
+                feature('Freigaben', reverse('setup:approvals'), 'berechtigungen rechte mitgliedschaften bestätigen vier augen'),
                 feature('Exporte', reverse('setup:exports'), 'protokoll personenbezogene daten datei'),
                 feature('Zugriffe', reverse('setup:sign_ins'), 'login anmeldungen fehlversuche protokoll sicherheit'),
             ]
@@ -56,7 +56,7 @@ class SetupConfig(Tile, AppConfig):
             from core.models import Grant, Membership
 
             if n := Grant.objects.exclude(by=person).count() + Membership.objects.filter(confirmed_by=None).exclude(by=person).exclude(person=person).count():
-                found.append(task(f'{plural(n, "Rechteänderung", "Rechteänderungen")} bestätigen', reverse('setup:approvals')))
+                found.append(task(f'{plural(n, "Änderung", "Änderungen")} der Berechtigungen bestätigen', reverse('setup:approvals')))
         if 'manage_institution' in person.roles:
             from core.models import Feedback
 

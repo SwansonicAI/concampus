@@ -50,8 +50,8 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
     ('Verwaltung', [
         ('manage_terms', 'Semester anlegen und pflegen'),
         ('manage_institution', 'Hochschuldaten, Institute und Texte pflegen'),
-        ('manage_accounts', 'Ämter, Rechte und Konten verwalten'),
-        ('view_statistics', 'Auswertungen aller Bereiche einsehen (Zahlen; Namen nur mit dem Recht des Bereichs)'),
+        ('manage_accounts', 'Ämter, Berechtigungen und Konten verwalten'),
+        ('view_statistics', 'Auswertungen aller Bereiche einsehen (Zahlen; Namen nur mit der Berechtigung des Bereichs)'),
         ('report_statistics', 'Amtliche Statistik der Studierenden und Prüfungen prüfen und liefern'),
     ]),
     ('Archiv', [
@@ -72,7 +72,7 @@ SHORT = {  # each right in a few words under its area, to take in at a glance; C
     'book_any_room': 'Alle Räume buchen', 'view_bookings': 'Alle Buchungen sehen', 'manage_bookings': 'Buchungen anderer ändern',
     'manage_rooms': 'Räume pflegen', 'manage_instruments': 'Leihinstrumente',
     'manage_mobility': 'Partner und Auslandsaufenthalte',
-    'manage_terms': 'Semester pflegen', 'manage_institution': 'Hochschuldaten und Texte', 'manage_accounts': 'Ämter, Rechte und Konten',
+    'manage_terms': 'Semester pflegen', 'manage_institution': 'Hochschuldaten und Texte', 'manage_accounts': 'Ämter, Berechtigungen und Konten',
     'view_statistics': 'Auswertungen', 'report_statistics': 'Amtliche Statistik',
     'assess_files': 'Akten bewerten',
 }
