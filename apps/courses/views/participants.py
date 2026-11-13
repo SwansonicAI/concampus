@@ -54,7 +54,7 @@ def add(request, pk):
         texts.send('eingetragen', study.person, course.get_absolute_url(), veranstaltung=course.title, semester=course.term)
         fits(course, study)
         dates = (group.bookings if group else course.bookings.filter(group=None, participants=None)).filter(start__gte=timezone.now()).select_related('room')
-        _, clashing = weight(course, clashes(study.person, dates))
+        _, clashing = weight(clashes(study.person, dates), dates)
         notes = ' '.join(filter(None, [study.concern, clashing and f'An {plural(clashing, "Termin", "Terminen")} überschneidet sie sich mit dem Stundenplan.']))
         done = f'{study.person} eingetragen' + (f', für {module.code}' if module else '') + (f', in Gruppe {group.number}' if group else '') + '.'
         (messages.warning if notes else messages.success)(request, f'{done} {notes}'.strip())

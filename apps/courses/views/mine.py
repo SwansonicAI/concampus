@@ -13,7 +13,7 @@ from students.models import Study
 from ..models import Course, Ensemble, Group, Participation, Signup
 from .common import TEACHING, ahead, queued, since
 from .load import coaching, counted, deputat, sws, taught
-from .timetable import clashes, fits, series, theirs, weight
+from .timetable import clashes, fits, limit, series, theirs, weight
 
 
 def registering():
@@ -83,9 +83,9 @@ def fitted(study, found):
         groups = c.groups.all()
         c.times = sorted(series(c.bookings.all()), key=lambda b: (timezone.localtime(b.start).weekday(), timezone.localtime(b.start).time()))
         c.free = sum(max(g.capacity - g.size, 0) for g in groups) if groups else c.capacity - c.size if c.capacity is not None else None
-        c.open_groups, c.limit = sum(g.size < g.capacity for g in groups), c.clash_limit()
+        c.open_groups, c.limit = sum(g.size < g.capacity for g in groups), limit(c.bookings.all())
         c.clashing = [] if groups else clashes(study.person, c.bookings.all(), mine)
-        c.clash, _ = weight(c, c.clashing)
+        c.clash, _ = weight(c.clashing, c.bookings.all())
         c.concern = fits(c, copy(study)).concern
     return found
 

@@ -9,7 +9,7 @@ from django.shortcuts import render
 from django.utils import timezone
 
 from core.dates import day as understood
-from core.models import Term
+from core.models import Institution, Term
 from curriculum.models import Module
 from rooms.models import Booking, BookingCategory
 from rooms.plans import agenda, legend, walk, week
@@ -46,11 +46,17 @@ def unmet(rows):
     return {(s, m): [r for r in needs[m] if (s, r.pk) not in passed] for s, m in rows}
 
 
-def weight(course, found):
-    """(how plainly to warn, on how many dates) of a course's clashes() with someone's week: 'heavy' from the number of
-    dates the course sets, 'light' below it, as a rehearsal now and then, or only a way between buildings too short."""
-    dates = sum(b.times for b, _, way in found if not way)
-    return ('heavy' if dates >= course.clash_limit() else 'light' if found else ''), dates
+def limit(dates):
+    """From how many of these dates clashing registering warns plainly, in red: as the Hochschule sets it, or all of
+    them, for a course of fewer dates."""
+    return min(Institution.get().clash_dates, len(dates))
+
+
+def weight(found, dates):
+    """(how plainly to warn, on how many dates) of clashes() of these dates with someone's week: 'heavy' from limit(),
+    'light' below it, as a rehearsal now and then, or only a way between buildings too short."""
+    clashing = sum(b.times for b, _, way in found if not way)
+    return ('' if not found else 'heavy' if clashing >= limit(dates) else 'light'), clashing
 
 
 def series(bookings):

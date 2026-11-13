@@ -172,7 +172,7 @@ def take_over(request, target, pending):
         for c in chosen:
             copy = Course.objects.create(
                 term=target, kind=c.kind, title=c.title, area=c.area, format=c.format, subject=c.subject, hours=c.hours, capacity=c.capacity,
-                allocation=c.allocation, grouping=c.grouping, clash_dates=c.clash_dates, description=c.description, rhythm=c.rhythm, origin=c,
+                allocation=c.allocation, grouping=c.grouping, description=c.description, rhythm=c.rhythm, origin=c,
                 opens=target.course_signup_start, deadline=target.course_signup_end,
             )
             copy.modules.set({m.pk for m in c.modules.all()} | earlier[c.title])

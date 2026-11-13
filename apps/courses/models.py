@@ -116,9 +116,6 @@ class Course(Tracked, models.Model):
         help_text='Nur bei Gruppen. Bleiben sie zusammen, übernimmt der Semesterwechsel die Gruppen der Veranstaltung, die laut Studienplan davor liegt, '
                   'mit Lehrenden und Zeit, und trägt nach der Rückmeldung ihre Mitglieder ein.',
     )
-    clash_dates = models.PositiveSmallIntegerField(
-        'Rote Warnung ab', null=True, blank=True, help_text='Überschneidungen mit dem Stundenplan; leer: wie in den Hochschuldaten.',
-    )
     pass_mark = models.DecimalField(
         'Bestehensgrenze', max_digits=4, decimal_places=1, null=True, blank=True,
         help_text='Gesetzt: Punkte, bestanden ab dieser Grenze. Leer: Noten, bestanden bis 4,0.',
@@ -203,10 +200,6 @@ class Course(Tracked, models.Model):
         """Whether participants may withdraw themselves: from what they registered for alone, until the lectures end, past
         the Anmeldeschluss too. A class the teachers give out, or an ensemble, they leave through the teachers."""
         return self.allocation in (self.Allocation.ORDER, self.Allocation.CHOICE) and timezone.localdate() <= self.term.lectures_end
-
-    def clash_limit(self):
-        """From how many of its dates clashing with someone's week registering warns them plainly, in red."""
-        return Institution.get().clash_dates if self.clash_dates is None else self.clash_dates
 
     @property
     def upcoming(self):

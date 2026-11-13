@@ -230,13 +230,12 @@ def course(request, pk):
         'eligible': eligible,
         'unmarked': sum(1 for p in rows if p.passed is None and not p.remark) if staffed and course.kind == Course.Kind.COURSE and over(course) and not course.modules.filter(exam=True).exists() else 0,
         'counts_for': besides_focus(course, eligible[0]) if eligible and not own else '',
-        'clashing': (clashing := clashes(person, course.bookings.filter(start__gte=timezone.now(), participants=None).select_related('room')) if eligible and not own and not groups else []),
-        'clash': weight(course, clashing),
+        'clashing': (clashing := clashes(person, dates := course.bookings.filter(start__gte=timezone.now(), participants=None).select_related('room')) if eligible and not own and not groups else []),
+        'clash': weight(clashing, dates if clashing else []),
         'groups': groups, 'taught': taught, 'regrouping': groups and staffed and not course.term.over,
         'choosing': bool(groups and eligible and not own and not wished and course.is_open and course.grouping == Course.Grouping.CHOICE),
         'switching': bool(groups and own and own[0].group_id and own[0].passed is None and course.is_open and course.grouping == Course.Grouping.CHOICE),
         'placing': bool(groups and eligible and not own and not wished and course.is_open and course.grouping != Course.Grouping.CHOICE),
-        'limit': course.clash_limit(),
         'current': (current := next((g for g in groups if own and g.pk == own[0].group_id), None)),
         'offered': sorted((g for g in groups if g.free and g != current), key=weekly_at),
         'booked_out': sorted((g for g in groups if not g.free and g != current), key=weekly_at),
@@ -285,7 +284,7 @@ def remove(request, pk):
     return redirect(f"{reverse('courses:catalogue')}?semester={course.term_id}")
 
 
-COPIED = ['kind', 'title', 'area', 'format', 'subject', 'rhythm', 'hours', 'capacity', 'allocation', 'grouping', 'opens', 'deadline', 'clash_dates', 'description']  # what „Duplizieren“ takes
+COPIED = ['kind', 'title', 'area', 'format', 'subject', 'rhythm', 'hours', 'capacity', 'allocation', 'grouping', 'opens', 'deadline', 'description']  # what „Duplizieren“ takes
 
 
 def edit(request, pk=None):

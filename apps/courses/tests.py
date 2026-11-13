@@ -156,11 +156,11 @@ class ChecksTest(Seeded):
             Booking.objects.filter(person=person, title='Test').delete()
             for b in dates[:n]:
                 Booking.objects.create(room=other, start=b.start, end=b.end, person=person, category_id=category, title='Test')
-            return weight(course, clashes(person, dates))
+            return weight(clashes(person, dates), dates)
 
         self.assertEqual(booked('uebung', 4)[0], '')  # practice moves aside
-        course.clash_dates = None
         self.assertEqual(booked('probe', 2), ('light', 2))
+        self.assertEqual(weight(clashes(person, dates[:2]), dates[:2]), ('heavy', 2))  # a course of two dates, both taken
         self.assertEqual(booked('probe', 3), ('heavy', 3))
 
 

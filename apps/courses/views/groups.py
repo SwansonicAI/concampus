@@ -22,7 +22,7 @@ from ..forms import EnsembleForm, GroupForm
 from ..models import Course, Ensemble, Group, Participation
 from .common import TEACHING, seen, taking, teaches
 from .dates import weekly
-from .timetable import clashes, series, theirs, weight
+from .timetable import clashes, limit, series, theirs, weight
 
 
 def weekly_at(group):
@@ -61,7 +61,8 @@ def grouped(course, person=None):
     for g in groups:
         g.free = max(g.capacity - g.size, 0)
         g.clashing = clashes(person, g.bookings.all(), mine) if person else []
-        g.clash, g.clash_dates = weight(course, g.clashing)
+        g.clash, g.clash_dates = weight(g.clashing, g.bookings.all())
+        g.limit = limit(g.bookings.all())
     return groups
 
 
@@ -155,7 +156,7 @@ def distribute(request, pk):
         if not (free := [g for g in groups if g.free]):
             break
         mine = list(agenda(p.study.person).filter(start__lte=span[1], end__gte=span[0]).select_related('room', 'course', 'category')) if span else []
-        best = min(free, key=lambda g: (weight(course, clashes(p.study.person, g.bookings.all(), mine))[1], g.number))
+        best = min(free, key=lambda g: (weight(clashes(p.study.person, g.bookings.all(), mine), g.bookings.all())[1], g.number))
         course.participations.filter(study=p.study_id).update(group=best)
         best.free -= 1
         placed.append((p.study.person, best))

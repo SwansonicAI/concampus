@@ -230,7 +230,7 @@ class CourseForm(forms.ModelForm):
         model = Course
         fields = [
             'term', 'title', 'kind', 'area', 'format', 'subject', 'rhythm', 'staff', 'modules', 'hours', 'capacity', 'allocation', 'grouping', 'opens', 'deadline',
-            'clash_dates', 'description',
+            'description',
         ]
         labels = {'staff': 'Lehrende'}
         localized_fields = ['hours', 'pass_mark']  # a decimal comma, in a text box
@@ -242,7 +242,7 @@ class CourseForm(forms.ModelForm):
 
     layout = [
         (None, ['correction', 'term', 'title', ('kind', 'allocation'), ('area', 'format'), ('subject', 'rhythm')]),
-        ('Umfang und Anmeldung', [('hours', 'capacity', 'opens', 'deadline'), ('grouping', 'clash_dates')]),
+        ('Umfang und Anmeldung', [('hours', 'capacity', 'opens', 'deadline'), 'grouping']),
         ('Lehrende und Module', ['staff', 'programme', 'modules']),
         (None, ['description']),
     ]
@@ -290,8 +290,6 @@ class CourseForm(forms.ModelForm):
                 if module and teacher:
                     taught[module].add(teacher)
             self.taught = {m: sorted(t) for m, t in taught.items()}
-        if 'clash_dates' in self.fields:
-            self.fields['clash_dates'].help_text = f'Überschneidungen mit dem Stundenplan; leer: wie in den Hochschuldaten, ab {Institution.get().clash_dates}. Verhindert wird die Anmeldung nie.'
         if 'program' in self.fields:
             self.fields['program'].queryset = Program.planned()
         if 'term' in self.fields and self.instance.pk and not self.moves:  # its dates and people are that semester's
@@ -316,7 +314,7 @@ class TeachingForm(CourseForm):
     those, its staff and its kind are for the office."""
 
     class Meta(CourseForm.Meta):
-        fields = ['capacity', 'allocation', 'opens', 'deadline', 'clash_dates', 'description']
+        fields = ['capacity', 'allocation', 'opens', 'deadline', 'description']
 
 
 class ExamForm(CourseForm):
