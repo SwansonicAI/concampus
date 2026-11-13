@@ -74,7 +74,7 @@ section { margin-top: 52px; }
 .me { display: flex; flex: 0 1 auto; align-items: center; gap: 18px; min-width: 0; margin-left: auto; font-size: 14px; white-space: nowrap; }
 .me > a { color: #cfcfcf; }
 .me > a:hover { color: #fff; }
-.search { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px; border: 1px solid #3c3c3c; background: #262626; color: #9a9a9a; font: inherit; font-size: 14px; cursor: text; }
+.search { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 10px; border: 1px solid #3c3c3c; border-radius: 8px; background: #262626; color: #9a9a9a; font: inherit; font-size: 14px; cursor: text; }
 .search:hover, .search:focus-visible { border-color: var(--accent); outline: none; }
 .search kbd { border-color: #3c3c3c; }
 .count { display: inline-block; min-width: 20px; margin-left: 5px; padding: 0 6px; border-radius: var(--radius); background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; text-align: center; }
@@ -638,16 +638,21 @@ a.block:hover { background: var(--accent-pale); text-decoration: none; }
 .when:not(:focus-within) .hint { display: none; }
 .form .when .hint { position: static; display: block; }
 
-/* Search palette in the middle of the page, over it */
+/* Search palette in the middle of the page, over it: rounder and softer than the rest, as it is met all the time.
+   Its top stays put while results grow below it. */
 .search { flex: 0 1 230px; min-width: 150px; }  /* gives way before the menu wraps */
-dialog.finder { flex-direction: column; width: min(680px, calc(100vw - 32px)); max-height: 76vh; margin: 12vh auto auto; padding: 0; border: 0; border-top: 4px solid var(--accent); border-radius: var(--radius); }
+dialog.finder { flex-direction: column; width: min(640px, calc(100vw - 32px)); max-height: 58vh; margin: 32vh auto auto; padding: 0; border: 0; border-radius: 14px; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22); }
 dialog.finder[open] { display: flex; }
-dialog.finder::backdrop { background: rgba(0, 0, 0, 0.45); }
-.finder input { width: 100%; padding: 16px 20px; border: 0; border-bottom: 1px solid var(--line); font: inherit; font-size: 20px; outline: none; }
+dialog.finder::backdrop { background: rgba(0, 0, 0, 0.3); }
+.finder input { width: 100%; padding: 18px 22px; border: 0; font: inherit; font-size: 20px; outline: none; }
+.finder input::-webkit-search-cancel-button { width: 14px; height: 14px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 4l8 8M12 4l-8 8'/%3E%3C/svg%3E") center / contain no-repeat; cursor: pointer; -webkit-appearance: none; }
 .palette { flex: 1 1 auto; overflow: hidden auto; }
-.palette:not(:empty) { padding: 8px 0; }
-.palette .empty { margin: 8px 16px; }
-.keys { display: flex; align-items: center; gap: 6px; margin: 0; padding: 8px 20px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.palette:not(:empty) { padding: 6px 0 8px; border-top: 1px solid var(--line); }
+.palette .empty { margin: 8px 22px; }
+.finder .found h4 { margin: 10px 22px 4px; }
+.finder .found a { margin: 0 8px; padding: 8px 14px; border-radius: 8px; }
+.keys { margin: 0; padding: 8px 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+.palette:empty + .keys { display: none; }
 kbd { padding: 0 5px; border: 1px solid var(--line); border-radius: var(--radius); font: inherit; font-size: 12px; }
 .found h4 { margin: 10px 16px 4px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
 .found a { display: flex; justify-content: space-between; gap: 16px; padding: 7px 16px; color: var(--ink); font-size: 15px; }

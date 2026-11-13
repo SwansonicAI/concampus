@@ -64,7 +64,7 @@ SYNONYMS = [
     'modul module',
     'ects leistungspunkte credit credits',
     'prüfung klausur examen exam examination test',
-    'eignungsprüfung aufnahmeprüfung audition',
+    'eignungsprüfung aufnahmeprüfung audition entrance',
     'kommission jury committee panel',
     'note noten grade grades',
     'leistungsübersicht notenspiegel leistungen transcript achievements',

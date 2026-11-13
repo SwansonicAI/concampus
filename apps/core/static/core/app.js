@@ -614,6 +614,10 @@ if (finder) {
     clearTimeout(timer);
     const q = input.value.trim();
     if (q === shown) return true;
+    if (!q) {  // an empty box: nothing yet, as nothing is sought
+      render(q, '');
+      return true;
+    }
     const ask = quick => fetch(`${form.action}?q=${encodeURIComponent(q)}${quick ? '&schnell' : ''}`, {headers: {'X-Fragment': '1'}}).then(r => r.text());
     const all = ask(false), first = await ask(true);
     if (q !== input.value.trim()) return false;
@@ -642,7 +646,7 @@ if (finder) {
       event.preventDefault();
       if (await show()) {
         const chosen = list.querySelector('a.on');
-        chosen ? location.href = chosen.href : form.submit();
+        chosen ? location.href = chosen.href : shown && form.submit();
       }
     }
   });
