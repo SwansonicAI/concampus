@@ -96,10 +96,7 @@ def account(request):
         messages.success(request, 'Kontaktdaten gespeichert.')
         return redirect('account')
     staff = not person.roles & {'student', 'applicant', 'alumni'}  # employees: their personnel file is HR's
-    offices = list(person.offices().prefetch_related('permissions', 'institutes', 'programs'))  # what one may do, to ask for more where it falls short
-    until = dict(person.memberships.exclude(confirmed_by=None).exclude(office__user=person).filter(until__gte=timezone.localdate()).values_list('office', 'until'))
-    for o in offices:
-        o.until = until.get(o.pk)
+    offices = person.offices_held()  # what one may do, to ask for more where it falls short
     return render(request, 'core/account.html', {
         'form': form, 'email_form': email, 'staff': staff, 'office': 'die Personalabteilung' if staff else Office.holding('manage_students', linked=True),
         'consents': person.consents.all(), 'sign_ins': person.sign_ins.all()[:5],
@@ -390,6 +387,54 @@ def towns(request):
     ], safe=False)
 
 
+OUTSIDE = {'applicant', 'alumni'}  # who finds the offices by their shared address only, not who works here (docs/privacy.md)
+
+
+def staff():
+    """Who teaches or holds an office, a stand-in too: whom everyone inside may find, to know whom to ask."""
+    standing = Q(memberships__confirmed_by__isnull=False, memberships__until__gte=timezone.localdate())
+    return Person.objects.filter(Q(teaching__isnull=False) | Q(groups__isnull=False) | standing, is_active=True).distinct()
+
+
+def directory(request):
+    """Personen und Ämter: who is responsible for what and how to reach them, as the Hochschule's website lists its
+    people; for applicants and alumni the offices with a shared address only."""
+    inside, q = bool(request.user.roles - OUTSIDE), request.GET.get('q', '').strip()
+    offices = [o for o in (Office.staffed() if inside else Office.staffed().exclude(email='')) if all(w in fold(f'{o.name} {o.remit}') for w in words(q))]
+    people = []
+    if inside:
+        held = {}
+        for o in Office.staffed():
+            for p in [*o.user_set.all(), *(m.person for m in o.standing_in)]:
+                held.setdefault(p.pk, []).append(o)
+        found = find(staff().select_related('institute'), q, 'first_name', 'last_name', 'institute__name', starts=True)
+        people = [(p, held.get(p.pk, [])) for p in found.order_by('last_name', 'first_name')]
+    return render(request, 'core/directory.html', {'q': q, 'inside': inside, 'offices': offices, 'people': people, 'rights': 'manage_accounts' in request.user.roles})
+
+
+def colleague(request, pk):
+    """A colleague's page: who they are, the offices they hold and how far, what they teach, and their work e-mail;
+    nothing else of them (docs/privacy.md, Staff). What an office may do, only to whoever gives rights, or one's own."""
+    if not request.user.roles - OUTSIDE:
+        raise PermissionDenied
+    person, term = get_object_or_404(staff().select_related('institute'), pk=pk), Term.current()
+    courses = person.teaching.filter(term=term, kind__in=[Course.Kind.COURSE, Course.Kind.LESSON], cancelled=None).order_by('title') if term else []
+    return render(request, 'core/colleague.html', {
+        'trail': [(None, reverse('directory'))], 'person': person, 'offices': person.offices_held(), 'courses': courses, 'term': term,
+        'rights': 'manage_accounts' in request.user.roles or person == request.user,
+    })
+
+
+def office(request, pk):
+    """An office's page: how far it reaches, how to reach it, and for everyone inside who is in it; what it may do, only
+    to whoever gives rights."""
+    inside = bool(request.user.roles - OUTSIDE)
+    return render(request, 'core/office.html', {
+        'trail': [(None, reverse('directory'))], 'inside': inside, 'rights': 'manage_accounts' in request.user.roles,
+        'office': get_object_or_404(Office.staffed() if inside else Office.staffed().exclude(email=''), pk=pk),
+    })
+
+
 def search(request):
     """One box for everything: places in the apps, dates, and every record the person may see."""
     q = request.GET.get('q', '').strip()
@@ -434,7 +479,7 @@ def people(studies, limit, person):
     taught = Participation.objects.filter(study=OuterRef('pk'), course__staff=person)
     own = Case(When(Q(teacher=person) | Q(Exists(taught)) | Q(subject__institute__in=person.ours('view_files')), then=0), default=1)
     rank = Case(*(When(status=status, then=n) for n, status in enumerate(STANDING)))
-    for s in studies.annotate(own=own, rank=rank).order_by('own', 'rank', 'person__last_name', 'person__first_name')[:limit * 10]:
+    for s in studies.annotate(own=own, rank=rank).order_by('own', '_fit', 'rank', 'person__last_name', 'person__first_name')[:limit * 10]:
         if s.person_id in shown:
             shown[s.person_id][1] += 1
         elif len(shown) < limit:
@@ -460,25 +505,27 @@ def found(person, q, limit, quick=False):
     """(label, hits) of everything the search finds; `quick`: the dates and places only, which need no records."""
     roles, sought = person.roles, words(q)
     groups = []
-    if q and roles - {'applicant', 'alumni'} and (when := dates.moment(q)):
+    if q and roles - OUTSIDE and (when := dates.moment(q)):
         groups.append(('Springen zu', jumps(roles, *when)))
-    # every app's places, also of apps without a tile for this person: a student applying for a Master
-    places = [(f, app.title(roles) or app.verbose_name, app.icon) for app in tile_apps() for f in app.features(person)]
-    places += [(feature('Startseite', reverse('home'), 'aufgaben zu erledigen übersicht'), '', PAGE), (feature('Postfach', reverse('inbox'), 'nachrichten bescheide mitteilungen'), '', MAIL),
-               (feature('Mein Konto', reverse('account'), 'anschrift adresse telefon kontaktdaten umzug ändern e-mail einwilligungen anmeldungen meine daten'), '', PERSON),
-               (feature('Passwort ändern', reverse('password_change'), 'kennwort passwort sicherheit'), '', PERSON),
-               (feature('Meine Daten herunterladen', reverse('copy'), 'kopie auskunft dsgvo datenschutz'), '', PERSON)]
+    # one's own places first, so that they win a tie ('address': Mein Konto, not the Hochschule's); then every app's, also
+    # of apps without a tile for this person: a student applying for a Master
+    places = [(feature('Startseite', reverse('home'), 'aufgaben zu erledigen übersicht'), '', PAGE), (feature('Postfach', reverse('inbox'), 'nachrichten bescheide mitteilungen'), '', MAIL),
+              (feature('Mein Konto', reverse('account'), 'anschrift adresse telefon kontaktdaten umzug ändern e-mail einwilligungen anmeldungen meine daten rechte ämter einstellungen'), '', PERSON),
+              (feature('Passwort ändern', reverse('password_change'), 'kennwort passwort sicherheit'), '', PERSON),
+              (feature('Meine Daten herunterladen', reverse('copy'), 'kopie auskunft dsgvo datenschutz'), '', PERSON),
+              (feature('Personen und Ämter', reverse('directory'), 'lehrende kollegium mitarbeiter verzeichnis kontakt zuständig e-mail'), '', PERSON)]
+    places += [(f, app.title(roles) or app.verbose_name, app.icon) for app in tile_apps() for f in app.features(person)]
     if mail := Institution.get().email:  # as the footer offers it
         places.append((feature('Hilfe und Rückmeldung', f'mailto:{mail}', 'frage problem kontakt'), '', MAIL))
     if person.is_superuser:
         places.append((feature('Datenpflege', reverse('admin:index'), 'admin stammdaten verwaltung'), '', PAGE))
     # the best fit first, of those that fit the most words, at least half; an empty box lists everything the person can do
     meaning = meant(q)
-    fits = sorted(((fit(meaning, f['title'], f"{f['words']} {app}"), f, app, icon) for f, app, icon in places), key=lambda s: s[0], reverse=True)
-    most = fits[0][0][0] if fits else 0
-    fits = [(score, f, app, icon) for (n, score), f, app, icon in fits if not meaning or n == most > 0 and n >= 0.5][:limit if q else None]
-    groups.append(functions := ('Funktionen', [hit(f['title'], f['url'], app, icon) for _, f, app, icon in fits]))
-    weak = fits and fits[0][0] < 3 * len(meaning)  # bits of words only, as a name may hold them: after the records
+    scored = sorted(((fit(meaning, f['title'], f"{f['words']} {app}"), f, app, icon) for f, app, icon in places), key=lambda s: s[0], reverse=True)
+    most, best = scored[0][0] if scored else (0, 0)
+    fits = [(f, app, icon) for (n, _), f, app, icon in scored if not meaning or n == most > 0 and n >= 0.5][:limit if q else None]
+    groups.append(functions := ('Funktionen', [hit(f['title'], f['url'], app, icon) for f, app, icon in fits]))
+    weak = fits and (most < 1 or best < 3 * len(meaning))  # some words only, or bits of them, as a name holds: after the records
     if len(q) < 2 or quick:
         return groups
     if roles & {'view_files', 'manage_students', 'view_applications', 'teacher'}:  # only the files and applications the person may open
@@ -495,29 +542,27 @@ def found(person, q, limit, quick=False):
             Participation.objects.filter(course__term=Term.current(), study__status=Study.Status.ENROLLED)
             .filter(Q(course__staff=person) | Q(study__ensembles__coach=person, study__ensembles__course=F('course'))).exclude(study__teacher=person)
         )
-        first = {}
-        taught = Participation.objects.filter(pk__in=taught.values('pk'))  # so that SQLite looks up the rows found first
+        taught, first = Participation.objects.filter(pk__in=taught.values('pk')), {}  # so that SQLite looks up the rows found first
         for p in find(taught.select_related('study__person', 'course'), q, 'study__person__first_name', 'study__person__last_name', starts=True)[:limit * 5]:
             first.setdefault(p.study.person_id, p)
         groups.append(('In Ihrem Unterricht', [hit(p.study.person.name, p.course.get_absolute_url(), p.course.title) for p in list(first.values())[:limit]]))
-    inside = bool(roles - {'applicant', 'alumni'})
-    if inside:  # whom to ask: who teaches or holds an office
-        staff = Person.objects.filter(Q(teaching__isnull=False) | Q(groups__isnull=False), is_active=True).distinct().select_related('institute')
+    inside = bool(roles - OUTSIDE)
+    if inside:  # whom to ask: who teaches or holds an office, on their page in Personen und Ämter
         groups.append(('Personen', [
-            hit(f'{p.title} {p.first_name} {p.last_name}'.strip(), f'mailto:{p.email}', ' · '.join(filter(None, [p.institute and str(p.institute), p.email])))
-            for p in ranked(staff, q, 'first_name', 'last_name', limit=limit)
+            hit(str(p), reverse('colleague', args=[p.pk]), ' · '.join(filter(None, [p.institute and str(p.institute), p.email])))
+            for p in ranked(staff().select_related('institute'), q, 'first_name', 'last_name', limit=limit)
         ]))
     offices = []  # and the offices: for applicants and alumni by their shared address only, without who works there
     for o in ranked(Office.objects.prefetch_related('user_set', 'institutes', 'programs'), q, 'name', limit=limit, names='amt'):
-        members = [p for p in o.user_set.all() if p.is_active] if inside or not o.email else []
-        if mail := o.email or ','.join(p.email for p in members):
-            offices.append(hit(o.name + limited(o), f'mailto:{mail}', ' · '.join(filter(None, [o.email, ', '.join(f'{p.first_name} {p.last_name}' for p in members)]))))
+        members = [p for p in o.user_set.all() if p.is_active] if inside else []
+        if inside or o.email:
+            offices.append(hit(o.name + limited(o), reverse('office', args=[o.pk]), ' · '.join(filter(None, [o.email, ', '.join(f'{p.first_name} {p.last_name}' for p in members)]))))
     groups.append(('Ämter', offices))
     teaching = [Course.Kind.COURSE, Course.Kind.LESSON]
     courses = find(Course.objects.filter(term__end__gte=timezone.localdate(), term__in=Term.shown(person)).select_related('term'), q, 'title', 'staff__last_name', 'subject__name', starts=True)
     own = Exists(Module.objects.filter(courses=OuterRef('pk'), program__studies__person=person, program__studies__status=Study.Status.ENROLLED))  # one's own Studiengang's first
     groups.append(('Lehrveranstaltungen', [
-        hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in courses.filter(kind__in=teaching).annotate(own=own).order_by('-own', 'title')[:limit]
+        hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in courses.filter(kind__in=teaching).annotate(own=own).order_by('_fit', '-own', 'title')[:limit]
     ]))
     papers = Q(staff=person)  # exams and auditions: those the person examines, those within reach for the offices running them
     written = Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.RECOGNITION, Course.Kind.THESIS])
@@ -530,7 +575,7 @@ def found(person, q, limit, quick=False):
         hit(f'{m.code} {m.title}', m.program.get_absolute_url(), str(m.program))
         for m in ranked(Module.objects.select_related('program'), q, 'code', 'title', limit=limit, names='modul')
     ]))
-    if roles - {'applicant', 'alumni'}:
+    if inside:
         groups.append(('Räume', [
             hit(r.name, reverse('rooms:room', args=[r.pk]), ' · '.join(filter(None, [r.purpose, r.building, f'{r.capacity} Plätze'])))
             for r in ranked(Room.objects.all(), q, 'name', 'purpose', 'building', 'equipment', limit=limit, names='raum')

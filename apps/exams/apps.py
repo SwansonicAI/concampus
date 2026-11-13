@@ -53,13 +53,13 @@ class ExamsConfig(Tile, AppConfig):
     def features(self, person):
         roles, found = person.roles, []
         if roles & {'manage_exams', 'decide_results', 'teacher'}:
-            found.append(feature('Prüfungen', reverse('exams:index'), 'prüfungsplan kommission noten eintragen bewerten freigabe abschlussarbeit attest rücktritt'))
+            found.append(feature('Prüfungen', reverse('exams:index'), 'prüfungsplan kommission noten eintragen bewerten freigabe protokoll abschlussarbeit attest rücktritt'))
         if 'manage_exams' in roles:
             found.append(feature('Prüfung anlegen', reverse('exams:new')))
         if 'recognise' in roles:
             found.append(feature('Anerkennung', reverse('exams:recognition'), 'anrechnung externe leistungen hochschulwechsel'))
         if 'student' in roles:
-            found.append(feature('Prüfungsanmeldung', reverse('exams:index'), 'prüfungen anmelden abmelden meine prüfungen'))
+            found.append(feature('Prüfungsanmeldung', reverse('exams:index'), 'prüfungen anmelden abmelden rücktritt wiederholung nachteilsausgleich abschlussarbeit'))
             for study in person.studies.filter(status='enrolled').select_related('subject'):
                 found.append(feature(f'Leistungsübersicht {study.subject}', reverse('exams:transcript', args=[study.pk]), 'noten ects transcript of records zeugnis notenspiegel'))
         for study in person.studies.filter(status='graduated').select_related('subject'):

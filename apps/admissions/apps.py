@@ -48,12 +48,12 @@ class AdmissionsConfig(Tile, AppConfig):
     def features(self, person):
         roles, found = person.roles, []
         if 'view_applications' in roles:
-            found.append(feature('Bewerbungen', reverse('admissions:board'), 'eignungsprüfung aufnahmeprüfung zulassung bewerber entscheiden'))
+            found.append(feature('Bewerbungen', reverse('admissions:board'), 'eignungsprüfung aufnahmeprüfung zulassung bewerber entscheiden nachrücken warteliste'))
         if 'juror' in roles:
             found.append(feature('Meine Kommissionen', reverse('admissions:juries'), 'eignungsprüfung aufnahmeprüfung jury bewerten'))
         if 'applicant' in roles or not roles:
             found += [
-                feature('Meine Bewerbung', reverse('admissions:mine'), 'status einladung eignungsprüfung termin entscheidung ergebnis video unterlagen hochladen studienplatz annehmen ablehnen semesterbeitrag immatrikulation krankenkasse zurückziehen'),
+                feature('Meine Bewerbung', reverse('admissions:mine'), 'status einladung eignungsprüfung termin entscheidung ergebnis zulassungsbescheid hochschulzugangsberechtigung abitur zeugnis video unterlagen hochladen studienplatz annehmen ablehnen semesterbeitrag immatrikulation krankenkasse zurückziehen'),
                 feature('Neue Bewerbung', reverse('admissions:apply'), 'bewerben studiengang'),
             ]
         elif roles & {'student', 'alumni'}:

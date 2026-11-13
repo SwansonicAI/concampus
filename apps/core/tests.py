@@ -304,6 +304,17 @@ class SearchTest(Seeded):
         self.assertLessEqual(set(Room.objects.filter(purpose__icontains='orgel').values_list('name', flat=True)), rooms)
         self.assertLess(len(rooms), Room.objects.count())
 
+    def test_colleagues_only_for_those_inside(self):  # docs/privacy.md: applicants find offices by their shared address only
+        wendt = Person.objects.get(last_name='Wendt', first_name='Katharina')
+        self.assertContains(self.login('student').get(f'/personen/{wendt.pk}/'), wendt.email)
+        applicant = self.login('bewerbung')
+        self.assertEqual(applicant.get(f'/personen/{wendt.pk}/').status_code, 403)
+        self.assertNotContains(applicant.get('/personen/'), wendt.email)
+        asa = Office.objects.get(name__startswith='Akademische')  # what an office may do: only for whoever gives rights
+        right = asa.rights[0][1][0]
+        self.assertNotContains(self.login('student').get(f'/aemter/{asa.pk}/'), right)
+        self.assertContains(self.login('campus').get(f'/aemter/{asa.pk}/'), right)
+
     def test_side_panel(self):
         student = self.login('student')
         booking = Booking.objects.filter(person__username='student').first()

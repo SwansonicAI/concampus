@@ -86,15 +86,16 @@ def meant(query):
 
 def near(word, forms, token):
     """How near a word of a page, folded, comes to one sought: 3 the word or one meaning the same, 2 its beginning, 1 a
-    part of a compound or one letter off. Beyond the word as typed, only a compound's part counts: 'Raum' in 'Raumplan',
-    not 'term' in 'Termin'."""
+    part of a compound either way ('Freigabe' in 'Notenfreigabe' typed) or one letter off. Beyond the word as typed,
+    only a compound's part counts: 'Raum' in 'Raumplan', not 'term' in 'Termin', nor 'krank' in 'Krankenkasse', a word
+    of a meaning of its own."""
     stemmed = stem(token)
     if stemmed in forms or token in forms:
         return 3
-    parts = [f for f in forms if len(stemmed) - len(f) >= 3]
+    parts = [f for f in forms if len(stemmed) - len(f) >= 3 and (f == word or f in KIN.get(stemmed, {f}))]
     if token.startswith(word) or any(token.startswith(f) for f in parts):
         return 2
-    return int(any(len(f) >= 4 and f in token for f in parts) or len(word) >= 5 and close(word, stemmed))
+    return int(any(len(f) >= 4 and f in token for f in parts) or len(stemmed) >= 5 and stemmed in word or len(word) >= 5 and close(word, stemmed))
 
 
 def fit(sought, title, more=''):

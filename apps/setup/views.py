@@ -5,7 +5,7 @@ from django import forms
 from django.contrib import messages
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import PermissionDenied
-from django.db.models import F, Prefetch, ProtectedError, RestrictedError
+from django.db.models import F, ProtectedError, RestrictedError
 from django.forms import modelform_factory
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -49,12 +49,8 @@ def approvals(request):
 @require('manage_accounts')
 def rights(request):
     """Who may do what: each right with the offices that hold it, how far, and who is in them, for good or until a day."""
-    offices = Office.objects.prefetch_related(
-        'permissions', 'institutes', 'programs', Prefetch('user_set', Person.objects.order_by('last_name')),
-        Prefetch('memberships', Membership.objects.exclude(confirmed_by=None).filter(until__gte=timezone.localdate()).select_related('person'), to_attr='standing_in'),
-    )
     holding = defaultdict(list)
-    for o in offices:
+    for o in Office.staffed():
         o.limit = limited(o)
         for p in o.permissions.all():
             holding[p.codename].append(o)

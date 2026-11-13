@@ -32,7 +32,7 @@ class InstrumentsConfig(Tile, AppConfig):
     def features(self, person):
         found = []
         if 'manage_instruments' in person.roles:
-            found.append(feature('Leihinstrumente', reverse('instruments:index'), 'instrumentenpool verleihen ausleihe rückgabe inventar'))
+            found.append(feature('Leihinstrumente', reverse('instruments:index'), 'instrumentenpool verleihen ausleihe leihvertrag rückgabe inventar'))
         if person.loans.exists():
             found.append(feature('Meine Leihinstrumente', reverse('instruments:mine'), 'instrument ausgeliehen rückgabe'))
         return found

@@ -1,0 +1,43 @@
+{% extends base %}
+{% block title %}Personen und Ämter{% endblock %}
+{% block content %}
+<h1>Personen und Ämter</h1>
+<p class="lead">Wer wofür zuständig ist und wie Sie sie erreichen.</p>
+<form class="toolbar"><div class="inline"><label>Suche<input type="search" name="q" value="{{ q }}" placeholder="{% if inside %}Name, Institut oder Amt{% else %}Amt{% endif %}"></label></div></form>
+<section>
+  <h2>Ämter</h2>
+  <table>
+    <thead><tr><th>Amt</th>{% if rights %}<th>Rechte in</th>{% endif %}{% if inside %}<th>Mitglieder</th>{% endif %}<th>E-Mail</th></tr></thead>
+    <tbody>
+      {% for o in offices %}
+      <tr>
+        <td><a href="{% url 'office' o.pk %}"><b>{{ o.name }}</b></a><br><small class="muted">{{ o.remit }}</small></td>
+        {% if rights %}<td>{% for area, labels in o.rights %}{{ area }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>{% endif %}
+        {% if inside %}<td>{% for p in o.user_set.all %}<a href="{% url 'colleague' p.pk %}">{{ p }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}{% for m in o.standing_in %}{% if o.user_set.all or not forloop.first %}, {% endif %}<a href="{% url 'colleague' m.person_id %}">{{ m.person }}</a> <small class="muted">bis {{ m.until|date:"j.n.Y" }}</small>{% endfor %}</td>{% endif %}
+        <td>{% if o.email %}<a href="mailto:{{ o.email }}">{{ o.email }}</a>{% endif %}</td>
+      </tr>
+      {% empty %}<tr><td colspan="4" class="empty">Kein Amt gefunden.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% if inside %}
+<section>
+  <h2>Lehrende und Mitarbeitende</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Institut</th><th>Ämter</th><th>E-Mail</th></tr></thead>
+    <tbody>
+      {% for p, offices in people %}
+      <tr>
+        <td><a href="{% url 'colleague' p.pk %}"><b>{{ p }}</b></a></td>
+        <td>{{ p.institute|default:"" }}</td>
+        <td>{% for o in offices %}<a href="{% url 'office' o.pk %}">{{ o.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+        <td>{% if p.email %}<a href="mailto:{{ p.email }}">{{ p.email }}</a>{% endif %}</td>
+      </tr>
+      {% empty %}<tr><td colspan="4" class="empty">Niemand gefunden.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+{% endblock %}

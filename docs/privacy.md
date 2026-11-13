@@ -199,7 +199,9 @@ deleted a year after it was answered.
   applications they rate and the students of their courses and ensembles, by name and course only, not their file.
   Everyone signed in but applicants and alumni finds who teaches or holds an office, with Institut and work e-mail, and
   the offices with their shared address and members; applicants and alumni find the offices by their shared address
-  only, without who works there.
+  only, without who works there. So does Personen und Ämter (`directory()`, `colleague()`, `office()`): a colleague's page
+  adds only the offices they hold, how far each reaches, and what they teach this semester. What an office may do, its
+  rights, shows only to `manage_accounts` (as under Einstellungen › Rechte im Überblick) and, on Mein Konto, to its members.
 - `core/views.py`, `account()`, `confirm_email()`: an applicant's new e-mail address is taken on only once confirmed from
   a link sent to it; until then the old one holds.
 - `students/views.py`, `verify()`: whoever holds an Immatrikulationsbescheinigung's Prüfcode sees what it says (name,

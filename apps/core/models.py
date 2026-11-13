@@ -527,6 +527,14 @@ class Person(Tracked, AbstractUser):
         held = models.Q(user=self) | models.Q(memberships__person=self, memberships__confirmed_by__isnull=False, memberships__until__gte=timezone.localdate())
         return Office.objects.filter(held).distinct()
 
+    def offices_held(self):
+        """offices() with what each covers and allows, and `until`: the last day of one held as a stand-in or for a term."""
+        offices = list(self.offices().prefetch_related('permissions', 'institutes', 'programs'))
+        until = dict(self.memberships.exclude(confirmed_by=None).exclude(office__user=self).filter(until__gte=timezone.localdate()).values_list('office', 'until'))
+        for o in offices:
+            o.until = until.get(o.pk)
+        return offices
+
     def everywhere(self, capability):
         return capability in self.reach and self.reach[capability] is None
 
@@ -598,6 +606,14 @@ class Office(Tracked, Group):
         verbose_name_plural = 'Ämter'
         default_permissions = ()
         permissions = [capability for _, group in CAPABILITIES for capability in group]
+
+    @classmethod
+    def staffed(cls):
+        """The offices with who is in them: members (`user_set`, by name) and stand-ins (`standing_in`, until a day)."""
+        return cls.objects.prefetch_related(
+            'permissions', 'institutes', 'programs', models.Prefetch('user_set', Person.objects.filter(is_active=True).order_by('last_name')),
+            models.Prefetch('memberships', Membership.objects.exclude(confirmed_by=None).filter(until__gte=timezone.localdate()).select_related('person'), to_attr='standing_in'),
+        )
 
     @property
     def remit(self):

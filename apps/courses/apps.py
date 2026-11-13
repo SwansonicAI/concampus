@@ -55,10 +55,10 @@ class CoursesConfig(Tile, AppConfig):
 
     def features(self, person):
         roles = person.roles
-        found = [feature('Vorlesungsverzeichnis', reverse('courses:catalogue'), 'veranstaltungen lehrangebot kurse seminare anmelden belegen')]
+        found = [feature('Vorlesungsverzeichnis', reverse('courses:catalogue'), 'veranstaltungen lehrangebot kurse seminare anmelden belegen ensemble kammermusik')]
         if roles & {'teacher', 'student'}:
             found += [
-                feature('Meine Lehre' if 'teacher' in roles else 'Meine Veranstaltungen', reverse('courses:mine'), 'veranstaltungen belegt angemeldet warteliste klasse studierende teilnehmende termine planen unterrichtszeiten'),
+                feature('Meine Lehre' if 'teacher' in roles else 'Meine Veranstaltungen', reverse('courses:mine'), 'veranstaltungen belegt angemeldet warteliste klasse studierende teilnehmende teilnehmerliste ensemble kammermusik termine planen unterrichtszeiten'),
                 feature('Stundenplan', reverse('courses:timetable'), 'woche kalender termine'),
             ]
         if 'manage_courses' in roles:
@@ -66,7 +66,7 @@ class CoursesConfig(Tile, AppConfig):
         if roles & {'view_teaching_load', 'teacher'}:
             found.append(feature('Deputat', reverse('courses:load'), 'lehrverpflichtung sws lehrende auslastung'))
         if roles & {'roll_over', 'publish_term'}:
-            found.append(feature('Semesterwechsel', reverse('courses:rollover'), 'übernehmen nächstes semester planen kopieren'))
+            found.append(feature('Semesterwechsel', reverse('courses:rollover'), 'übernehmen nächstes semester planen lehrplanung kopieren'))
         return found
 
     def tasks(self, person):

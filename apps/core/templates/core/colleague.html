@@ -1,0 +1,11 @@
+{% extends base %}
+{% block title %}{{ person }}{% endblock %}
+{% block content %}
+<h1>{{ person }}</h1>
+{% if person.institute %}<p class="lead">{{ person.institute }}</p>{% endif %}
+<dl class="facts">
+  <dt>E-Mail</dt><dd>{% if person.email %}<a href="mailto:{{ person.email }}">{{ person.email }}</a>{% else %}–{% endif %}</dd>
+  {% if offices %}<dt>Ämter</dt><dd>{% include "core/_held.html" %}</dd>{% endif %}
+  {% if courses %}<dt>Lehre im {{ term }}</dt><dd>{% for c in courses %}<a href="{{ c.get_absolute_url }}">{{ c.title }}</a><br>{% endfor %}</dd>{% endif %}
+</dl>
+{% endblock %}

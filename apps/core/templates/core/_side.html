@@ -4,4 +4,5 @@
   <a href="{% url app.url %}" class="area{% if app.label == area %} on{% endif %}">{{ title }}</a>
   {% if pages|length > 1 %}<div class="pages">{% for name, url, under in pages %}<a href="{{ url }}"{% if here in under %} class="on" aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}</div>{% endif %}
   {% endfor %}
+  <a href="{% url 'directory' %}" class="area{% if here == 'directory' %} on{% endif %}">Personen und Ämter</a>
 </nav>

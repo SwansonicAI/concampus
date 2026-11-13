@@ -8,11 +8,15 @@ from collections import defaultdict
 from itertools import islice, takewhile
 from threading import Lock
 
+from django.db.models import Case, Value, When
 from django.db.models.signals import post_delete, post_save
 
 from .text import KIN, close, fold, wanted
 
 FRESH = 60  # seconds an index is read again after
+HEAD = '^'  # before a field's beginning, kept as a word of its own: 'Klavier (Pflichtfach)' begins with 'klavier'
+MEANT = '~'  # before a word of a field that is no name, kept for words meaning the same: 'Saal' for 'room', not Saalfeld
+NAMES = ('first_name', 'last_name', 'birth_name')
 INDEXES, MAKING = {}, Lock()
 
 
@@ -23,11 +27,14 @@ class Index:
         post_delete.connect(self.deleted, sender=model, weak=False)
 
     def read(self, rows):
-        """{pk: its words}: each word of each field, and each field's beginning, for a word with a '-' ('BM-GM-02')."""
+        """{pk: its words}: each word of each field, each field's beginning (HEAD), and each word of a field not a name
+        once more (MEANT)."""
         found = defaultdict(set)
         for pk, *values in rows.values_list('pk', *self.fields):
-            for text in (fold(str(v)) for v in values if v):
-                found[pk] |= {*re.findall(r'[\w.]+', text), text[:60]}
+            for field, value in zip(self.fields, values):
+                if value:
+                    words = re.findall(r'[\w.]+', text := fold(str(value)))
+                    found[pk] |= {*words, HEAD + text[:60], *(() if field.endswith(NAMES) else (MEANT + w for w in words))}
         return found
 
     def build(self):
@@ -57,41 +64,53 @@ class Index:
             if self.built:
                 self.drop(instance.pk)
 
-    def look(self, word, starts):
-        """The rows with a word that begins with `word`, or with `starts` off, holds it anywhere."""
-        if starts:
-            keys = takewhile(lambda k: k.startswith(word), islice(self.keys, bisect_left(self.keys, word), None))
-        else:
-            keys = (k for k in self.keys if word in k)
+    def begun(self, prefix):
+        """The rows with a word beginning with `prefix`."""
+        keys = takewhile(lambda k: k.startswith(prefix), islice(self.keys, bisect_left(self.keys, prefix), None))
         return set().union(*(self.at[k] for k in keys))
 
-    def alike(self, word, starts):
-        """The rows of a word not found as typed: by a word meaning the same ('orchestra' → Orchester), else by one a
-        letter off ('Katarina' → Katharina), also while still typing ('Katar' → Katharina)."""
-        if found := set().union(*(self.look(form, starts) for form in KIN.get(word, ()) if form != word)):
-            return found
-        if len(word) < 5:
-            return found
-        near = (k for k in self.keys if k[0] == word[0] and any(close(word, k[:len(word) + d]) for d in (-1, 0, 1)))
-        return set().union(*(self.at[k] for k in near))
+    def look(self, word, starts):
+        """The rows with a word or field that begins with `word`, or with `starts` off, holds it anywhere."""
+        if starts:
+            return self.begun(word) | self.begun(HEAD + word)
+        return set().union(*(self.at[k] for k in self.keys if word in k))
 
-    def find(self, words, starts):
-        """The rows that hold every word."""
+    def alike(self, word, starts):
+        """The rows of a word as meant rather than typed: of a word known, by those meaning the same ('orchestra' →
+        Orchester); of one unknown, by one a letter off ('Katarina' → Katharina), also while still typing ('Katar')."""
+        if word in KIN:
+            return set().union(*(self.begun(MEANT + form) if starts else self.look(MEANT + form, False) for form in KIN[word] if form != word))
+        found = set()
+        if len(word) >= 5:
+            near = (k for k in self.keys if k[0] == word[0] and any(close(word, k[:len(word) + d]) for d in (-1, 0, 1)))
+            found |= set().union(*(self.at[k] for k in near))
+        return found
+
+    def find(self, words, starts, wide=False):
+        """The rows that hold every word, also `wide` as meant (alike); and those of them a field of which begins with
+        a word, and those that hold one whole, to come first."""
         with self.lock:
             if not self.built or time.monotonic() - self.built > FRESH:
                 self.build()
             found = None
             for word in words:
-                rows = self.look(word, starts) or self.alike(word, starts)
+                rows = self.look(word, starts) | (self.alike(word, starts) if wide else set())
                 found = rows if found is None else found & rows
-            return found
+            first = set().union(*(self.begun(HEAD + w) for w in words)) & found
+            return found, first, set().union(*(self.at.get(w, ()) for w in words)) & found
 
 
 def find(queryset, query, *fields, names='', starts=False):
-    """text.matching(), from memory: the rows of `queryset` that hold every word sought in one of the fields."""
+    """text.matching(), from memory: the rows of `queryset` that hold every word sought in one of the fields, best
+    first (`_fit`), then in the queryset's order. Words as meant, a letter off or meaning the same, only where nothing
+    the person may see holds them as typed."""
     if not (sought := wanted(query, names)):
-        return queryset
+        return queryset.annotate(_fit=Value(0))
     with MAKING:
         if (key := (queryset.model, fields)) not in INDEXES:
             INDEXES[key] = Index(*key)
-    return queryset.filter(pk__in=INDEXES[key].find(sought, starts))
+    found, first, whole = INDEXES[key].find(sought, starts)
+    if not queryset.filter(pk__in=found).exists():
+        found, first, whole = INDEXES[key].find(sought, starts, wide=True)
+    fit = Case(When(pk__in=first, then=0), When(pk__in=whole, then=1), default=2)
+    return queryset.filter(pk__in=found).annotate(_fit=fit).order_by('_fit', *(queryset.query.order_by or queryset.model._meta.ordering))

@@ -91,7 +91,7 @@ class StudentsConfig(Tile, AppConfig):
                 feature('Rückmeldung', reverse('students:reregistration'), 'semesterbeitrag zahlung bezahlt unbezahlt überweisung exmatrikulieren'),
             ]
         for study in person.studies.filter(Q(status='enrolled') | Q(status__in=Study.FORMER, terms__isnull=False)).distinct().select_related('subject'):
-            found.append(feature(f'Mein Studium {study.subject}', study.get_absolute_url(), 'akte status klasse lehrende ects fachsemester rückmeldung semesterbeitrag urlaubssemester beurlaubung abschluss'))
+            found.append(feature(f'Mein Studium {study.subject}', study.get_absolute_url(), 'akte status klasse lehrende ects fachsemester rückmeldung semesterbeitrag urlaubssemester beurlaubung fachwechsel exmatrikulation abschluss'))
             if study.status == 'enrolled':
                 found.append(feature('Immatrikulationsbescheinigung', reverse('students:certificate', args=[study.pk]), 'bescheinigung studienbescheinigung nachweis drucken pdf'))
                 found.append(feature('Immatrikulationsbescheinigung nach § 9 BAföG', f"{reverse('students:certificate', args=[study.pk])}?bafoeg", 'bafög formblatt 2 amt für ausbildungsförderung studienförderung'))

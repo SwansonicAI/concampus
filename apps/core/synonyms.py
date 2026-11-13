@@ -55,7 +55,7 @@ SYNONYMS = [
     'unterricht einzelunterricht unterrichtsstunde unterrichtszeit lesson tuition',
     'stundenplan timetable schedule',
     'kalender calendar ical',
-    'termin termine datum appointment date meeting',
+    'termin termine datum appointment meeting',  # not „date“: „Daten“ ends the same
     'semester term',
     'semesterwechsel rollover',
     'deputat lehrdeputat lehrverpflichtung sws load workload',
@@ -98,7 +98,7 @@ SYNONYMS = [
     'partnerhochschule partner',
     'abkommen vertrag vereinbarung agreement contract',
     # places and things
-    'raum räume zimmer saal room hall',
+    'raum räume zimmer saal room',  # not „hall“: a name in courses' titles
     'gebäude haus building',
     'instrument leihinstrument',
     'inventar inventory',
@@ -118,9 +118,10 @@ SYNONYMS = [
     'passwort kennwort password',
     'rechte berechtigung berechtigungen rollen zugriff rights permissions roles access',
     'amt ämter office offices',
+    'zuständig zuständigkeit verantwortlich ansprechpartner responsible',
     'institut fachbereich fakultät abteilung institute department faculty',
     'einstellungen konfiguration settings configuration setup options',
-    'statistik auswertung auswertungen kennzahlen bericht statistics stats report reports analytics analysis',
+    'statistik auswertung auswertungen kennzahlen statistics stats report reports analytics analysis',  # not „Bericht“: a Praktikumsbericht's
     'archiv aussonderung aufbewahrung archive retention',
     'vorlagen texte templates wording',
     'barrierefreiheit accessibility',

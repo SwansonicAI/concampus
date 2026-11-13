@@ -1,0 +1,13 @@
+{% extends base %}
+{% block title %}{{ office.name }}{% endblock %}
+{% block content %}
+<h1>{{ office.name }}</h1>
+<p class="lead">{% if office.institutes.all or office.programs.all %}Nur für {{ office.remit }}{% else %}Für die ganze Hochschule{% endif %}.</p>
+<dl class="facts">
+  <dt>E-Mail</dt><dd>{% if office.email %}<a href="mailto:{{ office.email }}">{{ office.email }}</a>{% else %}an seine Mitglieder{% endif %}</dd>
+  {% if inside %}<dt>Mitglieder</dt><dd>{% for p in office.user_set.all %}<a href="{% url 'colleague' p.pk %}">{{ p }}</a>{% if p.email %} · <a href="mailto:{{ p.email }}">{{ p.email }}</a>{% endif %}<br>{% endfor %}
+    {% for m in office.standing_in %}<a href="{% url 'colleague' m.person_id %}">{{ m.person }}</a> <small class="muted">bis {{ m.until|date:"j.n.Y" }}</small><br>{% endfor %}
+    {% if not office.user_set.all and not office.standing_in %}<span class="muted">noch niemand</span>{% endif %}</dd>{% endif %}
+  {% if rights %}<dt>Rechte</dt><dd>{% for area, labels in office.rights %}<b>{{ area }}:</b> {{ labels|join:"; " }}<br>{% empty %}–{% endfor %}</dd>{% endif %}
+</dl>
+{% endblock %}

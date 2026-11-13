@@ -1,0 +1,4 @@
+{% for o in offices %}
+<div>{% if rights %}<details><summary>{{ o.name }}</summary>{% for area, labels in o.rights %}<small class="muted"><b>{{ area }}:</b> {{ labels|join:"; " }}</small><br>{% endfor %}<small><a href="{% url 'office' o.pk %}">Zum Amt</a></small></details>{% else %}<a href="{% url 'office' o.pk %}">{{ o.name }}</a><br>{% endif %}
+<small class="muted">{% if o.institutes.all or o.programs.all %}nur für {{ o.remit }}{% else %}für die ganze Hochschule{% endif %}{% if o.until %} · bis {{ o.until|date:"j.n.Y" }}{% endif %}</small></div>
+{% endfor %}
