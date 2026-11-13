@@ -263,10 +263,9 @@ class CourseForm(forms.ModelForm):
             'description': forms.Textarea(attrs={'rows': 4}),
         }
 
-    layout = [  # what it counts for first: the Studienpläne suggest the rest
-        (None, ['correction', 'term', 'modules', 'title', ('format', 'hours'), ('kind', 'allocation'), ('capacity', 'opens', 'deadline'), 'grouping']),
-        ('Lehrende', ['staff']),
-        (None, [('area', 'subject', 'rhythm'), 'description']),
+    layout = [  # what it counts for right under its name: the Studienpläne suggest the rest
+        (None, ['correction', 'term', 'title', 'modules', ('format', 'hours'), ('kind', 'allocation'), ('capacity', 'opens', 'deadline'), 'grouping']),
+        (None, ['staff', ('area', 'subject', 'rhythm'), 'description']),
     ]
     planned = ('kind', 'format', 'hours', 'modules')  # what counts in the Deputat and the Studienpläne
     moves = False  # a course stays in its semester; an audition may move

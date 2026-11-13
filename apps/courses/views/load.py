@@ -1,11 +1,12 @@
 """The teaching load (Deputat): SWS per course and teacher, and the page that sums them."""
 import re
 from collections import Counter, defaultdict
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from types import SimpleNamespace
 
 from django.db.models import Count, F, Max, Min, OuterRef, Prefetch, Q, Subquery
 from django.db.models.functions import Coalesce
+from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 
@@ -15,7 +16,7 @@ from core.shortcuts import without_term
 from core.text import fold
 from curriculum.models import Module
 from students.models import Study
-from ..models import Course, Ensemble, Group, Participation, Reduction
+from ..models import Course, Ensemble, Format, Group, Participation, Reduction
 from .common import TEACHING
 
 
@@ -154,6 +155,35 @@ def loads(term, person, institute='', words=()):
             account=None if owed is None or t.employment == Person.Employment.LEHRAUFTRAG or not since or term.start < since else account[t.pk] + total - owed,
         ))
     return sorted(rows, key=lambda row: row.teacher.last_name)
+
+
+@require('view_teaching_load')
+def standing(request):
+    """The Deputat of the teachers ticked in a course's form (lehrende), for those in the person's view: the term, and
+    {pk: [SWS of it without the course (ohne), with it at the SWS typed, due]}. A course they teach already counts as it does
+    (share), scaled to the SWS typed; else once, or not yet where it counts per participant."""
+    person = request.user
+    course = Course.objects.filter(pk=request.GET.get('ohne') or None, kind__in=TEACHING).select_related('term').first()
+    term = course.term if course else Term.pick(request.GET.get('semester'))
+    asked = Person.objects.filter(pk__in=[pk for pk in request.GET.getlist('lehrende') if pk.isdigit()])
+    if not person.everywhere('view_teaching_load'):
+        asked = asked.filter(Q(pk__in=person.within(asked, 'view_teaching_load')) | Q(pk=person.pk))
+    try:
+        typed = Decimal(request.GET.get('sws', '').replace(',', '.') or 0)
+    except InvalidOperation:
+        typed = Decimal(0)
+    per_head = request.GET.get('art') == Course.Kind.LESSON or Format.objects.filter(pk=request.GET.get('lehrform') or None, per_head=True).exists()
+    taught = hours(term, {t.pk for t in asked}) if term else {}
+    reduced = Counter()
+    for r in Reduction.objects.filter(person__in=asked, term=term):
+        reduced[r.person_id] += r.hours
+    found = {}
+    for t in asked:
+        rows = taught.get(t, [])
+        without = sum(h for c, h in rows if c != course)
+        now = next((h * typed / c.hours if c.hours else h for c, h in rows if c == course), None)
+        found[t.pk] = [without, without + (now if now is not None else 0 if per_head else typed), None if t.obligation is None else t.obligation - reduced[t.pk]]
+    return JsonResponse({'term': str(term or ''), 'teachers': found})
 
 
 @require('view_teaching_load', 'teacher')

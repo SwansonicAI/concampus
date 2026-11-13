@@ -295,6 +295,8 @@ def edit(request, pk=None):
     course = get_object_or_404(Course, pk=pk, kind__in=TEACHING) if pk else Course(term=term, opens=term and term.course_signup_start, deadline=term and term.course_signup_end)
     initial, source = {}, None
     if not pk and (source := Course.objects.filter(pk=request.GET.get('von') or None, kind__in=TEACHING).first()):  # „Duplizieren“: filled in, saved once saved
+        if not person.may('manage_courses', source):  # as its page offers it: saving would be refused (kept)
+            raise PermissionDenied('Duplizieren lassen sich nur Lehrveranstaltungen der Institute und Studiengänge, für die Ihr Amt zuständig ist.')
         course = Course(term=source.term, **{f: getattr(source, f) for f in COPIED})
         if course.deadline and course.deadline < timezone.localdate():  # a registration over is not copied
             course.opens = course.deadline = None

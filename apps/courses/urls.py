@@ -9,6 +9,7 @@ urlpatterns = [
     path('meine/', mine.mine, name='mine'),
     path('stundenplan/', timetable.timetable, name='timetable'),
     path('deputat/', load.load, name='load'),
+    path('deputat/stand/', load.standing, name='standing'),
     path('semesterwechsel/', rollover.rollover, name='rollover'),
     path('pruefende/uebernehmen/', rollover.appoint_again, name='appoint_again'),
     path('eignungspruefungen/uebernehmen/', rollover.auditions_again, name='auditions_again'),

@@ -12,7 +12,7 @@
 {% if week %}<section style="margin-top: 0; margin-bottom: 32px">{% if before %}<p class="lead">Bisher {% for b in before %}{{ b.start|date:"l" }}s {{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}, {{ b.room }}{% if not forloop.last %}; {% endif %}{% endfor %}, für alle. Mit einer zweiten Zeit wird das Gruppe 1, mit allen, die angemeldet sind; diese hier Gruppe 2.</p>{% endif %}{% include "courses/_weekpick.html" %}</section>{% endif %}
 {% if form.taught %}{{ form.taught|json_script:"taught" }}{% endif %}
 {% if form.plans %}{{ form.plans|json_script:"plans" }}{% endif %}
-<form method="post" class="form" id="neu">
+<form method="post" class="form" id="neu"{% if form.fields.staff and 'view_teaching_load' in user.roles %} data-standing="{% url 'courses:standing' %}?ohne={{ course.pk|default:'' }}"{% endif %}>
   {% csrf_token %}
   {{ form }}
   <div class="actions">{% if not twin %}<button class="btn">Speichern</button>{% endif %}{% if another %}<button class="btn ghost" name="weitere" value="1">Speichern und nächste Gruppe</button>{% endif %}{% if group and not group.participations.exists %}<button class="btn danger" name="loeschen" value="1" formnovalidate data-confirm="Gruppe {{ group.number }} mit ihren Terminen löschen?">Löschen</button>{% endif %}<a class="btn ghost" data-close href="{{ back }}">Abbrechen</a></div>

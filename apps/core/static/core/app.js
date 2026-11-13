@@ -9,6 +9,7 @@ function init(root) {
   root.querySelectorAll('.form div[id^="id_"]').forEach(list => (list.dataset.search || list.querySelectorAll('input[type=checkbox]').length > 8) && filterable(list));
   root.querySelectorAll('form:has(#id_modules):has(#id_staff)').forEach(suggest);
   root.querySelectorAll('form:has(#id_modules)').forEach(planned);
+  root.querySelectorAll('form[data-standing]').forEach(standing);
   root.querySelectorAll('.weekplan .week[data-first]').forEach(preview);
   root.querySelectorAll('datalist[data-suggest]').forEach(lookup);
   root.querySelectorAll('.form select').forEach(select => (select.options.length > 60 || 'find' in select.dataset) && findable(select));
@@ -308,6 +309,48 @@ function planned(form) {
   form.addEventListener('change', event => update(Boolean(event.target.closest?.('#id_modules'))));
   form.addEventListener('input', () => update(false));
   update(true);
+}
+
+// In a course's form, beneath the teachers ticked, their Deputat in its semester (data-standing: courses:standing), as
+// the Deputat page has it: a bar of what they teach, this course lighter, against the Soll; what goes over in red.
+function standing(form) {
+  const staff = form.querySelector('#id_staff');
+  if (!staff) return;
+  const box = Object.assign(document.createElement('div'), {className: 'load'});
+  (staff.nextElementSibling?.matches('.chips') ? staff.nextElementSibling : staff).after(box);
+  const sws = value => value.toLocaleString('de-DE', {maximumFractionDigits: 1});
+  let timer;
+  const update = () => {
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const ticked = [...staff.querySelectorAll('input:checked')];
+      const {term, hours, format, kind} = form.elements;
+      const params = new URLSearchParams({semester: term?.value ?? '', sws: hours?.value ?? '', lehrform: format?.value ?? '', art: kind?.value ?? ''});
+      ticked.forEach(box => params.append('lehrende', box.value));
+      const found = ticked.length ? await (await fetch(`${form.dataset.standing}&${params}`)).json() : {teachers: {}};
+      const rows = ticked.filter(box => found.teachers[box.value]).flatMap(box => {
+        const [now, then, due] = found.teachers[box.value].map(v => v == null ? null : Number(v));
+        const bar = due == null  // nothing to measure against, as the Deputat page's „–“
+          ? Object.assign(document.createElement('small'), {className: 'muted', textContent: 'kein Soll', title: 'Keine Lehrverpflichtung eingetragen'})
+          : Object.assign(document.createElement('div'), {className: 'bar', title: `jetzt ${sws(now)}, mit dieser Lehrveranstaltung ${sws(then)} SWS`});
+        if (due != null) {
+          const whole = Math.max(due, then) || 1;
+          bar.append(...[now, Math.max(then - now, 0)].map(part => Object.assign(document.createElement('i'), {style: `width: ${part / whole * 100}%`})));
+          if (then > due) bar.append(Object.assign(document.createElement('b'), {title: `Soll ${sws(due)}`, style: `left: ${due / whole * 100}%`}));
+        }
+        const over = due != null && then > due;
+        return [
+          Object.assign(document.createElement('span'), {textContent: box.parentElement.textContent.trim()}), bar,
+          Object.assign(document.createElement('span'), {className: 'num', textContent: due == null ? `${sws(then)} SWS` : `${sws(then)} von ${sws(due)} SWS`}),
+          Object.assign(document.createElement('span'), {className: over ? 'num fail' : 'num', title: over ? 'Über dem Soll' : '', textContent: over ? `+${sws(then - due)}` : ''}),
+        ];
+      });
+      box.replaceChildren(...(rows.length ? [Object.assign(document.createElement('small'), {className: 'muted', textContent: `Deputat ${found.term}`})] : []), ...rows);
+    }, 300);
+  };
+  form.addEventListener('change', update);
+  form.addEventListener('input', event => event.target === form.elements.hours && update());
+  update();
 }
 
 // Type-to-find in a long dropdown, such as every Kreis and state: only entries matching the words, or their group, stay.
