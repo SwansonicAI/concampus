@@ -38,6 +38,7 @@ from .history import because, describe, former, restore, tables
 from .dates import months_before
 from .keys import DISTRICTS, replaced
 from .models import Change, Consent, Export, Institution, Key, Message, Office, Person, Term, Tracked, limited
+from .index import find
 from .text import fit, fold, matching, meant, words
 
 
@@ -397,11 +398,26 @@ def search(request):
     groups = [(label, hits) for label, hits in found(request.user, q, 6 if fragment else 30, quick) if hits]
     if quick and not groups:  # not „Nichts gefunden“ before the records are in
         return HttpResponse()
+    for label, hits in groups:
+        for h in hits:
+            h['icon'] = h['icon'] or getattr(apps.app_configs.get(KINDS[label]), 'icon', KINDS[label])
     return render(request, 'core/_found.html' if fragment else 'core/search.html', {'q': q, 'groups': groups, 'fragment': fragment})
 
 
-def hit(title, url, meta=''):
-    return {'title': title, 'url': url, 'meta': meta}
+def hit(title, url, meta='', icon=''):
+    return {'title': title, 'url': url, 'meta': meta, 'icon': icon}
+
+
+# What a hit is, at a glance as in Listary, with the apps' icons (Tile.icon) and these: SVG path data, 24×24, stroked
+PAGE = 'M14 3H6v18h12V7zM14 3v4h4'
+PERSON = 'M20 21a8 8 0 0 0-16 0M12 13a5 5 0 1 0 0-10 5 5 0 0 0 0 10z'
+OFFICE = 'M3 21h18M5 21V8l7-5 7 5v13M10 21v-6h4v6'
+DOOR = 'M3 21h18M6 21V3h12v18M14 12v.5'
+MAIL = 'M3 5h18v14H3zM3 6l9 7 9-7'
+KINDS = {  # each group's, by an app's label or as drawn
+    'Springen zu': 'rooms', 'Studierende und Bewerbungen': 'students', 'In Ihrem Unterricht': 'students', 'Personen': PERSON, 'Ämter': OFFICE,
+    'Lehrveranstaltungen': 'courses', 'Prüfungen': 'exams', 'Studiengänge': 'curriculum', 'Module': 'curriculum', 'Räume': DOOR, 'Termine': 'rooms', 'Postfach': MAIL,
+}
 
 
 STANDING = [  # whose study a search for a name shows first
@@ -435,8 +451,8 @@ def people(studies, limit, person):
 def ranked(queryset, q, *fields, limit, names=''):
     """Matches where a word begins first, then those inside a word, as German compounds need ('plan' in
     'Studienverlaufsplan'); at most `limit`."""
-    first = list(matching(queryset, q, *fields, names=names, starts=True)[:limit])
-    rest = matching(queryset, q, *fields, names=names).exclude(pk__in=[o.pk for o in first])[:limit - len(first)] if len(first) < limit else []
+    first = list(find(queryset, q, *fields, names=names, starts=True)[:limit])
+    rest = find(queryset, q, *fields, names=names).exclude(pk__in=[o.pk for o in first])[:limit - len(first)] if len(first) < limit else []
     return first + list(rest)
 
 
@@ -447,19 +463,21 @@ def found(person, q, limit, quick=False):
     if q and roles - {'applicant', 'alumni'} and (when := dates.moment(q)):
         groups.append(('Springen zu', jumps(roles, *when)))
     # every app's places, also of apps without a tile for this person: a student applying for a Master
-    places = [(f, app.title(roles) or app.verbose_name) for app in tile_apps() for f in app.features(person)]
-    places += [(feature('Startseite', reverse('home'), 'aufgaben zu erledigen übersicht'), ''), (feature('Postfach', reverse('inbox'), 'nachrichten bescheide mitteilungen'), ''),
-               (feature('Mein Konto', reverse('account'), 'anschrift adresse telefon kontaktdaten umzug e-mail einwilligungen anmeldungen meine daten'), ''),
-               (feature('Passwort ändern', reverse('password_change'), 'kennwort passwort sicherheit'), ''),
-               (feature('Meine Daten herunterladen', reverse('copy'), 'kopie auskunft dsgvo datenschutz'), '')]
+    places = [(f, app.title(roles) or app.verbose_name, app.icon) for app in tile_apps() for f in app.features(person)]
+    places += [(feature('Startseite', reverse('home'), 'aufgaben zu erledigen übersicht'), '', PAGE), (feature('Postfach', reverse('inbox'), 'nachrichten bescheide mitteilungen'), '', MAIL),
+               (feature('Mein Konto', reverse('account'), 'anschrift adresse telefon kontaktdaten umzug ändern e-mail einwilligungen anmeldungen meine daten'), '', PERSON),
+               (feature('Passwort ändern', reverse('password_change'), 'kennwort passwort sicherheit'), '', PERSON),
+               (feature('Meine Daten herunterladen', reverse('copy'), 'kopie auskunft dsgvo datenschutz'), '', PERSON)]
+    if mail := Institution.get().email:  # as the footer offers it
+        places.append((feature('Hilfe und Rückmeldung', f'mailto:{mail}', 'frage problem kontakt'), '', MAIL))
     if person.is_superuser:
-        places.append((feature('Datenpflege', reverse('admin:index'), 'admin stammdaten verwaltung'), ''))
+        places.append((feature('Datenpflege', reverse('admin:index'), 'admin stammdaten verwaltung'), '', PAGE))
     # the best fit first, of those that fit the most words, at least half; an empty box lists everything the person can do
     meaning = meant(q)
-    fits = sorted(((fit(meaning, f['title'], f"{f['words']} {app}"), f, app) for f, app in places), key=lambda s: s[0], reverse=True)
+    fits = sorted(((fit(meaning, f['title'], f"{f['words']} {app}"), f, app, icon) for f, app, icon in places), key=lambda s: s[0], reverse=True)
     most = fits[0][0][0] if fits else 0
-    fits = [(score, f, app) for (n, score), f, app in fits if not meaning or n == most > 0 and 2 * n >= len(meaning)][:limit if q else None]
-    groups.append(functions := ('Funktionen', [hit(f['title'], f['url'], app) for _, f, app in fits]))
+    fits = [(score, f, app, icon) for (n, score), f, app, icon in fits if not meaning or n == most > 0 and n >= 0.5][:limit if q else None]
+    groups.append(functions := ('Funktionen', [hit(f['title'], f['url'], app, icon) for _, f, app, icon in fits]))
     weak = fits and fits[0][0] < 3 * len(meaning)  # bits of words only, as a name may hold them: after the records
     if len(q) < 2 or quick:
         return groups
@@ -470,7 +488,7 @@ def found(person, q, limit, quick=False):
         seen |= Q(pk__in=person.within(Study.objects.filter(status__in=Study.APPLICATION).exclude(lapsed), 'view_applications').values('pk'))
         rating = Study.objects.filter(status=Study.Status.APPLIED, participations__course__kind=Course.Kind.AUDITION, participations__course__staff=person)
         seen |= Q(pk__in=rating.values('pk'))  # applications one rates, to their page for the jury
-        studies = matching(Study.objects.filter(seen).select_related('person', 'program', 'subject'), q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__matriculation', 'person__email', starts=True)
+        studies = find(Study.objects.filter(seen).select_related('person', 'program', 'subject'), q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__matriculation', 'person__email', starts=True)
         groups.append(('Studierende und Bewerbungen', people(studies, limit, person)))
     if 'teacher' in roles:  # whom one teaches outside one's class, by the course: their file is not one's own
         taught = (
@@ -478,7 +496,8 @@ def found(person, q, limit, quick=False):
             .filter(Q(course__staff=person) | Q(study__ensembles__coach=person, study__ensembles__course=F('course'))).exclude(study__teacher=person)
         )
         first = {}
-        for p in matching(taught.select_related('study__person', 'course'), q, 'study__person__first_name', 'study__person__last_name', starts=True)[:limit * 5]:
+        taught = Participation.objects.filter(pk__in=taught.values('pk'))  # so that SQLite looks up the rows found first
+        for p in find(taught.select_related('study__person', 'course'), q, 'study__person__first_name', 'study__person__last_name', starts=True)[:limit * 5]:
             first.setdefault(p.study.person_id, p)
         groups.append(('In Ihrem Unterricht', [hit(p.study.person.name, p.course.get_absolute_url(), p.course.title) for p in list(first.values())[:limit]]))
     inside = bool(roles - {'applicant', 'alumni'})
@@ -495,7 +514,7 @@ def found(person, q, limit, quick=False):
             offices.append(hit(o.name + limited(o), f'mailto:{mail}', ' · '.join(filter(None, [o.email, ', '.join(f'{p.first_name} {p.last_name}' for p in members)]))))
     groups.append(('Ämter', offices))
     teaching = [Course.Kind.COURSE, Course.Kind.LESSON]
-    courses = matching(Course.objects.filter(term__end__gte=timezone.localdate(), term__in=Term.shown(person)).select_related('term'), q, 'title', 'staff__last_name', 'subject__name', starts=True)
+    courses = find(Course.objects.filter(term__end__gte=timezone.localdate(), term__in=Term.shown(person)).select_related('term'), q, 'title', 'staff__last_name', 'subject__name', starts=True)
     own = Exists(Module.objects.filter(courses=OuterRef('pk'), program__studies__person=person, program__studies__status=Study.Status.ENROLLED))  # one's own Studiengang's first
     groups.append(('Lehrveranstaltungen', [
         hit(c.title, c.get_absolute_url(), f'{c.get_kind_display()} · {c.term}') for c in courses.filter(kind__in=teaching).annotate(own=own).order_by('-own', 'title')[:limit]
@@ -521,7 +540,7 @@ def found(person, q, limit, quick=False):
         if not person.everywhere('view_bookings'):
             shown = shown.filter(Q(category__public=True) | Q(pk__in=agenda(person).values('pk')) | Q(room__in=person.reached(Room, 'view_bookings')))
         named = [c.key for c in BookingCategory.objects.all() if all(w in fold(c.name) for w in sought)]
-        events = shown.filter(Q(pk__in=matching(shown, q, 'title', 'description', 'course__title').values('pk')) | Q(category__in=named))
+        events = shown.filter(Q(pk__in=find(shown, q, 'title', 'description', 'course__title').values('pk')) | Q(category__in=named))
         nearest = {}  # a course's or series' next date only, not every lesson of the term
         for b in events.order_by('start')[:limit * 20]:
             nearest.setdefault(b.course_id or b.series or b.pk, b)

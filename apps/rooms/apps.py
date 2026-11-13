@@ -26,10 +26,10 @@ class RoomsConfig(Tile, AppConfig):
         if not self.title(person.roles):
             return []
         found = [
-            feature('Raumplan', reverse('rooms:index'), 'belegung räume heute kalender tagesplan institut gebäude raum buchen frei freier finden suchen verfügbar buchung reservieren üben überaum kammermusik probe'),
+            feature('Raumplan', reverse('rooms:index'), 'belegung räume heute kalender tagesplan institut gebäude raum buchen frei freier finden suchen verfügbar buchung reservieren üben überaum kammermusik probe ausstattung'),
             feature('Raum buchen', reverse('rooms:new'), 'überaum übezeit probe'),
             feature('Meine Buchungen', reverse('rooms:mine'), 'stornieren übezeit kontingent'),
-            feature('Termine eines Tages absagen', reverse('rooms:day_off'), 'krank unterricht entfällt'),
+            feature('Termine eines Tages absagen', reverse('rooms:day_off'), 'krank unterricht entfällt schließen'),
             feature('Veranstaltungen', reverse('rooms:events'), 'konzert klassenabend meisterkurs vortrag programm'),
             feature('Kalender abonnieren', f"{reverse('rooms:mine')}#kalender", 'ical ics outlook google apple handy feed'),
         ]

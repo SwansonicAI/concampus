@@ -9,7 +9,7 @@ from django.db.backends.signals import connection_created
 from django.db.models import Func, Q, TextField
 from django.dispatch import receiver
 
-from .synonyms import STOP, SYNONYMS
+from .synonyms import ACTIONS, STOP, SYNONYMS
 
 
 SPELLED = (('ae', 'a'), ('oe', 'o'), ('ue', 'u'))
@@ -51,9 +51,10 @@ def words(query):
 
 
 KIN = {}  # each word, as compared, with all words meaning the same
-for line in SYNONYMS:
+for line in ACTIONS + SYNONYMS:
     for word in (meaning := set(words(line))):
         KIN[word] = KIN.get(word, set()) | meaning
+ACTS = set(words(' '.join(ACTIONS)))
 STOPPED = set(words(' '.join(STOP)))
 
 
@@ -68,8 +69,8 @@ def close(a, b):
 def alike(word, typing=False):
     """The word and those meaning the same; a word misspelt by a letter, as the word meant ('craete'); one still being
     typed, as every word it may become ('cour' → course, Kurs …)."""
-    if word in KIN:
-        return KIN[word]
+    if kin := KIN.get(word) or KIN.get(stem(word)):  # 'letters' → 'letter' → 'lett', as the table has it
+        return kin | {word}
     found = {word}
     for key, kin in KIN.items():
         if typing and len(word) >= 4 and key.startswith(word) or len(word) >= 5 and close(word, key):
@@ -84,23 +85,28 @@ def meant(query):
 
 
 def near(word, forms, token):
-    """How near a word of a page comes to one sought: 3 the word or one meaning the same, 2 its beginning, 1 a part of
-    a compound or one letter off."""
-    if token in forms:
+    """How near a word of a page, folded, comes to one sought: 3 the word or one meaning the same, 2 its beginning, 1 a
+    part of a compound or one letter off. Beyond the word as typed, only a compound's part counts: 'Raum' in 'Raumplan',
+    not 'term' in 'Termin'."""
+    stemmed = stem(token)
+    if stemmed in forms or token in forms:
         return 3
-    if any(token.startswith(f) for f in forms):
+    parts = [f for f in forms if len(stemmed) - len(f) >= 3]
+    if token.startswith(word) or any(token.startswith(f) for f in parts):
         return 2
-    return int(any(len(f) >= 4 and f in token for f in forms) or len(word) >= 5 and close(word, token))
+    return int(any(len(f) >= 4 and f in token for f in parts) or len(word) >= 5 and close(word, stemmed))
 
 
 def fit(sought, title, more=''):
-    """How well a page fits a search (meant): (words found, score), a word in the title counting twice."""
-    heads, rest = words(title), words(more)
+    """How well a page fits a search (meant): (share of the words found, score), a word in the title counting twice.
+    Words of doing (ACTIONS) add to the score only when a thing is sought too: they say what to do with it."""
+    heads, rest = re.findall(r'\w+', fold(title)), re.findall(r'\w+', fold(more))
+    counted = [forms for _, forms in sought if not forms <= ACTS] or [forms for _, forms in sought]
     found = score = 0
     for word, forms in sought:
         best = max([2 * near(word, forms, t) for t in heads] + [near(word, forms, t) for t in rest] + [0])
-        found, score = found + bool(best), score + best
-    return found, score
+        found, score = found + bool(best and forms in counted), score + best
+    return found / max(len(counted), 1), score
 
 
 @receiver(connection_created)
@@ -131,16 +137,17 @@ def untimed(note):
     return re.sub(r'^\d{1,2}:[0-5]\d\s+', '', note, flags=re.M)
 
 
+def wanted(query, names=''):
+    """The words of a search for rows, as compared. Words that name what the rows are (`names`, e.g. 'raum'), or mean
+    the same, pick no row: 'Räume' and 'rooms' list them all, 'Raum Orgel' the organ rooms."""
+    named = fold(names).split()
+    return [word for word in words(query) if not (len(word) >= 4 and any(name.startswith(form) for name in named for form in KIN.get(word, {word})))]
+
+
 def matching(queryset, query, *fields, names='', starts=False):
     """Rows in which every word of `query` occurs, folded, in one of the fields; in any order, as fragments, or with
-    `starts` only where a word of the field begins with it (names: 'Chen' is not in 'Bühnensprechen').
-
-    Words that name what the rows are (`names`, e.g. 'raum'), or mean the same, pick no row: 'Räume' and 'rooms' list
-    them all, 'Raum Orgel' the organ rooms.
-    """
-    named = fold(names).split()
-    wanted = [word for word in words(query) if not (len(word) >= 4 and any(name.startswith(form) for name in named for form in KIN.get(word, {word})))]
-    if not wanted:
+    `starts` only where a word of the field begins with it (names: 'Chen' is not in 'Bühnensprechen'); see wanted()."""
+    if not (sought := wanted(query, names)):
         return queryset
     found = queryset.model.objects.annotate(**{f'_f{i}': Fold(field) for i, field in enumerate(fields)})
 
@@ -149,6 +156,6 @@ def matching(queryset, query, *fields, names='', starts=False):
             return Q(**{f'_f{i}__contains': word})
         return reduce(or_, [Q(**{f'_f{i}__startswith': word}), *(Q(**{f'_f{i}__contains': mark + word}) for mark in ' -„(/')])
 
-    for word in wanted:
+    for word in sought:
         found = found.filter(reduce(or_, (where(i, word) for i in range(len(fields)))))
     return queryset.filter(pk__in=found.values('pk'))

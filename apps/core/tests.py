@@ -297,6 +297,9 @@ class SearchTest(Seeded):
         self.assertEqual(len(groups['Studiengänge']), Program.objects.count())
         for q in ['create course', 'Kurs anlegen', 'craete cousre']:  # in English, in German, misspelt: the best first
             self.assertEqual(dict(found(Person.objects.get(username='institut'), q, 6))['Funktionen'][0]['title'], 'Neue Veranstaltung')
+        lehre = Person.objects.get(username='lehre')  # records too: a letter off, in English
+        self.assertIn('Katharina Wendt', dict(found(lehre, 'katarina', 6))['Personen'][0]['title'])
+        self.assertIn('Orchester', dict(found(lehre, 'orchestra', 6))['Lehrveranstaltungen'][0]['title'])
         rooms = {h['title'] for h in dict(found(Person.objects.get(username='lehre'), 'Räume Orgel', 30))['Räume']}
         self.assertLessEqual(set(Room.objects.filter(purpose__icontains='orgel').values_list('name', flat=True)), rooms)
         self.assertLess(len(rooms), Room.objects.count())

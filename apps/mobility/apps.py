@@ -35,7 +35,7 @@ class MobilityConfig(Tile, AppConfig):
         found = []
         if person.everywhere('manage_mobility'):
             found += [
-                feature('Auslandsaufenthalte', reverse('mobility:index'), 'erasmus outgoing learning agreement auslandssemester mobilität'),
+                feature('Auslandsaufenthalte', reverse('mobility:index'), 'erasmus outgoing incoming learning agreement auslandssemester mobilität'),
                 feature('Partnerhochschulen und Abkommen', reverse('mobility:partners'), 'erasmus partner abkommen iia inter-institutional agreement plätze'),
             ]
         if Mobility.objects.filter(study__person=person).exists():

@@ -53,7 +53,7 @@ class AdmissionsConfig(Tile, AppConfig):
             found.append(feature('Meine Kommissionen', reverse('admissions:juries'), 'eignungsprüfung aufnahmeprüfung jury bewerten'))
         if 'applicant' in roles or not roles:
             found += [
-                feature('Meine Bewerbung', reverse('admissions:mine'), 'status einladung termin ergebnis video unterlagen hochladen studienplatz annehmen ablehnen semesterbeitrag immatrikulation krankenkasse zurückziehen'),
+                feature('Meine Bewerbung', reverse('admissions:mine'), 'status einladung eignungsprüfung termin entscheidung ergebnis video unterlagen hochladen studienplatz annehmen ablehnen semesterbeitrag immatrikulation krankenkasse zurückziehen'),
                 feature('Neue Bewerbung', reverse('admissions:apply'), 'bewerben studiengang'),
             ]
         elif roles & {'student', 'alumni'}:

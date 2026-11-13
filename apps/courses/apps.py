@@ -58,7 +58,7 @@ class CoursesConfig(Tile, AppConfig):
         found = [feature('Vorlesungsverzeichnis', reverse('courses:catalogue'), 'veranstaltungen lehrangebot kurse seminare anmelden belegen')]
         if roles & {'teacher', 'student'}:
             found += [
-                feature('Meine Lehre' if 'teacher' in roles else 'Meine Veranstaltungen', reverse('courses:mine'), 'belegt angemeldet warteliste klasse'),
+                feature('Meine Lehre' if 'teacher' in roles else 'Meine Veranstaltungen', reverse('courses:mine'), 'veranstaltungen belegt angemeldet warteliste klasse studierende teilnehmende termine planen unterrichtszeiten'),
                 feature('Stundenplan', reverse('courses:timetable'), 'woche kalender termine'),
             ]
         if 'manage_courses' in roles:

@@ -645,18 +645,24 @@ dialog.finder { flex-direction: column; width: min(640px, calc(100vw - 32px)); m
 dialog.finder[open] { display: flex; }
 dialog.finder::backdrop { background: rgba(0, 0, 0, 0.3); }
 .finder input { width: 100%; padding: 18px 22px; border: 0; font: inherit; font-size: 20px; outline: none; }
-.finder input::-webkit-search-cancel-button { width: 14px; height: 14px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M4 4l8 8M12 4l-8 8'/%3E%3C/svg%3E") center / contain no-repeat; cursor: pointer; -webkit-appearance: none; }
+.finder input::-webkit-search-cancel-button { width: 16px; height: 16px; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.75' stroke-linecap='round'%3E%3Cpath d='M3.5 3.5l9 9M12.5 3.5l-9 9'/%3E%3C/svg%3E") center / contain no-repeat; cursor: pointer; -webkit-appearance: none; }
 .palette { flex: 1 1 auto; overflow: hidden auto; }
 .palette:not(:empty) { padding: 6px 0 8px; border-top: 1px solid var(--line); }
 .palette .empty { margin: 8px 22px; }
-.finder .found h4 { margin: 10px 22px 4px; }
-.finder .found a { margin: 0 8px; padding: 8px 14px; border-radius: 8px; }
+.finder .found h4 { display: none; }  /* the icons tell what each hit is: one list, as in Listary */
+.finder .found a { margin: 0 8px; padding: 10px 14px; border-radius: 8px; }
+.finder .found a:hover:not(.on) { background: none; }  /* one row lit: the mouse chooses by moving (app.js) */
+.finder .found a span { display: grid; gap: 0; line-height: 1.35; }  /* what it is, under its name */
+.finder .found a b, .finder .found a small { overflow: hidden; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
 .keys { margin: 0; padding: 8px 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
 .palette:empty + .keys { display: none; }
 kbd { padding: 0 5px; border: 1px solid var(--line); border-radius: var(--radius); font: inherit; font-size: 12px; }
 .found h4 { margin: 10px 16px 4px; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
-.found a { display: flex; justify-content: space-between; gap: 16px; padding: 7px 16px; color: var(--ink); font-size: 15px; }
+.found a { display: flex; align-items: center; gap: 12px; padding: 7px 16px; color: var(--ink); font-size: 15px; }
+.found a span { display: flex; flex: 1; justify-content: space-between; gap: 16px; min-width: 0; }
 .found a small { min-width: 0; color: var(--muted); text-align: right; }
+.found svg { flex: none; width: 20px; height: 20px; fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.found a.on svg { stroke: var(--accent); }
 .found a:hover, .found a.on { background: var(--soft); text-decoration: none; }
 .found a.on b { color: var(--accent); }
 .results .found { margin-bottom: 24px; border-top: 2px solid var(--ink); }

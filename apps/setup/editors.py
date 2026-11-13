@@ -317,7 +317,7 @@ EDITORS = {e.key: e for e in [
             ('Amtliche Statistik', [('university', 'region', 'report_id')]),
         ],
         columns=[('Name', 'name'), ('Ort', 'place')],
-        words='hochschuldaten anschrift regeln buchungsregeln matrikelnummer fristen löschfristen datenschutz hochschulnummer statistik landesamt',
+        words='hochschuldaten anschrift logo farbe erscheinungsbild briefkopf regeln buchungsregeln matrikelnummer fristen löschfristen datenschutz hochschulnummer statistik landesamt',
     ),
     Editor(
         'aemter', Office, 'Ämter und Rechte', 'manage_accounts', 'Verwaltung', form=OfficeForm,

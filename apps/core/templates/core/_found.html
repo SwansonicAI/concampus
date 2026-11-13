@@ -1,9 +1,9 @@
 {% for label, hits in groups %}
 <div class="found">
   <h4>{{ label }}</h4>
-  {% for h in hits %}<a href="{{ h.url }}"><b>{{ h.title }}</b>{% if h.meta %}<small>{{ h.meta }}</small>{% endif %}</a>{% endfor %}
+  {% for h in hits %}<a href="{{ h.url }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="{{ h.icon }}"/></svg><span><b>{{ h.title }}</b>{% if h.meta %}<small>{{ h.meta }}</small>{% endif %}</span></a>{% endfor %}
 </div>
 {% empty %}
 {% if q %}<p class="empty">Nichts gefunden für „{{ q }}“.</p>{% endif %}
 {% endfor %}
-{% if fragment and groups %}<div class="found"><a href="{% url 'search' %}?q={{ q|urlencode }}"><b>Alle Treffer für „{{ q }}“</b></a></div>{% endif %}
+{% if fragment and groups %}<div class="found"><a href="{% url 'search' %}?q={{ q|urlencode }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.5-4.5"/></svg><span><b>Alle Treffer für „{{ q }}“</b></span></a></div>{% endif %}

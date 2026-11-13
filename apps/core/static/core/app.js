@@ -650,6 +650,13 @@ if (finder) {
       }
     }
   });
+  list.addEventListener('mousemove', event => {  // the mouse chooses by moving, not by where the palette opened under it
+    const a = event.target.closest('a');
+    if (a && !a.classList.contains('on')) {
+      list.querySelector('a.on')?.classList.remove('on');
+      a.classList.add('on');
+    }
+  });
   finder.addEventListener('click', event => event.target === finder && finder.close());  // a click beside it
 }
 

@@ -76,19 +76,22 @@ class StudentsConfig(Tile, AppConfig):
         found = []
         if 'view_students' in person.roles:
             found += [
-                feature('Studierende', reverse('students:list'), 'liste suchen filtern matrikel akte'),
+                # what is done in a student's file, which the list opens
+                feature('Studierende', reverse('students:list'), 'liste suchen filtern matrikel akte immatrikulieren exmatrikulieren beurlaubung fachwechsel leistungsübersicht zeugnis nachteilsausgleich'),
                 feature('Studierende als CSV exportieren', f"{reverse('students:list')}?format=csv", 'export excel tabelle download'),
             ]
+        if 'manage_students' in person.roles:
+            found.append(feature('Versandte Bescheide', reverse('students:notices'), 'briefe drucken post versand'))
         if person.roles & {'dispose_files', 'assess_files'}:
             found.append(feature('Aussonderung', reverse('students:disposal'), 'archiv löschen löschfrist aufbewahrung akten ehemalige bewerten'))
         if person.everywhere('manage_students'):
             found.append(feature('Krankenkassen', reverse('students:insurers'), 'studierendenmeldeverfahren smv meldungen versicherung m10 m11 m12 m20 m30 dakota zuordnen storno'))
         if 'manage_reregistration' in person.roles:
             found += [
-                feature('Rückmeldung', reverse('students:reregistration'), 'semesterbeitrag zahlung bezahlt überweisung exmatrikulieren'),
+                feature('Rückmeldung', reverse('students:reregistration'), 'semesterbeitrag zahlung bezahlt unbezahlt überweisung exmatrikulieren'),
             ]
         for study in person.studies.filter(Q(status='enrolled') | Q(status__in=Study.FORMER, terms__isnull=False)).distinct().select_related('subject'):
-            found.append(feature(f'Mein Studium {study.subject}', study.get_absolute_url(), 'akte status ects fachsemester rückmeldung semesterbeitrag urlaubssemester beurlaubung abschluss'))
+            found.append(feature(f'Mein Studium {study.subject}', study.get_absolute_url(), 'akte status klasse lehrende ects fachsemester rückmeldung semesterbeitrag urlaubssemester beurlaubung abschluss'))
             if study.status == 'enrolled':
                 found.append(feature('Immatrikulationsbescheinigung', reverse('students:certificate', args=[study.pk]), 'bescheinigung studienbescheinigung nachweis drucken pdf'))
                 found.append(feature('Immatrikulationsbescheinigung nach § 9 BAföG', f"{reverse('students:certificate', args=[study.pk])}?bafoeg", 'bafög formblatt 2 amt für ausbildungsförderung studienförderung'))

@@ -2,8 +2,9 @@
 „create course“, „Kurs anlegen“ or „neue Lehrveranstaltung“ finds the same page. One line, one meaning; a word may stand
 in two lines when it has two meanings (enrol: in a course, at the Hochschule). Any form of a word will do (text.words)."""
 
-SYNONYMS = [
-    # what one does
+# What one does with a thing, or whose it is: these rank the pages that have them first, but find none by themselves
+# when a thing is sought too, so that „change major“ does not offer „Passwort ändern“
+ACTIONS = [
     'neu neue neuer neues anlegen erstellen hinzufügen erfassen create make new add',
     'bearbeiten ändern anpassen korrigieren edit change modify update correct',
     'löschen entfernen delete remove',
@@ -17,20 +18,31 @@ SYNONYMS = [
     'hochladen upload',
     'einreichen abgeben abgabe submit',
     'schreiben senden schicken write send',
-    'planen plan schedule',
     'freigeben freigabe genehmigen bestätigen approve approval confirm',
     'veröffentlichen publish',
-    'entscheiden decide decision',
+    'entscheiden entscheidung decide decision',
+    'annehmen akzeptieren accept',
     'bewerten benoten grade grading mark marks assess assessment',
     'kopieren übernehmen duplizieren copy duplicate',
     'einladen einladung invite invitation',
-    'zahlen bezahlen zahlung überweisung beitrag semesterbeitrag gebühr pay payment fee',
     'rückgabe zurückgeben return',
     'leihen ausleihen verleihen leihe borrow lend loan rent',
     'verlängern extend renew',
     'verlegen verschieben move reschedule postpone',
-    'üben übezeit practice practise',
+    'schließen schließung close closure',
     'abonnieren subscribe',
+    'mein meine my mine',
+]
+
+SYNONYMS = [
+    'planen plan schedule',
+    'zahlen bezahlen zahlung überweisung beitrag semesterbeitrag gebühr gebühren pay payment fee fees',
+    'unbezahlt unpaid outstanding',
+    'üben übezeit practice practise',
+    'ergebnis ergebnisse result results outcome',
+    'nächste nächstes kommende next upcoming',
+    'studium study studies',
+    'studienplatz offer',
     # people
     'studierende student studentin studenten',
     'lehrende lehrkraft dozent dozentin professor professorin teacher lecturer tutor',
@@ -41,7 +53,7 @@ SYNONYMS = [
     # teaching
     'lehrveranstaltung veranstaltung kurs seminar vorlesung course lecture workshop',
     'unterricht einzelunterricht unterrichtsstunde unterrichtszeit lesson tuition',
-    'stundenplan timetable',
+    'stundenplan timetable schedule',
     'kalender calendar ical',
     'termin termine datum appointment date meeting',
     'semester term',
@@ -78,7 +90,7 @@ SYNONYMS = [
     'urlaubssemester beurlaubung urlaub leave',
     'rückmeldung rückmelden reregistration',
     'matrikelnummer matrikel id',
-    'krank krankheit attest sick ill illness',
+    'krank krankheit sick ill illness',
     'unterrichtsfrei feiertag ferien holiday holidays vacation',
     'ermäßigung reduction discount',
     'krankenkasse krankenversicherung versicherung insurance',
@@ -90,12 +102,15 @@ SYNONYMS = [
     'gebäude haus building',
     'instrument leihinstrument',
     'inventar inventory',
+    'ausstattung equipment',
+    'kategorie category categories',
     # the platform
     'startseite übersicht home dashboard overview start',
     'aufgaben erledigen tasks todo',
     'postfach posteingang inbox',
     'nachricht nachrichten mitteilung message messages mail email e-mail',
     'bescheid bescheide brief letter notice',
+    'unterlagen dokument dokumente document documents',
     'konto konten profil benutzer account profile user',
     'daten data',
     'anfrage request',
@@ -109,13 +124,15 @@ SYNONYMS = [
     'archiv aussonderung aufbewahrung archive retention',
     'vorlagen texte templates wording',
     'barrierefreiheit accessibility',
-    'mein meine my mine',
+    'hochschule universität university institution college',
+    'farbe farben colour colours color colors',
+    'hilfe help support',
     'liste list',
 ]
 
 # Words that carry no meaning of their own in a search for a page: „wie kann ich einen Raum buchen“, „how do I book a room“
 STOP = set('''
     der die das den dem des ein eine einen einem einer und oder für von vom zu zum zur im in an am auf mit wie wo was ich
-    kann möchte will bitte ist sind man es
-    a an the to for of on at by with how do does can i want where what is are please me
+    kann möchte will bitte ist sind man es wann
+    a an the to for of on at by with how do does can i want where what when is are please me
 '''.split())
