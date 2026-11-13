@@ -26,7 +26,7 @@ from .timetable import clashes, fits, weight
 def add(request, pk):
     """Enter an enrolled student into any course, exam included, by name or Matrikelnummer."""
     course = get_object_or_404(Course, pk=pk)
-    if not teaches(request.user, course):
+    if not teaches(request.user, course) or course.allocation == Course.Allocation.ENSEMBLE and not request.user.may('manage_courses', course):
         raise PermissionDenied
     form = AddForm(request.POST, course=course)
     found = Study.find(form.cleaned_data['who']) if form.is_valid() else []
@@ -35,7 +35,7 @@ def add(request, pk):
         messages.error(request, f'Mehrere passen: {names}. Bitte genauer.' if found else 'Niemand Immatrikuliertes passt dazu.')
         return redirect(course)
     study, exam = found[0], course.kind == Course.Kind.EXAM
-    module = owed_module(course, study) or exam and course.modules.filter(program=study.program_id).first()  # the next module due, as the class filling does
+    module = owed_module(course, study) or (course.modules.filter(program=study.program_id).first() if exam else None)  # the next module due, as the class filling does
     if exam and (refused := course.refuses(study, module)):
         messages.error(request, f'{study.person} nicht eingetragen: {refused}')
         return redirect(course)

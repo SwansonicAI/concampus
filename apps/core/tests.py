@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 from zipfile import ZipFile
 
+from django.apps import apps
 from django.conf import settings
 from django.contrib.auth.models import Permission
 from django.core.serializers.json import DjangoJSONEncoder
@@ -28,7 +29,7 @@ from . import dates, sso
 from .access import CODENAMES
 from .apps import tile_apps, tiles
 from .history import acting, restore
-from .models import Change, Institute, Institution, Message, Office, Person, Term, Text
+from .models import Change, Institute, Institution, Message, Office, Person, Term, Text, Tracked
 from .testing import Empty, Seeded, flashes
 from .transfer import FORMAT, check, dump, everything, load, staff
 from .texts import TEXTS, render, send
@@ -57,6 +58,16 @@ class HistoryTest(Empty):
         self.assertEqual(Change.objects.first().action, 'restored')
         with self.assertRaises(ValidationError):  # already undone: its 'after' is no longer current
             restore(change)
+
+    def test_no_record_hides_what_its_history_relies_on(self):
+        """A field or method of a model named as one of Tracked's breaks its Verlauf, as Study.settled() and Assignment.held did."""
+        for model in apps.get_models():
+            if issubclass(model, Tracked):
+                fields = {f.name for f in model._meta.get_fields()}
+                for name in (n for n in vars(Tracked) if not n.startswith('_')):
+                    with self.subTest(model=model.__name__, name=name):
+                        self.assertNotIn(name, fields)
+                        self.assertEqual(callable(getattr(model, name)), callable(getattr(Tracked, name)))
 
 
 class SmokeTest(Seeded):

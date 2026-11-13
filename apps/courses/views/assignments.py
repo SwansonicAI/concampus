@@ -158,6 +158,7 @@ def assignment(request, pk):
         'a': a, 'courses': courses, 'granting': 'grant_assignments' in person.roles and person.may('grant_assignments', a), 'weeks': weeks(a.term),
         'rates': Rate.objects.all(), 'rate': a.rate_id or previous, 'limit': Institution.get().assignment_max,
         'letter': a.person.messages.filter(subject__startswith=f'Bescheid: Lehrauftrag {a.term}').order_by('-created').first(),
+        'history': bool(Assignment.seen_by(person, a.pk)),
     })
 
 

@@ -59,6 +59,14 @@ class PlacesTest(Seeded):
         r = self.login('student').post(f'/lehre/{lesson.pk}/anmelden/', {'study': study.pk}, follow=True)
         self.assertEqual(flashes(r), ['Die Lehrenden teilen die Plätze ein.'])
 
+    def test_teachers_enter_anyone_a_coach_only_through_ensembles(self):
+        colloquium = Course.objects.get(term__name='WiSe 2026/27', title='Masterprojekt: Kolloquium', staff__username='lehre')
+        study, teacher = Study.objects.get(person__username='student'), self.login('lehre')
+        teacher.post(f'/lehre/{colloquium.pk}/hinzufuegen/', {'who': study.person.matriculation})
+        self.assertIsNone(colloquium.participations.get(study=study).module)  # in no module of their plan, entered all the same
+        chamber = Course.objects.get(term__name='WiSe 2026/27', title='Kammermusik')
+        self.assertEqual(teacher.post(f'/lehre/{chamber.pk}/hinzufuegen/', {'who': study.person.matriculation}).status_code, 403)  # unseen outside their ensembles
+
 
 class WaitlistTest(Seeded):
     def test_the_waitlist_moves_up_and_teachers_write_to_their_participants(self):

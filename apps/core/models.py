@@ -77,7 +77,7 @@ class Tracked:
         return cls.keepers(record)
 
     @classmethod
-    def held(cls, person, record, deleted=False, undo=False):
+    def powers(cls, person, record, deleted=False, undo=False):
         """Of the capabilities that look after `record` (with `undo`, that undo its changes), those the person holds for
         it; for a record no longer there, only those of offices for the whole Hochschule."""
         found = cls.undoers(record) if undo else cls.keepers(record)
@@ -87,7 +87,7 @@ class Tracked:
     def seen_by(cls, person, pk):
         """The person's capabilities by which they see a record's history; empty: it is closed to them."""
         record = cls.objects.filter(pk=pk).first()
-        return cls.held(person, record, deleted=record is None)
+        return cls.powers(person, record, deleted=record is None)
 
 
 class Keyed(models.Model):

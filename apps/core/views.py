@@ -349,7 +349,7 @@ def undo(request, pk):
     change = get_object_or_404(Change, pk=pk)
     model = apps.get_model(change.table)
     record = model.objects.filter(pk=change.row).first()
-    if not model.held(request.user, record or former(change), deleted=record is None, undo=True):
+    if not model.powers(request.user, record or former(change), deleted=record is None, undo=True):
         offices = Office.holding(model.undoers(record))
         raise PermissionDenied(f'Diese Änderung setzen nur die dafür zuständigen Ämter zurück{": " + offices if offices else ""}.')
     try:

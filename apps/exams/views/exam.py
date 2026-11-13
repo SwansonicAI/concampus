@@ -302,7 +302,7 @@ def roster(request, pk):
     """The exam's list to print and sign; once released also as a notice by Matrikelnummer (?aushang); or as CSV."""
     course = get_object_or_404(Course.objects.select_related('term'), pk=pk, kind__in=[Course.Kind.EXAM, Course.Kind.THESIS])
     person = request.user
-    if not (person.may('manage_exams', course) or person.may('decide_results', course) or course.staff.filter(pk=person.pk).exists()):
+    if not (any(person.may(c, course) for c in ('manage_exams', 'decide_results', 'correct_scores')) or course.staff.filter(pk=person.pk).exists()):
         raise PermissionDenied
     staff, rows = panel.sheet(course)
     if request.GET.get('format') == 'csv':

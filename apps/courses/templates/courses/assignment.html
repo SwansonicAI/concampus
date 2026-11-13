@@ -56,7 +56,7 @@
 {% endif %}
 {% endif %}
 
-<p style="margin-top: 32px"><a class="more" href="{% url 'history' 'courses.assignment' a.pk %}">Verlauf</a></p>
+{% if history %}<p style="margin-top: 32px"><a class="more" href="{% url 'history' 'courses.assignment' a.pk %}">Verlauf</a></p>{% endif %}
 
 {% if granting and a.status != 'withdrawn' %}
 <details class="tail" style="margin-top: 32px">

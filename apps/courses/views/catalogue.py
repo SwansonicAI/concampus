@@ -79,7 +79,7 @@ def catalogue(request):
         courses = matching(courses, q, *SEARCHED)
     if node := Module.objects.filter(pk=request.GET.get('modul', '')).first() if request.GET.get('modul', '').isdigit() else None:  # from the Studienplan
         courses = courses.filter(pk__in=Course.objects.filter(modules__in=node.within()).values('pk'))
-    settled = set().union(*(s.settled() for s in studies))
+    settled = set().union(*(s.closed() for s in studies))
     counting = Module.objects.filter(courses=OuterRef('pk'), program__in=studies.values('program'))
     courses = courses.annotate(counting=Exists(counting), owed=Exists(counting.exclude(pk__in=settled)))
     done = request.GET.get('bestandene') == '1'
@@ -273,7 +273,7 @@ def course(request, pk):
         'lesson_rows': zip([s for s, _ in lessons], timetable or []),
         'ensembles': ensembles,
         'grouping': EnsembleForm(sent(request, 'ensemble'), course=course, person=person) if course.allocation == Course.Allocation.ENSEMBLE else None,
-        'adding': AddForm(course=course) if staffed else None,
+        'adding': AddForm(course=course) if staffed and (office or course.allocation != Course.Allocation.ENSEMBLE) else None,  # a coach's people come through their ensembles
         'reachable': Study.reachable(person, Study.objects.filter(Q(participations__course=course) | Q(signups__course=course))) if staffed else set(),
         'panel': False,
     })

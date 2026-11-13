@@ -226,7 +226,7 @@ class Study(Tracked, models.Model):
                 best[p.module_id] = p
         return sorted(best.values(), key=lambda p: p.module.code)
 
-    def settled(self):
+    def closed(self):
         """The modules a course can count for no longer: those passed, and everything within a part of the plan that is
         complete, such as a Wahlkatalog whose credits are earned."""
         found = set()

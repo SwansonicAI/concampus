@@ -118,7 +118,7 @@
   <p class="lead">{% if groups %}{{ taken }} von {{ places }} Plätzen, in {{ groups|length }} Gruppen{% else %}{{ placed }}{% if course.capacity %} von {{ course.capacity }} Plätzen{% else %} angemeldet{% endif %}{% endif %}{% if waiting %} · {{ waiting }} auf der Warteliste{% endif %}{% if signups %} · <a href="#anfragen">{{ signups|length }} Anfrage{{ signups|length|pluralize:"n" }}</a>{% endif %}{% if mirror.absent %} · {{ mirror.absent|length }} ohne Moodle-Konto{% endif %}{% if taught and not office %} · Ihre {% if taught|length > 1 %}Gruppen{% else %}Gruppe{% endif %} {% for g in taught %}{{ g.number }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</p>
   <form id="auswahl" method="post" action="{% url 'courses:write' course.pk %}">{% csrf_token %}</form>
   <form id="austragen" method="post" action="{% url 'courses:drop' course.pk %}">{% csrf_token %}</form>
-  {% include "courses/_add.html" %}
+  {% if adding %}{% include "courses/_add.html" %}{% endif %}
   {% include "courses/_people.html" %}
 </section>
 {% endif %}
