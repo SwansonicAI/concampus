@@ -276,6 +276,21 @@ def demo(request):
     return redirect('home')
 
 
+@login_not_required
+def demo_moodle(request):
+    """Only in the demo, past its access code: where the demo's Moodle sends whoever signs in (docs/moodle.md); one of its
+    people chosen opens Moodle as them, ConCampus's own sign-in left as it is."""
+    from courses.moodle import entry  # which imports this module
+
+    if not settings.MOODLE['url'] or not admitted(request):
+        raise Http404
+    if request.method == 'POST':
+        if request.POST.get('konto') not in {p.username for _, people in demo_people() for p, _ in people}:
+            raise Http404
+        return redirect(entry(request.POST['konto']))
+    return render(request, 'core/demo_moodle.html', {'demo': demo_people})
+
+
 def message(request, pk):
     letter = get_object_or_404(Message, pk=pk, person=request.user)
     fresh = not letter.read

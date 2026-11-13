@@ -439,6 +439,9 @@ class MoodleTest(Seeded):
         self.assertEqual(sync(moodle, changed=True)['Kurse'], 1)
         self.assertEqual(len(moodle.courses), made)  # each course once
         self.assertNotIn((mine, moodle.users[students[1].email.lower()], 5), moodle.enrolled)
+        Course.objects.filter(pk=course.pk).update(allocation=Course.Allocation.ORDER, capacity=0)  # all on the waitlist: none in Moodle
+        sync(moodle, changed=True)
+        self.assertFalse([e for e in moodle.enrolled if e[0] == mine and e[2] == 5])
         Course.objects.filter(pk=course.pk).update(cancelled=timezone.now())
         sync(moodle)
         self.assertFalse(moodle.courses[mine]['visible'])

@@ -1,6 +1,7 @@
 <?php
 // Once after Moodle's install, again at will: the demo set up as HfM's Moodle is (seen 30.10.2026, docs/moodle.md),
-// its theme and logos, its categories and information courses, its dashboard; sign-in required; web services for
+// its theme and logos, its categories and information courses, its dashboard; sign-in required, through ConCampus
+// (auth/concampus, installed by admin/cli/upgrade.php); web services for
 // ConCampus with a service of the functions it calls, an account for ConCampus, its token printed.
 define('CLI_SCRIPT', true);
 require('/var/www/html/config.php');
@@ -11,15 +12,16 @@ require_once($CFG->dirroot . '/webservice/lib.php');
 
 (new \tool_langimport\controller())->install_languagepacks(['de', 'es']);
 foreach ([
-    'lang' => 'en', 'timezone' => 'Europe/Berlin', 'country' => 'DE', 'forcelogin' => 1, 'guestloginbutton' => 0,
-    'passwordpolicy' => 0,  // ConCampus gives the demo's users its access code, whatever it is
+    'lang' => 'en', 'timezone' => 'Europe/Berlin', 'country' => 'DE', 'forcelogin' => 1, 'guestloginbutton' => 0, 'auth' => 'concampus',
     'theme' => 'boost_union', 'defaulthomepage' => HOMEPAGE_MY, 'frontpage' => FRONTPAGECATEGORYCOMBO, 'frontpageloggedin' => FRONTPAGECATEGORYCOMBO,
     'enablewebservices' => 1, 'webserviceprotocols' => 'rest',
 ] as $name => $value) {
     set_config($name, $value);
 }
+unset_config('logininstructionsbelow', 'theme_boost_union');  // once how to sign in by password
+// The accounts ConCampus made before, with that password or none, now sign in through it.
+$DB->set_field_select('user', 'auth', 'concampus', "auth IN ('manual', 'nologin') AND deleted = 0 AND username NOT IN ('admin', 'guest', 'campus-sync')");
 foreach (['brandcolor' => '#9E000C', 'navbarcolor' => 'coloreddark',
-    'logininstructionsbelow' => '<p>Demo: der Benutzername wie in ConCampus (student, lehre, …), als Passwort der Zugangscode der Demo.</p>',
     'footnote' => '<p>Demo · <a href="https://www.hfm-weimar.de">Hochschule für Musik FRANZ LISZT Weimar</a></p>'] as $name => $value) {
     set_config($name, $value, 'theme_boost_union');
 }

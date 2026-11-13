@@ -1,0 +1,9 @@
+{% extends base %}
+{% block title %}Moodle · Demo-Profil wählen{% endblock %}
+{% block content %}
+<div class="demo">
+  <h1>Moodle · Demo-Profil wählen</h1>
+  <p class="lead">Ohne Passwort in Moodle anmelden, mit den Augen dieser Person. Ihre Anmeldung in ConCampus bleibt, wie sie ist.</p>
+  {% url 'demo_moodle' as action %}{% include "core/_demo.html" %}
+</div>
+{% endblock %}

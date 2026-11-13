@@ -113,6 +113,7 @@
       <dt>Platzvergabe</dt><dd>{{ course.get_allocation_display|capfirst }}{% if groups %}; {{ course.get_grouping_display }}{% endif %}</dd>
       {% if course.allocation != 'staff' %}<dt>Anmeldung</dt><dd>{% if course.opens %}vom {{ course.opens|date:"j. F" }} {% endif %}{% if course.deadline %}bis {{ course.deadline|date:"j. F Y" }}{% elif not course.opens %}–{% endif %}</dd>{% endif %}
       <dt>Anrechenbar für</dt><dd>{% for title, programs in modules %}{{ title }}<br><small>{% for program, codes in programs %}<a href="{{ program.get_absolute_url }}">{% if program.pk in studied %}<b>{{ program.title }}</b>{% else %}{{ program.title }}{% endif %}</a> <span class="muted">{{ codes|join:", " }}</span>{% if not forloop.last %}<br>{% endif %}{% endfor %}</small><br>{% empty %}–{% endfor %}</dd>
+      {% if moodle %}<dt>Moodle</dt><dd>{% if moodle.0 %}<a href="{{ moodle.0 }}" target="_blank" rel="noopener">Kurs öffnen</a>{% else %}<span class="muted">Kurs folgt {{ moodle.1 }}</span>{% endif %}</dd>{% endif %}
     </dl>
     {% if course.description %}<p style="margin-top: 24px">{{ course.description|linebreaksbr }}</p>{% endif %}
   </div>

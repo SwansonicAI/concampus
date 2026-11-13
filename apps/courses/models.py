@@ -213,9 +213,9 @@ class Course(Tracked, models.Model):
         waitlist."""
         if self.allocation != self.Allocation.ORDER or self.capacity is None:
             return {}
-        rows = list(self.participations.order_by('created', 'pk').values_list('pk', 'study'))
-        waiting = {study: n for n, study in enumerate(list(dict.fromkeys(study for _, study in rows))[self.capacity:], 1)}
-        return {pk: waiting[study] for pk, study in rows if study in waiting}
+        rows = sorted(self.participations.all(), key=attrgetter('created', 'pk'))  # prefetched, as for Moodle: no query
+        waiting = {study: n for n, study in enumerate(list(dict.fromkeys(p.study_id for p in rows))[self.capacity:], 1)}
+        return {p.pk: waiting[p.study_id] for p in rows if p.study_id in waiting}
 
     @property
     def withdraw_by(self):

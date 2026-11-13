@@ -4,8 +4,10 @@ and participants enrolled, whoever left taken out again, a course called off hid
 Moodle group for each. ConCampus is the record and Moodle
 follows. People are found there by e-mail address; whoever has not signed in to Moodle yet is enrolled the night after
 they have. Off without settings.MOODLE."""
+import hmac
 import json
 import secrets
+import time as clock
 from collections import Counter
 from datetime import datetime, time
 from hashlib import sha256
@@ -17,6 +19,7 @@ from django.db.models import Prefetch, Q
 from django.utils import timezone
 from django.utils.html import format_html_join, linebreaks
 
+from core.views import demo_people
 from .models import Course, MoodleCourse, Participation
 from .views.rollover import described, usual
 
@@ -51,12 +54,34 @@ def stamp(day):
 
 
 def account(person):
-    """The demo's Moodle account for someone: the demo's users sign in with its access code, the others not at all."""
-    login = person.username in settings.DEMO and settings.DEMO_CODE
+    """The demo's Moodle account for someone: signed in only through ConCampus (entry), never by password."""
     return {
         'username': person.username.lower(), 'email': person.email, 'firstname': person.first_name, 'lastname': person.last_name,
-        'auth': 'manual' if login else 'nologin', 'password': settings.DEMO_CODE if login else secrets.token_urlsafe(),
+        'auth': 'concampus', 'password': secrets.token_urlsafe(),
     }
+
+
+def entry(username):
+    """The address that signs `username` in to the demo's Moodle for the next minute (demo-moodle/concampus/login.php),
+    signed with the web service token, which both sides know."""
+    own, now = settings.MOODLE, int(clock.time())
+    signature = hmac.new(own['token'].encode(), f'{username.lower()}|{now}'.encode(), sha256).hexdigest()
+    return own['url'].rstrip('/') + '/auth/concampus/login.php?' + urlencode({'u': username.lower(), 't': now, 's': signature})
+
+
+def addresses(courses):
+    """{course pk: its address in Moodle}, of those there."""
+    url = settings.MOODLE['url'].rstrip('/')
+    return {c: f'{url}/course/view.php?id={m}' for c, m in MoodleCourse.objects.filter(course__in=courses).values_list('course', 'moodle_id')} if url else {}
+
+
+def place(course):
+    """A course's place in Moodle for its page: (its address there, '') or ('', when it comes); None where it never goes."""
+    if not settings.MOODLE['url'] or course.kind != Course.Kind.COURSE or course.cancelled or course.term.end < timezone.localdate():
+        return None
+    if url := addresses([course.pk]).get(course.pk):
+        return url, ''
+    return '', 'mit der Veröffentlichung des Semesters' if course.term.planning else 'in wenigen Minuten'
 
 
 def summary(course, slot):
@@ -91,7 +116,7 @@ def grouping(call, course, teams, users, ours):
 def sync(call=call, accounts=False, changed=False):
     """Bring Moodle up to ConCampus; returns {what: how many}. With changed, only the courses whose title, place, dates,
     summary or people have changed since ConCampus last sent them. With accounts, as on the demo, where no login of the
-    Hochschule makes them, whoever has no account gets one."""
+    Hochschule makes them, whoever has no account gets one, the demo's people too."""
     own, counts, categories = settings.MOODLE, Counter(), {}
 
     def category(idnumber, name, parent):
@@ -110,9 +135,13 @@ def sync(call=call, accounts=False, changed=False):
         .prefetch_related('staff', 'modules', Prefetch('participations', Participation.objects.select_related('study__person')), 'groups__staff').order_by('term__start', 'pk')
     )
     mirrors = {m.course_id: m for m in MoodleCourse.objects.filter(course__in=courses)}
-    wanted = {c.pk: {p.study.person.email.lower(): own['student'] for p in c.participations.all()} | {t.email.lower(): own['teacher'] for t in c.staff.all()} for c in courses}
+    waiting = {c.pk: c.waitlist() for c in courses}  # who waits for a place is not in the course yet
+    wanted = {
+        c.pk: {p.study.person.email.lower(): own['student'] for p in c.participations.all() if p.pk not in waiting[c.pk]} | {t.email.lower(): own['teacher'] for t in c.staff.all()}
+        for c in courses
+    }
     teams = {c.pk: {  # each group: its name and people
-        f'campus-group-{g.pk}': (f'Gruppe {g.number}', sorted({p.study.person.email.lower() for p in c.participations.all() if p.group_id == g.pk} | {t.email.lower() for t in g.staff.all()}))
+        f'campus-group-{g.pk}': (f'Gruppe {g.number}', sorted({p.study.person.email.lower() for p in c.participations.all() if p.group_id == g.pk and p.pk not in waiting[c.pk]} | {t.email.lower() for t in g.staff.all()}))
         for g in c.groups.all()
     } for c in courses}
     slots, todo = usual(courses), []
@@ -127,12 +156,13 @@ def sync(call=call, accounts=False, changed=False):
         state = sha256(json.dumps([fields, place, wanted[course.pk], teams[course.pk]], sort_keys=True).encode()).hexdigest()
         if not (changed and course.pk in mirrors and mirrors[course.pk].state == state):
             todo.append((course, fields, state))
-    emails = sorted({e for course, _, _ in todo for e in wanted[course.pk] if e})
+    demo = [p for _, people in demo_people() for p, _ in people if p.email] if accounts else []  # each can sign in, in a course or not
+    emails = sorted({e for course, _, _ in todo for e in wanted[course.pk] if e} | {p.email.lower() for p in demo})
     users = {}
     for i in range(0, len(emails), 50):
         users |= {u['email'].lower(): u['id'] for u in call('core_user_get_users_by_field', field='email', values=emails[i:i + 50])}
     if accounts:
-        people = {p.email.lower(): p for c, _, _ in todo for p in [*c.staff.all(), *(q.study.person for q in c.participations.all())]}
+        people = {p.email.lower(): p for c, _, _ in todo for p in [*c.staff.all(), *(q.study.person for q in c.participations.all())]} | {p.email.lower(): p for p in demo}
         new = [people[e] for e in emails if e not in users]
         for i in range(0, len(new), 50):
             made = {u['username']: u['id'] for u in call('core_user_create_users', users=[account(p) for p in new[i:i + 50]])}

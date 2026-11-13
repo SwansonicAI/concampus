@@ -52,16 +52,24 @@ blocks, its categories „Allgemeine Informationen / Fortbildungen“ and „Inf
 the semesters, the information courses the dashboard links to, open to guests; English by default, German and Spanish
 too. Moodle's PHP image (`moodlehq/moodle-php-apache:8.3`), its cron, its own Postgres, served by ConCampus's Caddy.
 Sign-in required, no mail (`noemailever`: the people are made up, their addresses not); no Shibboleth. There, ConCampus
-makes the accounts too (`core_user_create_users`, on with `DEMO`): the demo's users (`student`, `lehre`, …) sign in with
-the demo's access code, the others cannot sign in and fill the participant lists. ConCampus's account `campus-sync` is a
-site administrator; in production a role with only the functions above.
+makes the accounts too (`core_user_create_users`, on with `DEMO`), for the participants and teachers of its courses and
+for the people its login page offers, and signs them in: Moodle's login page sends on to ConCampus (`/demo/moodle/`),
+which asks for the access code and offers the same people; the one chosen opens Moodle signed in, by a link signed with
+the web service token and good for a minute (`courses/moodle.py` `entry`, the plugin `auth_concampus` in
+`demo-moodle/concampus`). ConCampus's own sign-in stays as it is, so one browser can be an office in ConCampus and a
+student in Moodle. Signing out of Moodle goes back to the choice; the admin signs in at `/login/index.php?noredirect=1`.
+ConCampus's account `campus-sync` is a site administrator; in production a role with only the functions above.
+Whoever waits for a place is enrolled once they have one. A course's page in ConCampus, „Meine Lehre“ and „Meine
+Lehrveranstaltungen“ link to its Moodle course.
 
 Set up once, on the server:
 
 1. `git clone -b MOODLE_405_STABLE --depth 1 https://github.com/moodle/moodle.git /opt/moodle`; Boost Union's
    `MOODLE_405_STABLE` (github.com/moodle-an-hochschulen/moodle-theme_boost_union) into `/opt/moodle/theme/boost_union`;
-   `touch /opt/moodle/config.php` (the mount point of `demo-moodle/config.php`).
-2. In `/opt/concampus/demo-moodle`: `.env` with `DB_PASSWORD`; `docker compose up -d`; `docker compose exec --user
+   `touch /opt/moodle/config.php` and `mkdir /opt/moodle/auth/concampus` (the mount points of `demo-moodle/config.php`
+   and `demo-moodle/concampus`).
+2. In `/opt/concampus/demo-moodle`: `.env` with `DB_PASSWORD` and `CAMPUS_URL` (the demo's ConCampus, `https://…`);
+   `docker compose up -d`; `docker compose exec --user
    www-data moodle php admin/cli/install_database.php --agree-license --fullname="Moodle der HfM Weimar · Demo" --shortname="Moodle der HfM Weimar · Demo"
    --adminuser=admin --adminpass=… --adminemail=…`; `docker compose exec -T --user www-data moodle php < setup.php`,
    which prints the token.

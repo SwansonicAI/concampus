@@ -20,7 +20,7 @@ from core.text import matching
 from curriculum.models import Module, Program
 from rooms.models import Booking
 from students.models import Study
-from .. import panel
+from .. import moodle, panel
 from ..forms import AddForm, CourseForm, DateForm, EnsembleForm, Lessons, PlanForm, TeachingForm
 from ..models import Area, Course, Format, Group, Participation, Signup
 from ..modules import credited
@@ -247,6 +247,7 @@ def course(request, pk):
         'running': running, 'cancelling': office and not course.term.planning and not course.cancelled and running,
         'from': max(course.term.lectures_start, timezone.localdate()), 'office': office,
         'modules': credited(course, studied), 'studied': studied,
+        'moodle': moodle.place(course) if staffed or office or any(not p.waiting for p in own) else None,  # whoever has a place there
         'bookings': upcoming.select_related('room', 'category', 'group').prefetch_related('participants', 'absent')[:8],
         'plan': PlanForm(sent(request, 'plan'), person=person, course=course) if staffed and running and not course.cancelled and course.kind != Course.Kind.LESSON else None,
         'date': DateForm(sent(request, 'date'), person=person, course=course) if staffed and running and not course.cancelled else None,

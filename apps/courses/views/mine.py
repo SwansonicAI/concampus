@@ -10,6 +10,7 @@ from core.models import Office, Term
 from rooms.models import Booking
 from rooms.plans import agenda
 from students.models import Study
+from .. import moodle
 from ..models import Assignment, Course, Ensemble, Group, Participation, Signup
 from .assignments import held
 from .common import TEACHING, ahead, queued, since
@@ -105,8 +106,9 @@ def mine(request):
         ).select_related('subject', 'format', 'term').prefetch_related(
             'participations__module__program', 'origin__participations__module__program', Prefetch('groups', Group.objects.filter(staff=person), to_attr='own'),
         ))
+        there = moodle.addresses(taught_here)
         for c in taught_here:  # as the Deputat counts it: a lesson class by its students' minutes
-            c.sws = None if c.cancelled else sws(c, c.coached)
+            c.sws, c.moodle_at = None if c.cancelled else sws(c, c.coached), there.get(c.pk)
         assignment = person.assignments.filter(term=term).exclude(status=Assignment.Status.WITHDRAWN).prefetch_related('courses').first()
         if assignment:  # after the lectures, the hours held of a granted one, to confirm
             assignment.so_far = None if assignment.status != Assignment.Status.GRANTED or timezone.localdate() <= term.lectures_end else (
@@ -126,8 +128,10 @@ def mine(request):
         coming = {}  # each course's next date the student comes to: of a lesson class, their own
         for b in agenda(person).filter(course__term=term, start__gte=timezone.now()).select_related('room').order_by('start'):
             coming.setdefault(b.course_id, b)
+        there = moodle.addresses([p.course_id for p in registrations])
         for p in registrations:
             p.next, p.queue = coming.get(p.course_id), queued(p)
+            p.moodle_at = not p.queue and there.get(p.course_id)  # on the waitlist: not in Moodle yet
         context['registrations'] = registrations
         context['requests'] = Signup.objects.filter(study__person=person, course__term=term).select_related('course', 'module')  # the teachers still decide
         if term == registering():  # what the Studienplan still wants this semester
