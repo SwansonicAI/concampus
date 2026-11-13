@@ -1,0 +1,43 @@
+{% extends base %}
+{% block title %}Lehrende{% endblock %}
+{% block subnav %}{% include "courses/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Lehrende</h1>
+<div class="head">
+  <p class="lead">{% for key, label, n in stands %}{% if n %}<a class="badge {% if key == 'ohne' %}no{% elif key == 'befristet' or key == 'neu' %}wait{% endif %}" href="?stand={{ key }}">{{ n }} {{ label }}</a> {% endif %}{% endfor %}</p>
+  {% if keeping %}<div class="actions">
+    {% if uninvited %}<form method="post" action="{% url 'setup:invite_new' %}">{% csrf_token %}<button class="btn ghost" data-confirm="{{ uninvited }} Lehrende, die sich noch nie angemeldet haben, per E-Mail einladen?">{{ uninvited }} einladen</button></form>{% endif %}
+    <a class="btn" href="{% url 'setup:new' 'lehrende' %}" data-panel>Neu anlegen</a>
+  </div>{% endif %}
+</div>
+<form class="toolbar">
+  <div class="inline">
+    <label>Institut<select name="institut" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>
+    <label>Beschäftigung<select name="art" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for value, label in kinds %}<option value="{{ value }}"{% if value == kind %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Aktiv</option>{% for key, label, n in stands %}<option value="{{ key }}"{% if key == stand %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name, Personalnummer, E-Mail"></label>
+  </div>
+</form>
+<table data-panel>
+  <thead><tr><th>Name</th><th>Institut</th><th>Beschäftigung</th><th class="num" title="Lehrverpflichtung im {{ term }}, bei Lehrbeauftragten der Lehrauftrag">Soll</th><th>Befristet bis</th><th title="Zugang zu ConCampus">Zugang</th></tr></thead>
+  <tbody>
+    {% for p in rows %}
+    <tr>
+      <td data-value="{{ p.name }}"><a href="{% url 'courses:teacher' p.pk %}"><b>{{ p.name }}</b></a>{% if p.personnel_number %}<br><small class="muted">{{ p.personnel_number }}</small>{% endif %}</td>
+      <td>{{ p.institute|default:"–" }}</td>
+      <td>{{ p.get_employment_display|default:"–" }}</td>
+      <td class="num" data-value="{{ p.soll|default_if_none:'' }}">{% if p.employment == 'lehrauftrag' %}{% if p.contract %}<span class="badge {% if p.contract.status == 'granted' %}yes{% elif p.contract.status == 'proposed' %}wait{% else %}no{% endif %}" title="Lehrauftrag {{ p.contract.get_status_display }}">{{ p.contract.hours|floatformat:"-1" }}</span>{% else %}<span class="muted">–</span>{% endif %}{% elif p.soll is None %}<span class="fail" title="Keine Lehrverpflichtung eingetragen">fehlt</span>{% else %}{{ p.soll|floatformat:"-1" }}{% endif %}</td>
+      <td data-value="{{ p.contract_end|date:'Y-m-d' }}">{% if p.contract_end %}<span{% if p.ending %} class="caution"{% endif %}>{{ p.contract_end|date:"j.n.Y" }}</span>{% else %}<span class="muted">–</span>{% endif %}</td>
+      <td data-value="{{ p.last_login|date:'Y-m-d' }}">{% if not p.is_active %}<span class="badge no">ausgeschieden</span>{% elif p.last_login %}<small class="muted" title="Zuletzt {{ p.last_login|date:'j.n.Y' }}">✓</small>{% else %}<small class="muted" title="Noch nie angemeldet">○</small>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="6" class="empty">Niemand{% if stand or q or institute or kind %}, der passt{% endif %}.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if keeping %}
+<form method="post" action="{% url 'setup:staff_import' %}" enctype="multipart/form-data" class="inline" style="margin-top: 32px">
+  {% csrf_token %}<input type="file" name="datei" accept=".csv,text/csv" required aria-label="CSV-Datei aus dem Personalsystem" title="Spalten: {{ columns }}">
+  <button class="btn ghost">Aus dem Personalsystem laden</button><a class="link" href="{% url 'setup:staff_import' %}?vorlage=1">Vorlage</a>
+</form>
+{% endif %}
+{% endblock %}

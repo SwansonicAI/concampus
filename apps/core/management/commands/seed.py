@@ -36,7 +36,7 @@ from admissions.views.board import DECISIONS, grounds
 from core import destatis, history, keys, texts
 from core.models import Change, Holiday, Institute, Institution, Key, Membership, Message, Office, Person, Term, Text
 from courses import panel as sheets
-from courses.models import Appointment, Area, Assignment, Course, Ensemble, Format, Group, Obligation, Participation, Recusal, Reduction, ReductionGround, Score, Signup
+from courses.models import Appointment, Area, Assignment, Course, Ensemble, Format, Group, Obligation, Participation, Post, Rate, Recusal, Reduction, ReductionGround, Score, Signup
 from courses.panel import mean, rounding
 from curriculum.models import Module, Program, Rounding, Subject
 from instruments.models import Instrument, Loan
@@ -2073,7 +2073,7 @@ class Command(BaseCommand):
         upcoming.course_signup_start, upcoming.course_signup_end = date(2027, 3, 1), upcoming.lectures_start + timedelta(days=14)
         upcoming.save()
         roth = self.teachers['roth']
-        Reduction.objects.create(person=roth, term=upcoming, ground=self.grounds['Forschungs- oder Freisemester'], hours=roth.obligations.filter(term=self.current).values_list('hours', flat=True).first() or Decimal(18), note='Beschluss des Präsidiums')
+        Reduction.objects.create(person=roth, term=upcoming, ground=self.grounds['Forschungs- oder Freisemester'], hours=roth.obligations.values_list('hours', flat=True).first() or Decimal(18), note='Beschluss des Präsidiums')
 
     def abroad(self):
         """HZBs from abroad are assessed and the Sprachnachweis and APS certificate in for everyone who studies here or has a
@@ -2185,16 +2185,28 @@ class Command(BaseCommand):
         from courses.views.common import TEACHING
         from courses.views.load import deputat
 
+        artistic, academic = (Post.objects.create(name=name, hours=Decimal(hours), basis='ThürLVVO § 4') for name, hours in [
+            ('Professur, künstlerisches Fach', 18), ('Professur, wissenschaftliches Fach', 9),
+        ])
         for teacher in dict.fromkeys(t for t in self.teachers.values() if t.title in ('Prof.', 'Prof. Dr.')):
-            Obligation.objects.create(person=teacher, term=self.current, hours=Decimal(18 if teacher.title == 'Prof.' else 9), basis='ThürLVVO § 4')
+            post = artistic if teacher.title == 'Prof.' else academic
+            Obligation.objects.create(person=teacher, term=self.current, post=post, hours=post.hours)
+        rates = [Rate.objects.create(name=name, euros=Decimal(euros)) for name, euros in [  # made up: each Hochschule sets its own
+            ('Stufe I: Studierende und ohne Hochschulabschluss', '28.00'), ('Stufe II: mit Hochschulabschluss', '38.00'), ('Stufe III: herausragende Qualifikation', '52.00'),
+        ]]
         dean, granted = self.staff['dekanat'], self.current.start - timedelta(weeks=4)
-        for person in Person.objects.filter(employment=Person.Employment.LEHRAUFTRAG, teaching__term=self.current).distinct():
+        for n, person in enumerate(Person.objects.filter(employment=Person.Employment.LEHRAUFTRAG, teaching__term=self.current).distinct().order_by('pk')):
             courses = person.teaching.filter(term=self.current, kind__in=TEACHING)
             if hours := deputat(courses, person):
                 assignment = Assignment.objects.create(
-                    person=person, term=self.current, hours=Decimal(math.ceil(hours)), status=Assignment.Status.GRANTED, proposed_by=dean, granted_by=dean, granted=granted,
+                    person=person, term=self.current, hours=Decimal(math.ceil(hours)), rate=rates[1], status=Assignment.Status.GRANTED, proposed_by=dean, proposed_on=granted - timedelta(weeks=2),
+                    granted_by=dean, granted=granted, accepted=None if n % 9 == 0 else timezone.make_aware(datetime(granted.year, granted.month, granted.day, 10) + timedelta(days=3 + n % 5)),  # a few still to accept
                 )
                 assignment.courses.set(courses)
+        mitarbeit = Person.objects.filter(employment=Person.Employment.MITARBEIT, institute__isnull=False).order_by('pk')
+        for person, ends in zip(mitarbeit[:3], [TODAY + timedelta(weeks=5), date(2027, 9, 30), date(2028, 3, 31)]):  # fixed-term, one ending soon
+            person.contract_end = ends
+            person.save(update_fields=['contract_end'])
 
     def held(self, leaf, subject):
         """(Hauptfach an exam is played in, its course title): the Pflichtfach Klavier on the piano, other artistic exams in

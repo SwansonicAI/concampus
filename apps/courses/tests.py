@@ -12,11 +12,11 @@ from rooms.models import Booking, Room
 from rooms.plans import agenda
 from core.testing import Seeded, flashes
 from students.models import Study
-from .models import Assignment, Course, Ensemble, MoodleCourse, Participation, Signup, owed_module, per_sws
+from .models import Assignment, Course, Ensemble, MoodleCourse, Obligation, Participation, Signup, owed_module, per_sws
 from .moodle import flat, sync
-from .views.assignments import held
+from .views.assignments import held, propose
 from .views.common import taking
-from .views.load import deputat, loads
+from .views.load import deputat, loads, owing
 from .views.rollover import missing
 from .views.timetable import clashes, fits, weight
 
@@ -307,6 +307,27 @@ class AssignmentTest(Seeded):
         Booking.objects.filter(pk=off.pk).update(category='abgesagt')
         lvs = Decimal((off.end - off.start).seconds // 60) / per_sws(off.course.format.short if off.course.format_id else '')
         self.assertLessEqual(abs(held([assignment]).get(assignment.pk, 0) - (before - lvs)), Decimal('0.1'))  # each total to a tenth
+
+    def test_a_withdrawn_lehrauftrag_pays_until_its_day_and_stays_withdrawn(self):
+        """Withdrawn with its person taken off the courses, it keeps the hours held so far for the payroll, and saving a
+        course again proposes nothing behind the office's back."""
+        assignment = Assignment.objects.filter(status=Assignment.Status.GRANTED, courses__bookings__end__lt=timezone.now()).select_related('person', 'term').first()
+        before = held([assignment])[assignment.pk]
+        self.login('dekanat').post(f'/lehre/lehrauftrag/{assignment.pk}/zurueckziehen/', {'grund': 'Neu besetzt', 'austragen': '1'})
+        assignment.refresh_from_db()
+        self.assertEqual((assignment.status, assignment.term.courses.filter(staff=assignment.person).exists()), (Assignment.Status.WITHDRAWN, False))
+        self.assertEqual(held([assignment])[assignment.pk], before)
+        assignment.term.courses.filter(pk__in=assignment.courses.all()).first().staff.add(assignment.person)  # put back on one, as by mistake
+        self.assertEqual(propose(assignment.term, None, [assignment.person]), [])
+        self.assertEqual(Assignment.objects.get(pk=assignment.pk).status, Assignment.Status.WITHDRAWN)
+        self.assertTrue(assignment.person.messages.filter(subject=f'Bescheid: Lehrauftrag {assignment.term} zurückgezogen').exists())
+
+    def test_a_lehrverpflichtung_holds_until_another_follows(self):
+        wendt, now, later = Person.objects.get(username='lehre'), Term.objects.get(name='WiSe 2026/27'), Term.objects.get(name='SoSe 2027')
+        owed = wendt.obligations.get(term=now).hours
+        self.assertEqual(owing([wendt], [later])[wendt.pk, later.pk], owed)
+        Obligation.objects.create(person=wendt, term=later, hours=owed - 4)
+        self.assertEqual((owing([wendt], [now])[wendt.pk, now.pk], owing([wendt], [later])[wendt.pk, later.pk]), (owed, owed - 4))
 
 
 class PlanTest(Seeded):

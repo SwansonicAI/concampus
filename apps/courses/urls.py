@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .views import assignments, catalogue, dates, groups, load, mine, participants, registration, rollover, timetable
+from .views import assignments, catalogue, dates, groups, load, mine, participants, registration, rollover, staff, timetable
 
 app_name = 'courses'
 urlpatterns = [
@@ -10,14 +10,16 @@ urlpatterns = [
     path('stundenplan/', timetable.timetable, name='timetable'),
     path('deputat/', load.load, name='load'),
     path('deputat/stand/', load.standing, name='standing'),
+    path('lehrende/', staff.staff, name='staff'),
+    path('lehrende/<int:pk>/', staff.teacher, name='teacher'),
     path('lehrauftraege/', assignments.assignments, name='assignments'),
     path('lehrauftraege/erteilen/', assignments.grant, name='grant'),
     path('lehrauftraege/stunden/', assignments.settle, name='settle'),
     path('lehrauftraege/export/', assignments.export, name='assignments_export'),
+    path('lehrauftrag/<int:pk>/', assignments.assignment, name='assignment'),
     path('lehrauftrag/<int:pk>/zurueckziehen/', assignments.withdraw, name='withdraw_assignment'),
-    path('lehrauftrag/<int:pk>/bestaetigen/', assignments.affirm, name='affirm'),
-    path('lehrverpflichtungen/uebernehmen/', assignments.obligations_again, name='obligations_again'),
-    path('semesterwechsel/', rollover.rollover, name='rollover'),
+    path('lehrauftrag/<int:pk>/annehmen/', assignments.accept, name='accept'),
+    path('lehrauftrag/<int:pk>/bestaetigen/', assignments.affirm, name='affirm'),    path('semesterwechsel/', rollover.rollover, name='rollover'),
     path('pruefende/uebernehmen/', rollover.appoint_again, name='appoint_again'),
     path('eignungspruefungen/uebernehmen/', rollover.auditions_again, name='auditions_again'),
     path('neu/', catalogue.edit, name='new'),

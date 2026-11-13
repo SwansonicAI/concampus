@@ -255,13 +255,17 @@ TEXTS = {
     ),
     'lehrauftrag': Spec(
         BESCHEID, 'Lehrauftrag erteilt', 'Bescheid: Lehrauftrag {semester}',
-        'Ihnen wird für das {semester} ein Lehrauftrag erteilt ({umfang}), für: {veranstaltungen}. Er begründet kein Arbeitsverhältnis. '
-        'Vergütet werden die gehaltenen Stunden; nach der Vorlesungszeit bestätigen Sie sie unter „Meine Lehre“.',
-        ('semester', 'umfang', 'veranstaltungen', 'von'),
+        'Ihnen wird für das {semester}, Vorlesungszeit {zeitraum}, ein Lehrauftrag erteilt ({umfang}) für: {veranstaltungen}.\n\n'
+        'Vergütung: {verguetung}. Vergütet werden die gehaltenen Stunden; nach der Vorlesungszeit bestätigen Sie sie unter „Meine Lehre“.\n\n'
+        'Der Lehrauftrag begründet kein Arbeitsverhältnis. Die Vergütung versteuern Sie selbst, ebenso tragen Sie gegebenenfalls Beiträge zur '
+        'Rentenversicherung (§ 2 SGB VI). Stehen Sie im öffentlichen Dienst, brauchen Sie eine Genehmigung Ihres Dienstherrn als Nebentätigkeit.\n\n'
+        'Bitte nehmen Sie den Lehrauftrag unter „Meine Lehre“ an.',
+        ('semester', 'zeitraum', 'umfang', 'veranstaltungen', 'verguetung', 'von'),
     ),
     'lehrauftrag_zurueckgezogen': Spec(
         BESCHEID, 'Lehrauftrag zurückgezogen', 'Bescheid: Lehrauftrag {semester} zurückgezogen',
-        'Ihr Lehrauftrag für das {semester} wird zurückgezogen. Grund: {grund}. Bis heute gehaltene Stunden werden vergütet.', ('semester', 'grund', 'von'), appeal=True,
+        'Ihr Lehrauftrag für das {semester} wird mit Ablauf des {tag} zurückgezogen. Grund: {grund}. Die bis dahin gehaltenen Stunden werden vergütet; '
+        'bitte bestätigen Sie sie unter „Meine Lehre“.', ('semester', 'grund', 'tag', 'von'), appeal=True,
     ),
     'unterrichtszeit': Spec(
         NACHRICHT, 'Unterrichtszeit eingetragen', 'Unterrichtszeit: {veranstaltung}', '{von} hat Ihre Unterrichtszeit eingetragen: {zeit} in {raum}, ab {ab}.',

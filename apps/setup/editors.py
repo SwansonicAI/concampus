@@ -16,9 +16,8 @@ from django.utils.html import format_html, format_html_join
 from core.access import CAPABILITIES, EVERYWHERE
 from core.dates import DayField, PastField, months_before
 from core.models import Grant, Holiday, Institute, Institution, Membership, Office, Person, Term, waiting
-from core.transfer import COLUMNS
 from courses.forms import AuditionForm
-from courses.models import Appointment, Area, Course, Format, Obligation, Reduction, ReductionGround
+from courses.models import Appointment, Area, Course, Format, Obligation, Post, Rate, Reduction, ReductionGround
 from curriculum.forms import ModuleForm, ProgramForm
 from curriculum.models import Module, Program, Subject
 from instruments.models import Instrument
@@ -49,8 +48,7 @@ class Editor:
     invite: bool = False  # people: its form offers to send a sign-in invitation
     carry: str = ''  # URL name of a step that takes the last period's entries over, offered above the list
     carried: str = 'Aus dem Vorjahr übernehmen'  # its button
-    upload: str = ''  # URL name of a page loading the list from a CSV file, offered above it
-    upload_columns: str = ''  # that file's headings
+    home: str = ''  # URL name of the page listing it elsewhere, where a list without a section leads back to
 
     def __post_init__(self):
         if self.sections:
@@ -172,7 +170,10 @@ class AccountForm(forms.ModelForm):
             self.note = 'Wartet auf Bestätigung: ' + ', '.join(f'{m.office}' + (f' bis {m.until:%d.%m.%Y}' if m.until else '') for m in waiting) + '.'
         self.depends = depending(self.instance) if self.instance.pk else ''
         if self.depends:
-            self.fields['anyway'] = forms.BooleanField(label='Trotzdem deaktivieren', required=False, help_text=f'Hängt an der Person: {self.depends}. Erst neu zuordnen.')
+            self.fields['anyway'] = forms.BooleanField(
+                label='Trotzdem deaktivieren', required=False, help_text=f'Hängt an der Person: {self.depends}. Erst neu zuordnen.',
+                widget=forms.CheckboxInput(attrs={'data-for': 'is_active:'}),  # only once „Aktiv“ is unticked
+            )
 
     def clean(self):
         data = super().clean()
@@ -215,10 +216,10 @@ class StaffForm(AccountForm):
     and whether they still teach here. Offices and rights stay with the accounts (manage_accounts)."""
 
     class Meta(AccountForm.Meta):
-        fields = ['title', 'first_name', 'last_name', 'personnel_number', 'email', 'username', 'institute', 'employment', 'is_active']
-        help_texts = AccountForm.Meta.help_texts | {'is_active': 'Ohne Haken ausgeschieden: kein Zugriff mehr; ab dem Tag läuft die Frist für die Daten früherer Beschäftigter.'}
+        fields = ['title', 'first_name', 'last_name', 'personnel_number', 'email', 'username', 'institute', 'employment', 'contract_end', 'is_active']
+        help_texts = {'is_active': 'Ohne Haken ausgeschieden.', 'username': 'Wie beim Hochschulkonto.'}
 
-    layout = [(None, [('title', 'first_name', 'last_name'), ('personnel_number', 'email', 'username'), ('institute', 'employment'), 'is_active'])]
+    layout = [(None, [('title', 'first_name', 'last_name'), ('personnel_number', 'email', 'username'), ('institute', 'employment', 'contract_end'), 'is_active'])]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -226,17 +227,29 @@ class StaffForm(AccountForm):
 
 
 class ObligationForm(forms.ModelForm):
+    """A Lehrverpflichtung from a term on: by the Stellenart, its LVS unless a contract says otherwise."""
+
     class Meta:
         model = Obligation
-        fields = ['person', 'term', 'hours', 'basis']
+        fields = ['person', 'term', 'post', 'hours', 'basis']
         localized_fields = ['hours']
+        help_texts = {'term': 'Gilt, bis eine neue folgt.', 'hours': 'Leer: wie die Stellenart.'}
 
-    layout = [(None, [('person', 'term', 'hours'), 'basis'])]
+    layout = [(None, [('person', 'term'), ('post', 'hours'), 'basis'])]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['person'].queryset = Person.teachers().exclude(employment=Person.Employment.LEHRAUFTRAG).order_by('last_name', 'first_name')  # theirs is agreed in the Lehrauftrag
         self.fields['term'].queryset = Term.objects.order_by('-start')
+        self.fields['hours'].required = False
+
+    def clean(self):
+        data = super().clean()
+        if data.get('hours') is None:
+            if not data.get('post'):
+                raise forms.ValidationError('Bitte die Stellenart oder die LVS angeben.')
+            data['hours'] = data['post'].hours
+        return data
 
 
 class AppointmentForm(forms.ModelForm):
@@ -295,7 +308,8 @@ class ReductionForm(forms.ModelForm):
         person, ground, hours = data.get('person'), data.get('ground'), data.get('hours')
         if not ground or hours is None:
             return data
-        owed = Obligation.objects.filter(person=person, term=data.get('term')).values_list('hours', flat=True).first() if person else None
+        found = Obligation.in_force([person], [data['term']]).get((person.pk, data['term'].pk)) if person and data.get('term') else None
+        owed = found and found.hours
         if ground.share and owed is not None and hours > owed * ground.share / 100:
             raise forms.ValidationError(f'Höchstens {ground.share} % der Lehrverpflichtung von {owed} LVS.')
         if ground.hours is not None and hours > ground.hours:
@@ -356,7 +370,7 @@ EDITORS = {e.key: e for e in [
             ('Räume', [('opens', 'closes', 'walk_minutes')]),
             ('Raumbuchung', [('student_daily_hours', 'student_ahead_hours'), ('last_minute_hours', 'teacher_ahead_days')]),
             ('Barrierefreiheit', ['feedback_days']),
-            ('Deputat', [('load_since', 'load_years'), ('load_floor', 'lesson_minutes')]),
+            ('Deputat', [('load_since', 'load_years'), ('load_floor', 'lesson_minutes'), 'assignment_max']),
             ('Studienpläne', ['credit_hours']),
             ('Anmeldung zu Lehrveranstaltungen', ['clash_dates']),
             ('Amtliche Statistik', [('university', 'region', 'report_id')]),
@@ -408,7 +422,7 @@ EDITORS = {e.key: e for e in [
         columns=[('Bezeichnung', 'name'), ('Von', 'first'), ('Bis', 'last'), ('Feiertag', 'public')], search=['name'], words='feiertage ferien vorlesungsfrei weihnachten semesterplanung',
         queryset=lambda: Holiday.objects.order_by('-first'), form=HolidayForm,
     ),
-    Editor('institute', Institute, 'Institute', 'manage_institution', 'Verwaltung', fields=['name'], columns=[('Institut', 'name')], search=['name']),
+    Editor('institute', Institute, 'Institute', 'manage_institution', 'Verwaltung', fields=['name', 'code'], columns=[('Institut', 'name'), ('Kennung', 'code')], search=['name', 'code']),
     Editor(
         'personen', Person, 'Stammdaten', 'manage_students', deletable=False,
         sections=[  # what changes most often first
@@ -440,20 +454,23 @@ EDITORS = {e.key: e for e in [
         queryset=lambda: Appointment.objects.select_related('person').prefetch_related('subjects').order_by('-year', 'person__last_name'),
         new=lambda request: Appointment(year=Course(term=Term.current()).year if Term.current() else None), carry='courses:appoint_again',
     ),
-    Editor(
-        'lehrende', Person, 'Lehrende', 'manage_staff', 'Studium und Lehre', form=StaffForm,
-        columns=[('Name', 'name'), ('Personalnummer', 'personnel_number'), ('Institut', 'institute'), ('Beschäftigung', 'employment'), ('E-Mail', 'email'), ('Aktiv', 'is_active')],
-        search=['first_name', 'last_name', 'email', 'username', 'personnel_number'],
-        words='personal personalabteilung personalnummer einstellen neue lehrkraft dozent lehrbeauftragte professur mitarbeit ausscheiden einladung import mach csv', invite=True,
-        queryset=lambda: Person.teachers().select_related('institute'), deletable=False,
-        upload='setup:staff_import', upload_columns=', '.join(COLUMNS),
+    Editor(  # the forms behind Lehre › Lehrende (courses.views.staff), where the list is
+        'lehrende', Person, 'Lehrende', 'manage_staff', form=StaffForm, invite=True, deletable=False, home='courses:staff',
+        queryset=lambda: Person.teachers().select_related('institute'), new=lambda request: Person(is_active=True),
     ),
     Editor(
-        'lehrverpflichtungen', Obligation, 'Lehrverpflichtungen', 'manage_staff', 'Studium und Lehre', form=ObligationForm,
-        columns=[('Lehrperson', 'person'), ('Semester', 'term'), ('LVS', 'hours'), ('Grundlage', 'basis')],
-        search=['person__last_name', 'person__first_name', 'basis'], words='deputat lvs lehrdeputat soll thürlvvo lehrverpflichtungsverordnung personal arbeitsvertrag',
-        queryset=lambda: Obligation.objects.select_related('person', 'term'),
-        new=lambda request: Obligation(term=Term.upcoming() or Term.current(), person_id=request.GET.get('person') or None), carry='courses:obligations_again', carried='Ins nächste Semester übernehmen',
+        'lehrverpflichtungen', Obligation, 'Lehrverpflichtungen', 'manage_staff', form=ObligationForm, home='courses:staff',
+        queryset=lambda: Obligation.objects.select_related('person', 'term', 'post'),
+        new=lambda request: Obligation(term=Term.upcoming() or Term.current(), person_id=request.GET.get('person') or None),
+    ),
+    Editor(
+        'stellenarten', Post, 'Stellenarten', 'manage_staff', 'Studium und Lehre', sections=[(None, [('name', 'hours'), 'basis'])],
+        columns=[('Stellenart', 'name'), ('LVS', 'hours'), ('Rechtsgrundlage', 'basis')], search=['name', 'basis'],
+        words='lehrverpflichtung lvs lehrverpflichtungsverordnung thürlvvo professur lehrkraft für besondere aufgaben mitarbeit deputat soll',
+    ),
+    Editor(
+        'verguetungsstufen', Rate, 'Vergütungsstufen der Lehraufträge', 'grant_assignments', 'Studium und Lehre', sections=[(None, [('name', 'euros')])],
+        columns=[('Stufe', 'name'), ('Je LVS (€)', 'euros')], search=['name'], words='lehrauftrag vergütung honorar stundensatz lehrbeauftragte',
     ),
     Editor(
         'ermaessigungen', Reduction, 'Ermäßigungen der Lehrverpflichtung', 'manage_teaching_load', 'Studium und Lehre', form=ReductionForm,

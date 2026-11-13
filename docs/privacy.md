@@ -88,12 +88,14 @@ no Matrikelnummer (`students/views.py`, `suggest()`). Who already knows a Matrik
 
 ### Staff
 
-A teacher's Beschäftigung (`Person.employment`), Lehrverpflichtung per semester (`courses.Obligation`) and Lehrauftrag
-(`courses.Assignment`) show only on the Deputat, in a course's form beside its teachers, and on the Lehraufträge: to the
-teacher for their own, and to `view_teaching_load` within the Institute its office is limited to (`courses/views/load.py`,
-`courses/views/assignments.py`). `manage_staff` takes teachers on, by hand or from the personnel system's export, and
-enters their Lehrverpflichtung with its Grundlage; their Personalnummer shows only to it and in the payroll's CSV;
-`grant_assignments` grants Lehraufträge and confirms the hours held. Ermäßigungen (`courses.Reduction`) show the same
+A teacher's Beschäftigung and contract end (`Person.employment`, `Person.contract_end`), Lehrverpflichtung
+(`courses.Obligation`, from a semester on) and Lehrauftrag (`courses.Assignment`, with its Vergütungsstufe and what it
+pays) show only on Lehre › Lehrende and the teacher's record, the Deputat, in a course's form beside its teachers, and on
+the Lehraufträge: to the teacher for their own Lehrauftrag under Meine Lehre, and to `view_teaching_load` within the
+Institute its office is limited to (`courses/views/staff.py`, `load.py`, `assignments.py`). `manage_staff` takes teachers
+on, by hand or from the personnel system's export, and enters their Lehrverpflichtung by Stellenart; their
+Personalnummer shows only to it and in the payroll's CSV; `grant_assignments` grants Lehraufträge and confirms the hours
+held. The Lehrbeauftragte accept their Lehrauftrag in ConCampus; the day is kept. Ermäßigungen (`courses.Reduction`) show the same
 way, their reason as the function (Dekan:in, Studiendekan:in …); `manage_teaching_load` enters them. A reduction for a
 Schwerbehinderung is health data (Art. 9): its reason shows only as that, never the condition; the course form shows the
 Soll after Ermäßigungen, never a reason. Pay and its records stay in the payroll (MACH), which keeps them as tax law

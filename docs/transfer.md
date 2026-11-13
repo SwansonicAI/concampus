@@ -72,8 +72,11 @@ Whoever takes teachers on (`manage_staff`) loads them under Einstellungen › Le
 system such as MACH exports them (`core/transfer.py`, `staff()`): a line each, separated by semicolons, under the
 headings `Personalnummer`, `Titel`, `Vorname`, `Nachname`, `E-Mail`, `Benutzername`, `Institut`, `Beschäftigung`,
 `Lehrverpflichtung`, `Grundlage`, in any order and any of them left out; „Vorlage“ gives a file with the headings.
-`Beschäftigung` as its label („Professur“, „Lehrauftrag“ …) or key; the Lehrverpflichtung, with a decimal comma or
-point, for the semester being planned, else the current one; a Lehrauftrag's SWS are agreed in the Lehrauftrag instead.
+`Beschäftigung` as its label („Professur“, „Lehrauftrag“ …) or key; `Institut` by its name or its Kennung im
+Personalsystem (Einstellungen › Institute). The Lehrverpflichtung, with a decimal comma or point, holds from the semester
+being planned, else the current one, until another follows; one equal to what holds already adds nothing. A
+Lehrauftrag's SWS are agreed in the Lehrauftrag instead. The file may be UTF-8 or as Excel saves it on a German Windows
+(Windows-1252); after loading, „N einladen“ on Lehre › Lehrende invites whoever has never signed in.
 
 A person is found by Personalnummer, then E-Mail, then username, and keeps all the file leaves out; someone new gets
 their address's local part as username and signs in through the Hochschule's login, whose first sign-in finds them by

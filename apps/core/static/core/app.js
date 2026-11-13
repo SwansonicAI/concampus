@@ -624,7 +624,8 @@ function conditional(form) {
   const rules = [...form.querySelectorAll('[data-for]')].map(input => [input.closest('.row > div, form > div'), ...input.dataset.for.split(':')]);
   const show = () => rules.forEach(([group, name, values]) => {
     const choice = form.elements[name], off = (choice.closest ? choice : choice[0]).closest('[hidden]');  // a select, or radio buttons
-    group.hidden = Boolean(off && form.contains(off)) || !values.split(',').includes(choice.value);
+    const value = choice.type === 'checkbox' ? (choice.checked ? choice.value : '') : choice.value;  // „is_active:“ shows while unticked
+    group.hidden = Boolean(off && form.contains(off)) || !values.split(',').includes(value);
   });
   form.addEventListener('change', show);
   show();

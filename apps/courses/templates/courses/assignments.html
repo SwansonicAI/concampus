@@ -4,35 +4,37 @@
 {% block content %}
 <h1>Lehraufträge</h1>
 <div class="head">
-  <p class="lead">{{ term }}: vorgeschlagen, sobald Lehrbeauftragte eine Lehrveranstaltung haben; erteilt mit Bescheid; nach der Vorlesungszeit die gehaltenen Stunden für die Vergütung.</p>
+  <p class="lead">{% for value, label, n in tally %}{% if n %}<a class="badge {% if value == 'granted' %}yes{% elif value == 'proposed' %}wait{% else %}no{% endif %}" href="?semester={{ term.pk }}&amp;stand={{ value }}">{{ n }} {{ label|lower }}</a> {% endif %}{% endfor %}
+    · {{ sws|floatformat:"-1" }} SWS{% if cost %} · <span title="Vereinbarte SWS über {{ weeks }} Unterrichtswochen, je Vergütungsstufe">≈ {{ cost|floatformat:"0g" }} €</span>{% endif %}{% if unrated %} <small class="muted" title="Ohne Vergütungsstufe: nicht in der Summe">· nicht alle mit Stufe</small>{% endif %}</p>
   {% if granting %}<div class="actions"><a class="btn ghost" href="{% url 'courses:assignments_export' %}?semester={{ term.pk }}">CSV für die Vergütung</a></div>{% endif %}
 </div>
 <form class="toolbar">
   <div class="inline">
     <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% empty %}<option>{{ term }}</option>{% endfor %}</select></label>
+    <label>Institut<select name="institut" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>
     <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for value, label in statuses %}<option value="{{ value }}"{% if value == stand %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name oder Lehrveranstaltung"></label>
   </div>
 </form>
 <form method="post" id="auftraege">
   {% csrf_token %}<input type="hidden" name="semester" value="{{ term.pk }}">
-  <table>
-    <thead><tr>{% if granting %}<th><input type="checkbox" data-all aria-label="Alle"></th>{% endif %}<th>Lehrbeauftragte</th><th>Lehrveranstaltungen</th><th class="num" title="Vereinbart, und was sie jetzt unterrichten">SWS</th><th>Stand</th>{% if over %}<th class="num" title="Gehaltene Termine, nicht abgesagte">Gehalten (LVS)</th>{% endif %}{% if granting %}<th></th>{% endif %}</tr></thead>
+  {% if granting and rows %}<div class="actions" style="margin-bottom: 12px">{% if counts.proposed %}<button class="btn" formaction="{% url 'courses:grant' %}">Ausgewählte erteilen</button>{% endif %}{% if over %}<button class="btn ghost" formaction="{% url 'courses:settle' %}">Stunden der ausgewählten bestätigen</button>{% endif %}</div>{% endif %}
+  <table data-panel>
+    <thead><tr>{% if granting %}<th>{% if counts.proposed or over %}<input type="checkbox" data-all aria-label="Alle">{% endif %}</th>{% endif %}<th>Lehrbeauftragte</th><th>Lehrveranstaltungen</th><th class="num" title="Vereinbart">SWS</th>{% if cost %}<th class="num">€</th>{% endif %}<th>Stand</th>{% if over %}<th class="num" title="Gehaltene Termine, nicht abgesagte">Gehalten</th>{% endif %}</tr></thead>
     <tbody>
       {% for a in rows %}
       <tr>
-        {% if granting %}<td>{% if a.status != 'withdrawn' %}<input type="checkbox" name="auftrag" value="{{ a.pk }}" data-part aria-label="{{ a.person }}">{% endif %}</td>{% endif %}
-        <td data-value="{{ a.person.name }}"><b>{{ a.person }}</b>{% if a.person.institute %}<br><small class="muted">{{ a.person.institute }}</small>{% endif %}</td>
-        <td>{% for c in a.courses.all %}<a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a>{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="muted">–</span>{% endfor %}</td>
-        <td class="num" data-value="{{ a.hours }}"><b>{{ a.hours }}</b>{% if a.more %}<br><small class="fail" title="Unterrichtet {{ a.teaching|floatformat:'-1' }} SWS: erneut erteilen">+{{ a.teaching|floatformat:'-1' }}</small>{% elif a.teaching != a.hours and a.status == 'proposed' %}<br><small class="muted">{{ a.teaching|floatformat:'-1' }} jetzt</small>{% endif %}</td>
-        <td data-value="{{ a.status }}"><span class="badge {% if a.status == 'granted' %}yes{% elif a.status == 'proposed' %}wait{% else %}no{% endif %}" title="{% if a.granted %}Erteilt am {{ a.granted|date:'j.n.Y' }} von {{ a.granted_by }}{% elif a.note %}{{ a.note }}{% endif %}">{{ a.get_status_display }}</span></td>
-        {% if over %}<td class="num" data-value="{{ a.so_far|default_if_none:'' }}">{% if a.status == 'granted' %}{{ a.so_far|floatformat:'-1' }}<br><small class="muted">{% if a.affirmed %}<span title="Von {{ a.person.first_name }} {{ a.person.last_name }} am {{ a.affirmed|date:'j.n.Y' }}">✓ Person</span>{% else %}Person offen{% endif %}{% if a.settled_on %} · <span title="{{ a.settled_by }}, {{ a.settled_on|date:'j.n.Y' }}">✓ Amt</span>{% endif %}</small>{% else %}<span class="muted">–</span>{% endif %}</td>{% endif %}
-        {% if granting %}<td>{% if a.status != 'withdrawn' %}<details><summary class="link">Zurückziehen</summary><input name="grund" form="zurueck-{{ a.pk }}" placeholder="Grund" aria-label="Grund" maxlength="200" required><button class="btn danger small" form="zurueck-{{ a.pk }}">Zurückziehen</button></details>{% endif %}</td>{% endif %}
+        {% if granting %}<td>{% if a.status == 'proposed' or a.so_far is not None and not a.settled_on %}<input type="checkbox" name="auftrag" value="{{ a.pk }}" data-part aria-label="{{ a.person }}">{% endif %}</td>{% endif %}
+        <td data-value="{{ a.person.name }}"><a href="{% url 'courses:assignment' a.pk %}"><b>{{ a.person }}</b></a>{% if a.person.institute %}<br><small class="muted">{{ a.person.institute }}</small>{% endif %}</td>
+        <td>{% for c in a.courses.all %}<a href="{% url 'courses:course' c.pk %}"{% if c.cancelled %} class="muted" title="Entfällt"{% endif %}>{{ c.title }}</a>{% if c.cancelled %} <span class="badge no">entfällt</span>{% endif %}{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="muted">–</span>{% endfor %}</td>
+        <td class="num" data-value="{{ a.hours }}"><b>{{ a.hours|floatformat:"-1" }}</b>{% if a.more %}<br><small class="fail" title="Unterrichtet {{ a.teaching|floatformat:'-1' }} SWS: erneut erteilen">{{ a.teaching|floatformat:"-1" }}</small>{% endif %}{% if a.too_much %}<br><small class="caution" title="Über dem Höchstumfang">!</small>{% endif %}</td>
+        {% if cost %}<td class="num" data-value="{{ a.cost|default_if_none:'' }}">{% if a.cost %}{{ a.cost|floatformat:"0g" }}{% else %}<span class="muted">–</span>{% endif %}</td>{% endif %}
+        <td data-value="{{ a.status }}"><span class="badge {% if a.status == 'granted' %}yes{% elif a.status == 'proposed' %}wait{% else %}no{% endif %}">{% if a.status == 'withdrawn' and not a.granted %}Nicht erteilt{% else %}{{ a.get_status_display }}{% endif %}</span>{% if a.status == 'granted' %} <small class="muted" title="{% if a.accepted %}Angenommen am {{ a.accepted|date:'j.n.Y' }}{% else %}Noch nicht angenommen{% endif %}">{% if a.accepted %}✓{% else %}○{% endif %}</small>{% endif %}{% if a.still %}<br><small class="caution">unterrichtet noch</small>{% endif %}</td>
+        {% if over %}<td class="num" data-value="{{ a.so_far|default_if_none:'' }}">{% if a.so_far is not None %}{{ a.so_far|floatformat:"-1" }}{% if a.settled_on %} <small class="muted" title="Bestätigt">✓</small>{% endif %}{% else %}<span class="muted">–</span>{% endif %}</td>{% endif %}
       </tr>
-      {% empty %}<tr><td colspan="7" class="empty">Keine Lehraufträge im {{ term }}.</td></tr>
+      {% empty %}<tr><td colspan="7" class="empty">Keine Lehraufträge{% if stand or q or institute %}, die passen{% else %} im {{ term }}{% endif %}.</td></tr>
       {% endfor %}
     </tbody>
   </table>
-  {% if granting and rows %}<div class="actions" style="margin-top: 16px"><button class="btn" formaction="{% url 'courses:grant' %}">Ausgewählte erteilen</button>{% if over %}<button class="btn ghost" formaction="{% url 'courses:settle' %}">Stunden der ausgewählten bestätigen</button>{% endif %}</div>{% endif %}
 </form>
-{% for a in rows %}{% if granting and a.status != 'withdrawn' %}<form method="post" action="{% url 'courses:withdraw_assignment' a.pk %}" id="zurueck-{{ a.pk }}">{% csrf_token %}<input type="hidden" name="semester" value="{{ term.pk }}"></form>{% endif %}{% endfor %}
 {% endblock %}

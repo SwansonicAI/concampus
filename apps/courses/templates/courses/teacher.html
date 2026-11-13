@@ -1,0 +1,47 @@
+{% extends base %}
+{% block title %}{{ t }}{% endblock %}
+{% block content %}
+<p class="eyebrow"><a href="{% url 'courses:staff' %}">Lehrende</a></p>
+<h1>{{ t }}</h1>
+<p class="lead">{{ t.get_employment_display|default:"Beschäftigung offen" }} · {{ t.institute|default:"ohne Institut" }}{% if t.personnel_number %} · Personalnummer {{ t.personnel_number }}{% endif %}{% if t.email %} · <a href="mailto:{{ t.email }}">{{ t.email }}</a>{% endif %}</p>
+<p>{% if not t.is_active %}<span class="badge no">ausgeschieden{% if t.left %} {{ t.left|date:"j.n.Y" }}{% endif %}</span>{% endif %}
+  {% if t.contract_end %}<span class="badge {% if ending %}wait{% endif %}">befristet bis {{ t.contract_end|date:"j.n.Y" }}</span>{% endif %}
+  {% if t.last_login %}<span class="badge" title="Zuletzt angemeldet {{ t.last_login|date:'j.n.Y' }}">angemeldet</span>{% elif t.is_active %}<span class="badge wait">noch nie angemeldet</span>{% endif %}</p>
+
+<table class="semesters">
+  <thead><tr><th></th>{% for s in semesters %}<th class="num{% if s.now %} now{% endif %}">{{ s.term }}</th>{% endfor %}</tr></thead>
+  <tbody>
+    <tr><th>{% if t.employment == 'lehrauftrag' %}Lehrauftrag{% else %}Soll{% endif %}</th>{% for s in semesters %}<td class="num">{% if t.employment == 'lehrauftrag' %}{% if s.contract %}<a href="{% url 'courses:assignment' s.contract.pk %}" class="badge {% if s.contract.status == 'granted' %}yes{% elif s.contract.status == 'proposed' %}wait{% else %}no{% endif %}" title="{{ s.contract.get_status_display }}">{{ s.contract.hours|floatformat:"-1" }}</a>{% else %}<span class="muted">–</span>{% endif %}{% elif s.soll is None %}{% if s.past %}<span class="muted">–</span>{% else %}<span class="fail">fehlt</span>{% endif %}{% else %}<span title="{% if s.obligation.post %}{{ s.obligation.post }}{% endif %}{% if s.obligation.basis %} · {{ s.obligation.basis }}{% endif %} · ab {{ s.obligation.term }}">{{ s.soll|floatformat:"-1" }}</span>{% endif %}</td>{% endfor %}</tr>
+    <tr><th>Ermäßigung</th>{% for s in semesters %}<td class="num">{% for r in s.reductions %}<span title="{{ r.ground }}">− {{ r.hours|floatformat:"-1" }}</span>{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="muted">–</span>{% endfor %}</td>{% endfor %}</tr>
+    <tr><th>Deputat</th>{% for s in semesters %}<td class="num"><b>{{ s.taught|floatformat:"-1" }}</b></td>{% endfor %}</tr>
+    <tr><th>Saldo</th>{% for s in semesters %}<td class="num">{% if s.balance is None %}<span class="muted">–</span>{% elif s.balance > 0 %}<span class="fail" title="Über dem Soll">+{{ s.balance|floatformat:"-1" }}</span>{% else %}{{ s.balance|floatformat:"-1" }}{% endif %}</td>{% endfor %}</tr>
+  </tbody>
+</table>
+
+{% if t.employment != 'lehrauftrag' %}
+<h2>Lehrverpflichtung</h2>
+<table>
+  <tbody>
+    {% for o in obligations %}
+    <tr><td>ab {{ o.term }}</td><td class="num"><b>{{ o.hours|floatformat:"-1" }}</b> LVS</td><td>{{ o.post.name|default:"" }}{% if o.basis %}{% if o.post %} · {% endif %}<span class="muted">{{ o.basis }}</span>{% endif %}</td><td>{% if keeping %}<a class="link" href="{% url 'setup:edit' 'lehrverpflichtungen' o.pk %}">Ändern</a>{% endif %}</td></tr>
+    {% empty %}<tr><td colspan="4" class="empty">Noch keine eingetragen.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+{% if courses %}
+<h2>Lehrveranstaltungen</h2>
+<table>
+  <tbody>{% for c in courses %}<tr><td><a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a>{% if c.cancelled %} <span class="badge no">entfällt</span>{% endif %}</td><td class="num">{{ c.n }} <small class="muted">Teilnahmen</small></td></tr>{% endfor %}</tbody>
+</table>
+{% endif %}
+
+{% if keeping %}
+<div class="actions" style="margin-top: 32px">
+  <a class="btn" href="{% url 'setup:edit' 'lehrende' t.pk %}">Bearbeiten</a>
+  {% if t.employment != 'lehrauftrag' %}<a class="btn ghost" href="{% url 'setup:new' 'lehrverpflichtungen' %}?person={{ t.pk }}">Neue Lehrverpflichtung</a>{% endif %}
+  {% if t.is_active and t.email %}<form method="post" action="{% url 'setup:invite' t.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'courses:teacher' t.pk %}"><button class="btn ghost">{% if t.last_login %}Zugang neu senden{% else %}Einladen{% endif %}</button></form>{% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -139,7 +139,7 @@ def rollover(request):
         'timeless': timeless, 'fillable': timezone.localdate() > target.deadline,
         'over': [row for row in load if row.balance and row.balance > 0], 'under': [row for row in load if row.low],
         'assignments': Counter(target.assignments.values_list('status', flat=True)),
-        'unbound': staffed.exclude(obligations__term=target).count(), 'staffing': 'manage_staff' in person.roles,  # teaching there without a Lehrverpflichtung
+        'unbound': staffed.exclude(obligations__term__start__lte=target.start).count(), 'staffing': 'manage_staff' in person.roles,  # teaching there without a Lehrverpflichtung
         'leave': Reduction.objects.filter(term=target, ground__leave=True, person__teaching__in=live).distinct().select_related('person', 'ground'),
         'gaps': gaps(target)[:12] if planned.exists() else [],
         'publishers': Office.holding('publish_term', linked=True),

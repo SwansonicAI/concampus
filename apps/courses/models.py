@@ -598,18 +598,39 @@ def per_sws(short):
     return Institution.get().lesson_minutes if short.startswith('E') else 45
 
 
+class Post(Tracked, models.Model):
+    """A kind of post as the Lehrverpflichtungsverordnung lists it, with the LVS it asks: a Lehrverpflichtung is entered
+    by it, a contract's own where it says otherwise."""
+
+    capabilities = ('manage_staff',)
+
+    name = models.CharField('Stellenart', max_length=120, unique=True, help_text='Z. B. „Professur, künstlerisches Fach“.')
+    hours = models.DecimalField('Lehrverpflichtung (LVS)', max_digits=4, decimal_places=1)
+    basis = models.CharField('Rechtsgrundlage', max_length=120, blank=True, help_text='Z. B. „ThürLVVO § 4 Abs. 1 Nr. 1“.')
+
+    class Meta:
+        ordering = ['-hours', 'name']
+        verbose_name = 'Stellenart'
+        verbose_name_plural = 'Stellenarten'
+
+    def __str__(self):
+        return f'{self.name} ({self.hours.normalize():f} LVS)'.replace('.', ',')
+
+
 class Obligation(Tracked, models.Model):
-    """A teacher's Lehrverpflichtung in a term, before Ermäßigungen: what the Lehrverpflichtungsverordnung asks of their
-    post, or their contract, with where it comes from. The Deputat counts against it; the Semesterwechsel takes it over."""
+    """A teacher's Lehrverpflichtung from a term on, until another follows: what their post asks under the
+    Lehrverpflichtungsverordnung, or their contract, before Ermäßigungen. The Deputat counts each term against the one
+    in force (in_force)."""
 
     owner = 'person_id'
     capabilities = ('manage_staff',)
     scope = (['person__institute'], [])
 
     person = models.ForeignKey(Person, models.CASCADE, related_name='obligations', verbose_name='Lehrperson')
-    term = models.ForeignKey(Term, models.PROTECT, related_name='obligations', verbose_name='Semester')
+    term = models.ForeignKey(Term, models.PROTECT, related_name='obligations', verbose_name='Ab Semester')
+    post = models.ForeignKey(Post, models.PROTECT, null=True, blank=True, related_name='obligations', verbose_name='Stellenart')
     hours = models.DecimalField('Lehrverpflichtung (LVS)', max_digits=4, decimal_places=1)
-    basis = models.CharField('Grundlage', max_length=200, blank=True, help_text='Z. B. „ThürLVVO § 4 Abs. 1 Nr. 1“ oder „Arbeitsvertrag vom 1.10.2026“.')
+    basis = models.CharField('Notiz', max_length=200, blank=True, help_text='Z. B. „Arbeitsvertrag vom 1.10.2026“.')
 
     class Meta:
         ordering = ['-term__start', 'person__last_name']
@@ -618,7 +639,35 @@ class Obligation(Tracked, models.Model):
         constraints = [models.UniqueConstraint(fields=['person', 'term'], name='unique_obligation')]
 
     def __str__(self):
-        return f'{self.person} · {self.term}'
+        return f'{self.person} · ab {self.term}'
+
+    @classmethod
+    def in_force(cls, people, terms):
+        """{(person, term): Obligation}: for each of the terms, the one each person had entered from it or before."""
+        found = {}
+        rows = list(cls.objects.filter(person__in=people).select_related('term', 'post').order_by('term__start'))
+        for term in terms:
+            for o in rows:
+                if o.term.start <= term.start:
+                    found[o.person_id, term.pk] = o  # later ones win
+        return found
+
+
+class Rate(Tracked, models.Model):
+    """What a Lehrauftrag pays per Lehrveranstaltungsstunde held, as the Hochschule's rules set it by qualification."""
+
+    capabilities = ('grant_assignments',)
+
+    name = models.CharField('Vergütungsstufe', max_length=80, unique=True, help_text='Z. B. „Stufe II: mit abgeschlossenem Hochschulstudium“.')
+    euros = models.DecimalField('Je LVS (€)', max_digits=6, decimal_places=2)
+
+    class Meta:
+        ordering = ['euros']
+        verbose_name = 'Vergütungsstufe'
+        verbose_name_plural = 'Vergütungsstufen'
+
+    def __str__(self):
+        return f'{self.name} ({self.euros:.2f} €)'.replace('.', ',')
 
 
 class Assignment(Tracked, models.Model):
@@ -639,10 +688,14 @@ class Assignment(Tracked, models.Model):
     term = models.ForeignKey(Term, models.PROTECT, related_name='assignments', verbose_name='Semester')
     courses = models.ManyToManyField(Course, blank=True, related_name='assignments', verbose_name='Lehrveranstaltungen')
     hours = models.DecimalField('Vereinbart (SWS)', max_digits=4, decimal_places=1)
+    rate = models.ForeignKey(Rate, models.PROTECT, null=True, blank=True, related_name='assignments', verbose_name='Vergütungsstufe')
     status = models.CharField('Stand', max_length=10, choices=Status, default=Status.PROPOSED)
     proposed_by = models.ForeignKey(Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Vorgeschlagen von')
+    proposed_on = models.DateField('Vorgeschlagen am', default=timezone.localdate)
     granted_by = models.ForeignKey(Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Erteilt von')
     granted = models.DateField('Erteilt am', null=True, blank=True)
+    accepted = models.DateTimeField('Angenommen am', null=True, blank=True)
+    withdrawn_on = models.DateField('Zurückgezogen am', null=True, blank=True, help_text='Bis dahin gehaltene Stunden werden vergütet.')
     note = models.CharField('Notiz', max_length=200, blank=True, help_text='Z. B. der Grund eines Rückzugs.')
     held = models.DecimalField('Gehalten (LVS)', max_digits=5, decimal_places=1, null=True, blank=True, help_text='Nach dem Semester, für die Vergütung.')
     affirmed = models.DateTimeField('Von der Person bestätigt', null=True, blank=True)

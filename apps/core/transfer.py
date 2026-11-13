@@ -290,6 +290,7 @@ def staff(text, term):
     first = text.split('\n', 1)[0]
     reader = csv.DictReader(io.StringIO(text), delimiter=';' if ';' in first else '\t' if '\t' in first else ',')
     kinds = {label.lower(): key for key, label in Person.Employment.choices} | {key: key for key in Person.Employment.values}
+    codes = dict(Institute.objects.exclude(code='').values_list('code', 'name'))  # an Institut as the personnel system names it
     people = []
     for row in reader:
         found = {COLUMNS.get(k.strip(), k.strip()): (v or '').strip() for k, v in row.items() if k}
@@ -297,11 +298,13 @@ def staff(text, term):
         hours, basis = found.pop('hours', ''), found.pop('basis', '')
         if 'employment' in found:
             found['employment'] = kinds.get(found['employment'].lower(), found['employment'])
+        if 'institute' in found:
+            found['institute'] = codes.get(found['institute'], found['institute'])
         known = next((p for key, lookup in (('personnel_number', 'personnel_number'), ('email', 'email__iexact'), ('username', 'username'))
                       if found.get(key) and (p := Person.objects.filter(**{lookup: found[key]}).first())), None)
         base = record(known, institute=known.institute and known.institute.name) if known else {'username': found.get('email', '').split('@')[0] or found.get('personnel_number')}
         person = base | found
-        if hours and person.get('employment') != Person.Employment.LEHRAUFTRAG:  # a Lehrauftrag's SWS are agreed in it
+        if hours and person.get('employment') != Person.Employment.LEHRAUFTRAG and not (known and same(in_force(known, term), hours.replace(',', '.'))):  # a Lehrauftrag's SWS are agreed in it
             person['obligations'] = [compact({'term': term.name, 'hours': hours.replace(',', '.'), 'basis': basis})]
         people.append(person)
     return json.loads(json.dumps({'format': FORMAT, 'people': people}, cls=DjangoJSONEncoder))  # as a session keeps it
@@ -319,15 +322,24 @@ def changes(document):
         was = json.loads(json.dumps(record(person, institute=person.institute and person.institute.name), cls=DjangoJSONEncoder))
         changed = [str(Person._meta.get_field(k).verbose_name) for k, v in p.items() if k not in ('obligations', 'studies') and was.get(k) != v]
         for o in p.get('obligations', []):
-            hours = Obligation.objects.filter(person=person, term__name=o['term']).values_list('hours', flat=True).first()
-            try:
-                same = hours == Decimal(o['hours'])  # „18“ is 18.0
-            except InvalidOperation:
-                same = False  # check() names it
-            if not same:
+            if not same(in_force(person, Term.objects.filter(name=o['term']).first()), o['hours']):
                 changed.append('Lehrverpflichtung')
         found.append((p, person, changed))
     return found
+
+
+def in_force(person, term):
+    """The LVS of the person's Lehrverpflichtung in force in the term, or None."""
+    found = term and Obligation.in_force([person], [term]).get((person.pk, term.pk))
+    return found and found.hours
+
+
+def same(hours, text):
+    """Whether LVS kept equal LVS as a file gives them: „18“ is 18.0; what is no number is not (check() names it)."""
+    try:
+        return hours is not None and hours == Decimal(text)
+    except InvalidOperation:
+        return False
 
 
 def check(document):

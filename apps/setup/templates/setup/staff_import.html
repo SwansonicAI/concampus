@@ -1,7 +1,7 @@
 {% extends base %}
 {% block title %}Lehrende laden{% endblock %}
 {% block content %}
-<p class="eyebrow"><a href="{% url 'setup:index' %}">Einstellungen</a> › <a href="{% url 'setup:list' 'lehrende' %}">Lehrende</a></p>
+<p class="eyebrow"><a href="{% url 'courses:staff' %}">Lehrende</a></p>
 <h1>Lehrende laden</h1>
 <p class="lead">{% if new %}<span class="badge yes">{{ new }} neu</span> {% endif %}{% if changed %}<span class="badge open">{{ changed }} geändert</span> {% endif %}{% if same %}<span class="badge">{{ same }} unverändert</span> {% endif %}{% if faults %}<span class="badge no">{{ faults|length }} Fehler</span>{% endif %} · Lehrverpflichtungen für das {{ term }}. Noch ist nichts gespeichert.</p>
 <table>
@@ -23,6 +23,6 @@
 <div class="actions" style="margin-top: 24px">
   {% if not faults %}<form method="post">{% csrf_token %}<button class="btn" name="laden" value="1">{{ rows|length }} Zeilen laden</button></form>{% endif %}
   <form method="post" enctype="multipart/form-data" class="inline">{% csrf_token %}<input type="file" name="datei" accept=".csv,text/csv" required aria-label="CSV-Datei"><button class="btn ghost">{% if faults %}Berichtigte Datei prüfen{% else %}Andere Datei{% endif %}</button></form>
-  <a class="btn ghost" href="{% url 'setup:list' 'lehrende' %}">Abbrechen</a>
+  <a class="btn ghost" href="{% url 'courses:staff' %}">Abbrechen</a>
 </div>
 {% endblock %}

@@ -6,7 +6,6 @@
   <h1>{{ editor.title }}</h1>
   <div class="actions">
     {% if editor.carry %}<form method="post" action="{% url editor.carry %}">{% csrf_token %}<button class="btn ghost" data-confirm="{{ editor.carried }}, für alle, die dort noch keinen Eintrag haben?">{{ editor.carried }}</button></form>{% endif %}
-    {% if editor.upload %}<form method="post" action="{% url editor.upload %}" enctype="multipart/form-data" class="inline">{% csrf_token %}<input type="file" name="datei" accept=".csv,text/csv" required aria-label="CSV-Datei" title="Spalten: {{ editor.upload_columns }}"><button class="btn ghost">Aus CSV laden</button><a class="link" href="{% url editor.upload %}?vorlage=1">Vorlage</a></form>{% endif %}
     {% if editor.creatable %}<a class="btn" href="{% url 'setup:new' editor.key %}" data-panel>Neu anlegen</a>{% endif %}
   </div>
 </div>

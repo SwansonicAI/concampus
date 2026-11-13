@@ -12,7 +12,7 @@ from rooms.plans import agenda
 from students.models import Study
 from .. import moodle
 from ..models import Assignment, Course, Ensemble, Group, Participation, Signup
-from .assignments import held
+from .assignments import held, payable
 from .common import TEACHING, ahead, queued, since
 from .load import coaching, counted, deputat, sws, taught
 from .timetable import clashes, fits, limit, series, theirs, weight
@@ -109,10 +109,10 @@ def mine(request):
         there = moodle.addresses(taught_here)
         for c in taught_here:  # as the Deputat counts it: a lesson class by its students' minutes
             c.sws, c.moodle_at = None if c.cancelled else sws(c, c.coached), there.get(c.pk)
-        assignment = person.assignments.filter(term=term).exclude(status=Assignment.Status.WITHDRAWN).prefetch_related('courses').first()
-        if assignment:  # after the lectures, the hours held of a granted one, to confirm
-            assignment.so_far = None if assignment.status != Assignment.Status.GRANTED or timezone.localdate() <= term.lectures_end else (
-                assignment.held if assignment.settled_on else held([assignment]).get(assignment.pk, 0))
+        assignment = person.assignments.filter(term=term, granted__isnull=False).select_related('rate').prefetch_related('courses').first()  # a proposal is the office's
+        if assignment:  # its Bescheid, and once they count the hours held, to confirm
+            assignment.so_far = (assignment.held if assignment.settled_on else held([assignment]).get(assignment.pk, 0)) if payable(assignment) else None
+            assignment.letter = person.messages.filter(subject__startswith=f'Bescheid: Lehrauftrag {term}').order_by('-created').first()
         context.update(
             assignment=assignment, granting=assignment and Office.holding('grant_assignments', linked=True),
             teaching=taught_here,

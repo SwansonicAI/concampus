@@ -22,7 +22,7 @@
   <tbody>
     {% for row in rows %}
     <tr>
-      <td data-value="{{ row.teacher.name }}"><b>{{ row.teacher }}</b>{% if row.teacher.employment %}<br><small class="muted">{{ row.teacher.get_employment_display }}</small>{% endif %}</td>
+      <td data-value="{{ row.teacher.name }}">{% if everyone %}<a href="{% url 'courses:teacher' row.teacher.pk %}"><b>{{ row.teacher }}</b></a>{% else %}<b>{{ row.teacher }}</b>{% endif %}{% if row.teacher.employment %}<br><small class="muted">{{ row.teacher.get_employment_display }}</small>{% endif %}</td>
       <td>{% for c, load in row.courses %}<a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a> <small class="muted">{{ load }}</small>{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
       <td class="num"><b>{{ row.total }}</b>{% if row.low %}<br><small class="fail" title="Unter {{ institution.load_floor }} % der Lehrverpflichtung">unter {{ institution.load_floor }} %</small>{% endif %}</td>
       <td class="num" data-value="{{ row.due|default_if_none:'' }}">{% if row.due is None %}<span class="muted">–</span>{% else %}{{ row.due }}{% if row.teacher.employment == 'lehrauftrag' %}<br><small class="muted">vereinbart</small>{% endif %}{% for r in row.reductions %}<br><small class="muted" title="{{ r.ground }}">− {{ r.hours }} {{ r.note|default:r.ground.name }}</small>{% endfor %}{% endif %}</td>

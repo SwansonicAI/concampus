@@ -19,6 +19,7 @@ from core.access import CAPABILITIES, CODENAMES, EVERYWHERE, LOCK, SENSITIVE, SH
 from core.history import because
 from core.keys import Edition, Key, review
 from core import transfer
+from core.apps import plural
 from core.models import AccessRequest, Export, Feedback, Grant, Institute, Membership, Office, Person, SignIn, Term, Text, limited, waiting
 from core.text import matching
 from core.texts import TEXTS, Values, basics, mail, wording
@@ -185,7 +186,7 @@ def back(request, editor):
     target = request.GET.get('next', '')
     if url_has_allowed_host_and_scheme(target, {request.get_host()}):
         return target
-    return reverse('setup:list', args=[editor.key]) if editor.section else reverse('home')
+    return reverse('setup:list', args=[editor.key]) if editor.section else reverse(editor.home or 'home')
 
 
 def cell(obj, name):
@@ -303,11 +304,16 @@ def staff_import(request):
         response['Content-Disposition'] = 'attachment; filename="lehrende.csv"'
         return response
     if term and request.method == 'POST' and (upload := request.FILES.get('datei')):
-        request.session['lehrende'] = transfer.staff(upload.read().decode('utf-8-sig', errors='replace'), term)
+        raw = upload.read()
+        try:
+            text = raw.decode('utf-8-sig')
+        except UnicodeDecodeError:  # Excel's „CSV (Trennzeichen-getrennt)“ on a German Windows
+            text = raw.decode('cp1252', errors='replace')
+        request.session['lehrende'] = transfer.staff(text, term)
         return redirect('setup:staff_import')
     document = request.session.get('lehrende')
     if not (document and term):
-        return redirect('setup:list', 'lehrende')
+        return redirect('courses:staff')
     ours = None if request.user.everywhere('manage_staff') else set(Institute.objects.filter(pk__in=request.user.ours('manage_staff')).values_list('name', flat=True))
     faults = [f'Zeile {i + 2}: Institut {p.get("institute") or "fehlt"}, außerhalb Ihres Amtes' for i, p in enumerate(document['people']) if ours is not None and p.get('institute') not in ours]
     faults += transfer.check(document)
@@ -315,7 +321,7 @@ def staff_import(request):
         counts = transfer.load(document)
         del request.session['lehrende']
         messages.success(request, 'Geladen: ' + ', '.join(f'{n} {what}' for what, n in counts.items()) + '.')
-        return redirect('setup:list', 'lehrende')
+        return redirect('courses:staff')
     kinds = dict(Person.Employment.choices)
     rows = [
         {'line': i + 2, 'p': p, 'person': person, 'changed': changed, 'kind': kinds.get(p.get('employment'), p.get('employment', '')),
@@ -338,10 +344,30 @@ def invite(request, pk):
     if not person.email:
         messages.error(request, 'Ohne E-Mail-Adresse kann keine Einladung verschickt werden.')
     else:
-        link = request.build_absolute_uri(reverse('password_reset_confirm', args=[urlsafe_base64_encode(force_bytes(person.pk)), default_token_generator.make_token(person)]))
-        mail('konto', person, zugang=link, benutzername=person.username)
+        invitation(request, person)
         messages.success(request, f'Einladung an {person.email} verschickt.')
     return redirect(request.POST.get('next') if url_has_allowed_host_and_scheme(request.POST.get('next', ''), {request.get_host()}) else reverse('setup:edit', args=['konten', pk]))
+
+
+def invitation(request, person):
+    link = request.build_absolute_uri(reverse('password_reset_confirm', args=[urlsafe_base64_encode(force_bytes(person.pk)), default_token_generator.make_token(person)]))
+    mail('konto', person, zugang=link, benutzername=person.username)
+
+
+def uninvited(person):
+    """The teachers in the person's reach who have never signed in, with an address to invite them at."""
+    return person.within(Person.teachers(), 'manage_staff').filter(is_active=True, last_login=None).exclude(email='')
+
+
+@require('manage_staff')
+@require_POST
+def invite_new(request):
+    """Invite every teacher in reach who has never signed in, as after loading new ones from the personnel system."""
+    people = list(uninvited(request.user))
+    for person in people:
+        invitation(request, person)
+    messages.success(request, f'{plural(len(people), "Einladung", "Einladungen")} verschickt.')
+    return redirect('courses:staff')
 
 
 @require_POST

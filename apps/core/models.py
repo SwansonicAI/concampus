@@ -213,6 +213,10 @@ class Institution(Tracked, models.Model):
         'Mindestens je Semester (%)', null=True, blank=True, default=50,
         help_text='Weniger Lehre der Lehrverpflichtung in einem Semester wird im Deputat markiert; leer: nicht.',
     )
+    assignment_max = models.DecimalField(
+        'Lehrauftrag höchstens (SWS)', max_digits=4, decimal_places=1, null=True, blank=True,
+        help_text='Je Person und Semester; darüber warnt ConCampus beim Erteilen, denn viel Lehre im Auftrag kann als Beschäftigung gelten. Leer: ohne Grenze.',
+    )
     lesson_minutes = models.PositiveSmallIntegerField(
         'Minuten Einzelunterricht je SWS', default=60, validators=[MinValueValidator(1)], help_text='Wie das Deputat die Minuten je Woche aus dem Studienplan („E 90“) in SWS umrechnet.',
     )
@@ -295,6 +299,7 @@ class Institute(Tracked, models.Model):
     capabilities = ('manage_institution',)
 
     name = models.CharField('Name', max_length=80, unique=True)
+    code = models.CharField('Kennung im Personalsystem', max_length=30, blank=True, help_text='Wie das Personalsystem die Einheit nennt; ein Import nimmt sie wie den Namen.')
 
     class Meta:
         ordering = ['name']
@@ -409,6 +414,9 @@ class Person(Tracked, AbstractUser):
 
     class Employment(models.TextChoices):
         PROFESSUR = 'professur', 'Professur'
+        VERTRETUNG = 'vertretung', 'Vertretungsprofessur'
+        HONORAR = 'honorar', 'Honorarprofessur'
+        LEHRKRAFT = 'lehrkraft', 'Lehrkraft für besondere Aufgaben'
         MITARBEIT = 'mitarbeit', 'Künstlerische oder wissenschaftliche Mitarbeit'
         LEHRAUFTRAG = 'lehrauftrag', 'Lehrauftrag'
 
@@ -417,8 +425,9 @@ class Person(Tracked, AbstractUser):
     )
     employment = models.CharField(
         'Beschäftigung', max_length=12, choices=Employment, blank=True,
-        help_text='Für Lehrende. Die Lehrverpflichtung je Semester unter Lehrverpflichtungen, ein Lehrauftrag unter Lehraufträge (courses).',
+        help_text='Für Lehrende.',
     )
+    contract_end = models.DateField('Befristet bis', null=True, blank=True, help_text='Letzter Tag des Vertrags; vorher erinnert ConCampus.')
 
     class Meta:
         ordering = ['last_name', 'first_name']

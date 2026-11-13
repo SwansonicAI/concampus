@@ -489,6 +489,10 @@ svg.lock { width: 14px; height: 14px; margin-left: 6px; fill: none; stroke: var(
 .chip.no { border-color: var(--red); color: var(--red); }
 button.chip { background: none; font: inherit; font-size: 12px; cursor: pointer; }
 .chips + .filter { margin-top: 8px; }
+.steps { display: grid; gap: 10px; margin: 0 0 40px; padding: 0; list-style: none; }  /* a record's way, a square each step: filled once done */
+.steps li { display: grid; grid-template-columns: 14px 150px 1fr; gap: 12px; align-items: center; }
+.semesters tbody th { color: var(--muted); font-weight: 400; }  /* a teacher's semesters side by side, this one marked */
+.semesters .now { color: var(--accent); }
 .form .chips { gap: 6px; }
 .form .chips .chip { padding: 4px 10px; color: var(--ink); font-size: 14px; }  /* what is ticked in a long list, to read at a glance */
 .load { display: grid; grid-template-columns: max-content minmax(80px, 160px) max-content max-content; gap: 4px 12px; align-items: center; margin-top: 10px; font-size: 14px; }  /* a course's teachers' Deputat beneath them */

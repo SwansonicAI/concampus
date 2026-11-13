@@ -16,9 +16,7 @@ class CoursesConfig(Tile, AppConfig):
     url = 'courses:index'
 
     def title(self, roles):
-        if 'manage_courses' in roles:
-            return 'Lehre'
-        if 'teacher' in roles:
+        if roles & {'manage_courses', 'teacher', 'view_teaching_load', 'manage_staff', 'grant_assignments'}:  # also who only sees the Deputat or keeps the teachers
             return 'Lehre'
         if 'student' in roles:
             return 'Lehrveranstaltungen'
@@ -37,6 +35,11 @@ class CoursesConfig(Tile, AppConfig):
         if 'teacher' in person.roles:
             courses = person.teaching.filter(term=term, kind__in=TEACHING)
             return f'{plural(courses.count(), "Lehrveranstaltung", "Lehrveranstaltungen")} ·{number_format(deputat(courses, person))} SWS'
+        if person.roles & {'view_teaching_load', 'manage_staff', 'grant_assignments'}:
+            from core.models import Person
+
+            teaching = Person.objects.filter(teaching__term=term, teaching__kind__in=TEACHING, teaching__cancelled=None).distinct()
+            return f'{plural(person.within(teaching, "view_teaching_load" if "view_teaching_load" in person.roles else "manage_staff").count(), "Lehrperson", "Lehrpersonen")} im {term}'
         count = Course.objects.filter(term=term, kind__in=TEACHING, participations__study__person=person).distinct().count()
         return f'{count} belegt im {term}'
 
@@ -49,8 +52,10 @@ class CoursesConfig(Tile, AppConfig):
         found.append(page('Stundenplan', 'courses:timetable'))
         if roles & {'teacher', 'view_teaching_load'}:
             found.append(page('Deputat', 'courses:load'))
+        if roles & {'manage_staff', 'view_teaching_load'}:
+            found.append(page('Lehrende', 'courses:staff', 'teacher'))
         if roles & {'grant_assignments', 'view_teaching_load'}:
-            found.append(page('Lehraufträge', 'courses:assignments'))
+            found.append(page('Lehraufträge', 'courses:assignments', 'assignment'))
         if roles & {'roll_over', 'publish_term'}:
             found.append(page('Semesterwechsel', 'courses:rollover'))
         return found
@@ -67,6 +72,8 @@ class CoursesConfig(Tile, AppConfig):
             found.append(feature('Neue Lehrveranstaltung',reverse('courses:new'), 'lehrveranstaltung einzelunterricht klasse'))
         if roles & {'view_teaching_load', 'teacher'}:
             found.append(feature('Deputat', reverse('courses:load'), 'lehrverpflichtung sws lehrende auslastung'))
+        if roles & {'manage_staff', 'view_teaching_load'}:
+            found.append(feature('Lehrende', reverse('courses:staff'), 'personal personalabteilung personalnummer einstellen neue lehrkraft dozent lehrbeauftragte professur ausscheiden befristet einladen import mach lehrverpflichtung'))
         if roles & {'grant_assignments', 'view_teaching_load'}:
             found.append(feature('Lehraufträge', reverse('courses:assignments'), 'lehrbeauftragte lehrauftrag erteilen verlängern vergütung stundennachweis gehaltene stunden'))
         if roles & {'roll_over', 'publish_term'}:
@@ -74,9 +81,12 @@ class CoursesConfig(Tile, AppConfig):
         return found
 
     def staffing(self, person, term):
-        """Lehraufträge to grant and hours held to confirm, for the office granting them; teachers without a
-        Lehrverpflichtung, for the one taking teachers on; a Lehrbeauftragte:r's own hours held to confirm. For this term
-        and the one being planned."""
+        """For this term and the one being planned: Lehraufträge to grant, to staff anew or to look at again, and hours
+        held to confirm, for the office granting them; teachers without a Lehrverpflichtung and contracts ending, for the
+        one taking teachers on; a Lehrbeauftragte:r's own Lehrauftrag to accept and hours held to confirm."""
+        from datetime import timedelta
+
+        from django.db.models import Q
         from django.utils import timezone
 
         from core.models import Person, Term
@@ -85,18 +95,29 @@ class CoursesConfig(Tile, AppConfig):
 
         found, today, url = [], timezone.localdate(), reverse('courses:assignments')
         for t in filter(None, {term, Term.upcoming()}):
+            teaching = Q(teaching__term=t, teaching__kind__in=TEACHING, teaching__cancelled=None)
             if 'grant_assignments' in person.roles:
                 theirs = person.within(t.assignments.all(), 'grant_assignments')
                 if n := theirs.filter(status=Assignment.Status.PROPOSED).count():
                     found.append(task(f'{plural(n, "Lehrauftrag", "Lehraufträge")} erteilen ({t})', f'{url}?semester={t.pk}&stand=proposed', t.lectures_start))
-                if today > t.lectures_end and (n := theirs.filter(status=Assignment.Status.GRANTED, settled_on=None).count()):
-                    found.append(task(f'Gehaltene Stunden von {plural(n, "Lehrauftrag", "Lehraufträgen")} bestätigen ({t})', f'{url}?semester={t.pk}&stand=granted'))
+                if n := theirs.filter(status=Assignment.Status.WITHDRAWN, person__in=Person.objects.filter(teaching)).count():
+                    found.append(task(f'{plural(n, "Lehrauftrag", "Lehraufträge")} zurückgezogen, unterrichtet aber noch ({t})', f'{url}?semester={t.pk}&stand=withdrawn'))
+                if n := theirs.filter(status=Assignment.Status.GRANTED, courses__cancelled__isnull=False).distinct().count():
+                    found.append(task(f'{plural(n, "Lehrauftrag", "Lehraufträge")} mit abgesagter Lehrveranstaltung ({t})', f'{url}?semester={t.pk}&stand=granted'))
+                if today > t.lectures_end and (n := theirs.filter(granted__isnull=False, settled_on=None).count()):
+                    found.append(task(f'Gehaltene Stunden von {plural(n, "Lehrauftrag", "Lehraufträgen")} bestätigen ({t})', f'{url}?semester={t.pk}'))
             if 'manage_staff' in person.roles:
-                teaching = Person.objects.filter(is_active=True, teaching__term=t, teaching__kind__in=TEACHING, teaching__cancelled=None).exclude(employment=Person.Employment.LEHRAUFTRAG)
-                if n := person.within(teaching.exclude(obligations__term=t).distinct(), 'manage_staff').count():
-                    found.append(task(f'{plural(n, "Lehrperson", "Lehrpersonen")} ohne Lehrverpflichtung im {t}', reverse('setup:list', args=['lehrverpflichtungen']), t.start))
-        for a in person.assignments.filter(status=Assignment.Status.GRANTED, affirmed=None, term__lectures_end__lt=today).select_related('term'):
-            found.append(task(f'Lehrauftrag {a.term}: gehaltene Stunden bestätigen', f"{reverse('courses:mine')}?semester={a.term_id}"))
+                bare = Person.objects.filter(teaching, is_active=True).exclude(employment=Person.Employment.LEHRAUFTRAG).exclude(obligations__term__start__lte=t.start)
+                if n := person.within(bare.distinct(), 'manage_staff').count():
+                    found.append(task(f'{plural(n, "Lehrperson", "Lehrpersonen")} ohne Lehrverpflichtung im {t}', f"{reverse('courses:staff')}?stand=ohne", t.start))
+        if 'manage_staff' in person.roles:
+            for p in person.within(Person.objects.filter(is_active=True, contract_end__lte=today + timedelta(weeks=8)), 'manage_staff').order_by('contract_end'):
+                found.append(task(f'{p}: befristet bis {p.contract_end:%d.%m.%Y}', reverse('courses:teacher', args=[p.pk]), p.contract_end))
+        for a in person.assignments.filter(status=Assignment.Status.GRANTED, accepted=None).select_related('term'):
+            found.append(task(f'Lehrauftrag {a.term} annehmen', f"{reverse('courses:mine')}?semester={a.term_id}", a.term.lectures_start))
+        for a in person.assignments.filter(granted__isnull=False, affirmed=None, settled_on=None).select_related('term'):
+            if a.status == Assignment.Status.WITHDRAWN or a.term.lectures_end < today:
+                found.append(task(f'Lehrauftrag {a.term}: gehaltene Stunden bestätigen', f"{reverse('courses:mine')}?semester={a.term_id}"))
         return found
 
     def tasks(self, person):

@@ -14,10 +14,21 @@
   <div class="stat"><b>{{ teaching|length }}</b><span>Lehrveranstaltungen im {{ term }}</span></div>
   <div class="stat"><b>{{ load }}</b><span>SWS Deputat</span></div>
   {% if students %}<div class="stat"><b>{{ students|length }}</b><span>Studierende in meiner Klasse</span></div>{% endif %}
-  {% if assignment %}<div class="stat"><b>{{ assignment.hours|floatformat:"-1" }}</b><span>SWS Lehrauftrag <span class="badge {% if assignment.status == 'granted' %}yes{% else %}wait{% endif %}"{% if assignment.granted %} title="Erteilt am {{ assignment.granted|date:'j.n.Y' }}"{% endif %}>{{ assignment.get_status_display }}</span></span></div>
-  {% if assignment.so_far is not None %}<div class="stat"><b>{{ assignment.so_far|floatformat:"-1" }}</b><span>Stunden gehalten{% if assignment.affirmed %} <span class="badge yes" title="{{ assignment.affirmed|date:'j.n.Y' }}">bestätigt</span>{% endif %}</span></div>{% endif %}{% endif %}
 </div>
-{% if assignment.so_far is not None and not assignment.affirmed %}<form method="post" action="{% url 'courses:affirm' assignment.pk %}" class="inline" style="margin-bottom: 24px">{% csrf_token %}<button class="btn">Gehaltene Stunden bestätigen</button><small class="muted">Die Termine ohne Absage. Fehlt einer oder ist einer zu viel, bitte vorher Bescheid an {{ granting|default:"das zuständige Amt" }}.</small></form>{% endif %}
+{% if assignment %}
+<div class="panel" style="margin-bottom: 40px">
+  <h3>Lehrauftrag {{ term }}</h3>
+  <p><b>{% if assignment.hours %}{{ assignment.hours|floatformat:"-1" }} SWS{% else %}nach gehaltenen Stunden{% endif %}</b>{% if assignment.rate %} · {{ assignment.rate.euros|floatformat:2 }} € je Stunde{% endif %} · {% for c in assignment.courses.all %}{{ c.title }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+  <ol class="steps" style="margin-bottom: 16px">
+    <li>{% include "core/_mark.html" with mark="done" %}<b>Erteilt</b><small class="muted">{{ assignment.granted|date:"j.n.Y" }}{% if assignment.letter %} · <a href="{% url 'message' assignment.letter.pk %}" data-panel>Bescheid</a>{% endif %}</small></li>
+    {% if assignment.status == 'withdrawn' %}<li>{% include "core/_mark.html" with mark="done" %}<b>Zurückgezogen</b><small class="muted">{{ assignment.withdrawn_on|date:"j.n.Y" }}</small></li>
+    {% else %}<li>{% include "core/_mark.html" with mark=assignment.accepted|yesno:"done," %}<b>Angenommen</b><small class="muted">{% if assignment.accepted %}{{ assignment.accepted|date:"j.n.Y" }}{% else %}offen{% endif %}</small></li>{% endif %}
+    {% if assignment.so_far is not None %}<li>{% include "core/_mark.html" with mark=assignment.affirmed|yesno:"done," %}<b>{{ assignment.so_far|floatformat:"-1" }} Stunden gehalten</b><small class="muted">{% if assignment.affirmed %}bestätigt {{ assignment.affirmed|date:"j.n.Y" }}{% else %}zu bestätigen{% endif %}</small></li>{% endif %}
+  </ol>
+  {% if assignment.status == 'granted' and not assignment.accepted %}<form method="post" action="{% url 'courses:accept' assignment.pk %}">{% csrf_token %}<button class="btn">Lehrauftrag annehmen</button></form>{% endif %}
+  {% if assignment.so_far is not None and not assignment.affirmed %}<form method="post" action="{% url 'courses:affirm' assignment.pk %}" class="inline">{% csrf_token %}<button class="btn">Gehaltene Stunden bestätigen</button><small class="muted">Die Termine ohne Absage. Fehlt einer, bitte vorher an {{ granting|default:"das zuständige Amt" }}.</small></form>{% endif %}
+</div>
+{% endif %}
 <section>
   <h2>Lehrveranstaltungen</h2>
   <table data-panel>

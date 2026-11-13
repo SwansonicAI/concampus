@@ -122,12 +122,11 @@ def hours(term, seen):
 
 
 def owing(people, terms):
-    """{(person, term): SWS} each teacher owes in a term before Ermäßigungen: their Lehrverpflichtung, and a Lehrauftrag's
-    agreed SWS until withdrawn. Missing: nothing entered, no Soll."""
-    found = Counter()
-    for rows in (Obligation.objects.all(), Assignment.objects.exclude(status=Assignment.Status.WITHDRAWN)):
-        for pk, term, hours in rows.filter(person__in=people, term__in=terms).values_list('person', 'term', 'hours'):
-            found[pk, term] += hours
+    """{(person, term): SWS} each teacher owes in a term before Ermäßigungen: the Lehrverpflichtung in force, and a
+    Lehrauftrag's agreed SWS until withdrawn. Missing: nothing entered, no Soll."""
+    found = Counter({key: o.hours for key, o in Obligation.in_force(people, terms).items()})
+    for pk, term, hours in Assignment.objects.exclude(status=Assignment.Status.WITHDRAWN).filter(person__in=people, term__in=terms).values_list('person', 'term', 'hours'):
+        found[pk, term] += hours
     return found
 
 

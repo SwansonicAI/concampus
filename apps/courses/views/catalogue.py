@@ -320,9 +320,10 @@ def edit(request, pk=None):
             saved = kept(form, person, 'manage_courses') if office else form.save()
         if saved:
             admit(saved, before)
-            if office:  # a Lehrbeauftragte:r on it: their Lehrauftrag proposed or extended
-                propose(saved.term, person, saved.staff.all())
-            messages.success(request, 'Gespeichert. Jetzt Termine planen und Teilnehmende eintragen.' if not pk else 'Gespeichert.')
+            made = propose(saved.term, person, saved.staff.all()) if office else []  # a Lehrbeauftragte:r on it: their Lehrauftrag proposed or extended
+            messages.success(request, ('Gespeichert. Jetzt Termine planen und Teilnehmende eintragen.' if not pk else 'Gespeichert.') + (
+                f' Lehrauftrag vorgeschlagen für {", ".join(str(t) for t in made)}; {Office.holding("grant_assignments") or "das zuständige Amt"} erteilt ihn.' if made else ''
+            ))
             return redirect(saved.get_absolute_url() + ('' if pk else '#planen'))
     back = course.get_absolute_url() if pk else reverse('courses:catalogue')
     return render(request, 'courses/form.html', {

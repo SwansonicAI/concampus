@@ -1,0 +1,72 @@
+{% extends base %}
+{% block title %}Lehrauftrag {{ a.person }}{% endblock %}
+{% block content %}
+<p class="eyebrow"><a href="{% url 'courses:assignments' %}?semester={{ a.term_id }}">Lehraufträge {{ a.term }}</a></p>
+<h1>{{ a.person }}</h1>
+<p class="lead">{{ a.person.institute|default:"Ohne Institut" }}{% if a.person.personnel_number %} · Personalnummer {{ a.person.personnel_number }}{% endif %}{% if a.person.email %} · <a href="mailto:{{ a.person.email }}">{{ a.person.email }}</a>{% endif %}</p>
+
+<div class="stats">
+  <div class="stat"><b>{{ a.hours|floatformat:"-1" }}</b><span>SWS vereinbart</span></div>
+  <div class="stat"><b{% if a.more %} class="fail"{% endif %}>{{ a.teaching|floatformat:"-1" }}</b><span>SWS unterrichtet</span></div>
+  {% if a.so_far is not None %}<div class="stat"><b>{{ a.so_far|floatformat:"-1" }}</b><span>Stunden gehalten</span></div>{% endif %}
+  {% if a.cost %}<div class="stat"><b>{{ a.cost|floatformat:"0g" }} €</b><span>{% if a.settled_on %}Vergütung{% else %}bei {{ weeks }} Wochen{% endif %}</span></div>{% endif %}
+</div>
+
+{% if a.more %}<p class="caution">Unterrichtet {{ a.teaching|floatformat:"-1" }} statt {{ a.hours|floatformat:"-1" }} SWS: erneut erteilen.</p>{% endif %}
+{% if a.too_much %}<p class="caution">Über {{ limit|floatformat:"-1" }} SWS: viel Lehre im Auftrag kann als Beschäftigung gelten.</p>{% endif %}
+{% if a.still %}<p class="caution">Zurückgezogen, unterrichtet aber noch: bitte die Lehrveranstaltungen neu besetzen.</p>{% endif %}
+
+<ol class="steps">
+  <li>{% include "core/_mark.html" with mark="done" %}<b>Vorgeschlagen</b><small class="muted">{{ a.proposed_on|date:"j.n.Y" }}{% if a.proposed_by %} · {{ a.proposed_by }}{% endif %}</small></li>
+  {% if a.granted %}<li>{% include "core/_mark.html" with mark="done" %}<b>Erteilt</b><small class="muted">{{ a.granted|date:"j.n.Y" }}{% if a.granted_by %} · {{ a.granted_by }}{% endif %}{% if a.rate %} · {{ a.rate }}{% endif %}{% if letter %} · Bescheid versandt{% endif %}</small></li>
+  <li>{% include "core/_mark.html" with mark=a.accepted|yesno:"done," %}<b>Angenommen</b><small class="muted">{% if a.accepted %}{{ a.accepted|date:"j.n.Y" }}{% else %}offen{% endif %}</small></li>
+  {% elif a.status != 'withdrawn' %}<li>{% include "core/_mark.html" with mark="" %}<b>Erteilt</b><small class="muted">offen</small></li>{% endif %}
+  {% if a.status == 'withdrawn' %}<li>{% include "core/_mark.html" with mark="done" %}<b>{% if a.granted %}Zurückgezogen{% else %}Nicht erteilt{% endif %}</b><small class="muted">{{ a.withdrawn_on|date:"j.n.Y" }} · {{ a.note }}</small></li>{% endif %}
+  {% if a.granted %}<li>{% include "core/_mark.html" with mark=a.settled_on|yesno:"done," %}<b>Stunden bestätigt</b><small class="muted">{% if a.affirmed %}Person {{ a.affirmed|date:"j.n.Y" }}{% else %}Person offen{% endif %} · {% if a.settled_on %}{{ a.settled_by }} {{ a.settled_on|date:"j.n.Y" }}{% else %}Amt offen{% endif %}</small></li>{% endif %}
+</ol>
+
+<h2>Lehrveranstaltungen</h2>
+<table data-panel>
+  <thead><tr><th>Lehrveranstaltung</th><th class="num">SWS</th><th></th></tr></thead>
+  <tbody>
+    {% for c, sws, on in courses %}
+    <tr>
+      <td><a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a></td>
+      <td class="num">{% if sws is None %}–{% else %}{{ sws|floatformat:"-1" }}{% endif %}</td>
+      <td>{% if c.cancelled %}<span class="badge no">entfällt</span>{% elif not on %}<span class="badge wait" title="Nach der Erteilung dazugekommen">nicht im Lehrauftrag</span>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="3" class="empty">Keine.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if granting %}
+{% if a.status == 'proposed' or a.more %}
+<form method="post" action="{% url 'courses:grant' %}" class="inline" style="margin-top: 24px">
+  {% csrf_token %}<input type="hidden" name="auftrag" value="{{ a.pk }}"><input type="hidden" name="von" value="auftrag">
+  {% if rates %}<label>Vergütungsstufe<select name="stufe">{% for r in rates %}<option value="{{ r.pk }}"{% if r.pk == rate %} selected{% endif %}>{{ r }}</option>{% endfor %}</select></label>{% endif %}
+  <button class="btn">{% if a.status == 'granted' %}Erneut erteilen{% else %}Erteilen{% endif %}</button>
+</form>
+{% endif %}
+{% if a.so_far is not None and not a.settled_on %}
+<form method="post" action="{% url 'courses:settle' %}" style="margin-top: 24px">
+  {% csrf_token %}<input type="hidden" name="auftrag" value="{{ a.pk }}"><input type="hidden" name="von" value="auftrag">
+  <button class="btn">{{ a.so_far|floatformat:"-1" }} Stunden für die Vergütung bestätigen</button>
+</form>
+{% endif %}
+{% endif %}
+
+<p style="margin-top: 32px"><a class="more" href="{% url 'history' 'courses.assignment' a.pk %}">Verlauf</a></p>
+
+{% if granting and a.status != 'withdrawn' %}
+<details class="tail" style="margin-top: 32px">
+  <summary>{% if a.status == 'granted' %}Lehrauftrag zurückziehen{% else %}Nicht erteilen{% endif %}</summary>
+  <form method="post" action="{% url 'courses:withdraw_assignment' a.pk %}" class="form">
+    {% csrf_token %}<input type="hidden" name="von" value="auftrag">
+    <div><label for="grund">Grund</label><input id="grund" name="grund" maxlength="200" required>{% if a.status == 'granted' %}<div class="helptext">Steht im Bescheid; die bis heute gehaltenen Stunden werden vergütet.</div>{% endif %}</div>
+    {% if a.teaching %}<label class="option"><input type="checkbox" name="austragen" value="1"> Aus den Lehrveranstaltungen austragen</label>{% endif %}
+    <div class="actions"><button class="btn danger" data-confirm="{% if a.status == 'granted' %}Lehrauftrag von {{ a.person }} zurückziehen? Die Person erhält einen Bescheid.{% else %}Vorschlag verwerfen?{% endif %}">{% if a.status == 'granted' %}Zurückziehen{% else %}Nicht erteilen{% endif %}</button></div>
+  </form>
+</details>
+{% endif %}
+{% endblock %}
