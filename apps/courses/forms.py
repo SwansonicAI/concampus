@@ -14,7 +14,7 @@ from curriculum.models import Module, Program
 from rooms.forms import Participants, People, RoomField, bookable
 from rooms.models import Booking, Room
 from students.models import Study
-from .models import Appointment, Course, Format
+from .models import Appointment, Course, Format, per_sws
 
 
 class PlanForm(forms.Form):
@@ -226,11 +226,9 @@ def labelled(modules):
 
 def studienplan(modules):
     """What the Studienpläne say of each module's course, by the pk it is shown with: its `form` as they write it, „S 90“
-    a Seminar 90 minutes a week, so its Lehrform and SWS, 60 minutes to an SWS in Einzel- and Kleingruppenunterricht and
-    45 in the rest, as the HfM counts them; with the title and the Fachgebiet of its course lately. For the form to
-    suggest, and to mark what differs (app.js: planned)."""
+    a Seminar 90 minutes a week, so its Lehrform and SWS (per_sws); with the title and the Fachgebiet of its course
+    lately. For the form to suggest, and to mark what differs (app.js: planned)."""
     formats = dict(Format.objects.exclude(short='').values_list('short', 'pk'))
-    lesson = Institution.get().lesson_minutes
     areas = dict(Course.objects.filter(kind=Course.Kind.COURSE, area__isnull=False).order_by('term__start').values_list('modules', 'area'))  # the latest
     plans = {}
     for pk, twins in modules:
@@ -240,7 +238,7 @@ def studienplan(modules):
             short = found[1].split('/')[0]  # „S/Ü“: a Seminar, or an Übung
             plan.update(form=found[0], format=formats.get(short))
             if found[2]:
-                hours = Decimal(found[2]) / (lesson if short.startswith('E') else 45) if module.program.weekly == 'minuten' else Decimal(found[2])
+                hours = Decimal(found[2]) / per_sws(short) if module.program.weekly == 'minuten' else Decimal(found[2])
                 plan['hours'] = str(hours.quantize(Decimal('0.1')))
     return plans
 

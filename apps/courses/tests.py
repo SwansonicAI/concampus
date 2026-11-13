@@ -1,5 +1,6 @@
 from collections import defaultdict
 from datetime import date, timedelta
+from decimal import Decimal
 
 from django.db.models import Count
 from django.test import Client
@@ -11,10 +12,12 @@ from rooms.models import Booking, Room
 from rooms.plans import agenda
 from core.testing import Seeded, flashes
 from students.models import Study
-from .models import Course, Ensemble, MoodleCourse, Participation, Signup, owed_module
+from .models import Assignment, Course, Ensemble, MoodleCourse, Participation, Signup, owed_module, per_sws
 from .moodle import flat, sync
+from .views.assignments import held
 from .views.common import taking
 from .views.load import deputat, loads
+from .views.rollover import missing
 from .views.timetable import clashes, fits, weight
 
 
@@ -278,9 +281,32 @@ class TeachingTest(Seeded):
         self.assertTrue({'hours', 'modules', 'format', 'kind'} <= set(self.login('dekanatsreferat').get(f'/lehre/{course.pk}/bearbeiten/').context['form'].fields))
 
     def test_the_deputat_counts_against_the_obligation_less_reductions(self):
-        wendt = Person.objects.get(username='lehre')
-        row = next(r for r in loads(Term.objects.get(name='WiSe 2026/27'), wendt) if r.teacher == wendt)
-        self.assertEqual((row.due, row.balance, row.account), (wendt.obligation - 2, row.total - row.due, row.total - row.due))  # the account starts this term
+        wendt, term = Person.objects.get(username='lehre'), Term.objects.get(name='WiSe 2026/27')
+        row = next(r for r in loads(term, wendt) if r.teacher == wendt)
+        self.assertEqual((row.due, row.balance, row.account), (wendt.obligations.get(term=term).hours - 2, row.total - row.due, row.total - row.due))  # the account starts this term
+
+
+class AssignmentTest(Seeded):
+    def test_taking_courses_over_proposes_lehrauftraege_the_dekanat_grants_with_a_bescheid(self):
+        target = Term.upcoming()
+        course = next(c for c in missing(target) if c.staff.filter(employment=Person.Employment.LEHRAUFTRAG).exists())
+        teacher = course.staff.get(employment=Person.Employment.LEHRAUFTRAG)
+        self.login('dekanatsreferat').post('/lehre/semesterwechsel/', {'schritt': 'uebernehmen', 'course': [course.pk]})
+        assignment = Assignment.objects.get(person=teacher, term=target)
+        self.assertEqual((assignment.status, list(assignment.courses.values_list('origin', flat=True))), (Assignment.Status.PROPOSED, [course.pk]))
+        self.assertEqual(self.login('institut').post('/lehre/lehrauftraege/erteilen/', {'auftrag': [assignment.pk]}).status_code, 403)
+        self.login('dekanat').post('/lehre/lehrauftraege/erteilen/', {'auftrag': [assignment.pk], 'semester': target.pk})
+        assignment.refresh_from_db()
+        self.assertEqual(assignment.status, Assignment.Status.GRANTED)
+        self.assertTrue(teacher.messages.filter(subject=f'Bescheid: Lehrauftrag {target}').exists())
+
+    def test_hours_held_leave_out_dates_called_off(self):
+        assignment = Assignment.objects.filter(status=Assignment.Status.GRANTED, courses__bookings__end__lt=timezone.now(), courses__groups=None).first()
+        before = held([assignment])[assignment.pk]
+        off = Booking.objects.filter(course__in=assignment.courses.all(), end__lt=timezone.now(), group=None, ensemble=None).first()
+        Booking.objects.filter(pk=off.pk).update(category='abgesagt')
+        lvs = Decimal((off.end - off.start).seconds // 60) / per_sws(off.course.format.short if off.course.format_id else '')
+        self.assertLessEqual(abs(held([assignment]).get(assignment.pk, 0) - (before - lvs)), Decimal('0.1'))  # each total to a tenth
 
 
 class PlanTest(Seeded):

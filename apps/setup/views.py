@@ -291,11 +291,13 @@ def text(request, key):
     })
 
 
-@require('manage_accounts')
+@require('manage_accounts', 'manage_staff')
 @require_POST
 def invite(request, pk):
-    """Send a person a link to set their password and sign in; it works once, for a few days."""
-    person = get_object_or_404(Person, pk=pk, is_active=True)
+    """Send a person a link to set their password and sign in; it works once, for a few days. Whoever takes teachers on
+    invites the teachers in their reach."""
+    people = Person.objects.all() if 'manage_accounts' in request.user.roles else request.user.within(Person.teachers(), 'manage_staff')
+    person = get_object_or_404(people, pk=pk, is_active=True)
     if not person.email:
         messages.error(request, 'Ohne E-Mail-Adresse kann keine Einladung verschickt werden.')
     else:

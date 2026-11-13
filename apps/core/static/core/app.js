@@ -329,9 +329,9 @@ function standing(form) {
       ticked.forEach(box => params.append('lehrende', box.value));
       const found = ticked.length ? await (await fetch(`${form.dataset.standing}&${params}`)).json() : {teachers: {}};
       const rows = ticked.filter(box => found.teachers[box.value]).flatMap(box => {
-        const [now, then, due] = found.teachers[box.value].map(v => v == null ? null : Number(v));
+        const [now, then, due] = found.teachers[box.value].slice(0, 3).map(v => v == null ? null : Number(v)), contract = found.teachers[box.value][3];
         const bar = due == null  // nothing to measure against, as the Deputat page's „–“
-          ? Object.assign(document.createElement('small'), {className: 'muted', textContent: 'kein Soll', title: 'Keine Lehrverpflichtung eingetragen'})
+          ? Object.assign(document.createElement('small'), {className: 'muted', ...(contract ? {textContent: 'kein Lehrauftrag', title: 'Wird beim Speichern vorgeschlagen'} : {textContent: 'kein Soll', title: 'Keine Lehrverpflichtung eingetragen'})})
           : Object.assign(document.createElement('div'), {className: 'bar', title: `jetzt ${sws(now)}, mit dieser Lehrveranstaltung ${sws(then)} SWS`});
         if (due != null) {
           const whole = Math.max(due, then) || 1;
@@ -341,8 +341,8 @@ function standing(form) {
         const over = due != null && then > due;
         return [
           Object.assign(document.createElement('span'), {textContent: box.parentElement.textContent.trim()}), bar,
-          Object.assign(document.createElement('span'), {className: 'num', textContent: due == null ? `${sws(then)} SWS` : `${sws(then)} von ${sws(due)} SWS`}),
-          Object.assign(document.createElement('span'), {className: over ? 'num fail' : 'num', title: over ? 'Über dem Soll' : '', textContent: over ? `+${sws(then - due)}` : ''}),
+          Object.assign(document.createElement('span'), {className: 'num', textContent: due == null ? `${sws(then)} SWS` : `${sws(then)} von ${sws(due)} SWS${contract ? ' vereinbart' : ''}`}),
+          Object.assign(document.createElement('span'), {className: over ? 'num fail' : 'num', title: over ? (contract ? 'Über dem Lehrauftrag: erst erweitern' : 'Über dem Soll') : '', textContent: over ? `+${sws(then - due)}` : ''}),
         ];
       });
       box.replaceChildren(...(rows.length ? [Object.assign(document.createElement('small'), {className: 'muted', textContent: `Deputat ${found.term}`})] : []), ...rows);

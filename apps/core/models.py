@@ -412,10 +412,9 @@ class Person(Tracked, AbstractUser):
         MITARBEIT = 'mitarbeit', 'Künstlerische oder wissenschaftliche Mitarbeit'
         LEHRAUFTRAG = 'lehrauftrag', 'Lehrauftrag'
 
-    employment = models.CharField('Beschäftigung', max_length=12, choices=Employment, blank=True, help_text='Für Lehrende.')
-    obligation = models.DecimalField(
-        'Lehrverpflichtung (LVS)', max_digits=4, decimal_places=1, null=True, blank=True,
-        help_text='Was die Lehrverpflichtungsverordnung verlangt, vor Ermäßigungen; bei einem Lehrauftrag die vereinbarten SWS.',
+    employment = models.CharField(
+        'Beschäftigung', max_length=12, choices=Employment, blank=True,
+        help_text='Für Lehrende. Die Lehrverpflichtung je Semester unter Lehrverpflichtungen, ein Lehrauftrag unter Lehraufträge (courses).',
     )
 
     class Meta:

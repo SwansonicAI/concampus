@@ -49,6 +49,8 @@ class CoursesConfig(Tile, AppConfig):
         found.append(page('Stundenplan', 'courses:timetable'))
         if roles & {'teacher', 'view_teaching_load'}:
             found.append(page('Deputat', 'courses:load'))
+        if roles & {'grant_assignments', 'view_teaching_load'}:
+            found.append(page('Lehraufträge', 'courses:assignments'))
         if roles & {'roll_over', 'publish_term'}:
             found.append(page('Semesterwechsel', 'courses:rollover'))
         return found
@@ -65,8 +67,36 @@ class CoursesConfig(Tile, AppConfig):
             found.append(feature('Neue Lehrveranstaltung',reverse('courses:new'), 'lehrveranstaltung einzelunterricht klasse'))
         if roles & {'view_teaching_load', 'teacher'}:
             found.append(feature('Deputat', reverse('courses:load'), 'lehrverpflichtung sws lehrende auslastung'))
+        if roles & {'grant_assignments', 'view_teaching_load'}:
+            found.append(feature('Lehraufträge', reverse('courses:assignments'), 'lehrbeauftragte lehrauftrag erteilen verlängern vergütung stundennachweis gehaltene stunden'))
         if roles & {'roll_over', 'publish_term'}:
             found.append(feature('Semesterwechsel', reverse('courses:rollover'), 'übernehmen nächstes semester planen lehrplanung kopieren'))
+        return found
+
+    def staffing(self, person, term):
+        """Lehraufträge to grant and hours held to confirm, for the office granting them; teachers without a
+        Lehrverpflichtung, for the one taking teachers on; a Lehrbeauftragte:r's own hours held to confirm. For this term
+        and the one being planned."""
+        from django.utils import timezone
+
+        from core.models import Person, Term
+        from .models import Assignment
+        from .views.common import TEACHING
+
+        found, today, url = [], timezone.localdate(), reverse('courses:assignments')
+        for t in filter(None, {term, Term.upcoming()}):
+            if 'grant_assignments' in person.roles:
+                theirs = person.within(t.assignments.all(), 'grant_assignments')
+                if n := theirs.filter(status=Assignment.Status.PROPOSED).count():
+                    found.append(task(f'{plural(n, "Lehrauftrag", "Lehraufträge")} erteilen ({t})', f'{url}?semester={t.pk}&stand=proposed', t.lectures_start))
+                if today > t.lectures_end and (n := theirs.filter(status=Assignment.Status.GRANTED, settled_on=None).count()):
+                    found.append(task(f'Gehaltene Stunden von {plural(n, "Lehrauftrag", "Lehraufträgen")} bestätigen ({t})', f'{url}?semester={t.pk}&stand=granted'))
+            if 'manage_staff' in person.roles:
+                teaching = Person.objects.filter(is_active=True, teaching__term=t, teaching__kind__in=TEACHING, teaching__cancelled=None).exclude(employment=Person.Employment.LEHRAUFTRAG)
+                if n := person.within(teaching.exclude(obligations__term=t).distinct(), 'manage_staff').count():
+                    found.append(task(f'{plural(n, "Lehrperson", "Lehrpersonen")} ohne Lehrverpflichtung im {t}', reverse('setup:list', args=['lehrverpflichtungen']), t.start))
+        for a in person.assignments.filter(status=Assignment.Status.GRANTED, affirmed=None, term__lectures_end__lt=today).select_related('term'):
+            found.append(task(f'Lehrauftrag {a.term}: gehaltene Stunden bestätigen', f"{reverse('courses:mine')}?semester={a.term_id}"))
         return found
 
     def tasks(self, person):
@@ -145,6 +175,7 @@ class CoursesConfig(Tile, AppConfig):
             upcoming = Term.upcoming()
             if upcoming and (count := person.within(missing(upcoming), 'roll_over').exclude(rhythm=Course.Rhythm.ONCE).count()):
                 found.append(task(f'Semesterwechsel: {plural(count, "Lehrveranstaltung", "Lehrveranstaltungen")} für {upcoming} übernehmen', reverse('courses:rollover'), upcoming.ready_by or upcoming.start))
+        found += self.staffing(person, term)
         if 'publish_term' in person.roles and (upcoming := Term.upcoming()) and upcoming.planning and upcoming.replies_by and upcoming.courses.filter(kind__in=TEACHING).exclude(origin=None).exists():  # taken over and asked
             found.append(task(f'{upcoming} prüfen und veröffentlichen', reverse('courses:rollover'), upcoming.ready_by))
         return found

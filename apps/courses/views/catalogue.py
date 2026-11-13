@@ -24,6 +24,7 @@ from .. import panel
 from ..forms import AddForm, CourseForm, DateForm, EnsembleForm, Lessons, PlanForm, TeachingForm
 from ..models import Area, Course, Format, Group, Participation, Signup
 from ..modules import credited
+from .assignments import propose
 from .common import TEACHING, admit, ahead, queued, seen, since, teaches
 from .dates import lesson_times
 from .groups import grouped, weekly_at
@@ -318,6 +319,8 @@ def edit(request, pk=None):
             saved = kept(form, person, 'manage_courses') if office else form.save()
         if saved:
             admit(saved, before)
+            if office:  # a Lehrbeauftragte:r on it: their Lehrauftrag proposed or extended
+                propose(saved.term, person, saved.staff.all())
             messages.success(request, 'Gespeichert. Jetzt Termine planen und Teilnehmende eintragen.' if not pk else 'Gespeichert.')
             return redirect(saved.get_absolute_url() + ('' if pk else '#planen'))
     back = course.get_absolute_url() if pk else reverse('courses:catalogue')

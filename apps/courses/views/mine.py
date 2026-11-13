@@ -6,11 +6,12 @@ from django.db.models import Count, OuterRef, Prefetch, prefetch_related_objects
 from django.shortcuts import render
 from django.utils import timezone
 
-from core.models import Term
+from core.models import Office, Term
 from rooms.models import Booking
 from rooms.plans import agenda
 from students.models import Study
-from ..models import Course, Ensemble, Group, Participation, Signup
+from ..models import Assignment, Course, Ensemble, Group, Participation, Signup
+from .assignments import held
 from .common import TEACHING, ahead, queued, since
 from .load import coaching, counted, deputat, sws, taught
 from .timetable import clashes, fits, limit, series, theirs, weight
@@ -106,7 +107,12 @@ def mine(request):
         ))
         for c in taught_here:  # as the Deputat counts it: a lesson class by its students' minutes
             c.sws = None if c.cancelled else sws(c, c.coached)
+        assignment = person.assignments.filter(term=term).exclude(status=Assignment.Status.WITHDRAWN).prefetch_related('courses').first()
+        if assignment:  # after the lectures, the hours held of a granted one, to confirm
+            assignment.so_far = None if assignment.status != Assignment.Status.GRANTED or timezone.localdate() <= term.lectures_end else (
+                assignment.held if assignment.settled_on else held([assignment]).get(assignment.pk, 0))
         context.update(
+            assignment=assignment, granting=assignment and Office.holding('grant_assignments', linked=True),
             teaching=taught_here,
             load=deputat(teaching, person),
             coached=person.coaching.filter(course__term=term).select_related('course').prefetch_related('members__person'),

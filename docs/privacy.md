@@ -88,15 +88,19 @@ no Matrikelnummer (`students/views.py`, `suggest()`). Who already knows a Matrik
 
 ### Staff
 
-A teacher's Beschäftigung and Lehrverpflichtung (`Person.employment`, `Person.obligation`) show only on the Deputat:
-to the teacher for their own row, and to `view_teaching_load` within the Institute its office is limited to
-(`courses/views.py`, `load()`). Accounts keep them (`manage_accounts`). Ermäßigungen (`courses.Reduction`) show the same
+A teacher's Beschäftigung (`Person.employment`), Lehrverpflichtung per semester (`courses.Obligation`) and Lehrauftrag
+(`courses.Assignment`) show only on the Deputat, in a course's form beside its teachers, and on the Lehraufträge: to the
+teacher for their own, and to `view_teaching_load` within the Institute its office is limited to (`courses/views/load.py`,
+`courses/views/assignments.py`). `manage_staff` takes teachers on and enters their Lehrverpflichtung with its Grundlage;
+`grant_assignments` grants Lehraufträge and confirms the hours held. Ermäßigungen (`courses.Reduction`) show the same
 way, their reason as the function (Dekan:in, Studiendekan:in …); `manage_teaching_load` enters them. A reduction for a
-Schwerbehinderung is health data (Art. 9): its reason shows only as that, never the condition.
+Schwerbehinderung is health data (Art. 9): its reason shows only as that, never the condition; the course form shows the
+Soll after Ermäßigungen, never a reason. Pay and its records stay in the payroll (MACH), which keeps them as tax law
+says; ConCampus hands it the hours held (CSV, logged as an export).
 
 When `manage_accounts` deactivates an account, the day is kept (`Person.left`). After the period set under Einstellungen
 › Hochschule (`staff_years`, five years) the record is cut down to the name, which stays on the courses taught and the
-exams examined: contact data, Beschäftigung, Lehrverpflichtung, offices, Ermäßigungen, Postfach, bookings, loans and
+exams examined: contact data, Beschäftigung, Lehrverpflichtungen, Lehraufträge, offices, Ermäßigungen, Postfach, bookings, loans and
 Verlauf go; after the period of the Grunddaten it is made anonymous (`core/departure.py`, `manage.py prune`).
 
 ### Restriction of processing

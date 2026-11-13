@@ -17,7 +17,7 @@ from core.access import CAPABILITIES, EVERYWHERE
 from core.dates import DayField, PastField, months_before
 from core.models import Grant, Holiday, Institute, Institution, Membership, Office, Person, Term, waiting
 from courses.forms import AuditionForm
-from courses.models import Appointment, Area, Course, Format, Reduction, ReductionGround
+from courses.models import Appointment, Area, Course, Format, Obligation, Reduction, ReductionGround
 from curriculum.forms import ModuleForm, ProgramForm
 from curriculum.models import Module, Program, Subject
 from instruments.models import Instrument
@@ -47,6 +47,7 @@ class Editor:
     adding: bool = True  # False: only some fields of records kept up elsewhere, like the exam dates of a term
     invite: bool = False  # people: its form offers to send a sign-in invitation
     carry: str = ''  # URL name of a step that takes the last period's entries over, offered above the list
+    carried: str = 'Aus dem Vorjahr übernehmen'  # its button
 
     def __post_init__(self):
         if self.sections:
@@ -148,8 +149,7 @@ def depending(person):
 class AccountForm(forms.ModelForm):
     class Meta:
         model = Person
-        fields = ['title', 'first_name', 'last_name', 'email', 'username', 'institute', 'employment', 'obligation', 'groups', 'is_active', 'restriction']
-        localized_fields = ['obligation']
+        fields = ['title', 'first_name', 'last_name', 'email', 'username', 'institute', 'groups', 'is_active', 'restriction']
         labels = {'groups': 'Ämter', 'is_active': 'Aktiv', 'username': 'Benutzername'}
         help_texts = {
             'groups': 'Gilt sofort; ein Amt mit sensiblen Berechtigungen erst nach Bestätigung unter „Freigaben“. Befristet: „Vertretungen und Amtszeiten“.',
@@ -159,11 +159,12 @@ class AccountForm(forms.ModelForm):
         }
         widgets = {'groups': forms.CheckboxSelectMultiple}
 
-    layout = [(None, [('title', 'first_name', 'last_name'), ('email', 'username'), ('institute', 'employment', 'obligation'), 'groups', 'is_active', 'restriction'])]
+    layout = [(None, [('title', 'first_name', 'last_name'), ('email', 'username'), 'institute', 'groups', 'is_active', 'restriction'])]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['groups'].queryset = Office.objects.all()
+        if 'groups' in self.fields:
+            self.fields['groups'].queryset = Office.objects.all()
         if self.instance.pk and (waiting := Membership.objects.filter(person=self.instance, confirmed_by=None).select_related('office')):
             self.note = 'Wartet auf Bestätigung: ' + ', '.join(f'{m.office}' + (f' bis {m.until:%d.%m.%Y}' if m.until else '') for m in waiting) + '.'
         self.depends = depending(self.instance) if self.instance.pk else ''
@@ -193,6 +194,9 @@ class AccountForm(forms.ModelForm):
         if 'restriction' in self.changed_data:
             person.restricted = timezone.localdate() if person.restriction else None
         person.save()
+        self.pending = False
+        if 'groups' not in self.fields:  # a teacher (StaffForm): offices stay with the accounts
+            return person
         chosen, held = set(self.cleaned_data['groups']), set(Office.objects.filter(user=person))
         later = {o for o in chosen - held if waiting(o.marks, self.by, person)}
         self.cleaned_data['groups'] = list(chosen - later)
@@ -201,6 +205,35 @@ class AccountForm(forms.ModelForm):
             Membership.objects.get_or_create(person=person, office=office, until=None, confirmed_by=None, defaults={'by': self.by})
         self.pending = bool(later)
         return person
+
+
+class StaffForm(AccountForm):
+    """A teacher as the office taking teachers on keeps them (manage_staff): who they are, their Institut and Beschäftigung,
+    and whether they still teach here. Offices and rights stay with the accounts (manage_accounts)."""
+
+    class Meta(AccountForm.Meta):
+        fields = ['title', 'first_name', 'last_name', 'email', 'username', 'institute', 'employment', 'is_active']
+        help_texts = AccountForm.Meta.help_texts | {'is_active': 'Ohne Haken ausgeschieden: kein Zugriff mehr; ab dem Tag läuft die Frist für die Daten früherer Beschäftigter.'}
+
+    layout = [(None, [('title', 'first_name', 'last_name'), ('email', 'username'), ('institute', 'employment'), 'is_active'])]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['institute'].required = self.fields['employment'].required = True  # what makes them a teacher, and how the Deputat counts them
+
+
+class ObligationForm(forms.ModelForm):
+    class Meta:
+        model = Obligation
+        fields = ['person', 'term', 'hours', 'basis']
+        localized_fields = ['hours']
+
+    layout = [(None, [('person', 'term', 'hours'), 'basis'])]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['person'].queryset = Person.teachers().exclude(employment=Person.Employment.LEHRAUFTRAG).order_by('last_name', 'first_name')  # theirs is agreed in the Lehrauftrag
+        self.fields['term'].queryset = Term.objects.order_by('-start')
 
 
 class AppointmentForm(forms.ModelForm):
@@ -254,13 +287,14 @@ class ReductionForm(forms.ModelForm):
         self.fields['term'].queryset = Term.objects.order_by('-start')
 
     def clean(self):
-        """At most what the ground allows, of the teacher's Lehrverpflichtung and in LVS."""
+        """At most what the ground allows, of the teacher's Lehrverpflichtung in that term and in LVS."""
         data = super().clean()
         person, ground, hours = data.get('person'), data.get('ground'), data.get('hours')
         if not ground or hours is None:
             return data
-        if person and ground.share and person.obligation is not None and hours > person.obligation * ground.share / 100:
-            raise forms.ValidationError(f'Höchstens {ground.share} % der Lehrverpflichtung von {person.obligation} LVS.')
+        owed = Obligation.objects.filter(person=person, term=data.get('term')).values_list('hours', flat=True).first() if person else None
+        if ground.share and owed is not None and hours > owed * ground.share / 100:
+            raise forms.ValidationError(f'Höchstens {ground.share} % der Lehrverpflichtung von {owed} LVS.')
         if ground.hours is not None and hours > ground.hours:
             raise forms.ValidationError(f'Für {ground.name} höchstens {ground.hours} LVS.')
         return data
@@ -402,6 +436,19 @@ EDITORS = {e.key: e for e in [
         search=['person__last_name', 'person__first_name'], words='prüfer prüferliste prüfungsausschuss bestellung kommission eignungsprüfung',
         queryset=lambda: Appointment.objects.select_related('person').prefetch_related('subjects').order_by('-year', 'person__last_name'),
         new=lambda request: Appointment(year=Course(term=Term.current()).year if Term.current() else None), carry='courses:appoint_again',
+    ),
+    Editor(
+        'lehrende', Person, 'Lehrende', 'manage_staff', 'Studium und Lehre', form=StaffForm,
+        columns=[('Name', 'name'), ('Institut', 'institute'), ('Beschäftigung', 'employment'), ('E-Mail', 'email'), ('Aktiv', 'is_active')],
+        search=['first_name', 'last_name', 'email', 'username'], words='personal personalabteilung einstellen neue lehrkraft dozent lehrbeauftragte professur mitarbeit ausscheiden einladung', invite=True,
+        queryset=lambda: Person.teachers().select_related('institute'), deletable=False,
+    ),
+    Editor(
+        'lehrverpflichtungen', Obligation, 'Lehrverpflichtungen', 'manage_staff', 'Studium und Lehre', form=ObligationForm,
+        columns=[('Lehrperson', 'person'), ('Semester', 'term'), ('LVS', 'hours'), ('Grundlage', 'basis')],
+        search=['person__last_name', 'person__first_name', 'basis'], words='deputat lvs lehrdeputat soll thürlvvo lehrverpflichtungsverordnung personal arbeitsvertrag',
+        queryset=lambda: Obligation.objects.select_related('person', 'term'),
+        new=lambda request: Obligation(term=Term.upcoming() or Term.current(), person_id=request.GET.get('person') or None), carry='courses:obligations_again', carried='Ins nächste Semester übernehmen',
     ),
     Editor(
         'ermaessigungen', Reduction, 'Ermäßigungen der Lehrverpflichtung', 'manage_teaching_load', 'Studium und Lehre', form=ReductionForm,

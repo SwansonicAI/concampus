@@ -16,7 +16,7 @@ from core.shortcuts import without_term
 from core.text import fold
 from curriculum.models import Module
 from students.models import Study
-from ..models import Course, Ensemble, Format, Group, Participation, Reduction
+from ..models import Assignment, Course, Ensemble, Format, Group, Obligation, Participation, Reduction
 from .common import TEACHING
 
 
@@ -121,6 +121,16 @@ def hours(term, seen):
     return found
 
 
+def owing(people, terms):
+    """{(person, term): SWS} each teacher owes in a term before Ermäßigungen: their Lehrverpflichtung, and a Lehrauftrag's
+    agreed SWS until withdrawn. Missing: nothing entered, no Soll."""
+    found = Counter()
+    for rows in (Obligation.objects.all(), Assignment.objects.exclude(status=Assignment.Status.WITHDRAWN)):
+        for pk, term, hours in rows.filter(person__in=people, term__in=terms).values_list('person', 'term', 'hours'):
+            found[pk, term] += hours
+    return found
+
+
 def loads(term, person, institute='', words=()):
     """The Deputat of the teachers in the person's view: their own, and that of the Institute in reach. Each row has
     `teacher`, `courses` [(course, SWS)], `total`, the term's `reductions`, `due` (the Lehrverpflichtung less them),
@@ -133,12 +143,12 @@ def loads(term, person, institute='', words=()):
     institution = Institution.get()
     since, floor = institution.load_since, institution.load_floor
     terms = [term, *(Term.objects.filter(start__lt=term.start, start__gte=since).order_by('-start')[:2 * institution.load_years - 1] if since else [])]
-    reduced = defaultdict(list)
+    reduced, owes = defaultdict(list), owing(now, terms)
     for r in Reduction.objects.filter(person__in=now, term__in=terms):
         reduced[r.person_id, r.term_id].append(r)
 
     def due(teacher, on):
-        return None if teacher.obligation is None else teacher.obligation - sum(r.hours for r in reduced[teacher.pk, on.pk])
+        return None if (hours := owes.get((teacher.pk, on.pk))) is None else hours - sum(r.hours for r in reduced[teacher.pk, on.pk])
 
     account, first = defaultdict(Decimal), dict(Course.objects.filter(staff__in=now, kind__in=TEACHING).values('staff').annotate(first=Min('term__start')).values_list('staff', 'first'))
     for earlier in terms[1:]:
@@ -160,8 +170,8 @@ def loads(term, person, institute='', words=()):
 @require('view_teaching_load')
 def standing(request):
     """The Deputat of the teachers ticked in a course's form (lehrende), for those in the person's view: the term, and
-    {pk: [SWS of it without the course (ohne), with it at the SWS typed, due]}. A course they teach already counts as it does
-    (share), scaled to the SWS typed; else once, or not yet where it counts per participant."""
+    {pk: [SWS of it without the course (ohne), with it at the SWS typed, due, whether a Lehrauftrag]}. A course they teach
+    already counts as it does (share), scaled to the SWS typed; else once, or not yet where it counts per participant."""
     person = request.user
     course = Course.objects.filter(pk=request.GET.get('ohne') or None, kind__in=TEACHING).select_related('term').first()
     term = course.term if course else Term.pick(request.GET.get('semester'))
@@ -173,16 +183,18 @@ def standing(request):
     except InvalidOperation:
         typed = Decimal(0)
     per_head = request.GET.get('art') == Course.Kind.LESSON or Format.objects.filter(pk=request.GET.get('lehrform') or None, per_head=True).exists()
-    taught = hours(term, {t.pk for t in asked}) if term else {}
+    taught, owes = (hours(term, {t.pk for t in asked}), owing(asked, [term])) if term else ({}, {})
     reduced = Counter()
     for r in Reduction.objects.filter(person__in=asked, term=term):
         reduced[r.person_id] += r.hours
     found = {}
     for t in asked:
-        rows = taught.get(t, [])
+        rows, due = taught.get(t, []), owes.get((t.pk, term and term.pk))
         without = sum(h for c, h in rows if c != course)
         now = next((h * typed / c.hours if c.hours else h for c, h in rows if c == course), None)
-        found[t.pk] = [without, without + (now if now is not None else 0 if per_head else typed), None if t.obligation is None else t.obligation - reduced[t.pk]]
+        found[t.pk] = [
+            without, without + (now if now is not None else 0 if per_head else typed), None if due is None else due - reduced[t.pk], t.employment == Person.Employment.LEHRAUFTRAG,
+        ]
     return JsonResponse({'term': str(term or ''), 'teachers': found})
 
 

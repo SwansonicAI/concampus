@@ -592,6 +592,73 @@ class Reduction(Tracked, models.Model):
         return f'{self.person} · {self.term}: {self.ground and self.ground.name}'
 
 
+def per_sws(short):
+    """Minutes a week to an SWS for a Lehrform by its Kürzel, as Musikhochschulen count them: in Einzel- and
+    Kleingruppenunterricht (E, E+x) the Hochschule's lesson length (Institution.lesson_minutes), else 45."""
+    return Institution.get().lesson_minutes if short.startswith('E') else 45
+
+
+class Obligation(Tracked, models.Model):
+    """A teacher's Lehrverpflichtung in a term, before Ermäßigungen: what the Lehrverpflichtungsverordnung asks of their
+    post, or their contract, with where it comes from. The Deputat counts against it; the Semesterwechsel takes it over."""
+
+    owner = 'person_id'
+    capabilities = ('manage_staff',)
+    scope = (['person__institute'], [])
+
+    person = models.ForeignKey(Person, models.CASCADE, related_name='obligations', verbose_name='Lehrperson')
+    term = models.ForeignKey(Term, models.PROTECT, related_name='obligations', verbose_name='Semester')
+    hours = models.DecimalField('Lehrverpflichtung (LVS)', max_digits=4, decimal_places=1)
+    basis = models.CharField('Grundlage', max_length=200, blank=True, help_text='Z. B. „ThürLVVO § 4 Abs. 1 Nr. 1“ oder „Arbeitsvertrag vom 1.10.2026“.')
+
+    class Meta:
+        ordering = ['-term__start', 'person__last_name']
+        verbose_name = 'Lehrverpflichtung'
+        verbose_name_plural = 'Lehrverpflichtungen'
+        constraints = [models.UniqueConstraint(fields=['person', 'term'], name='unique_obligation')]
+
+    def __str__(self):
+        return f'{self.person} · {self.term}'
+
+
+class Assignment(Tracked, models.Model):
+    """A Lehrauftrag: a term's teaching agreed with someone not employed to teach, paid by the hours held. Proposed when
+    they are put on a course, granted in writing, renewed in the Semesterwechsel; after the term the person and the
+    office confirm the hours held, for the payroll (MACH)."""
+
+    class Status(models.TextChoices):
+        PROPOSED = 'proposed', 'Vorgeschlagen'
+        GRANTED = 'granted', 'Erteilt'
+        WITHDRAWN = 'withdrawn', 'Zurückgezogen'
+
+    owner = 'person_id'
+    capabilities = ('grant_assignments',)
+    scope = (['person__institute'], [])
+
+    person = models.ForeignKey(Person, models.CASCADE, related_name='assignments', verbose_name='Lehrbeauftragte:r')
+    term = models.ForeignKey(Term, models.PROTECT, related_name='assignments', verbose_name='Semester')
+    courses = models.ManyToManyField(Course, blank=True, related_name='assignments', verbose_name='Lehrveranstaltungen')
+    hours = models.DecimalField('Vereinbart (SWS)', max_digits=4, decimal_places=1)
+    status = models.CharField('Stand', max_length=10, choices=Status, default=Status.PROPOSED)
+    proposed_by = models.ForeignKey(Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Vorgeschlagen von')
+    granted_by = models.ForeignKey(Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Erteilt von')
+    granted = models.DateField('Erteilt am', null=True, blank=True)
+    note = models.CharField('Notiz', max_length=200, blank=True, help_text='Z. B. der Grund eines Rückzugs.')
+    held = models.DecimalField('Gehalten (LVS)', max_digits=5, decimal_places=1, null=True, blank=True, help_text='Nach dem Semester, für die Vergütung.')
+    affirmed = models.DateTimeField('Von der Person bestätigt', null=True, blank=True)
+    settled_by = models.ForeignKey(Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Stunden bestätigt von')
+    settled_on = models.DateField('Stunden bestätigt am', null=True, blank=True)
+
+    class Meta:
+        ordering = ['-term__start', 'person__last_name']
+        verbose_name = 'Lehrauftrag'
+        verbose_name_plural = 'Lehraufträge'
+        constraints = [models.UniqueConstraint(fields=['person', 'term'], name='unique_assignment')]
+
+    def __str__(self):
+        return f'{self.person} · {self.term}'
+
+
 class Appointment(Tracked, models.Model):
     """A teacher appointed by the Prüfungsausschuss to examine in a Studienjahr: in the
     Hauptfächer ticked, and in exams of no Hauptfach. Panels are made up of the appointed."""

@@ -5,7 +5,7 @@ someone whose processing is restricted (Art. 18 DSGVO)."""
 from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
-from courses.models import Reduction
+from courses.models import Assignment, Obligation, Reduction
 from instruments.models import Loan
 from rooms.models import Booking
 from students.models import Study
@@ -23,11 +23,11 @@ def gone(years):
 
 
 def reduce():
-    """Cut their records down to the name; their Postfach, consents, sign-ins, bookings, loans, offices, Ermäßigungen and
-    Verlauf go. Returns how many."""
+    """Cut their records down to the name; their Postfach, consents, sign-ins, bookings, loans, offices, Lehrverpflichtungen,
+    Lehraufträge, Ermäßigungen and Verlauf go. Returns how many."""
     ids = list(gone(Institution.get().staff_years).exclude(password='!').values_list('pk', flat=True))  # '!': cut down already (Person.clear)
     with quietly():
-        for model in (Message, Consent, SignIn, Booking, Loan, Membership, Reduction, Change):
+        for model in (Message, Consent, SignIn, Booking, Loan, Membership, Obligation, Assignment, Reduction, Change):
             model.objects.filter(person__in=ids).delete()
         for through in (Booking.participants.through, Booking.absent.through, Person.groups.through):
             through.objects.filter(person__in=ids).delete()

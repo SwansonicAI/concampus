@@ -253,6 +253,16 @@ TEXTS = {
         NACHRICHT, 'Buchung storniert', 'Buchung storniert: {buchung}', '{von} hat {anzahl} Termin(e) ab {termin} in {raum} storniert.',
         ('buchung', 'von', 'anzahl', 'termin', 'raum'),
     ),
+    'lehrauftrag': Spec(
+        BESCHEID, 'Lehrauftrag erteilt', 'Bescheid: Lehrauftrag {semester}',
+        'Ihnen wird für das {semester} ein Lehrauftrag erteilt ({umfang}), für: {veranstaltungen}. Er begründet kein Arbeitsverhältnis. '
+        'Vergütet werden die gehaltenen Stunden; nach der Vorlesungszeit bestätigen Sie sie unter „Meine Lehre“.',
+        ('semester', 'umfang', 'veranstaltungen', 'von'),
+    ),
+    'lehrauftrag_zurueckgezogen': Spec(
+        BESCHEID, 'Lehrauftrag zurückgezogen', 'Bescheid: Lehrauftrag {semester} zurückgezogen',
+        'Ihr Lehrauftrag für das {semester} wird zurückgezogen. Grund: {grund}. Bis heute gehaltene Stunden werden vergütet.', ('semester', 'grund', 'von'), appeal=True,
+    ),
     'unterrichtszeit': Spec(
         NACHRICHT, 'Unterrichtszeit eingetragen', 'Unterrichtszeit: {veranstaltung}', '{von} hat Ihre Unterrichtszeit eingetragen: {zeit} in {raum}, ab {ab}.',
         ('veranstaltung', 'von', 'zeit', 'raum', 'ab'),

@@ -23,6 +23,7 @@ from curriculum.models import Module, Program
 from rooms.models import Booking
 from students.models import Study
 from ..models import Appointment, Area, Course, Group, Participation, Reduction
+from .assignments import propose
 from .common import TEACHING
 from .dates import weekly
 from .load import loads
@@ -129,7 +130,7 @@ def rollover(request):
     for c in timeless:
         c.slot = described(slots.get(c.origin_id))
     load = loads(target, person) if 'view_teaching_load' in person.roles else []
-    contracts = [row.total for row in load if row.teacher.employment == Person.Employment.LEHRAUFTRAG]
+    staffed = Person.objects.filter(teaching__in=live).exclude(employment=Person.Employment.LEHRAUFTRAG).distinct()
     return render(request, 'courses/rollover.html', {
         'target': target, 'rows': rows, 'planner': 'roll_over' in person.roles, 'publisher': 'publish_term' in person.roles,
         'institutes': Institute.objects.all(), 'areas': Area.objects.all(), 'institute': institute, 'area': area, 'kind': kind, 'q': q,
@@ -137,7 +138,8 @@ def rollover(request):
         'waiting': Person.objects.filter(teaching__in=waiting).annotate(n=Count('teaching', filter=Q(teaching__in=waiting))).order_by('last_name'),
         'timeless': timeless, 'fillable': timezone.localdate() > target.deadline,
         'over': [row for row in load if row.balance and row.balance > 0], 'under': [row for row in load if row.low],
-        'contracts': len(contracts), 'contract_hours': sum(contracts),
+        'assignments': Counter(target.assignments.values_list('status', flat=True)),
+        'unbound': staffed.exclude(obligations__term=target).count(), 'staffing': 'manage_staff' in person.roles,  # teaching there without a Lehrverpflichtung
         'leave': Reduction.objects.filter(term=target, ground__leave=True, person__teaching__in=live).distinct().select_related('person', 'ground'),
         'gaps': gaps(target)[:12] if planned.exists() else [],
         'publishers': Office.holding('publish_term', linked=True),
@@ -181,6 +183,7 @@ def take_over(request, target, pending):
             for g in source.groups.prefetch_related('staff') if source else []:
                 Group.objects.create(course=copy, number=g.number, capacity=g.capacity).staff.set(g.staff.all())
                 copy.staff.add(*g.staff.all())
+        propose(target, request.user)  # the Lehraufträge renewed: proposed, for the office granting them to grant
     hidden = ' als Entwurf; Studierende sehen sie, sobald das Semester veröffentlicht ist' if target.planning else ''
     messages.success(request, f'{plural(len(chosen), "Lehrveranstaltung", "Lehrveranstaltungen")} nach {target} übernommen{hidden}.')
 

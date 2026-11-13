@@ -5,7 +5,7 @@
 <div class="head">
   <h1>{{ editor.title }}</h1>
   <div class="actions">
-    {% if editor.carry %}<form method="post" action="{% url editor.carry %}">{% csrf_token %}<button class="btn ghost" data-confirm="Die Einträge des letzten Jahres ins nächste übernehmen, für wer dort noch keinen hat?">Aus dem Vorjahr übernehmen</button></form>{% endif %}
+    {% if editor.carry %}<form method="post" action="{% url editor.carry %}">{% csrf_token %}<button class="btn ghost" data-confirm="{{ editor.carried }}, für alle, die dort noch keinen Eintrag haben?">{{ editor.carried }}</button></form>{% endif %}
     {% if editor.creatable %}<a class="btn" href="{% url 'setup:new' editor.key %}" data-panel>Neu anlegen</a>{% endif %}
   </div>
 </div>

@@ -36,7 +36,7 @@ from admissions.views.board import DECISIONS, grounds
 from core import destatis, history, keys, texts
 from core.models import Change, Holiday, Institute, Institution, Key, Membership, Message, Office, Person, Term, Text
 from courses import panel as sheets
-from courses.models import Appointment, Area, Course, Ensemble, Format, Group, Participation, Recusal, Reduction, ReductionGround, Score, Signup
+from courses.models import Appointment, Area, Assignment, Course, Ensemble, Format, Group, Obligation, Participation, Recusal, Reduction, ReductionGround, Score, Signup
 from courses.panel import mean, rounding
 from curriculum.models import Module, Program, Rounding, Subject
 from instruments.models import Instrument, Loan
@@ -548,7 +548,8 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
     ],
     'Hochschularchiv': ['assess_files'],
     'Prüfungsamt': ['view_students', 'view_files', 'manage_exams', 'decide_results', 'view_curriculum', 'book_any_room', 'view_bookings'],
-    'Dekanat': ['view_teaching_load', 'manage_teaching_load', 'publish_term', 'view_curriculum', 'view_statistics'],  # the dean approves; the Referat does the work
+    'Dekanat': ['view_teaching_load', 'manage_teaching_load', 'grant_assignments', 'publish_term', 'view_curriculum', 'view_statistics'],  # the dean approves; the Referat does the work
+    'Personalabteilung': ['manage_staff', 'view_teaching_load'],  # takes teachers on and enters their Lehrverpflichtung; pay stays in MACH
     'Dekanatsreferat': ['manage_courses', 'plan_teaching', 'view_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings'],
     'Veranstaltungsbüro': ['book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms', 'manage_instruments'],
     'ConCampus-Team': ['manage_accounts', 'manage_institution', 'manage_terms'],
@@ -1147,8 +1148,7 @@ class Command(BaseCommand):
             institute = self.institutes[SUBJECT_INSTITUTE[subject] if subject else TEACHER_INSTITUTE[key]]
             login = {'wendt': 'lehre', 'hein': 'korrepetition', 'neumann': 'pruefungsausschuss'}.get(key) or handle(first, last)  # the demo's teacher, accompanist and chair of the Prüfungsausschuss
             employment = Person.Employment.LEHRAUFTRAG if key == 'hein' else Person.Employment.PROFESSUR if title.startswith('Prof.') else Person.Employment.MITARBEIT
-            obligation = {'Prof.': 18, 'Prof. Dr.': 9}.get(title)  # ThürLVVO § 4: artistic and academic subjects
-            self.teachers[key] = self.person(login, first, last, title, institute=institute, employment=employment, obligation=obligation)
+            self.teachers[key] = self.person(login, first, last, title, institute=institute, employment=employment)
             if subject:
                 self.by_subject[subject].append(self.teachers[key])
         self.teachers['neumann'].groups.add(offices['Prüfungsausschuss'])  # chairs it, and teaches
@@ -1159,6 +1159,9 @@ class Command(BaseCommand):
         Person.objects.create(  # the Dekanatsreferentin, who plans the teaching for the dean
             username='dekanatsreferat', first_name='Ines', last_name='Weißgerber', email='ines.weissgerber@hfm-weimar.de', password=self.password, phone='+49 3643 555 140',
         ).groups.add(offices['Dekanatsreferat'])
+        Person.objects.create(  # the Personalabteilung's clerk, who takes teachers on; made apart, so the other demo data stays as it was
+            username='personal', first_name='Andrea', last_name='Kunze', email='andrea.kunze@hfm-weimar.de', password=self.password, phone='+49 3643 555 160',
+        ).groups.add(offices['Personalabteilung'])
         Membership.objects.create(  # a stand-in, waiting for the ConCampus-Team's second person to confirm it
             person=self.staff['monika.hartmann'], office=offices['Veranstaltungsbüro'], until=date(2027, 3, 31),
             note='Vertretung während der Elternzeit von Michael Görlitz', by=self.staff['campus'],
@@ -2070,7 +2073,7 @@ class Command(BaseCommand):
         upcoming.course_signup_start, upcoming.course_signup_end = date(2027, 3, 1), upcoming.lectures_start + timedelta(days=14)
         upcoming.save()
         roth = self.teachers['roth']
-        Reduction.objects.create(person=roth, term=upcoming, ground=self.grounds['Forschungs- oder Freisemester'], hours=roth.obligation or Decimal(18), note='Beschluss des Präsidiums')
+        Reduction.objects.create(person=roth, term=upcoming, ground=self.grounds['Forschungs- oder Freisemester'], hours=roth.obligations.filter(term=self.current).values_list('hours', flat=True).first() or Decimal(18), note='Beschluss des Präsidiums')
 
     def abroad(self):
         """HZBs from abroad are assessed and the Sprachnachweis and APS certificate in for everyone who studies here or has a
@@ -2176,14 +2179,22 @@ class Command(BaseCommand):
         Institution.objects.update(load_since=self.current.start)
 
     def contracts(self):
-        """Lehraufträge as agreed: the hours each Lehrbeauftragte:r teaches this term, rounded up."""
+        """This term's Lehrverpflichtungen, after ThürLVVO § 4 for the professors (artistic and academic subjects), entered by
+        the Personalabteilung; the Mitarbeiter:innen's are left for it to enter. Lehraufträge granted by the Dekanat before
+        the term: the hours each Lehrbeauftragte:r teaches, rounded up, with their courses."""
         from courses.views.common import TEACHING
         from courses.views.load import deputat
 
+        for teacher in dict.fromkeys(t for t in self.teachers.values() if t.title in ('Prof.', 'Prof. Dr.')):
+            Obligation.objects.create(person=teacher, term=self.current, hours=Decimal(18 if teacher.title == 'Prof.' else 9), basis='ThürLVVO § 4')
+        dean, granted = self.staff['dekanat'], self.current.start - timedelta(weeks=4)
         for person in Person.objects.filter(employment=Person.Employment.LEHRAUFTRAG, teaching__term=self.current).distinct():
-            if hours := deputat(person.teaching.filter(term=self.current, kind__in=TEACHING), person):
-                person.obligation = Decimal(math.ceil(hours))
-                person.save(update_fields=['obligation'])
+            courses = person.teaching.filter(term=self.current, kind__in=TEACHING)
+            if hours := deputat(courses, person):
+                assignment = Assignment.objects.create(
+                    person=person, term=self.current, hours=Decimal(math.ceil(hours)), status=Assignment.Status.GRANTED, proposed_by=dean, granted_by=dean, granted=granted,
+                )
+                assignment.courses.set(courses)
 
     def held(self, leaf, subject):
         """(Hauptfach an exam is played in, its course title): the Pflichtfach Klavier on the piano, other artistic exams in

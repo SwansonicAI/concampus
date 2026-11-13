@@ -14,7 +14,10 @@
   <div class="stat"><b>{{ teaching|length }}</b><span>Lehrveranstaltungen im {{ term }}</span></div>
   <div class="stat"><b>{{ load }}</b><span>SWS Deputat</span></div>
   {% if students %}<div class="stat"><b>{{ students|length }}</b><span>Studierende in meiner Klasse</span></div>{% endif %}
+  {% if assignment %}<div class="stat"><b>{{ assignment.hours|floatformat:"-1" }}</b><span>SWS Lehrauftrag <span class="badge {% if assignment.status == 'granted' %}yes{% else %}wait{% endif %}"{% if assignment.granted %} title="Erteilt am {{ assignment.granted|date:'j.n.Y' }}"{% endif %}>{{ assignment.get_status_display }}</span></span></div>
+  {% if assignment.so_far is not None %}<div class="stat"><b>{{ assignment.so_far|floatformat:"-1" }}</b><span>Stunden gehalten{% if assignment.affirmed %} <span class="badge yes" title="{{ assignment.affirmed|date:'j.n.Y' }}">bestätigt</span>{% endif %}</span></div>{% endif %}{% endif %}
 </div>
+{% if assignment.so_far is not None and not assignment.affirmed %}<form method="post" action="{% url 'courses:affirm' assignment.pk %}" class="inline" style="margin-bottom: 24px">{% csrf_token %}<button class="btn">Gehaltene Stunden bestätigen</button><small class="muted">Die Termine ohne Absage. Fehlt einer oder ist einer zu viel, bitte vorher Bescheid an {{ granting|default:"das zuständige Amt" }}.</small></form>{% endif %}
 <section>
   <h2>Lehrveranstaltungen</h2>
   <table data-panel>
