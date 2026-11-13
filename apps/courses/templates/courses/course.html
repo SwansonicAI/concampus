@@ -133,7 +133,7 @@
     {% if staffed and bookings %}<p class="muted"><small>Ein Datum anklicken, um den Termin abzusagen oder zu verlegen.</small></p>{% elif bookings and course.kind == 'lesson' %}<p class="muted"><small>Können Sie zu einem Termin nicht kommen, melden Sie sich ab; {{ staff.0|default:"die Lehrperson" }} erfährt es. Einen Grund müssen Sie nicht nennen.</small></p>{% endif %}
     {% if bookings and plan or bookings and date %}<details class="tail" style="margin-top: 16px"{% if plan.is_bound or date.is_bound %} open{% endif %}><summary>Termine buchen</summary>{% endif %}
     {% if plan %}
-    <form method="post" action="{% url 'courses:plan' course.pk %}" class="panel" style="margin-top: 24px">
+    <form method="post" action="{% url 'courses:plan' course.pk %}" class="panel" style="margin-top: 24px" id="planen">
       {% csrf_token %}
       <h3>Wöchentlich planen</h3>
       <div class="inline">{% for field in plan %}<label>{{ field.label }}{{ field }}</label>{% endfor %}</div>

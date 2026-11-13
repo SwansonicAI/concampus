@@ -263,13 +263,13 @@ class FocusTest(Seeded):
 
 class TeachingTest(Seeded):
     def test_teachers_change_what_is_theirs_not_hours_staff_or_modules(self):
-        course = Course.objects.get(title='Hauptfach Violine · Klasse Wendt', term__name='WiSe 2026/27')
+        course = Course.objects.get(title='Masterprojekt: Kolloquium', term__name='WiSe 2026/27', staff__username='lehre')  # a class has no places to give
         hours, staff = course.hours, set(course.staff.all())
         self.login('lehre').post(f'/lehre/{course.pk}/bearbeiten/', {
             'hours': '9', 'staff': [Person.objects.get(username='dekanat').pk], 'title': 'Anders', 'capacity': '12', 'allocation': 'staff', 'description': 'Neu',
         })
         course.refresh_from_db()
-        self.assertEqual((course.hours, set(course.staff.all()), course.title, course.capacity), (hours, staff, 'Hauptfach Violine · Klasse Wendt', 12))
+        self.assertEqual((course.hours, set(course.staff.all()), course.title, course.capacity), (hours, staff, 'Masterprojekt: Kolloquium', 12))
 
     def test_hours_and_modules_are_planned_by_the_office_that_plans_teaching(self):
         course = Course.objects.filter(kind='course', term__name='WiSe 2026/27', staff__institute__name='Streichinstrumente und Harfe').first()

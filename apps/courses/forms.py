@@ -1,10 +1,12 @@
 import re
 from collections import defaultdict
 from datetime import timedelta
+from decimal import Decimal
 
 from django import forms
 from django.db.models import F, Max, Min, Q
 from django.utils import timezone
+from django.utils.html import format_html
 
 from core.dates import ClockField, DayField, MomentField, working
 from core.models import Institution, Person, Term
@@ -12,7 +14,7 @@ from curriculum.models import Module, Program
 from rooms.forms import Participants, People, RoomField, bookable
 from rooms.models import Booking, Room
 from students.models import Study
-from .models import Appointment, Course
+from .models import Appointment, Course, Format
 
 
 class PlanForm(forms.Form):
@@ -200,29 +202,50 @@ def substitutes(course):
     return [(label, [(pk, name) for pk, name in people if pk not in staff]) for label, people in teachers(course.subject, appointed=appointed(course))]
 
 
-def leaf_modules(exams=False):
-    """The course work of the plans a course can count for, or their exams, as choices grouped by programme, the
-    programmes as lists show them (Bachelor first), each in study-plan order."""
-    groups, shared = defaultdict(list), defaultdict(set)
-    rank = {pk: n for n, pk in enumerate(Program.objects.ordered().values_list('pk', flat=True))}
-    leaves = sorted(
-        Module.objects.filter(children=None, exam=exams).select_related('program').order_by(F('semester').asc(nulls_last=True), 'code'),
-        key=lambda m: rank[m.program_id],
-    )
-    for m in leaves:
-        shared[m.code, m.title].add(m.program.name)
-    for m in leaves:
-        others = sorted(shared[m.code, m.title] - {m.program.name}) if m.code else []
-        groups[str(m.program)].append((m.pk, f'{m.code} {m.title}' + (f' · auch in {", ".join(others)}' if others else '')))
-    return list(groups.items())
+def leaf_modules(exams=False, chosen=()):
+    """The course work of the plans a course can count for, or their exams, by code: [(pk, twins)], a module several
+    Studiengänge share (the same code and title) once, its pk a chosen one where any is, so that it shows ticked; saving
+    counts it for all of them (CourseForm.clean_modules). `chosen`: modules or their pks, as a form's initial has them."""
+    shared, chosen = defaultdict(list), {getattr(m, 'pk', m) for m in chosen}
+    for m in Module.objects.filter(children=None, exam=exams).select_related('program').order_by('code', 'pk'):
+        shared[(m.code, m.title) if m.code else m.pk].append(m)
+    return [(next((m.pk for m in twins if m.pk in chosen), twins[0].pk), twins) for twins in shared.values()]
+
+
+def labelled(modules):
+    """Modules as choices: code and title, then their Studiengänge, the one, or how many with each on hover."""
+    choices = []
+    for pk, twins in modules:
+        names = sorted({m.program.title for m in twins})
+        choices.append((pk, format_html(
+            '<span class="code">{}</span> {} <small class="muted" title="{}">{}</small>',
+            twins[0].code, twins[0].title, ', '.join(names), names[0] if len(names) == 1 else f'{len(names)} Studiengänge',
+        )))
+    return choices
+
+
+def studienplan(modules):
+    """What the Studienpläne say of each module's course, by the pk it is shown with: its `form` as they write it, „S 90“
+    a Seminar 90 minutes a week, so its Lehrform and SWS, 60 minutes to an SWS in Einzel- and Kleingruppenunterricht and
+    45 in the rest, as the HfM counts them; with the title and the Fachgebiet of its course lately. For the form to
+    suggest, and to mark what differs (app.js: planned)."""
+    formats = dict(Format.objects.exclude(short='').values_list('short', 'pk'))
+    lesson = Institution.get().lesson_minutes
+    areas = dict(Course.objects.filter(kind=Course.Kind.COURSE, area__isnull=False).order_by('term__start').values_list('modules', 'area'))  # the latest
+    plans = {}
+    for pk, twins in modules:
+        module = next(m for m in twins if m.pk == pk)
+        plan = plans[pk] = {'title': module.title, 'area': next((areas[m.pk] for m in twins if m.pk in areas), None)}
+        if found := re.fullmatch(r'([^\d\s]\S*?)\s*(\d+)?', module.description.strip()):
+            short = found[1].split('/')[0]  # „S/Ü“: a Seminar, or an Übung
+            plan.update(form=found[0], format=formats.get(short))
+            if found[2]:
+                hours = Decimal(found[2]) / (lesson if short.startswith('E') else 45) if module.program.weekly == 'minuten' else Decimal(found[2])
+                plan['hours'] = str(hours.quantize(Decimal('0.1')))
+    return plans
 
 
 class CourseForm(forms.ModelForm):
-    programme = forms.ModelChoiceField(
-        label='Module zeigen für', queryset=Program.planned(), required=False, empty_label='alle Studiengänge',
-        help_text='Nur ein Filter für die Liste darunter: eine Lehrveranstaltung kann für Module mehrerer Studiengänge zählen.',
-        widget=forms.Select(attrs={'data-leads': 'modules'}),
-    )
     opens = DayField(label='Anmeldung ab', required=False, help_text='Erster Tag der Anmeldung; leer: sofort.')
     deadline = DayField(label='Anmeldeschluss', required=False, help_text='Letzter Tag der Anmeldung; abmelden geht bis zum Ende der Vorlesungszeit.')
 
@@ -236,17 +259,16 @@ class CourseForm(forms.ModelForm):
         localized_fields = ['hours', 'pass_mark']  # a decimal comma, in a text box
         widgets = {
             'staff': forms.CheckboxSelectMultiple,
-            'modules': forms.CheckboxSelectMultiple(attrs={'data-twins': ''}),  # a module several Studiengänge share: ticked once for all
+            'modules': forms.CheckboxSelectMultiple,
             'description': forms.Textarea(attrs={'rows': 4}),
         }
 
-    layout = [
-        (None, ['correction', 'term', 'title', ('kind', 'allocation'), ('area', 'format'), ('subject', 'rhythm')]),
-        ('Umfang und Anmeldung', [('hours', 'capacity', 'opens', 'deadline'), 'grouping']),
-        ('Lehrende und Module', ['staff', 'programme', 'modules']),
-        (None, ['description']),
+    layout = [  # what it counts for first: the Studienpläne suggest the rest
+        (None, ['correction', 'term', 'modules', 'title', ('format', 'hours'), ('kind', 'allocation'), ('capacity', 'opens', 'deadline'), 'grouping']),
+        ('Lehrende', ['staff']),
+        (None, [('area', 'subject', 'rhythm'), 'description']),
     ]
-    planned = ('kind', 'format', 'hours', 'modules', 'programme')  # what counts in the Deputat and the Studienpläne
+    planned = ('kind', 'format', 'hours', 'modules')  # what counts in the Deputat and the Studienpläne
     moves = False  # a course stays in its semester; an audition may move
 
     def __init__(self, *args, person=None, planning=True, over=False, **kwargs):
@@ -270,13 +292,19 @@ class CourseForm(forms.ModelForm):
         if 'after' in self.fields:  # the stages of the same intake
             self.fields['after'].queryset = Course.objects.filter(kind=Course.Kind.AUDITION, term=self.instance.term_id).exclude(pk=self.instance.pk).order_by('title')
         if 'modules' in self.fields:
-            self.fields['modules'].choices = leaf_modules()
-            self.fields['programme'].initial = self.instance.pk and self.instance.modules.values_list('program', flat=True).first()
-            names = [name for name in self.fields if name != 'programme']
-            names.insert(names.index('modules'), 'programme')
-            self.order_fields(names)
-        else:
-            self.fields.pop('programme', None)
+            modules = leaf_modules(chosen=self.initial.get('modules', ()))
+            self.fields['modules'].choices = labelled(modules)
+            if 'format' in self.fields:
+                self.plans = studienplan(modules)
+        if 'kind' in self.fields:  # places and how they are given only where people share the dates
+            for name in ('allocation', 'capacity'):
+                self.fields[name].widget.attrs['data-for'] = 'kind:course'
+        elif self.instance.kind == Course.Kind.LESSON:  # one person each, in the teachers' class
+            for name in ('allocation', 'capacity', 'opens', 'deadline'):
+                self.fields.pop(name, None)
+        if 'allocation' in self.fields:  # registration dates only where people register
+            for name in ('opens', 'deadline'):
+                self.fields[name].widget.attrs['data-for'] = 'allocation:order,choice'
         if 'subject' in self.fields:
             self.fields['subject'].empty_label = 'Keines'
         grouped = self.instance.pk and self.instance.groups.exists()
@@ -285,10 +313,10 @@ class CourseForm(forms.ModelForm):
         if 'grouping' in self.fields and not grouped:  # how groups are given out, once there are some
             del self.fields['grouping']
         if {'staff', 'modules'} <= set(self.fields):  # who taught these modules lately, to come first once they are ticked
-            taught = defaultdict(set)
+            shown, taught = {m.pk: pk for pk, twins in modules for m in twins}, defaultdict(set)
             for module, teacher in Course.objects.filter(kind=Course.Kind.COURSE, term__start__gte=timezone.localdate() - timedelta(days=730)).values_list('modules', 'staff').distinct():
                 if module and teacher:
-                    taught[module].add(teacher)
+                    taught[shown.get(module, module)].add(teacher)
             self.taught = {m: sorted(t) for m, t in taught.items()}
         if 'program' in self.fields:
             self.fields['program'].queryset = Program.planned()
@@ -300,6 +328,14 @@ class CourseForm(forms.ModelForm):
             if name in self.fields:
                 self.fields[name].required, self.fields[name].empty_label = True, 'Bitte wählen'
 
+
+    def clean(self):
+        data = super().clean()
+        if data.get('kind') == Course.Kind.LESSON:  # its fields hidden (app.js: conditional): one person each, the teachers' class
+            data['allocation'], data['capacity'] = Course.Allocation.STAFF, None
+        if data.get('allocation') in (Course.Allocation.STAFF, Course.Allocation.ENSEMBLE):
+            data['opens'] = data['deadline'] = None
+        return data
 
     def clean_modules(self):
         """A module several Studiengänge share, the same code and title in each, counts for all of them."""
@@ -336,7 +372,7 @@ class ExamForm(CourseForm):
         self.fields['staff'].choices = teachers(self.instance.subject, person.ours('manage_exams') if person else (), modules, appointed(self.instance))
         self.fields['assessor'].queryset = Person.teachers()
         self.fields['assessor'].choices = [('', 'Keiner'), *teachers(self.instance.subject, person.ours('manage_exams') if person else (), modules)]
-        self.fields['modules'].choices = leaf_modules(exams=True)
+        self.fields['modules'].choices = labelled(leaf_modules(exams=True, chosen=self.initial.get('modules', ())))
 
 
 WRITTEN = re.compile(r'arbeit|schriftlich|programmheft|dokumentation|dissertation', re.I)  # what of a final project is written

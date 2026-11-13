@@ -8,6 +8,7 @@ const fold = text => text.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
 function init(root) {
   root.querySelectorAll('.form div[id^="id_"]').forEach(list => (list.dataset.search || list.querySelectorAll('input[type=checkbox]').length > 8) && filterable(list));
   root.querySelectorAll('form:has(#id_modules):has(#id_staff)').forEach(suggest);
+  root.querySelectorAll('form:has(#id_modules)').forEach(planned);
   root.querySelectorAll('.weekplan .week[data-first]').forEach(preview);
   root.querySelectorAll('datalist[data-suggest]').forEach(lookup);
   root.querySelectorAll('.form select').forEach(select => (select.options.length > 60 || 'find' in select.dataset) && findable(select));
@@ -227,7 +228,8 @@ function filterable(list) {
     const words = fold(input.value).split(/\s+/).filter(Boolean);
     for (const label of list.querySelectorAll('label:has(input)')) {
       const box = label.querySelector('input');
-      label.parentElement.hidden = !box.checked && !words.every(word => fold(label.textContent).includes(word));
+      const text = fold(`${label.textContent} ${label.querySelector('[title]')?.title ?? ''}`);  // a module's Studiengänge too
+      label.parentElement.hidden = !box.checked && !words.every(word => text.includes(word));
     }
     for (const group of list.children) {  // programme headings disappear with all their entries
       if (group.querySelector(':scope > label:not(:has(input))')) {
@@ -238,22 +240,16 @@ function filterable(list) {
   input.addEventListener('input', narrow);
   input.addEventListener('filter', narrow);
 
-  // What is ticked shows beneath the list, so that ticking never moves it: how many, and each by its name, in a list of
-  // modules with its Studiengang. A module several Studiengänge share (data-twins) is ticked, and shown, once for all.
+  // What is ticked shows beneath the list, so that ticking never moves it: how many, and each by its name, without what
+  // follows it (a person's Hauptfach, a module's Studiengänge).
   const chosen = Object.assign(document.createElement('div'), {className: 'chips'});
   list.after(chosen);
-  const key = box => box.parentElement.textContent.trim().split(' · ')[0];
-  const twins = list.querySelector('input[data-twins]');
-  twins && list.addEventListener('change', event => {
-    if (event.target.matches?.('input[data-twins]')) list.querySelectorAll('input[data-twins]').forEach(box => key(box) === key(event.target) && (box.checked = event.target.checked));
-  });
+  const name = box => [...box.parentElement.childNodes].filter(node => node.localName !== 'small').map(node => node.textContent).join('').trim().split(' · ')[0];
   const sum = () => {
-    const ticked = Map.groupBy([...list.querySelectorAll('input[type=checkbox]:checked')], box => twins ? key(box) : box.value);
-    chosen.replaceChildren(...(ticked.size ? [Object.assign(document.createElement('small'), {className: 'muted', textContent: `${ticked.size} ausgewählt`})] : []), ...[...ticked.values()].map(boxes => {
-      const group = boxes.length > 1 ? `${boxes.length} Studiengänge` : twins && boxes[0].closest(`#${list.id} > div`)?.querySelector(':scope > label:not(:has(input))')?.textContent.trim();
-      const chip = Object.assign(document.createElement('button'), {type: 'button', className: 'chip yes', title: 'Abwählen'});
-      chip.textContent = `${key(boxes[0])}${group ? ` · ${group}` : ''} ×`;
-      chip.addEventListener('click', () => { boxes.forEach(box => box.checked = false); list.dispatchEvent(new Event('change', {bubbles: true})); });
+    const ticked = [...list.querySelectorAll('input[type=checkbox]:checked')];
+    chosen.replaceChildren(...(ticked.length ? [Object.assign(document.createElement('small'), {className: 'muted', textContent: `${ticked.length} ausgewählt`})] : []), ...ticked.map(box => {
+      const chip = Object.assign(document.createElement('button'), {type: 'button', className: 'chip yes', title: 'Abwählen', textContent: `${name(box)} ×`});
+      chip.addEventListener('click', () => { box.checked = false; list.dispatchEvent(new Event('change', {bubbles: true})); });
       return chip;
     }));
   };
@@ -280,6 +276,38 @@ function suggest(form) {
   };
   modules.addEventListener('change', order);
   order();
+}
+
+// In a course's form, what the Studienpläne say of the modules ticked (the page's „plans“): Titel, Lehrform, SWS and
+// Fachgebiet take it while empty or as suggested, and beneath Lehrform and SWS it says so, in red where they differ.
+function planned(form) {
+  const plans = JSON.parse(document.getElementById('plans')?.textContent || 'null');
+  const modules = form.querySelector('#id_modules');
+  if (!plans || !modules) return;
+  const {title, format, hours, area} = form.elements;
+  const [lehrform, sws] = [format, hours].map(field => field.parentElement.appendChild(Object.assign(document.createElement('div'), {className: 'helptext'})));
+  const same = values => values.length && values.every(v => v === values[0]) ? values[0] : null;
+  const take = (field, value) => {
+    if (field && value != null && (!field.value || field.value === field.dataset.suggested)) field.value = field.dataset.suggested = value;
+  };
+  const update = suggest => {
+    const ticked = [...modules.querySelectorAll('input:checked')].map(box => plans[box.value]);
+    const [f, h, a] = ['format', 'hours', 'area'].map(key => same(ticked.map(plan => plan[key] ?? null)));
+    if (suggest) {
+      take(title, ticked.length === 1 ? ticked[0].title : null);
+      take(format, f && String(f));
+      take(hours, h?.replace('.', ','));
+      take(area, a && String(a));
+    }
+    const forms = [...new Set(ticked.map(plan => plan.form).filter(Boolean))].join(' / ');
+    lehrform.textContent = forms && `Studienplan: ${forms}`;
+    lehrform.classList.toggle('differs', Boolean(format.value && f && format.value !== String(f)));
+    sws.textContent = h ? `Studienplan: ${h.replace('.', ',')}` : '';
+    sws.classList.toggle('differs', Boolean(hours.value && h && parseFloat(hours.value.replace(',', '.')) !== parseFloat(h)));
+  };
+  form.addEventListener('change', event => update(Boolean(event.target.closest?.('#id_modules'))));
+  form.addEventListener('input', () => update(false));
+  update(true);
 }
 
 // Type-to-find in a long dropdown, such as every Kreis and state: only entries matching the words, or their group, stay.
@@ -546,17 +574,17 @@ document.addEventListener('change', ({target}) => {
   target.form.querySelectorAll(target.dataset.all ? `[data-part="${target.dataset.all}"]` : '[data-part], [data-all]').forEach(box => { box.checked = target.checked; });
 });
 
-// Fields that matter only for some choices of another (data-for="category:kammermusik") show only then.
+// Fields that matter only for some choices of another (data-for="category:kammermusik") show only then. A choice hidden
+// so hides what hangs on it, as a course's registration dates with its Platzvergabe in one-to-one teaching; the rules
+// go in page order, so it is hidden first.
 function conditional(form) {
-  const rules = new Map();
-  form.querySelectorAll('[data-for]').forEach(input => rules.set(input.closest('.row > div, form > div'), input.dataset.for));
-  for (const [group, rule] of rules) {
-    const [name, values] = rule.split(':');
-    const choice = form.elements[name];
-    const show = () => { group.hidden = !values.split(',').includes(choice.value); };
-    choice.addEventListener('change', show);
-    show();
-  }
+  const rules = [...form.querySelectorAll('[data-for]')].map(input => [input.closest('.row > div, form > div'), ...input.dataset.for.split(':')]);
+  const show = () => rules.forEach(([group, name, values]) => {
+    const choice = form.elements[name], off = (choice.closest ? choice : choice[0]).closest('[hidden]');  // a select, or radio buttons
+    group.hidden = Boolean(off && form.contains(off)) || !values.split(',').includes(choice.value);
+  });
+  form.addEventListener('change', show);
+  show();
 }
 
 // Date fields take 'morgen', 'fr', '12.11.' and say what they understood; arrow keys move a day, with Shift a week.

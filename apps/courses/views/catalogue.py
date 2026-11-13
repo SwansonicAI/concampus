@@ -299,6 +299,8 @@ def edit(request, pk=None):
         if course.deadline and course.deadline < timezone.localdate():  # a registration over is not copied
             course.opens = course.deadline = None
         initial = {'staff': list(source.staff.values_list('pk', flat=True)), 'modules': list(source.modules.values_list('pk', flat=True))}
+    elif not pk and request.GET.get('modul', '').isdigit():  # for a module „Ohne Angebot“ (rollover): the Studienplan suggests the rest
+        initial = {'modules': [int(request.GET['modul'])]}
     office = 'manage_courses' in person.roles and (not pk or person.may('manage_courses', course))
     if not (office or pk and course.staff.filter(pk=person.pk).exists()):
         raise PermissionDenied
@@ -315,7 +317,7 @@ def edit(request, pk=None):
         if saved:
             admit(saved, before)
             messages.success(request, 'Gespeichert. Jetzt Termine planen und Teilnehmende eintragen.' if not pk else 'Gespeichert.')
-            return redirect(saved)
+            return redirect(saved.get_absolute_url() + ('' if pk else '#planen'))
     back = course.get_absolute_url() if pk else reverse('courses:catalogue')
     return render(request, 'courses/form.html', {
         'form': form, 'course': course,'heading': f'Kopie von {source.title}' if source else 'Neue Lehrveranstaltung', 'back': back, 'twin': twin,

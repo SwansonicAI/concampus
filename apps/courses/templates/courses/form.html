@@ -11,6 +11,7 @@
 </div>{% endif %}
 {% if week %}<section style="margin-top: 0; margin-bottom: 32px">{% if before %}<p class="lead">Bisher {% for b in before %}{{ b.start|date:"l" }}s {{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}, {{ b.room }}{% if not forloop.last %}; {% endif %}{% endfor %}, für alle. Mit einer zweiten Zeit wird das Gruppe 1, mit allen, die angemeldet sind; diese hier Gruppe 2.</p>{% endif %}{% include "courses/_weekpick.html" %}</section>{% endif %}
 {% if form.taught %}{{ form.taught|json_script:"taught" }}{% endif %}
+{% if form.plans %}{{ form.plans|json_script:"plans" }}{% endif %}
 <form method="post" class="form" id="neu">
   {% csrf_token %}
   {{ form }}
