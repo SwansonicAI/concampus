@@ -55,7 +55,7 @@ def contents(person):
         ],
         'Einwilligungen': [values(c) for c in person.consents.all()],
         'Meldungen im Studierendenmeldeverfahren': [values(r) for r in person.insurance_reports.select_related('term')],
-        'Anmeldungen': [values(s) for s in person.sign_ins.all()],
+        'Zugriffe': [values(s) for s in person.sign_ins.all()],
         'Leihinstrumente': [values(loan) for loan in Loan.objects.filter(person=person).select_related('instrument')],
         'Auslandsaufenthalte': [
             values(m) | {'Learning Agreement': [values(c) for c in m.components.select_related('module')]}

@@ -160,7 +160,7 @@ class Component(Tracked, models.Model):
 
     mobility = models.ForeignKey(Mobility, models.CASCADE, related_name='components', verbose_name='Auslandsaufenthalt')
     table = models.CharField('Tabelle', max_length=1, choices=Table)
-    title = models.CharField('Veranstaltung', max_length=200, blank=True)
+    title = models.CharField('Lehrveranstaltung', max_length=200, blank=True)
     code = models.CharField('Kürzel dort', max_length=40, blank=True)
     credits = models.DecimalField('ECTS', max_digits=4, decimal_places=1)
     module = models.ForeignKey(Module, models.PROTECT, null=True, blank=True, related_name='+', verbose_name='Modul')

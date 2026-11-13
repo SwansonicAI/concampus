@@ -2,7 +2,28 @@
 {% block title %}Kein Zugriff{% endblock %}
 {% block content %}
 <h1>Kein Zugriff</h1>
+{% if roles %}
+<p class="lead">Nur {% if who %}für {{ who|join:", " }}{% if areas %} oder {% endif %}{% endif %}{% if areas %}mit {% if several %}einem dieser Rechte{% else %}diesem Recht{% endif %}{% endif %}.</p>
+{% if areas %}
+<div class="rights">
+  {% for area, icon, rights in areas %}
+  <div>
+    <h4><svg viewBox="0 0 24 24" aria-hidden="true"><path d="{{ icon }}"/></svg>{{ area }}</h4>
+    {% for short, label, offices in rights %}
+    <ul>
+      <li title="{{ label }}">{% include "core/_mark.html" with mark="" %}<b>{{ short }}</b></li>
+      {% for o in offices %}<li class="holder">{% include "core/_mark.html" with mark=o.mark %}{% if inside or o.email %}<a href="{% url 'office' o.pk %}">{{ o.name }}</a>{% else %}{{ o.name }}{% endif %}</li>
+      {% empty %}<li class="holder off">noch kein Amt</li>{% endfor %}
+    </ul>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+{% include "core/_marks.html" %}
+{% endif %}
+{% else %}
 <p class="lead">{{ reason|default:"Diese Seite gehört zu Aufgaben, die Ihr Konto nicht hat."|linebreaksbr }}</p>
-{% if user.is_authenticated %}<p>Brauchen Sie das für Ihre Arbeit, wenden Sie sich an die Stelle, die Ämter und Rechte vergibt{% if accounts %}: {{ accounts }}{% endif %}.</p>{% endif %}
+{% endif %}
+{% if user.is_authenticated and accounts %}<p class="muted"><small>Rechte vergibt: {{ accounts }}</small></p>{% endif %}
 <p class="actions">{% if back %}<a class="more" href="{{ back }}">Zurück</a>{% endif %}<a class="more" href="{% url 'home' %}">Zur Startseite</a></p>
 {% endblock %}

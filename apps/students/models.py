@@ -520,7 +520,7 @@ class InsuranceReport(models.Model):
     first_name = models.CharField('Vorname', max_length=150, blank=True)
     birth_date = models.DateField('Geboren', null=True, blank=True)
     insurance = models.CharField('Versicherungsstatus', max_length=10, choices=STATUSES, blank=True)
-    day = models.DateField('Tag', null=True, blank=True, help_text='M11: Beginn der neuen Versicherung; M20: Tag der Einschreibung; M30: Tag der Exmatrikulation.')
+    day = models.DateField('Tag', null=True, blank=True, help_text='M11: Beginn der neuen Versicherung; M20: Tag der Immatrikulation; M30: Tag der Exmatrikulation.')
     term = models.ForeignKey(Term, models.PROTECT, null=True, blank=True, related_name='+', verbose_name='Semester')
     created = models.DateTimeField('Eingegangen oder erstellt', default=timezone.now)
     due = models.DateField('Zu senden ab', null=True, blank=True)

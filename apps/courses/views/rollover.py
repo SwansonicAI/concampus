@@ -92,7 +92,7 @@ def rollover(request):
     the teachers to confirm them, book last year's weekly times, fill the classes after the Rückmeldung, check, publish."""
     target = Term.upcoming()
     if target is None:
-        return without_term(request, 'das nächste Semester, in das die Veranstaltungen übernommen werden')
+        return without_term(request, 'das nächste Semester, in das die Lehrveranstaltungen übernommen werden')
     person = request.user
     pending = person.within(missing(target), 'roll_over')
     if request.method == 'POST':
@@ -182,7 +182,7 @@ def take_over(request, target, pending):
                 Group.objects.create(course=copy, number=g.number, capacity=g.capacity).staff.set(g.staff.all())
                 copy.staff.add(*g.staff.all())
     hidden = ' als Entwurf; Studierende sehen sie, sobald das Semester veröffentlicht ist' if target.planning else ''
-    messages.success(request, f'{plural(len(chosen), "Veranstaltung", "Veranstaltungen")} nach {target} übernommen{hidden}.')
+    messages.success(request, f'{plural(len(chosen), "Lehrveranstaltung", "Lehrveranstaltungen")} nach {target} übernommen{hidden}.')
 
 
 def ask(request, target, pending):
@@ -233,7 +233,7 @@ def schedule(request, target, pending):
             continue
         history.saved(Booking.objects.bulk_create(dates))
         booked += 1
-    messages.success(request, f'{plural(booked, "Veranstaltung hat", "Veranstaltungen haben")} ihre wöchentlichen Termine.')
+    messages.success(request, f'{plural(booked, "Lehrveranstaltung hat", "Lehrveranstaltungen haben")} ihre wöchentlichen Termine.')
     if taken:
         messages.error(request, f'Raum belegt, nicht gebucht: {"; ".join(taken)}. Diese bitte auf ihrer Seite planen.')
 
@@ -354,4 +354,4 @@ def publish(request, target, pending):
         dropped.delete()
         target.planning = False
         target.save(update_fields=['planning'])
-    messages.success(request, f'{target} veröffentlicht: Studierende sehen seine Lehrveranstaltungen.' + (f' {plural(n, "abgesagte Veranstaltung", "abgesagte Veranstaltungen")} gelöscht.' if n else ''))
+    messages.success(request, f'{target} veröffentlicht: Studierende sehen seine Lehrveranstaltungen.' + (f' {plural(n, "abgesagte Lehrveranstaltung", "abgesagte Lehrveranstaltungen")} gelöscht.' if n else ''))

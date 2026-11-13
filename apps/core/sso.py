@@ -101,7 +101,7 @@ def acs(request):
     if person is None:
         SignIn.objects.create(username=sso_id[:150], ip=address(request), success=False)
         why = 'zu diesem Hochschulkonto gibt es in ConCampus kein Konto' if sso_id else 'die Antwort der Hochschule ließ sich nicht prüfen'
-        messages.error(request, f'Anmeldung mit dem Hochschulkonto nicht möglich: {why}.')
+        messages.error(request, f'Anmelden mit dem Hochschulkonto nicht möglich: {why}.')
         response = redirect('login')
     else:
         login(request, person, backend=settings.AUTHENTICATION_BACKENDS[0])

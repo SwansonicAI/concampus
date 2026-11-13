@@ -296,7 +296,7 @@ class SearchTest(Seeded):
         self.assertLessEqual({'Studiengänge', 'Mein Studienplan Violine'}, {h['title'] for h in groups['Funktionen']})
         self.assertEqual(len(groups['Studiengänge']), Program.objects.count())
         for q in ['create course', 'Kurs anlegen', 'craete cousre']:  # in English, in German, misspelt: the best first
-            self.assertEqual(dict(found(Person.objects.get(username='institut'), q, 6))['Funktionen'][0]['title'], 'Neue Veranstaltung')
+            self.assertEqual(dict(found(Person.objects.get(username='institut'), q, 6))['Funktionen'][0]['title'], 'Neue Lehrveranstaltung')
         lehre = Person.objects.get(username='lehre')  # records too: a letter off, in English
         self.assertIn('Katharina Wendt', dict(found(lehre, 'katarina', 6))['Personen'][0]['title'])
         self.assertIn('Orchester', dict(found(lehre, 'orchestra', 6))['Lehrveranstaltungen'][0]['title'])
@@ -488,7 +488,7 @@ class AccessibilityTest(Seeded):
             r = Client().post('/barrierefreiheit/', {'email': 'gast@example.org', 'page': '/raeume/', 'text': 'Der Wochenplan liest sich mit dem Screenreader nicht.'}, follow=True)
         self.assertIn('Wir antworten bis zum', flashes(r)[0])
         self.assertEqual(mail.outbox[0].to, [Institution.get().email])
-        self.assertContains(self.login('campus').get('/'), 'Barrierefreiheit: 1 Rückmeldung beantworten')
+        self.assertContains(self.login('campus').get('/'), 'Barrierefreiheit: 1 Hinweis beantworten')
 
 
 class AccountTest(Seeded):

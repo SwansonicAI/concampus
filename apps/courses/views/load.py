@@ -161,7 +161,7 @@ def load(request):
     person = request.user
     term = Term.pick(request.GET.get('semester'))
     if term is None:
-        return without_term(request, 'ein Semester mit Veranstaltungen')
+        return without_term(request, 'ein Semester mit Lehrveranstaltungen')
     ours = person.ours('view_teaching_load')  # an Institut's office sees its own; the list says so
     institute, q, stand = request.GET.get('institut', str(min(ours)) if len(ours) == 1 else ''), request.GET.get('q', '').strip(), request.GET.get('stand', '')
     rows = loads(term, person, institute, fold(q).split())

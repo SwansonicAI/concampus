@@ -181,7 +181,7 @@ class Institution(Tracked, models.Model):
     )
     staff_years = models.PositiveSmallIntegerField(
         'Daten früherer Beschäftigter aufbewahren (Jahre)', default=5,
-        help_text='Nach dem Deaktivieren des Kontos; dann bis auf den Namen gelöscht, der an Veranstaltungen und Prüfungen stehen bleibt.',
+        help_text='Nach dem Deaktivieren des Kontos; dann bis auf den Namen gelöscht, der an Lehrveranstaltungen und Prüfungen stehen bleibt.',
     )
     signup = models.BooleanField('Neue Bewerbungskonten', default=True, help_text='Ohne Haken legt niemand ein neues Bewerbungskonto an.')
     sender_number = models.CharField(
@@ -198,7 +198,7 @@ class Institution(Tracked, models.Model):
     )
     clash_dates = models.PositiveSmallIntegerField(
         'Warnung bei Überschneidung ab (Termine)', default=3,
-        help_text='Überschneiden sich so viele Termine einer Veranstaltung mit dem Stundenplan, oder alle, warnt die Anmeldung rot und fragt nach; '
+        help_text='Überschneiden sich so viele Termine einer Lehrveranstaltung mit dem Stundenplan, oder alle, warnt die Anmeldung rot und fragt nach; '
                   'weniger, etwa eine Probe, nur gelb. Verhindert wird die Anmeldung nie; Übezeiten zählen nicht.',
     )
     load_since = models.DateField(
@@ -384,7 +384,7 @@ class Person(Tracked, AbstractUser):
     matriculation = models.CharField('Matrikelnummer', max_length=12, unique=True, null=True, blank=True)
     sso_id = models.CharField(
         'Kennung im Hochschulkonto', max_length=255, unique=True, null=True, blank=True,
-        help_text='Wie der Login der Hochschule die Person nennt (eduPersonPrincipalName); bei der ersten Anmeldung über ihn gesetzt.',
+        help_text='Wie der Login der Hochschule die Person nennt (eduPersonPrincipalName); beim ersten Zugriff über ihn gesetzt.',
     )
     hold = models.CharField('Sperre', max_length=200, blank=True, help_text='Grund der Sperre; leer heißt keine Sperre.')
 
@@ -626,10 +626,13 @@ class Office(Tracked, Group):
         return ', '.join(map(str, [*self.institutes.all(), *self.programs.all()])) or 'ganze Hochschule'
 
     @property
+    def mark(self):
+        """How far it reaches, for core.access.areas(): 'part' where limited to some Institute or Studiengänge, else 'done'."""
+        return 'part' if self.institutes.all() or self.programs.all() else 'done'
+
+    @property
     def marks(self):
-        """Its rights for core.access.areas(): 'part' where it is limited to some Institute or Studiengänge."""
-        mark = 'part' if self.institutes.all() or self.programs.all() else 'done'
-        return {p.codename: mark for p in self.permissions.all()}
+        return {p.codename: self.mark for p in self.permissions.all()}
 
     @classmethod
     def holding(cls, capability, program=None, remit=False, linked=False, institute=None):
@@ -682,7 +685,7 @@ class Term(Tracked, models.Model):
         'In Planung', default=False, help_text='Seine Lehrveranstaltungen sehen nur die Ämter und die Lehrenden, bis das Semester veröffentlicht ist.',
     )
     ready_by = models.DateField('Vorlesungsverzeichnis fertig bis', null=True, blank=True, help_text='Bis dahin ist das Semester geplant und veröffentlicht.')
-    replies_by = models.DateField('Rückmeldung der Lehrenden bis', null=True, blank=True, help_text='Bis dahin bestätigen die Lehrenden ihre Veranstaltungen.')
+    replies_by = models.DateField('Antwort der Lehrenden bis', null=True, blank=True, help_text='Bis dahin bestätigen die Lehrenden ihre Lehrveranstaltungen.')
     course_signup_start = models.DateField(
         'Anmeldung zu Lehrveranstaltungen ab', null=True, blank=True, help_text='Neue und übernommene Lehrveranstaltungen übernehmen den Zeitraum.',
     )
@@ -971,12 +974,12 @@ class SignIn(models.Model):
     person = models.ForeignKey(Person, models.CASCADE, null=True, related_name='sign_ins', verbose_name='Person')
     ip = models.CharField('Adresse', max_length=45, blank=True)
     at = models.DateTimeField('Am', default=timezone.now)
-    success = models.BooleanField('Angemeldet')
+    success = models.BooleanField('Erfolgreich')
 
     class Meta:
         ordering = ['-at']
-        verbose_name = 'Anmeldung'
-        verbose_name_plural = 'Anmeldungen'
+        verbose_name = 'Zugriff'
+        verbose_name_plural = 'Zugriffe'
 
 
 class Feedback(models.Model):
@@ -996,8 +999,8 @@ class Feedback(models.Model):
 
     class Meta:
         ordering = ['-received']
-        verbose_name = 'Rückmeldung zur Barrierefreiheit'
-        verbose_name_plural = 'Rückmeldungen zur Barrierefreiheit'
+        verbose_name = 'Hinweis zur Barrierefreiheit'
+        verbose_name_plural = 'Hinweise zur Barrierefreiheit'
 
     @property
     def due(self):

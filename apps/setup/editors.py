@@ -138,7 +138,7 @@ def depending(person):
     """What hangs on a person's account, said in words: their class, courses still running, bookings to come."""
     counts = [
         (Study.objects.filter(teacher=person, status=Study.Status.ENROLLED).count(), 'Studierende der Klasse', 'Studierende der Klasse'),
-        (person.teaching.filter(term__end__gte=timezone.localdate(), cancelled=None).count(), 'Veranstaltung', 'Veranstaltungen'),
+        (person.teaching.filter(term__end__gte=timezone.localdate(), cancelled=None).count(), 'Lehrveranstaltung oder Prüfung', 'Lehrveranstaltungen und Prüfungen'),
         (Booking.objects.filter(person=person, start__gte=timezone.now()).count(), 'künftige Buchung', 'künftige Buchungen'),
     ]
     return ', '.join(f'{n} {one if n == 1 else many}' for n, one, many in counts if n)
@@ -153,7 +153,7 @@ class AccountForm(forms.ModelForm):
         help_texts = {
             'groups': 'Was jemand darf, ergibt sich aus den Rechten der Ämter. Ein neues Amt gilt, sobald eine zweite Person es unter „Freigaben“ bestätigt; befristet unter „Vertretungen und Amtszeiten“.',
             'institute': 'Für Lehrende: das Institut, dessen Räume sie buchen.',
-            'is_active': 'Ohne Haken ist keine Anmeldung möglich; ab dem Tag läuft die Frist für die Daten früherer Beschäftigter (Einstellungen › Hochschule).',
+            'is_active': 'Ohne Haken ist kein Zugriff möglich; ab dem Tag läuft die Frist für die Daten früherer Beschäftigter (Einstellungen › Hochschule).',
             'username': 'Wie beim Hochschulkonto.',
         }
         widgets = {'groups': forms.CheckboxSelectMultiple}
@@ -300,7 +300,7 @@ EDITORS = {e.key: e for e in [
         sections=[
             ('Briefkopf und Website', [('name', 'short_name'), 'address', ('place', 'email', 'website'), ('imprint', 'privacy', 'accessibility')]),
             ('Erscheinungsbild', ['wordmark', ('logo', 'accent', 'radius')]),
-            ('Aufnahme und Immatrikulation', [('matriculation_start', 'student_mail', 'accept_days', 'pay_days'), 'signup', 'sender_number', 'insurers']),
+            ('Bewerbung und Immatrikulation', [('matriculation_start', 'student_mail', 'accept_days', 'pay_days'), 'signup', 'sender_number', 'insurers']),
             ('Eignungsprüfungen', [('audition_panel_main', 'audition_panel', 'audition_rounding')]),
             ('Aufbewahrung', [('retention_months', 'file_years'), ('core_years', 'staff_years')]),
             ('Rückmeldung und Beurlaubung', [('late_fee', 'leave_terms'), 'first_term_leave', 'loans_hold', 'payee', ('iban', 'bic')]),
@@ -326,7 +326,7 @@ EDITORS = {e.key: e for e in [
     ),
     Editor(
         'konten', Person, 'Konten', 'manage_accounts', 'Verwaltung', form=AccountForm,
-        columns=[('Name', 'name'), ('E-Mail', 'email'), ('Ämter', 'groups'), ('Institut', 'institute'), ('Zuletzt angemeldet', 'last_login'), ('Aktiv', 'is_active')],
+        columns=[('Name', 'name'), ('E-Mail', 'email'), ('Ämter', 'groups'), ('Institut', 'institute'), ('Letzter Zugriff', 'last_login'), ('Aktiv', 'is_active')],
         search=['first_name', 'last_name', 'email', 'username'], words='mitarbeitende lehrende zugang benutzer einladung passwort', invite=True,
         queryset=lambda: (
             Person.objects.filter(models.Q(groups__isnull=False) | models.Q(institute__isnull=False) | models.Q(studies=None)).distinct()
@@ -422,7 +422,7 @@ EDITORS = {e.key: e for e in [
     ),
     Editor('studien', Study, 'Studium', 'manage_students', form=StudyForm, deletable=False),
     Editor(
-        'eignungspruefungen', Course, 'Eignungsprüfungen', 'run_auditions', 'Aufnahme', form=AuditionForm,
+        'eignungspruefungen', Course, 'Eignungsprüfungen', 'run_auditions', 'Bewerbungen', form=AuditionForm,
         columns=[('Prüfung', 'title'), ('Semester', 'term'), ('Studiengang', 'program'), ('Bewerbungsschluss', 'deadline'), ('Plätze', 'capacity')],
         search=['title', 'subject__name'], words='aufnahmeprüfung videostufe kommission bewerbungsfrist',
         queryset=lambda: Course.objects.filter(kind=Course.Kind.AUDITION).select_related('term', 'program').order_by('-term__start', 'title'),
@@ -457,7 +457,7 @@ EDITORS = {e.key: e for e in [
         search=['partner__name'], words='erasmus iia inter-institutional agreement plätze ausland', queryset=lambda: Agreement.objects.select_related('partner'),
     ),
     Editor(
-        'unterlagen', DocumentType, 'Unterlagenarten', 'run_auditions', 'Aufnahme',
+        'unterlagen', DocumentType, 'Unterlagenarten', 'run_auditions', 'Bewerbungen',
         sections=[(None, [
             ('name', 'condition'), ('required', 'single', 'shared'), ('jury', 'health', 'by_enrolment'), 'note', 'template', ('file_types', 'max_mb', 'max_files'), ('amount', 'order'), 'subjects',
         ])],

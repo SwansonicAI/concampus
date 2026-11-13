@@ -52,7 +52,7 @@ class LineForm(forms.ModelForm):
     def clean(self):
         data = super().clean()
         if data.get('table') == Component.Table.ABROAD and not data.get('title'):
-            self.add_error('title', 'Bitte die Veranstaltung dort nennen.')
+            self.add_error('title', 'Bitte die Lehrveranstaltung dort nennen.')
         if data.get('table') == Component.Table.HOME and not data.get('module'):
             self.add_error('module', 'Bitte das Modul hier wählen.')
         return data

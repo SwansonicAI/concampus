@@ -202,7 +202,7 @@ MEASURES = {m.key: m for m in [
         },
     ),
     Measure(
-        'veranstaltungen', 'Veranstaltungen',
+        'veranstaltungen', 'Lehrveranstaltungen',
         rows=lambda: Course.objects.filter(kind__in=[Course.Kind.COURSE, Course.Kind.LESSON]),
         value=Count('pk'), term='term', default='groesse', drill='semester', capability='manage_courses',
         objects=lambda rows: rows.annotate(size=Count('participations')).order_by('title'),

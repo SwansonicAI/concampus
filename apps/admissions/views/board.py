@@ -42,7 +42,7 @@ def index(request):
     if 'juror' in roles:
         return redirect('admissions:juries')
     if roles & {'teacher', *CODENAMES} and not roles & {'applicant', 'student', 'alumni'}:  # staff apply to nothing here
-        raise PermissionDenied('Die Aufnahme ist für Bewerbende, ihre Kommissionen und die Ämter, die Bewerbungen bearbeiten.')
+        raise PermissionDenied('Bewerbungen sind für Bewerbende, ihre Kommissionen und die Ämter, die sie bearbeiten.')
     return redirect('admissions:mine')
 
 

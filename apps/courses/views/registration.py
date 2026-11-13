@@ -51,7 +51,7 @@ def register(request, pk):
     group = course.groups.filter(pk=request.POST.get('gruppe') or None).first() if choosing else None
     full = choosing and not group and course.groups.exists()  # every group full: the teachers may open another
     if course.cancelled or course.term.planning:
-        messages.error(request, 'Diese Veranstaltung entfällt.' if course.cancelled else 'Das Semester ist noch nicht veröffentlicht.')
+        messages.error(request, 'Diese Lehrveranstaltung entfällt.' if course.cancelled else 'Das Semester ist noch nicht veröffentlicht.')
     elif course.allocation == Course.Allocation.STAFF:
         messages.error(request, 'Die Lehrenden teilen die Plätze ein.')
     elif course.allocation == Course.Allocation.ENSEMBLE:

@@ -52,7 +52,7 @@
       <td>{% if r.incoming %}von der Kasse{% else %}an die Kasse{% endif %}<br>{{ r.get_reason_display }}{% if r.cancels_id %} <span class="badge wait">Storno</span>{% endif %}</td>
       <td>{% if study %}<a href="{{ study.get_absolute_url }}">{{ r.person.name }}</a>{% elif r.person %}{{ r.person.name }}{% else %}{{ r.first_name }} {{ r.last_name }}{% endif %}{% if r.person.matriculation %}<br><small class="muted">{{ r.person.matriculation }}</small>{% endif %}</td>
       <td>{{ r.insurer }}</td>
-      <td>{% if r.reason == '10' %}{{ r.get_insurance_display }}{% elif r.reason == '11' %}versichert ab {{ r.day|date:"j.n.Y" }}{% elif r.reason == '20' %}{{ r.term }}, eingeschrieben am {{ r.day|date:"j.n.Y" }}{% elif r.reason == '30' %}{{ r.term }}, exmatrikuliert zum {{ r.day|date:"j.n.Y" }}{% endif %}</td>
+      <td>{% if r.reason == '10' %}{{ r.get_insurance_display }}{% elif r.reason == '11' %}versichert ab {{ r.day|date:"j.n.Y" }}{% elif r.reason == '20' %}{{ r.term }}, immatrikuliert am {{ r.day|date:"j.n.Y" }}{% elif r.reason == '30' %}{{ r.term }}, exmatrikuliert zum {{ r.day|date:"j.n.Y" }}{% endif %}</td>
       <td>
         {% if r.state == 'erledigt' %}<span class="badge green">{% if r.incoming %}verbucht{% else %}versandt{% endif %}</span> <small class="muted">{{ r.done|date:"j.n.Y" }}{% if r.by %}, von Hand{% endif %}</small>
         {% elif r.state == 'offen' %}<span class="badge open">wartet</span>{% if r.due > today %} <small class="muted">bis {{ r.due|date:"j.n.Y" }}</small>{% endif %}

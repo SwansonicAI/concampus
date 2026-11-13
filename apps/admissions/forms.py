@@ -237,7 +237,7 @@ class AcceptForm(forms.ModelForm):
         ]
         widgets = {'insurer': forms.TextInput(attrs={'list': 'insurers'})}
         help_texts = {
-            'first_university': 'Wo Sie sich zum ersten Mal eingeschrieben haben.',
+            'first_university': 'Wo Sie sich zum ersten Mal immatrikuliert haben.',
             'first_term': 'Z. B. WiSe 2019/20.',
             'external_terms': 'An anderen deutschen Hochschulen, Urlaubssemester eingeschlossen.',
             'degree_university': 'Wo Sie Ihren letzten Abschluss erworben haben.',

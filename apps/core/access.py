@@ -12,7 +12,7 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
         ('message_students', 'Nachrichten an ausgewählte Studierende senden'),
         ('dispose_files', 'Akten Ehemaliger nach Ablauf der Aufbewahrung dem Archiv anbieten'),
     ]),
-    ('Aufnahme', [
+    ('Bewerbungen', [
         ('view_applications', 'Alle Bewerbungen einsehen'),
         ('decide_applications', 'Über Bewerbungen entscheiden'),
         ('run_auditions', 'Eignungsprüfungen anlegen und durchführen, Kommissionen zusammenstellen, Unterlagen nach Frist annehmen'),
@@ -26,11 +26,11 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
         ('grant_compensation', 'Nachteilsausgleich gewähren, mit dem Attest dazu (Gesundheitsdaten)'),
     ]),
     ('Lehre', [
-        ('manage_courses', 'Veranstaltungen anlegen und bearbeiten: Titel, Lehrende, Termine, Plätze, Ensembles'),
-        ('plan_teaching', 'Umfang (SWS), Lehrform und Module von Veranstaltungen festlegen'),
+        ('manage_courses', 'Lehrveranstaltungen anlegen und bearbeiten: Titel, Lehrende, Termine, Plätze, Ensembles'),
+        ('plan_teaching', 'Umfang (SWS), Lehrform und Module von Lehrveranstaltungen festlegen'),
         ('view_teaching_load', 'Deputat aller Lehrenden einsehen'),
         ('manage_teaching_load', 'Ermäßigungen der Lehrverpflichtung eintragen'),
-        ('roll_over', 'Semesterwechsel: Veranstaltungen ins nächste Semester übernehmen und planen'),
+        ('roll_over', 'Semesterwechsel: Lehrveranstaltungen ins nächste Semester übernehmen und planen'),
         ('publish_term', 'Ein geplantes Semester veröffentlichen'),
     ]),
     ('Studiengänge', [
@@ -66,7 +66,7 @@ SHORT = {  # each right in a few words under its area, to take in at a glance; C
     'view_applications': 'Bewerbungen einsehen', 'decide_applications': 'Über Bewerbungen entscheiden', 'run_auditions': 'Eignungsprüfungen durchführen',
     'manage_exams': 'Prüfungen anlegen und planen', 'decide_results': 'Ergebnisse freigeben, Zeugnisse', 'appoint_examiners': 'Prüfende bestellen',
     'correct_scores': 'Wertungen berichtigen', 'recognise': 'Leistungen anerkennen', 'grant_compensation': 'Nachteilsausgleich gewähren',
-    'manage_courses': 'Veranstaltungen anlegen', 'plan_teaching': 'SWS, Lehrform und Module', 'view_teaching_load': 'Deputat einsehen',
+    'manage_courses': 'Lehrveranstaltungen anlegen', 'plan_teaching': 'SWS, Lehrform und Module', 'view_teaching_load': 'Deputat einsehen',
     'manage_teaching_load': 'Ermäßigungen eintragen', 'roll_over': 'Semesterwechsel', 'publish_term': 'Semester veröffentlichen',
     'view_curriculum': 'Studiengänge mit Zahlen', 'edit_curriculum': 'Studiengänge bearbeiten',
     'book_any_room': 'Alle Räume buchen', 'view_bookings': 'Alle Buchungen sehen', 'manage_bookings': 'Buchungen anderer ändern',
@@ -77,18 +77,19 @@ SHORT = {  # each right in a few words under its area, to take in at a glance; C
     'assess_files': 'Akten bewerten',
 }
 AREAS = {  # each area's icon: an app's, by its label, or as drawn
-    'Studierende': 'students', 'Aufnahme': 'admissions', 'Prüfungen': 'exams', 'Lehre': 'courses', 'Studiengänge': 'curriculum', 'Räume': 'rooms',
+    'Studierende': 'students', 'Bewerbungen': 'admissions', 'Prüfungen': 'exams', 'Lehre': 'courses', 'Studiengänge': 'curriculum', 'Räume': 'rooms',
     'Internationales': 'mobility', 'Verwaltung': 'setup', 'Archiv': 'M3 4h18v4H3zM5 8v12h14V8M10 12h4',
 }
 
 
-def areas(marks=None):
+def areas(marks=None, every=True):
     """CAPABILITIES to draw: [(area, icon, [(short, label, mark)])]. `marks` ({codename: 'done', or 'part' where limited to
-    some Institute or Studiengänge; for a table, a list of them}) leaves out the areas it holds nothing in."""
+    some Institute or Studiengänge; for a table, a list of them}) leaves out the areas it holds nothing in, and without
+    `every` the rights it holds nothing for."""
     from django.apps import apps
 
     return [
-        (area, getattr(apps.app_configs.get(AREAS[area]), 'icon', AREAS[area]), [(SHORT[c], label, (marks or {}).get(c, '')) for c, label in group])
+        (area, getattr(apps.app_configs.get(AREAS[area]), 'icon', AREAS[area]), [(SHORT[c], label, (marks or {}).get(c, '')) for c, label in group if every or c in marks])
         for area, group in CAPABILITIES if marks is None or marks.keys() & {c for c, _ in group}
     ]
 
@@ -111,24 +112,24 @@ def kept(form, person, capability):
 ROLES = {'student': 'Studierende', 'applicant': 'Bewerbende', 'teacher': 'Lehrende', 'juror': 'Kommissionen von Eignungsprüfungen', 'alumni': 'Ehemalige'}
 
 
-def needs(roles):
-    """Whom a page is for, in a sentence: the roles, and the rights with the offices that hold them."""
-    from .models import Office
+class Refused(PermissionDenied):
+    """A page for some roles or rights only (`roles`, as require() takes them): the 403 page shows which, and the offices
+    that hold each right."""
 
-    labels = dict(c for _, group in CAPABILITIES for c in group)
-    lines = [ROLES[r] for r in roles if r in ROLES] + [f'Recht „{labels[r]}“: {Office.holding(r, remit=True) or "noch kein Amt"}' for r in roles if r in labels]
-    return 'Diese Seite ist für:\n' + '\n'.join(f'– {line}' for line in lines)
+    def __init__(self, roles):
+        super().__init__(f'Nur für {", ".join(roles)}')
+        self.roles = roles
 
 
 def require(*roles):
     """View decorator: the user needs one of these roles (capabilities, 'student', 'applicant', 'teacher'); else they
-    hear whom the page is for."""
+    see whom the page is for."""
 
     def decorator(view):
         @wraps(view)
         def guarded(request, *args, **kwargs):
             if not request.user.roles & set(roles):
-                raise PermissionDenied(needs(roles))
+                raise Refused(roles)
             return view(request, *args, **kwargs)
 
         return guarded

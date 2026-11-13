@@ -5,7 +5,7 @@
 {% block content %}
 <div class="head">
   <h1>{{ course.title }}</h1>
-  {% if staffed and not course.term.over or office %}<div class="actions"><a class="btn ghost" href="{% url 'courses:edit' course.pk %}">{% if course.term.over %}Korrigieren{% else %}Bearbeiten{% endif %}</a>{% if office and not course.term.over %}{% if growing %}<a class="btn ghost" href="{% url 'courses:group' course.pk %}" title="Die Veranstaltung zu einer weiteren Zeit, mit eigenen Lehrenden und Plätzen{% if not groups %}; die bisherige Zeit wird Gruppe 1{% endif %}">Weitere Gruppe</a>{% endif %}<a class="btn ghost" href="{% url 'courses:new' %}?von={{ course.pk }}" title="Eine weitere Veranstaltung wie diese">Duplizieren</a>{% if deletable %}<form method="post" action="{% url 'courses:remove' course.pk %}">{% csrf_token %}<button class="btn danger" data-confirm="Mit allen Terminen löschen?">Löschen</button></form>{% endif %}{% endif %}</div>{% endif %}
+  {% if staffed and not course.term.over or office %}<div class="actions"><a class="btn ghost" href="{% url 'courses:edit' course.pk %}">{% if course.term.over %}Korrigieren{% else %}Bearbeiten{% endif %}</a>{% if office and not course.term.over %}{% if growing %}<a class="btn ghost" href="{% url 'courses:group' course.pk %}" title="Die Lehrveranstaltung zu einer weiteren Zeit, mit eigenen Lehrenden und Plätzen{% if not groups %}; die bisherige Zeit wird Gruppe 1{% endif %}">Weitere Gruppe</a>{% endif %}<a class="btn ghost" href="{% url 'courses:new' %}?von={{ course.pk }}" title="Eine weitere Lehrveranstaltung wie diese">Duplizieren</a>{% if deletable %}<form method="post" action="{% url 'courses:remove' course.pk %}">{% csrf_token %}<button class="btn danger" data-confirm="Mit allen Terminen löschen?">Löschen</button></form>{% endif %}{% endif %}</div>{% endif %}
 </div>
 <p class="lead">{{ course.format|default:course.get_kind_display }} · {{ course.term }}{% if course.area %} · {{ course.area }}{% endif %}{% if course.subject %} · {{ course.subject }}{% endif %}{% if course.cancelled %} · <span class="badge no">entfällt</span> {{ course.cancel_reason }}{% endif %}</p>
 {% if staffed and course.term.planning and course.origin_id %}
@@ -156,7 +156,7 @@
       {% csrf_token %}
       <h3>Entfällt</h3>
       <div class="inline"><label>Grund<input name="grund" required maxlength="200" placeholder="z. B. Erkrankung der Lehrperson"></label><button class="btn danger small" data-confirm="Absagen und alle {{ count }} benachrichtigen?">Absagen</button></div>
-      <p class="muted" style="margin: 12px 0 0"><small>Sagt die kommenden Termine ab, hebt Anmeldungen ohne Ergebnis und Anfragen auf und benachrichtigt alle mit dem Grund. Die Veranstaltung bleibt im Verzeichnis, als „entfällt“.</small></p>
+      <p class="muted" style="margin: 12px 0 0"><small>Sagt die kommenden Termine ab, hebt Anmeldungen ohne Ergebnis und Anfragen auf und benachrichtigt alle mit dem Grund. Die Lehrveranstaltung bleibt im Verzeichnis, als „entfällt“.</small></p>
     </form>
     {% endif %}
   </div>
@@ -285,7 +285,7 @@
   <form id="auswahl" method="post" action="{% url 'courses:write' course.pk %}">{% csrf_token %}</form>
   {% include "courses/_add.html" %}
   {% include "courses/_sheet.html" with panel=False decide=True columns=None %}
-  {% if unmarked > 1 %}<form method="post" class="actions" style="margin-top: 8px">{% csrf_token %}<button class="btn ghost small" name="alle_bestanden" value="1" data-confirm="Alle {{ unmarked }} ohne Ergebnis als bestanden eintragen, aus allen Studiengängen und für alle Lehrenden der Veranstaltung?">Alle {{ unmarked }} ohne Ergebnis: bestanden</button></form>{% endif %}
+  {% if unmarked > 1 %}<form method="post" class="actions" style="margin-top: 8px">{% csrf_token %}<button class="btn ghost small" name="alle_bestanden" value="1" data-confirm="Alle {{ unmarked }} ohne Ergebnis als bestanden eintragen, aus allen Studiengängen und für alle Lehrenden der Lehrveranstaltung?">Alle {{ unmarked }} ohne Ergebnis: bestanden</button></form>{% endif %}
 </section>
 {% endif %}
 {% endblock %}

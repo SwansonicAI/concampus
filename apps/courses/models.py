@@ -58,7 +58,7 @@ class Course(Tracked, models.Model):
     scope = (['subject__institute', 'staff__institute'], ['program', 'modules__program'])
 
     class Kind(models.TextChoices):
-        COURSE = 'course', 'Lehrveranstaltung'
+        COURSE = 'course', 'Gruppenunterricht'
         LESSON = 'lesson', 'Einzelunterricht'
         EXAM = 'exam', 'Prüfung'
         AUDITION = 'audition', 'Eignungsprüfung'
@@ -74,7 +74,7 @@ class Course(Tracked, models.Model):
     class Grouping(models.TextChoices):
         CHOICE = 'choice', 'Studierende wählen ihre Gruppe'
         ASSIGNED = 'assigned', 'das Institut teilt die Gruppen zu'
-        CONTINUED = 'continued', 'die Gruppen der Veranstaltung davor bleiben zusammen'
+        CONTINUED = 'continued', 'die Gruppen der Lehrveranstaltung davor bleiben zusammen'
 
     class Rhythm(models.TextChoices):
         SEMESTER = 'semester', 'jedes Semester'
@@ -113,7 +113,7 @@ class Course(Tracked, models.Model):
     deadline = models.DateField('Anmeldeschluss', null=True, blank=True, help_text='Letzter Tag der Anmeldung; abmelden geht bis zum Ende der Vorlesungszeit.')
     grouping = models.CharField(
         'Gruppen', max_length=10, choices=Grouping, default=Grouping.CHOICE,
-        help_text='Nur bei Gruppen. Bleiben sie zusammen, übernimmt der Semesterwechsel die Gruppen der Veranstaltung, die laut Studienplan davor liegt, '
+        help_text='Nur bei Gruppen. Bleiben sie zusammen, übernimmt der Semesterwechsel die Gruppen der Lehrveranstaltung, die laut Studienplan davor liegt, '
                   'mit Lehrenden und Zeit, und trägt nach der Rückmeldung ihre Mitglieder ein.',
     )
     pass_mark = models.DecimalField(
@@ -123,7 +123,7 @@ class Course(Tracked, models.Model):
     max_points = models.PositiveSmallIntegerField('Höchstpunktzahl', null=True, blank=True, help_text='Bei Punkten: so viele gibt jedes Mitglied höchstens.')
     accompaniment = models.ForeignKey(
         'self', models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Korrepetition',
-        help_text='Bei Eignungsprüfungen: die Veranstaltung, in die eingetragen wird, wer eine Begleitung wünscht.',
+        help_text='Bei Eignungsprüfungen: die Lehrveranstaltung, in die eingetragen wird, wer eine Begleitung wünscht.',
     )
     released = models.DateTimeField('Ergebnisse freigegeben', null=True, blank=True)
     video = models.BooleanField('Videostufe', default=False, help_text='Nur bei Eignungsprüfungen: Bewerbende reichen ein Video ein, die Kommission wertet online.')
@@ -142,8 +142,8 @@ class Course(Tracked, models.Model):
 
     class Meta:
         ordering = ['title']
-        verbose_name = 'Veranstaltung'
-        verbose_name_plural = 'Veranstaltungen'
+        verbose_name = 'Lehrveranstaltung oder Prüfung'  # exams, auditions and theses too (Kind)
+        verbose_name_plural = 'Lehrveranstaltungen und Prüfungen'
 
     def __str__(self):
         return f'{self.title} ({self.term})'
@@ -351,7 +351,7 @@ class Participation(Judged, Tracked, models.Model):
         ABSENT = 'ne', 'NE · nicht erschienen'
         CHEATED = 'tv', 'TV · Täuschungsversuch'
 
-    course = models.ForeignKey(Course, models.CASCADE, related_name='participations', verbose_name='Veranstaltung')
+    course = models.ForeignKey(Course, models.CASCADE, related_name='participations', verbose_name='Lehrveranstaltung oder Prüfung')
     study = models.ForeignKey(Study, models.CASCADE, related_name='participations', verbose_name='Studium')
     module = models.ForeignKey(Module, models.PROTECT, null=True, blank=True, related_name='participations', verbose_name='Modul')
     note = models.TextField('Notiz', blank=True, help_text='Repertoire bei Prüfungen, Herkunft bei Anerkennungen.')
@@ -423,7 +423,7 @@ class Signup(Tracked, models.Model):
     capabilities = ('manage_courses',)
     scope = (['course__subject__institute', 'course__staff__institute'], ['study__program'])
 
-    course = models.ForeignKey(Course, models.CASCADE, related_name='signups', verbose_name='Veranstaltung')
+    course = models.ForeignKey(Course, models.CASCADE, related_name='signups', verbose_name='Lehrveranstaltung')
     study = models.ForeignKey(Study, models.CASCADE, related_name='signups', verbose_name='Studium')
     module = models.ForeignKey(Module, models.PROTECT, null=True, blank=True, related_name='+', verbose_name='Modul')
     note = models.TextField('Nachricht an die Lehrenden', blank=True)
@@ -445,7 +445,7 @@ class Ensemble(Tracked, models.Model):
     capabilities = ('manage_courses',)
     scope = (['course__subject__institute', 'course__staff__institute'], ['members__program'])
 
-    course = models.ForeignKey(Course, models.CASCADE, related_name='ensembles', verbose_name='Veranstaltung')
+    course = models.ForeignKey(Course, models.CASCADE, related_name='ensembles', verbose_name='Lehrveranstaltung')
     name = models.CharField('Besetzung', max_length=80)
     members = models.ManyToManyField(Study, related_name='ensembles', verbose_name='Mitglieder')
     repertoire = models.TextField('Repertoire', blank=True)
@@ -469,7 +469,7 @@ class Group(Tracked, models.Model):
     capabilities = ('manage_courses',)
     scope = (['course__subject__institute', 'course__staff__institute'], ['course__modules__program'])
 
-    course = models.ForeignKey(Course, models.CASCADE, related_name='groups', verbose_name='Veranstaltung')
+    course = models.ForeignKey(Course, models.CASCADE, related_name='groups', verbose_name='Lehrveranstaltung')
     number = models.PositiveSmallIntegerField('Nummer')
     staff = models.ManyToManyField(Person, related_name='teaching_groups', verbose_name='Lehrende')
     capacity = models.PositiveSmallIntegerField('Plätze', help_text='Höchstens so viele, wie der Raum fasst.')
@@ -556,7 +556,7 @@ class ReductionGround(Tracked, models.Model):
     hours = models.DecimalField('Höchstens (LVS)', max_digits=4, decimal_places=1, null=True, blank=True)
     leave = models.BooleanField(
         'Freistellung', default=False,
-        help_text='Für ein Semester ohne Lehre, etwa ein Freisemester: der Semesterwechsel übernimmt sie nicht und nennt Veranstaltungen der Person darin.',
+        help_text='Für ein Semester ohne Lehre, etwa ein Freisemester: der Semesterwechsel übernimmt sie nicht und nennt Lehrveranstaltungen der Person darin.',
     )
 
     class Meta:
@@ -631,7 +631,7 @@ class MoodleCourse(models.Model):
     """A Lehrveranstaltung as it stands in the Hochschule's Moodle (courses/moodle.py): its course there, and whom ConCampus
     enrolled in it, so that ConCampus takes out only whom it put in."""
 
-    course = models.OneToOneField(Course, models.CASCADE, related_name='moodle', verbose_name='Veranstaltung')
+    course = models.OneToOneField(Course, models.CASCADE, related_name='moodle', verbose_name='Lehrveranstaltung')
     moodle_id = models.PositiveIntegerField('Kurs in Moodle')
     people = models.JSONField('Von ConCampus eingeschrieben', default=list, help_text='Die Nutzer-IDs in Moodle.')
     synced = models.DateTimeField('Abgeglichen', default=timezone.now)

@@ -154,12 +154,12 @@ def teaching(person):
     return {
         'title': 'Lehre', 'when': term.name, 'half': True,
         'stats': [
-            stat('Lehrveranstaltungen', len(sizes)),
+            stat('Lehrveranstaltungen im Gruppenunterricht', len(sizes)),
             stat('Klassen im Einzelunterricht', lessons),
-            stat('Belegungen der Lehrveranstaltungen', taken),
-            stat('Teilnehmende je Lehrveranstaltung', shown=number_format(taken / len(sizes), 1) if sizes else '–'),
+            stat('Belegungen im Gruppenunterricht', taken),
+            stat('Ø Teilnehmende im Gruppenunterricht', shown=number_format(taken / len(sizes), 1) if sizes else '–'),
         ],
-        'charts': [chart(query, person, 'Lehrveranstaltungen nach Teilnehmenden')],
+        'charts': [chart(query, person, 'Gruppenunterricht nach Teilnehmenden')],
     }
 
 

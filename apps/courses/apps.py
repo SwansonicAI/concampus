@@ -33,10 +33,10 @@ class CoursesConfig(Tile, AppConfig):
         if not term:
             return ''
         if 'manage_courses' in person.roles:
-            return f'{person.within(term.courses.filter(kind__in=TEACHING), "manage_courses").count()} Veranstaltungen im {term}'
+            return f'{person.within(term.courses.filter(kind__in=TEACHING), "manage_courses").count()} Lehrveranstaltungen im {term}'
         if 'teacher' in person.roles:
             courses = person.teaching.filter(term=term, kind__in=TEACHING)
-            return f'{plural(courses.count(), "Veranstaltung", "Veranstaltungen")} · {number_format(deputat(courses, person))} SWS'
+            return f'{plural(courses.count(), "Lehrveranstaltung", "Lehrveranstaltungen")} ·{number_format(deputat(courses, person))} SWS'
         count = Course.objects.filter(term=term, kind__in=TEACHING, participations__study__person=person).distinct().count()
         return f'{count} belegt im {term}'
 
@@ -44,7 +44,7 @@ class CoursesConfig(Tile, AppConfig):
         roles = person.roles
         found = [page('Vorlesungsverzeichnis', 'courses:catalogue', 'course', 'new', 'edit', 'group')]
         if roles & {'teacher', 'student'}:  # first where Lehre opens on it (catalogue.index): for all but the office
-            mine = page('Meine Lehre' if 'teacher' in roles else 'Meine Veranstaltungen', 'courses:mine')
+            mine = page('Meine Lehre' if 'teacher' in roles else 'Meine Lehrveranstaltungen', 'courses:mine')
             found = found + [mine] if 'manage_courses' in roles else [mine] + found
         found.append(page('Stundenplan', 'courses:timetable'))
         if roles & {'teacher', 'view_teaching_load'}:
@@ -58,11 +58,11 @@ class CoursesConfig(Tile, AppConfig):
         found = [feature('Vorlesungsverzeichnis', reverse('courses:catalogue'), 'veranstaltungen lehrangebot kurse seminare anmelden belegen ensemble kammermusik')]
         if roles & {'teacher', 'student'}:
             found += [
-                feature('Meine Lehre' if 'teacher' in roles else 'Meine Veranstaltungen', reverse('courses:mine'), 'veranstaltungen belegt angemeldet warteliste klasse studierende teilnehmende teilnehmerliste ensemble kammermusik termine planen unterrichtszeiten'),
+                feature('Meine Lehre' if 'teacher' in roles else 'Meine Lehrveranstaltungen', reverse('courses:mine'), 'veranstaltungen belegt angemeldet warteliste klasse studierende teilnehmende teilnehmerliste ensemble kammermusik termine planen unterrichtszeiten'),
                 feature('Stundenplan', reverse('courses:timetable'), 'woche kalender termine'),
             ]
         if 'manage_courses' in roles:
-            found.append(feature('Neue Veranstaltung', reverse('courses:new'), 'lehrveranstaltung einzelunterricht klasse'))
+            found.append(feature('Neue Lehrveranstaltung',reverse('courses:new'), 'lehrveranstaltung einzelunterricht klasse'))
         if roles & {'view_teaching_load', 'teacher'}:
             found.append(feature('Deputat', reverse('courses:load'), 'lehrverpflichtung sws lehrende auslastung'))
         if roles & {'roll_over', 'publish_term'}:
@@ -101,7 +101,7 @@ class CoursesConfig(Tile, AppConfig):
             for planned in Term.objects.filter(planning=True, replies_by__isnull=False):  # the next semester: one's courses to confirm
                 if n := person.teaching.filter(term=planned, kind__in=TEACHING, confirmed=None, cancelled=None, origin__isnull=False).count():
                     found.append(task(
-                        f'{planned} planen: {plural(n, "Veranstaltung", "Veranstaltungen")} bestätigen oder absagen', f"{reverse('courses:mine')}?semester={planned.pk}", planned.replies_by,
+                        f'{planned} planen: {plural(n, "Lehrveranstaltung", "Lehrveranstaltungen")} bestätigen oder absagen', f"{reverse('courses:mine')}?semester={planned.pk}", planned.replies_by,
                     ))
             for course in person.teaching.filter(term=term, signups__isnull=False).annotate(n=Count('signups')):
                 found.append(task(f'{course.title}: {plural(course.n, "Anfrage", "Anfragen")} entscheiden', course.get_absolute_url()))
@@ -132,19 +132,19 @@ class CoursesConfig(Tile, AppConfig):
             for planned in Term.objects.filter(planning=True, replies_by__isnull=False):  # the Institut answers for its courses too
                 if n := person.within(planned.courses.filter(kind__in=TEACHING, confirmed=None, cancelled=None, origin__isnull=False), 'manage_courses').count():
                     found.append(task(
-                        f'{planned} planen: {plural(n, "Veranstaltung", "Veranstaltungen")} noch ohne Antwort', f"{reverse('courses:catalogue')}?semester={planned.pk}&stand=offen", planned.replies_by,
+                        f'{planned} planen: {plural(n, "Lehrveranstaltung", "Lehrveranstaltungen")} noch ohne Antwort', f"{reverse('courses:catalogue')}?semester={planned.pk}&stand=offen", planned.replies_by,
                     ))
         if 'student' in person.roles and (coming := registering()):  # what the Studienplan wants and registration is open for
             for study in Study.objects.filter(person=person, status=Study.Status.ENROLLED).select_related('program', 'person'):
                 items = to_take(study, coming)
                 if any(c.is_open for _, there in items for c in there):
-                    found.append(task(f'Anmeldung {coming}: {plural(len(items), "Modul", "Module")} noch ohne Veranstaltung', f"{reverse('courses:mine')}?semester={coming.pk}#offen", study.until))
+                    found.append(task(f'Anmeldung {coming}: {plural(len(items), "Modul", "Module")} noch ohne Lehrveranstaltung', f"{reverse('courses:mine')}?semester={coming.pk}#offen", study.until))
         if 'roll_over' in person.roles:
             from .views.rollover import missing
 
             upcoming = Term.upcoming()
             if upcoming and (count := person.within(missing(upcoming), 'roll_over').exclude(rhythm=Course.Rhythm.ONCE).count()):
-                found.append(task(f'Semesterwechsel: {plural(count, "Veranstaltung", "Veranstaltungen")} für {upcoming} übernehmen', reverse('courses:rollover'), upcoming.ready_by or upcoming.start))
+                found.append(task(f'Semesterwechsel: {plural(count, "Lehrveranstaltung", "Lehrveranstaltungen")} für {upcoming} übernehmen', reverse('courses:rollover'), upcoming.ready_by or upcoming.start))
         if 'publish_term' in person.roles and (upcoming := Term.upcoming()) and upcoming.planning and upcoming.replies_by and upcoming.courses.filter(kind__in=TEACHING).exclude(origin=None).exists():  # taken over and asked
             found.append(task(f'{upcoming} prüfen und veröffentlichen', reverse('courses:rollover'), upcoming.ready_by))
         return found

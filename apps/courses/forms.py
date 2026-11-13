@@ -220,7 +220,7 @@ def leaf_modules(exams=False):
 class CourseForm(forms.ModelForm):
     programme = forms.ModelChoiceField(
         label='Module zeigen für', queryset=Program.planned(), required=False, empty_label='alle Studiengänge',
-        help_text='Nur ein Filter für die Liste darunter: eine Veranstaltung kann für Module mehrerer Studiengänge zählen.',
+        help_text='Nur ein Filter für die Liste darunter: eine Lehrveranstaltung kann für Module mehrerer Studiengänge zählen.',
         widget=forms.Select(attrs={'data-leads': 'modules'}),
     )
     opens = DayField(label='Anmeldung ab', required=False, help_text='Erster Tag der Anmeldung; leer: sofort.')
@@ -256,7 +256,7 @@ class CourseForm(forms.ModelForm):
         if over:  # the semester is over: a correction, kept with its reason in the Verlauf
             self.fields['correction'] = forms.CharField(label='Grund der Korrektur', max_length=200, help_text='Das Semester ist vorbei; der Verlauf hält den Grund fest.')
         if 'kind' in self.fields:  # the Lehrform says how it is taught; this, how it is organised
-            self.fields['kind'].choices = [(Course.Kind.COURSE.value, 'Lehrveranstaltung: gemeinsame Termine'), (Course.Kind.LESSON.value, 'Klasse: je Person eine eigene Unterrichtszeit')]
+            self.fields['kind'].choices = [(Course.Kind.COURSE.value, 'Gruppenunterricht: gemeinsame Termine'), (Course.Kind.LESSON.value, 'Einzelunterricht: je Person eine eigene Unterrichtszeit')]
             self.fields['kind'].label = 'Organisation'
         if 'staff' in self.fields:
             self.fields['staff'].queryset = Person.teachers()
@@ -430,7 +430,7 @@ class EnsembleForm(forms.Form):
         found = []
         for person in self.cleaned_data['members']:
             if not (study := Study.objects.filter(person=person, status=Study.Status.ENROLLED, program__modules__courses=self.course).first()):
-                raise forms.ValidationError(f'{person}: für dessen Studium ist die Veranstaltung nicht anrechenbar.')
+                raise forms.ValidationError(f'{person}: für dessen Studium ist die Lehrveranstaltung nicht anrechenbar.')
             found.append(study)
         return found
 

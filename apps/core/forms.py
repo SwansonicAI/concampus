@@ -63,7 +63,7 @@ class SignInForm(AuthenticationForm):
     def clean(self):
         if held(self.data.get('username', ''), self.request):
             raise forms.ValidationError(
-                f'Nach {TRIES} Fehlversuchen ist die Anmeldung von hier eine Viertelstunde gesperrt. Ein neues Passwort setzen Sie über „Passwort vergessen?“.',
+                f'Nach {TRIES} Fehlversuchen ist das Anmelden von hier eine Viertelstunde gesperrt. Ein neues Passwort setzen Sie über „Passwort vergessen?“.',
             )
         return super().clean()
 

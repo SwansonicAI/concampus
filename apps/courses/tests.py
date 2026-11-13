@@ -25,7 +25,7 @@ class RolloverTest(Seeded):
         once = [c for c in rows if c.rhythm == 'once']
         kept, *taken = [c for c in rows if c.rhythm != 'once']  # one left out, e.g. for a sabbatical
         r = referat.post('/lehre/semesterwechsel/', {'schritt': 'uebernehmen', 'course': [c.pk for c in taken]}, follow=True)
-        self.assertEqual(flashes(r), [f'{len(taken)} Veranstaltungen nach SoSe 2027 übernommen als Entwurf; Studierende sehen sie, sobald das Semester veröffentlicht ist.'])
+        self.assertEqual(flashes(r), [f'{len(taken)} Lehrveranstaltungen nach SoSe 2027 übernommen als Entwurf; Studierende sehen sie, sobald das Semester veröffentlicht ist.'])
         self.assertFalse(Course.objects.filter(term__name='SoSe 2027', title=kept.title).exists())
         self.assertTrue(once)  # offered, not ticked
         self.assertFalse(Participation.objects.filter(course__term__name='SoSe 2027', course__kind='lesson', course__origin__isnull=False).exists())  # classes fill after the Rückmeldung

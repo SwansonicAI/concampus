@@ -425,6 +425,9 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .rights ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
 .rights li { display: flex; align-items: center; gap: 10px; cursor: help; }
 .rights li.off, .matrix tr.off td:first-child { color: var(--muted); }
+.rights ul + ul { margin-top: 14px; }
+.rights li.holder { align-items: flex-start; padding-left: 24px; cursor: auto; }
+.rights li.holder .check { margin-top: 3px; }  /* on Kein Zugriff: the offices that hold the right above */
 .legend .check { flex: none; }
 .areas { white-space: nowrap; }
 .areas svg { width: 20px; height: 20px; margin-right: 6px; stroke: var(--muted); vertical-align: middle; }

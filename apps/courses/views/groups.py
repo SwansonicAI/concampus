@@ -80,7 +80,7 @@ def ensemble(request, pk):
         return again(request, course, 'ensemble')
     members = list(dict.fromkeys([study, *form.cleaned_data['members']]))
     if not course.modules.filter(program=study.program_id).exists():
-        messages.error(request, 'Diese Veranstaltung ist in Ihrem Studiengang nicht anrechenbar.')
+        messages.error(request, 'Diese Lehrveranstaltung ist in Ihrem Studiengang nicht anrechenbar.')
         return redirect(course)
     with transaction.atomic():
         group = Ensemble.objects.create(course=course, name=form.cleaned_data['name'], repertoire=form.cleaned_data['repertoire'], wish=form.cleaned_data['wish'])

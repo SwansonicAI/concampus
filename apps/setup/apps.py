@@ -35,12 +35,12 @@ class SetupConfig(Tile, AppConfig):
                 feature('Rechte im Überblick', reverse('setup:rights'), 'wer darf was berechtigungen rollen ämter zugriff'),
                 feature('Freigaben', reverse('setup:approvals'), 'rechte mitgliedschaften bestätigen vier augen'),
                 feature('Exporte', reverse('setup:exports'), 'protokoll personenbezogene daten datei'),
-                feature('Anmeldungen', reverse('setup:sign_ins'), 'login fehlversuche protokoll sicherheit'),
+                feature('Zugriffe', reverse('setup:sign_ins'), 'login anmeldungen fehlversuche protokoll sicherheit'),
             ]
         if 'manage_institution' in person.roles:
             found += [
                 feature('Texte', reverse('setup:texts'), 'einstellungen bescheide nachrichten briefe vorlagen formulierung rechtsbehelfsbelehrung'),
-                feature('Barrierefreiheit', reverse('setup:feedback'), 'barrieren rückmeldungen beantworten'),
+                feature('Barrierefreiheit', reverse('setup:feedback'), 'barrieren hinweise rückmeldungen beantworten'),
             ]
         if person.roles & {'manage_institution', 'manage_students'}:
             found.append(feature('Amtliche Verzeichnisse', reverse('setup:keys'), 'schlüssel destatis staaten kreise'))
@@ -61,7 +61,7 @@ class SetupConfig(Tile, AppConfig):
             from core.models import Feedback
 
             if open_ := list(Feedback.objects.filter(answered=None).order_by('received')):
-                found.append(task(f'Barrierefreiheit: {plural(len(open_), "Rückmeldung", "Rückmeldungen")} beantworten', reverse('setup:feedback'), open_[0].due))
+                found.append(task(f'Barrierefreiheit: {plural(len(open_), "Hinweis", "Hinweise")} beantworten', reverse('setup:feedback'), open_[0].due))
         if 'manage_accounts' in person.roles:  # an office nobody holds: what it decides goes nowhere
             for office in Office.objects.filter(user=None).order_by('name'):
                 found.append(task(f'Amt ohne Mitglieder: {office.name}', reverse('setup:list', args=['konten'])))

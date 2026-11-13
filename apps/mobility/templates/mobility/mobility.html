@@ -18,18 +18,18 @@
 
 <h3>A · An der Partnerhochschule</h3>
 <table>
-  <thead><tr><th>Kürzel</th><th>Veranstaltung</th><th class="num">ECTS</th>{% if editing %}<th></th>{% endif %}</tr></thead>
+  <thead><tr><th>Kürzel</th><th>Lehrveranstaltung</th><th class="num">ECTS</th>{% if editing %}<th></th>{% endif %}</tr></thead>
   <tbody>
     {% for c in abroad %}
     <tr><td>{{ c.code|default:"–" }}</td><td>{{ c.title }}</td><td class="num">{{ c.credits }}</td>{% if editing %}<td class="num"><form method="post">{% csrf_token %}<button class="link" name="entfernen" value="{{ c.pk }}"><small>entfernen</small></button></form></td>{% endif %}</tr>
-    {% empty %}<tr><td colspan="{{ editing|yesno:'4,3' }}" class="empty">Noch keine Veranstaltung.</td></tr>
+    {% empty %}<tr><td colspan="{{ editing|yesno:'4,3' }}" class="empty">Noch keine Lehrveranstaltung.</td></tr>
     {% endfor %}
     {% if abroad %}<tr><td></td><td><b>Zusammen</b></td><td class="num"><b>{{ credits.0 }}</b></td>{% if editing %}<td></td>{% endif %}</tr>{% endif %}
   </tbody>
 </table>
 {% if editing %}{% with form=adding.A %}
 <form method="post" class="inline" style="margin: 8px 0 24px">{% csrf_token %}{{ form.table }}
-  <label>Veranstaltung{{ form.title }}</label><label>Kürzel dort{{ form.code }}</label><label>ECTS{{ form.credits }}</label>
+  <label>Lehrveranstaltung{{ form.title }}</label><label>Kürzel dort{{ form.code }}</label><label>ECTS{{ form.credits }}</label>
   <button class="btn ghost small" name="zeile" value="1">Ergänzen</button>
 </form>{% endwith %}{% endif %}
 

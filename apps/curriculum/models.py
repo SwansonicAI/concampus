@@ -327,7 +327,7 @@ class Module(Tracked, models.Model):
     def used(self):
         """What still hangs on the module, in words: empty when it may go (setup/views.py delete())."""
         counts = [
-            (self.children.count(), 'Untermodul', 'Untermodule'), (self.courses.count(), 'Veranstaltung', 'Veranstaltungen'),
+            (self.children.count(), 'Untermodul', 'Untermodule'), (self.courses.count(), 'Lehrveranstaltung', 'Lehrveranstaltungen'),
             (self.participations.count(), 'Leistung', 'Leistungen'),
         ]
         return ', '.join(f'{n} {one if n == 1 else many}' for n, one, many in counts if n)

@@ -42,7 +42,7 @@ def catalogue(request):
     if term and not Term.shown(person).filter(pk=term.pk).exists():
         term = Term.current()
     if term is None:
-        return without_term(request, 'ein Semester mit Veranstaltungen')
+        return without_term(request, 'ein Semester mit Lehrveranstaltungen')
     studies = person.studies.filter(status=Study.Status.ENROLLED)
     program = request.GET.get('studiengang', str(studies[0].program_id) if studies else '')
     upcoming = Booking.objects.filter(course=OuterRef('pk'), start__gte=timezone.now()).order_by('start')
@@ -154,7 +154,7 @@ def course(request, pk):
         return redirect(course)
     if request.method == 'POST':
         if not staffed or course.released:
-            raise PermissionDenied('Ergebnisse tragen die Lehrenden der Veranstaltung ein.')
+            raise PermissionDenied('Ergebnisse tragen die Lehrenden der Lehrveranstaltung ein.')
         post = request.POST  # „alle bestanden“: every row without a result passed, as a Studienleistung is
         if request.POST.get('alle_bestanden'):
             post = {f'grade-{p.pk}': '' for p in rows if p.passed is None and not p.remark} | {f'passed-{p.pk}': '1' for p in rows if p.passed is None and not p.remark}
@@ -214,7 +214,7 @@ def course(request, pk):
     )
     ensembles.sort(key=lambda e: (e.coach_id != person.pk, e.coach_id is not None, e.wish_id != person.pk))  # one's own, then those still open
     return render(request, 'courses/course.html', {
-        'trail': [('Meine Lehre', reverse('courses:mine')) if staffed and not office else ('Meine Veranstaltungen', reverse('courses:mine')) if own else ('Vorlesungsverzeichnis', reverse('courses:catalogue'))],
+        'trail': [('Meine Lehre', reverse('courses:mine')) if staffed and not office else ('Meine Lehrveranstaltungen', reverse('courses:mine')) if own else ('Vorlesungsverzeichnis', reverse('courses:catalogue'))],
         'course': course, 'playing': playing, 'players': list(course.staff.all()) if playing is not None else [],
         'lengths': sorted(Counter(minutes(p.module) or course.hours for p in course.participations.select_related('module__program')).items(), reverse=True) if course.kind == Course.Kind.LESSON and staffed else [],
         'share': minutes(own[0].module) or course.hours if own and course.kind == Course.Kind.LESSON else None,
@@ -318,7 +318,7 @@ def edit(request, pk=None):
             return redirect(saved)
     back = course.get_absolute_url() if pk else reverse('courses:catalogue')
     return render(request, 'courses/form.html', {
-        'form': form, 'course': course,'heading': f'Kopie von {source.title}' if source else 'Neue Veranstaltung', 'back': back, 'twin': twin,
+        'form': form, 'course': course,'heading': f'Kopie von {source.title}' if source else 'Neue Lehrveranstaltung', 'back': back, 'twin': twin,
         'joining': twin and [p.pk for p in form.cleaned_data.get('staff', ())],
         'note': None if office and planning else format_html(
             '{} trägt {} ein: sie zählen im Deputat und in den Studienplänen.', 'Umfang (SWS), Lehrform und Module' if office else 'Umfang (SWS), Lehrende, Module und Lehrform',

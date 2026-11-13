@@ -162,7 +162,7 @@ class Booking(Tracked, models.Model):
     person = models.ForeignKey(Person, models.CASCADE, related_name='bookings', verbose_name='Gebucht für')
     participants = models.ManyToManyField(Person, blank=True, related_name='attending', verbose_name='Teilnehmende')
     absent = models.ManyToManyField(Person, blank=True, related_name='absences', verbose_name='Abgemeldet', help_text='Teilnehmende, die zu diesem Termin nicht kommen.')
-    course = models.ForeignKey(Course, models.CASCADE, null=True, blank=True, related_name='bookings', verbose_name='Veranstaltung')
+    course = models.ForeignKey(Course, models.CASCADE, null=True, blank=True, related_name='bookings', verbose_name='Lehrveranstaltung')
     title = models.CharField('Titel', max_length=120, blank=True)
     description = models.TextField('Beschreibung', blank=True)
     series = models.UUIDField('Serie', null=True, blank=True, db_index=True)
@@ -181,7 +181,7 @@ class Booking(Tracked, models.Model):
     )
     group = models.ForeignKey(
         'courses.Group', models.CASCADE, null=True, blank=True, related_name='bookings', verbose_name='Gruppe',
-        help_text='Ein Termin dieser Gruppe einer Veranstaltung: nur ihre Teilnehmenden und Lehrenden nehmen teil.',
+        help_text='Ein Termin dieser Gruppe einer Lehrveranstaltung: nur ihre Teilnehmenden und Lehrenden nehmen teil.',
     )
     requested = models.BooleanField(
         'Angefragt', default=False, help_text='Um einen zentral vergebenen Raum gebeten: belegt ihn erst, wenn das Amt bestätigt.',

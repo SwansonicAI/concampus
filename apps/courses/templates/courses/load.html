@@ -18,7 +18,7 @@
   </div>
 </form>
 <table data-panel>
-  <thead><tr><th>Lehrende</th><th>Veranstaltungen</th><th class="num">SWS</th><th class="num">Soll</th><th class="num">Saldo</th>{% if since %}<th class="num" title="Mehr- und Minderleistungen über {{ institution.load_years }} Studienjahre">Konto</th>{% endif %}</tr></thead>
+  <thead><tr><th>Lehrende</th><th>Lehrveranstaltungen</th><th class="num">SWS</th><th class="num">Soll</th><th class="num">Saldo</th>{% if since %}<th class="num" title="Mehr- und Minderleistungen über {{ institution.load_years }} Studienjahre">Konto</th>{% endif %}</tr></thead>
   <tbody>
     {% for row in rows %}
     <tr>

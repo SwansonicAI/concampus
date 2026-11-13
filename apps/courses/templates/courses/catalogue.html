@@ -5,13 +5,13 @@
 {% block content %}
 <div class="head">
   <h1>Vorlesungsverzeichnis</h1>
-  {% if office %}<div class="actions"><a class="btn" href="{% url 'courses:new' %}?semester={{ term.pk }}">Neue Veranstaltung</a></div>{% endif %}
+  {% if office %}<div class="actions"><a class="btn" href="{% url 'courses:new' %}?semester={{ term.pk }}">Neue Lehrveranstaltung</a></div>{% endif %}
 </div>
-<p class="lead">{{ term }} · {{ courses|length }} Veranstaltung{{ courses|length|pluralize:"en" }}{% if term.planning %} · <span class="badge wait">in Planung</span> Studierende sehen das Semester ab der Veröffentlichung{% if open %} · nur noch nicht bestätigte{% endif %}{% endif %}</p>
+<p class="lead">{{ term }} · {{ courses|length }} Lehrveranstaltung{{ courses|length|pluralize:"en" }}{% if term.planning %} · <span class="badge wait">in Planung</span> Studierende sehen das Semester ab der Veröffentlichung{% if open %} · nur noch nicht bestätigte{% endif %}{% endif %}</p>
 <form class="toolbar">
   <div class="inline">
     <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
-    {% if scoped %}<label>Veranstaltungen<select name="bereich" onchange="this.form.requestSubmit()"><option value="eigene">in Ihrer Zuständigkeit</option><option value="alle"{% if reach == 'alle' %} selected{% endif %}>alle</option></select></label>{% endif %}
+    {% if scoped %}<label>Lehrveranstaltungen<select name="bereich" onchange="this.form.requestSubmit()"><option value="eigene">in Ihrer Zuständigkeit</option><option value="alle"{% if reach == 'alle' %} selected{% endif %}>alle</option></select></label>{% endif %}
     <label>Fachgebiet<select name="fachgebiet" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for a in areas %}<option value="{{ a.pk }}"{% if a.pk|stringformat:'s' == area %} selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
     <label>Lehrform<select name="lehrform" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for f in formats %}<option value="{{ f.pk }}"{% if f.pk|stringformat:'s' == form %} selected{% endif %}>{{ f }}</option>{% endfor %}</select></label>
     <label>Studiengang<select name="studiengang" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for p in programs %}<option value="{{ p.pk }}"{% if p.pk|stringformat:'s' == program %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
@@ -27,7 +27,7 @@
 <section>
   <h2>{{ group.grouper|default:"Ohne Fachgebiet" }}</h2>
   <table class="catalogue" data-panel>
-    <thead><tr><th>Veranstaltung</th><th>Lehrende</th><th class="num spare">SWS</th><th class="num">Teilnahmen</th><th>Anmeldung</th><th class="spare">Nächster Termin</th></tr></thead>
+    <thead><tr><th>Lehrveranstaltung</th><th>Lehrende</th><th class="num spare">SWS</th><th class="num">Teilnahmen</th><th>Anmeldung</th><th class="spare">Nächster Termin</th></tr></thead>
     <tbody>
       {% for c in group.list %}
       <tr>
@@ -43,6 +43,6 @@
   </table>
 </section>
 {% empty %}
-<p class="empty">Keine Veranstaltungen.</p>
+<p class="empty">Keine Lehrveranstaltungen.</p>
 {% endfor %}
 {% endblock %}

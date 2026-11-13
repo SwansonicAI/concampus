@@ -165,17 +165,17 @@ TEXTS = {
     'semesterplanung': Spec(
         NACHRICHT, 'Planung des nächsten Semesters', 'Planung {semester}: bitte bis zum {frist} bestätigen',
         'Für das {semester} sind Ihre Lehrveranstaltungen übernommen:\n{veranstaltungen}\n\nBitte bestätigen Sie bis zum {frist} je '
-        'Veranstaltung, ob sie so stattfindet; ändern Sie, was anders wird, oder sagen Sie ab, was entfällt. Studierende sehen das '
+        'Lehrveranstaltung, ob sie so stattfindet; ändern Sie, was anders wird, oder sagen Sie ab, was entfällt. Studierende sehen das '
         'Semester erst, wenn es veröffentlicht ist.',
         ('semester', 'frist', 'veranstaltungen'),
     ),
     'entfaellt': Spec(
         NACHRICHT, 'Lehrveranstaltung entfällt', 'Entfällt: {veranstaltung}',
         '„{veranstaltung}“ im {semester} entfällt. Grund: {grund}.\n\nIhre Anmeldung oder Anfrage ist damit aufgehoben; die Termine sind '
-        'abgesagt. Bitte melden Sie sich gegebenenfalls zu einer anderen Veranstaltung an.',
+        'abgesagt. Bitte melden Sie sich gegebenenfalls zu einer anderen Lehrveranstaltung an.',
         ('veranstaltung', 'semester', 'grund'),
     ),
-    'eingetragen': Spec(NACHRICHT, 'In eine Veranstaltung eingetragen', 'Eingetragen: {veranstaltung}', 'Sie wurden für „{veranstaltung}“ im {semester} eingetragen.', ('veranstaltung', 'semester')),
+    'eingetragen': Spec(NACHRICHT, 'In eine Lehrveranstaltung eingetragen', 'Eingetragen: {veranstaltung}', 'Sie wurden für „{veranstaltung}“ im {semester} eingetragen.', ('veranstaltung', 'semester')),
     'ensemble': Spec(
         NACHRICHT, 'Mit einem Ensemble angemeldet', 'Ensemble: {besetzung}',
         '{von} hat Sie mit „{besetzung}“ für „{veranstaltung}“ angemeldet. Die Betreuung teilen die Lehrenden zu.', ('veranstaltung', 'besetzung', 'von'),
@@ -210,14 +210,14 @@ TEXTS = {
         ('benutzername', 'zugang'),
     ),
     'kein_platz': Spec(
-        NACHRICHT, 'Kein Platz in einer Veranstaltung', 'Kein Platz: {veranstaltung}',
+        NACHRICHT, 'Kein Platz in einer Lehrveranstaltung', 'Kein Platz: {veranstaltung}',
         'Für „{veranstaltung}“ im {semester} konnten wir Ihnen leider keinen Platz geben.', ('veranstaltung', 'semester'),
     ),
-    'ausgetragen': Spec(NACHRICHT, 'Aus einer Veranstaltung oder Prüfung ausgetragen', 'Ausgetragen: {veranstaltung}', 'Ihre Anmeldung zu „{veranstaltung}“ im {semester} ist gelöscht.', ('veranstaltung', 'semester')),
+    'ausgetragen': Spec(NACHRICHT, 'Aus einer Lehrveranstaltung oder Prüfung ausgetragen', 'Ausgetragen: {veranstaltung}', 'Ihre Anmeldung zu „{veranstaltung}“ im {semester} ist gelöscht.', ('veranstaltung', 'semester')),
     'angefragt': Spec(
         NACHRICHT, 'Platz angefragt', 'Angefragt: {veranstaltung}',
         'Ihre Anfrage für „{veranstaltung}“ im {semester} ist bei den Lehrenden. Sie entscheiden; ihre Antwort erhalten Sie als Nachricht. '
-        'Zurückziehen können Sie die Anfrage auf der Seite der Veranstaltung.', ('veranstaltung', 'semester'),
+        'Zurückziehen können Sie die Anfrage auf der Seite der Lehrveranstaltung.', ('veranstaltung', 'semester'),
     ),
     'warteliste': Spec(
         NACHRICHT, 'Auf der Warteliste', 'Warteliste: {veranstaltung}',
@@ -621,16 +621,16 @@ TEXTS = {
         'Antworten wir nicht oder nicht zufriedenstellend, können Sie sich an die Durchsetzungsstelle nach dem Landesgesetz über '
         'barrierefreie Informationstechnik wenden:\n\n[Durchsetzungsstelle des Landes: Name, Anschrift, Telefon, E-Mail]',
     ),
-    'anmeldung': Spec(BAUSTEIN, 'Begrüßung auf der Anmeldeseite', '', 'ConCampus ist die Verwaltung von Studium, Lehre, Prüfungen, Aufnahme und Räumen der {hochschule}.'),
+    'anmeldung': Spec(BAUSTEIN, 'Begrüßung auf der Anmeldeseite', '', 'ConCampus ist die Verwaltung von Studium, Lehre, Prüfungen, Bewerbungen und Räumen der {hochschule}.'),
     'datenschutz_bewerbung': Spec(
         BAUSTEIN, 'Datenschutz beim Bewerben', '',
         'Ihre Angaben verarbeitet die {hochschule} nur für das Bewerbungsverfahren und, wenn Sie hier studieren, für Ihr Studium. '
-        'Sie sehen nur die Stellen, die damit befasst sind; die Prüfungskommission sieht Ihre künstlerischen Unterlagen.',
+        'Sie sehen nur die Ämter, die damit befasst sind; die Prüfungskommission sieht Ihre künstlerischen Unterlagen.',
     ),
     'einwilligung_gesundheit': Spec(
         BAUSTEIN, 'Einwilligung in Gesundheitsdaten', '',
         'Ich willige ein, dass die {hochschule} die Gesundheitsangaben in meinem Nachweis {zweck} verarbeitet (Art. 9 Abs. 2 lit. a DSGVO). '
-        'Ihn sehen nur die Stellen, die darüber entscheiden. Ich kann die Einwilligung jederzeit unter „Mein Konto“ widerrufen; der Nachweis '
+        'Ihn sehen nur die Ämter, die darüber entscheiden. Ich kann die Einwilligung jederzeit unter „Mein Konto“ widerrufen; der Nachweis '
         'wird dann gelöscht. Was bis dahin entschieden ist, bleibt bestehen.',
         ('zweck',),
     ),

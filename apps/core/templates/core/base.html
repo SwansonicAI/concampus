@@ -47,7 +47,7 @@
 <footer class="foot">
   <div class="wrap">
     <span>ConCampus · {{ institution.name }}</span>
-    {% if institution.email %}<a href="mailto:{{ institution.email }}">Hilfe und Rückmeldung</a>{% endif %}
+    {% if institution.email %}<a href="mailto:{{ institution.email }}">Hilfe und Hinweise</a>{% endif %}
     {% if institution.website %}<a href="{{ institution.website }}">Website der Hochschule</a>{% endif %}
     {% if institution.imprint %}<a href="{{ institution.imprint }}">Impressum</a>{% endif %}
     {% if institution.privacy %}<a href="{{ institution.privacy }}">Datenschutz</a>{% endif %}
@@ -65,7 +65,7 @@
   <div class="drawer-body"></div>
 </aside>
 <dialog class="finder" aria-label="Suchen">
-  <form action="{% url 'search' %}" role="search"><input type="search" name="q" placeholder="Seite, Person, Veranstaltung, Raum, Datum …" aria-label="Suchen" autocomplete="off"></form>
+  <form action="{% url 'search' %}" role="search"><input type="search" name="q" placeholder="Seite, Person, Lehrveranstaltung, Raum, Datum …" aria-label="Suchen" autocomplete="off"></form>
   <div class="palette"></div>
   <p class="keys">↑↓ wählen · Enter öffnen · Esc schließen</p>
 </dialog>

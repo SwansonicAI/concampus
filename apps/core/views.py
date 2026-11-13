@@ -28,7 +28,8 @@ from rooms.models import Booking, BookingCategory, Room
 from rooms.plans import agenda, moves
 from students.models import Document, Study
 from . import dates, texts
-from .access import areas
+from . import access
+from .access import CODENAMES, areas
 from .apps import feature, plural, tile_apps, tiles
 from .backends import address
 from .days import busy, strip
@@ -99,7 +100,7 @@ def account(request):
     staff = not person.roles & {'student', 'applicant', 'alumni'}  # employees: their personnel file is HR's
     offices = person.offices_held()  # what one may do, to ask for more where it falls short
     return render(request, 'core/account.html', {
-        'form': form, 'email_form': email, 'staff': staff, 'office': 'die Personalabteilung' if staff else Office.holding('manage_students', linked=True),
+        'form': form, 'email_form': email, 'staff': staff, 'office': 'die Personalverwaltung' if staff else Office.holding('manage_students', linked=True),
         'consents': person.consents.all(), 'sign_ins': person.sign_ins.all()[:5],
         'offices': offices, 'areas': offices and areas(person.marks), 'accounts': offices and Office.holding('manage_accounts', linked=True),
     })
@@ -347,12 +348,20 @@ def undo(request, pk):
 
 
 def denied(request, exception):
-    """Kein Zugriff: why, where the code says it, whom to ask for a right, and the way back."""
+    """Kein Zugriff: why, where the code says it, or whom the page is for and which offices hold the rights it needs;
+    whom to ask for a right, and the way back."""
     back = request.headers.get('Referer', '')
     back = back if back != request.build_absolute_uri() and url_has_allowed_host_and_scheme(back, {request.get_host()}) else ''
+    roles, holding = getattr(exception, 'roles', ()), {}
+    for o in Office.objects.filter(permissions__codename__in=roles).distinct().prefetch_related('permissions', 'institutes', 'programs'):
+        for c in o.marks.keys() & set(roles):
+            holding.setdefault(c, []).append(o)
+    needed = [c for c in roles if c in CODENAMES]
     return render(request, '403.html', {
         'trail': [(None, back or reverse('home'))],  # the menu stays where one came from, not on the page refused
-        'reason': str(exception), 'accounts': Office.holding('manage_accounts'), 'back': back,
+        'reason': str(exception), 'roles': roles, 'who': [access.ROLES[r] for r in roles if r in access.ROLES], 'several': len(needed) > 1,
+        'areas': areas({c: holding.get(c, []) for c in needed}, every=False), 'inside': bool(getattr(request.user, 'roles', set()) - OUTSIDE),
+        'accounts': Office.holding('manage_accounts', linked=True), 'back': back,
     }, status=403)
 
 
@@ -521,7 +530,7 @@ def found(person, q, limit, quick=False):
               (feature('Personen und Ämter', reverse('directory'), 'lehrende kollegium mitarbeiter verzeichnis kontakt zuständig e-mail'), '', PERSON)]
     places += [(f, app.title(roles) or app.verbose_name, app.icon) for app in tile_apps() for f in app.features(person)]
     if mail := Institution.get().email:  # as the footer offers it
-        places.append((feature('Hilfe und Rückmeldung', f'mailto:{mail}', 'frage problem kontakt'), '', MAIL))
+        places.append((feature('Hilfe und Hinweise', f'mailto:{mail}', 'frage problem kontakt'), '', MAIL))
     if person.is_superuser:
         places.append((feature('Datenpflege', reverse('admin:index'), 'admin stammdaten verwaltung'), '', PAGE))
     # the best fit first, of those that fit the most words, at least half; an empty box lists everything the person can do

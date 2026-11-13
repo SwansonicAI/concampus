@@ -14,7 +14,7 @@ from django.utils.encoding import force_bytes
 from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_encode
 from django.views.decorators.http import require_POST
 
-from core.access import CODENAMES, areas, kept, needs, require
+from core.access import CODENAMES, Refused, areas, kept, require
 from core.history import because
 from core.keys import Edition, Key, review
 from core.models import Export, Feedback, Grant, Membership, Office, Person, SignIn, Text, limited
@@ -122,7 +122,7 @@ def editor(request, key):
     if found is None:
         raise Http404
     if not found.usable(request.user):
-        raise PermissionDenied(needs([found.capability]))
+        raise Refused([found.capability])
     return found
 
 

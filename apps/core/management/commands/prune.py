@@ -20,8 +20,8 @@ class Command(BaseCommand):
             for model in tracked() if model.keep
         )
         self.stdout.write(f'{deleted} Änderungen gelöscht.')
-        self.stdout.write(f'{SignIn.objects.filter(at__lt=now - SignIn.KEEP).delete()[0]} Anmeldungen gelöscht.')
-        self.stdout.write(f'{Feedback.objects.filter(answered__lt=timezone.localdate() - Feedback.KEEP).delete()[0]} Rückmeldungen zur Barrierefreiheit gelöscht.')
+        self.stdout.write(f'{SignIn.objects.filter(at__lt=now - SignIn.KEEP).delete()[0]} Zugriffe gelöscht.')
+        self.stdout.write(f'{Feedback.objects.filter(answered__lt=timezone.localdate() - Feedback.KEEP).delete()[0]} Hinweise zur Barrierefreiheit gelöscht.')
         self.stdout.write(f'{Export.objects.filter(created__lt=now - Export.KEEP).delete()[0]} Einträge im Exportprotokoll gelöscht.')
         if months := Institution.get().retention_months:
             documents, people = forget(cutoff := months_before(timezone.localdate(), months))

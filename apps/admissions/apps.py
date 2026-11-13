@@ -11,14 +11,14 @@ from core.apps import Tile, feature, page, plural, task
 
 class AdmissionsConfig(Tile, AppConfig):
     name = 'admissions'
-    verbose_name = 'Aufnahme'
+    verbose_name = 'Bewerbungen'
     order = 4
     icon = 'M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0zM21 16a3 3 0 1 1-6 0 3 3 0 0 1 6 0z'
     url = 'admissions:index'
 
     def title(self, roles):
         if roles & {'view_applications', 'juror'}:
-            return 'Aufnahme'
+            return 'Bewerbungen'
         if 'applicant' in roles or not roles:
             return 'Meine Bewerbung'
 
