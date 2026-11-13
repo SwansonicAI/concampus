@@ -60,6 +60,9 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
 ]
 CODENAMES = [codename for _, group in CAPABILITIES for codename, _ in group]
 EVERYWHERE = {'manage_reregistration', 'manage_terms', 'manage_institution', 'manage_accounts', 'view_statistics', 'report_statistics', 'dispose_files', 'assess_files', 'manage_mobility'}  # never limited to Institute
+SENSITIVE = {  # given to an office, or an office holding one joined, only once a second person confirms it: whoever gives Berechtigungen could give themselves all, the rest opens health data, grades and certificates, or whole personal records
+    'manage_accounts', 'manage_students', 'decide_results', 'correct_scores', 'grant_compensation',
+}
 SHORT = {  # each right in a few words under its area, to take in at a glance; CAPABILITIES says it in full
     'view_students': 'Auflisten und exportieren', 'view_files': 'Studienakten einsehen', 'manage_students': 'Immatrikulieren und Stammdaten',
     'manage_reregistration': 'Rückmeldung verbuchen', 'message_students': 'Nachrichten senden', 'dispose_files': 'Akten dem Archiv anbieten',
@@ -76,6 +79,7 @@ SHORT = {  # each right in a few words under its area, to take in at a glance; C
     'view_statistics': 'Auswertungen', 'report_statistics': 'Amtliche Statistik',
     'assess_files': 'Akten bewerten',
 }
+LOCK = 'M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4'  # beside a SENSITIVE right, as drawn: 24×24, stroked
 AREAS = {  # each area's icon: an app's, by its label, or as drawn
     'Studierende': 'students', 'Bewerbungen': 'admissions', 'Prüfungen': 'exams', 'Lehre': 'courses', 'Studiengänge': 'curriculum', 'Räume': 'rooms',
     'Internationales': 'mobility', 'Verwaltung': 'setup', 'Archiv': 'M3 4h18v4H3zM5 8v12h14V8M10 12h4',
@@ -83,13 +87,13 @@ AREAS = {  # each area's icon: an app's, by its label, or as drawn
 
 
 def areas(marks=None, every=True):
-    """CAPABILITIES to draw: [(area, icon, [(short, label, mark)])]. `marks` ({codename: 'done', or 'part' where limited to
-    some Institute or Studiengänge; for a table, a list of them}) leaves out the areas it holds nothing in, and without
-    `every` the rights it holds nothing for."""
+    """CAPABILITIES to draw: [(area, icon, [(codename, short, label, mark)])]. `marks` ({codename: 'done', or 'part' where
+    limited to some Institute or Studiengänge; for a table, a list of them}) leaves out the areas it holds nothing in, and
+    without `every` the rights it holds nothing for."""
     from django.apps import apps
 
     return [
-        (area, getattr(apps.app_configs.get(AREAS[area]), 'icon', AREAS[area]), [(SHORT[c], label, (marks or {}).get(c, '')) for c, label in group if every or c in marks])
+        (area, getattr(apps.app_configs.get(AREAS[area]), 'icon', AREAS[area]), [(c, SHORT[c], label, (marks or {}).get(c, '')) for c, label in group if every or c in marks])
         for area, group in CAPABILITIES if marks is None or marks.keys() & {c for c, _ in group}
     ]
 

@@ -9,7 +9,7 @@
   {% for area, icon, rights in areas %}
   <div>
     <h4><svg viewBox="0 0 24 24" aria-hidden="true"><path d="{{ icon }}"/></svg>{{ area }}</h4>
-    {% for short, label, offices in rights %}
+    {% for c, short, label, offices in rights %}
     <ul>
       <li title="{{ label }}">{% include "core/_mark.html" with mark="" %}<b>{{ short }}</b></li>
       {% for o in offices %}<li class="holder">{% include "core/_mark.html" with mark=o.mark %}{% if inside or o.email %}<a href="{% url 'office' o.pk %}">{{ o.name }}</a>{% else %}{{ o.name }}{% endif %}</li>

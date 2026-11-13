@@ -18,7 +18,7 @@ from django.utils.html import format_html, format_html_join
 from django.utils.text import slugify
 
 from . import destatis
-from .access import CAPABILITIES, CODENAMES, areas
+from .access import CAPABILITIES, CODENAMES, SENSITIVE, areas
 from .keys import COUNTRIES, DEGREES, DISTRICTS, FIELDS, GERMAN, PLACES, TOWNS, UNIVERSITIES, Edition, Key, KeyField  # noqa: F401, the key lists' models
 
 looked_up = ContextVar('looked_up', default=None)  # what a GET request has looked up: core.middleware.lookups
@@ -536,6 +536,13 @@ class Person(Tracked, AbstractUser):
             o.until = until.get(o.pk)
         return offices
 
+    @classmethod
+    def holding(cls, capability):
+        """Who holds a capability now, through an office held for good or, once confirmed, until a day."""
+        offices = Office.objects.filter(permissions__codename=capability)
+        held = models.Q(groups__in=offices) | models.Q(memberships__office__in=offices, memberships__confirmed_by__isnull=False, memberships__until__gte=timezone.localdate())
+        return cls.objects.filter(held, is_active=True).distinct()
+
     @property
     def marks(self):
         """What the person may do, for core.access.areas(): 'part' where only for some Institute or Studiengänge."""
@@ -1039,8 +1046,16 @@ class Consent(models.Model):
         return cls.objects.create(person=person, purpose=purpose, wording=block('einwilligung_gesundheit', zweck=purpose), by=by)
 
 
+def waiting(rights, by, person=None):
+    """Those of `rights` that wait for a second person who gives Berechtigungen: the sensitive ones (core.access.SENSITIVE),
+    unless nobody but whoever gives them, or the person who would get them, could confirm."""
+    sensitive = set(rights) & SENSITIVE
+    others = Person.holding('manage_accounts').exclude(pk__in=[by.pk, getattr(person, 'pk', None)])
+    return sensitive if sensitive and others.exists() else set()
+
+
 class Grant(Tracked, models.Model):
-    """Berechtigungen given to an office, waiting until a second person who keeps accounts confirms them."""
+    """Sensitive Berechtigungen given to an office, waiting until a second person who gives them confirms them (waiting())."""
 
     capabilities = ('manage_accounts',)
 

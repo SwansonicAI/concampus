@@ -2,6 +2,7 @@ from datetime import timedelta
 
 from django import forms
 from django.contrib import messages
+from django.contrib.auth.models import Permission
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import PermissionDenied
 from django.db.models import F, ProtectedError, RestrictedError
@@ -14,10 +15,10 @@ from django.utils.encoding import force_bytes
 from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_encode
 from django.views.decorators.http import require_POST
 
-from core.access import CODENAMES, Refused, areas, kept, require
+from core.access import CODENAMES, EVERYWHERE, LOCK, SENSITIVE, SHORT, Refused, areas, kept, require
 from core.history import because
 from core.keys import Edition, Key, review
-from core.models import Export, Feedback, Grant, Membership, Office, Person, SignIn, Text, limited
+from core.models import Export, Feedback, Grant, Membership, Office, Person, SignIn, Text, limited, waiting
 from core.text import matching
 from core.texts import TEXTS, Values, basics, mail, wording
 from core.shortcuts import SHOWN
@@ -47,13 +48,43 @@ def approvals(request):
 
 @require('manage_accounts')
 def rights(request):
-    """Who may do what, as a table: a row for each right by area, a column for each office with who is in it, a square
-    where it holds the right."""
-    offices = list(Office.staffed())
+    """Who may do what, as a table: a row for each Berechtigung by area, a column for each office with who is in it, a
+    square where it holds it. A click on a square takes it away or gives it, a sensitive one once a second person
+    confirms it; on one that waits, it withdraws it."""
+    if request.method == 'POST':
+        pk, _, c = request.POST.get('feld', '').partition(' ')
+        if c not in CODENAMES or not pk.isdigit():
+            raise Http404
+        office = get_object_or_404(Office.objects.prefetch_related('permissions', 'institutes', 'programs', 'grants'), pk=pk)
+        right, short = Permission.objects.get(content_type__model='office', codename=c), f'{office}: „{SHORT[c]}“'
+        grant = next((g for g in office.grants.all() if c in g.rights), None)
+        if c in office.marks:
+            office.permissions.remove(right)
+            messages.success(request, f'{short} entzogen.')
+        elif grant:
+            grant.rights.remove(c)
+            if grant.rights:
+                grant.save()
+            else:
+                grant.delete()
+            messages.success(request, f'{short} nicht mehr beantragt.')
+        elif c in EVERYWHERE and office.mark == 'part':
+            messages.error(request, f'„{SHORT[c]}“ gilt nur für die ganze Hochschule, {office} ist nur für einen Teil zuständig.')
+        elif waiting([c], request.user):
+            Grant.objects.create(office=office, rights=[c], by=request.user)
+            messages.success(request, f'{short} gilt, sobald eine zweite Person es unter „Freigaben“ bestätigt.')
+        else:
+            office.permissions.add(right)
+            messages.success(request, f'{short} gegeben.')
+        return redirect(reverse('setup:rights') + f'#{c}')
+    offices = list(Office.staffed().prefetch_related('grants'))
     for o in offices:
         o.limit, o.people = limited(o), [*o.user_set.all(), *(m.person for m in o.standing_in)]
-    held = [o.marks for o in offices]
-    return render(request, 'setup/rights.html', {'offices': offices, 'areas': areas({c: [m.get(c, '') for m in held] for c in CODENAMES})})
+        o.wait = {c for g in o.grants.all() for c in g.rights}
+    table = {c: [(o, o.marks.get(c) or ('wait' if c in o.wait else '')) for o in offices] for c in CODENAMES}
+    return render(request, 'setup/rights.html', {
+        'offices': offices, 'areas': areas(table), 'nobody': {c for c, cells in table.items() if not any(m for _, m in cells)}, 'sensitive': SENSITIVE, 'lock': LOCK,
+    })
 
 
 @require('manage_accounts')
@@ -187,7 +218,7 @@ def edit(request, key, pk=None):
             form.initial |= {'institutes': list(ours)} if 'institutes' in form.fields else {'institute': next(iter(ours))}
     if form.is_valid() and (saved := save(form, request.user, e.capability)):
         obj = saved
-        messages.success(request, f'„{obj}“ gespeichert.' + (' Neue Berechtigungen und Mitgliedschaften gelten, sobald eine zweite Person sie unter „Freigaben“ bestätigt.' if getattr(form, 'pending', False) else ''))
+        messages.success(request, f'„{obj}“ gespeichert.' + (' Sensible Berechtigungen gelten, sobald eine zweite Person sie unter „Freigaben“ bestätigt.' if getattr(form, 'pending', False) else ''))
         return redirect(back(request, e))
     return render(request, 'setup/form.html', {
         'editor': e, 'form': form, 'object': obj, 'back': back(request, e),

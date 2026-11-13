@@ -15,7 +15,7 @@ from django.utils.html import format_html, format_html_join
 
 from core.access import CAPABILITIES, EVERYWHERE
 from core.dates import DayField, PastField, months_before
-from core.models import Grant, Holiday, Institute, Institution, Membership, Office, Person, Term
+from core.models import Grant, Holiday, Institute, Institution, Membership, Office, Person, Term, waiting
 from courses.forms import AuditionForm
 from courses.models import Appointment, Area, Course, Format, Reduction, ReductionGround
 from curriculum.forms import ModuleForm, ProgramForm
@@ -105,7 +105,7 @@ class OfficeForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields['capabilities'].help_text = 'Neue Berechtigungen gelten, sobald eine zweite Person sie unter „Freigaben“ bestätigt.'
+        self.fields['capabilities'].help_text = 'Gelten sofort; sensible (Konten, Gesundheitsdaten, Noten, Stammdaten) erst nach Bestätigung unter „Freigaben“.'
         if self.instance.pk:
             self.initial['capabilities'] = list(self.instance.permissions.values_list('codename', flat=True))
             members = ', '.join(str(p) for p in self.instance.user_set.order_by('last_name'))
@@ -124,13 +124,14 @@ class OfficeForm(forms.ModelForm):
         return data
 
     def save(self, commit=True):
-        """Rights taken away go at once; rights given wait for a second person to confirm them (Grant)."""
+        """Berechtigungen taken away or given go at once; sensitive ones given wait for a second person (Grant)."""
         office = super().save()
         chosen, held = set(self.cleaned_data['capabilities']), set(office.permissions.values_list('codename', flat=True))
-        office.permissions.set(Permission.objects.filter(content_type__model='office', codename__in=chosen & held))
-        if added := sorted(chosen - held):
-            Grant.objects.create(office=office, rights=added, by=self.by)
-        self.pending = bool(added)
+        later = waiting(chosen - held, self.by)
+        office.permissions.set(Permission.objects.filter(content_type__model='office', codename__in=chosen - later))
+        if later:
+            Grant.objects.create(office=office, rights=sorted(later), by=self.by)
+        self.pending = bool(later)
         return office
 
 
@@ -151,7 +152,7 @@ class AccountForm(forms.ModelForm):
         localized_fields = ['obligation']
         labels = {'groups': 'Ämter', 'is_active': 'Aktiv', 'username': 'Benutzername'}
         help_texts = {
-            'groups': 'Was jemand darf, ergibt sich aus den Berechtigungen der Ämter. Ein neues Amt gilt, sobald eine zweite Person es unter „Freigaben“ bestätigt; befristet unter „Vertretungen und Amtszeiten“.',
+            'groups': 'Gilt sofort; ein Amt mit sensiblen Berechtigungen erst nach Bestätigung unter „Freigaben“. Befristet: „Vertretungen und Amtszeiten“.',
             'institute': 'Für Lehrende: das Institut, dessen Räume sie buchen.',
             'is_active': 'Ohne Haken ist kein Zugriff möglich; ab dem Tag läuft die Frist für die Daten früherer Beschäftigter (Einstellungen › Hochschule).',
             'username': 'Wie beim Hochschulkonto.',
@@ -182,7 +183,8 @@ class AccountForm(forms.ModelForm):
         return email
 
     def save(self, commit=True):
-        """Leaving an office takes effect at once; joining one waits for a second person to confirm it (Membership)."""
+        """Leaving an office takes effect at once, joining one too, unless it holds a sensitive Berechtigung: then it waits
+        for a second person to confirm it (Membership)."""
         person = super().save(commit=False)
         if not person.pk:
             person.set_unusable_password()  # signs in with the Hochschule's login
@@ -192,11 +194,12 @@ class AccountForm(forms.ModelForm):
             person.restricted = timezone.localdate() if person.restriction else None
         person.save()
         chosen, held = set(self.cleaned_data['groups']), set(Office.objects.filter(user=person))
-        self.cleaned_data['groups'] = list(chosen & held)
+        later = {o for o in chosen - held if waiting(o.marks, self.by, person)}
+        self.cleaned_data['groups'] = list(chosen - later)
         self.save_m2m()
-        for office in chosen - held:
+        for office in later:
             Membership.objects.get_or_create(person=person, office=office, until=None, confirmed_by=None, defaults={'by': self.by})
-        self.pending = bool(chosen - held)
+        self.pending = bool(later)
         return person
 
 
@@ -214,7 +217,8 @@ class AppointmentForm(forms.ModelForm):
 
 
 class MembershipForm(forms.ModelForm):
-    """An office held until a day, as a stand-in or for a term of office; it takes effect once a second person confirms it."""
+    """An office held until a day, as a stand-in or for a term of office: at once, or once a second person confirms it
+    where the office holds a sensitive Berechtigung."""
 
     class Meta:
         model = Membership
@@ -228,7 +232,11 @@ class MembershipForm(forms.ModelForm):
         self.fields['person'].queryset = Person.objects.filter(models.Q(groups__isnull=False) | models.Q(institute__isnull=False)).distinct().order_by('last_name')
 
     def save(self, commit=True):
-        self.instance.by, self.pending = self.instance.by or self.by, self.instance.confirmed_by is None
+        membership = self.instance
+        membership.by = membership.by or self.by
+        if membership.confirmed_by is None and not waiting(membership.office.marks, self.by, membership.person):
+            membership.confirmed_by = self.by
+        self.pending = membership.confirmed_by is None
         return super().save(commit)
 
 

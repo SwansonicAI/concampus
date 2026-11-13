@@ -437,6 +437,12 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .matrix td:first-child { min-width: 240px; }
 .matrix td + td { width: 36px; padding: 7px 0; text-align: center; }
 .matrix .check { margin: 0 auto; }
+.matrix button { display: block; width: 100%; padding: 4px 0; border: 0; background: none; cursor: pointer; }
+.matrix button .check:not(.done, .part, .wait) { visibility: hidden; }  /* an empty field shows its square only under the pointer */
+.matrix button:is(:hover, :focus-visible) .check { visibility: visible; border-color: var(--accent); }
+.matrix tr[id] { scroll-margin-top: 240px; }  /* back to the row clicked, below the sticking head */
+.check.wait { border-style: dashed; border-color: var(--accent); }
+svg.lock { width: 14px; height: 14px; margin-left: 6px; fill: none; stroke: var(--muted); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: -1px; }
 .matrix tbody tr:not(.area):hover td { background: var(--soft); }
 .matrix th.office { height: 170px; padding: 0 0 10px; vertical-align: bottom; font-weight: 600; letter-spacing: 0; text-transform: none; }
 .matrix th.office a { display: block; max-height: 160px; margin: 0 auto; overflow: hidden; color: var(--ink); text-overflow: ellipsis; writing-mode: vertical-rl; transform: rotate(180deg); }

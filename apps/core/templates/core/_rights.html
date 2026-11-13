@@ -2,7 +2,7 @@
   {% for area, icon, rights in areas %}
   <div>
     <h4><svg viewBox="0 0 24 24" aria-hidden="true"><path d="{{ icon }}"/></svg>{{ area }}</h4>
-    <ul>{% for short, label, mark in rights %}<li title="{{ label }}"{% if not mark %} class="off"{% endif %}>{% include "core/_mark.html" %}{{ short }}</li>{% endfor %}</ul>
+    <ul>{% for c, short, label, mark in rights %}<li title="{{ label }}"{% if not mark %} class="off"{% endif %}>{% include "core/_mark.html" %}{{ short }}</li>{% endfor %}</ul>
   </div>
   {% endfor %}
 </div>

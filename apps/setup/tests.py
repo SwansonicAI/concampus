@@ -76,17 +76,21 @@ class EditorTest(Seeded):
         campus = self.login('campus')
         clerk = Person.objects.create(username='clerk')
         office = Office.objects.create(name='Bibliothek')
-        campus.post(f'/einstellungen/aemter/{office.pk}/', {'name': 'Bibliothek', 'capabilities': ['view_students']})
+        campus.post(f'/einstellungen/aemter/{office.pk}/', {'name': 'Bibliothek', 'capabilities': ['view_students', 'grant_compensation']})
         campus.post(f'/einstellungen/konten/{clerk.pk}/', {'username': 'clerk', 'groups': [office.pk], 'is_active': 'on'})
-        self.assertFalse(Person.objects.get(pk=clerk.pk).roles)  # nothing yet: a second person confirms rights and members
-        self.assertEqual(campus.post('/einstellungen/freigaben/', {'art': 'mitglied', 'id': Membership.objects.get(person=clerk).pk, 'decision': 'yes'}).status_code, 404)
+        self.assertEqual(Person.objects.get(pk=clerk.pk).roles, {'view_students'})  # at once; health data waits for a second person
+        grant = Grant.objects.get(office=office)
+        self.assertEqual(campus.post('/einstellungen/freigaben/', {'art': 'recht', 'id': grant.pk, 'decision': 'yes'}).status_code, 404)
         second = self.login('jan.reuter')
-        second.post('/einstellungen/freigaben/', {'art': 'recht', 'id': Grant.objects.get(office=office).pk, 'decision': 'yes'})
-        second.post('/einstellungen/freigaben/', {'art': 'mitglied', 'id': Membership.objects.get(person=clerk).pk, 'decision': 'yes'})
-        self.assertIn('view_students', Person.objects.get(pk=clerk.pk).roles)
-        second.post(f'/einstellungen/konten/{Person.objects.get(username="campus").pk}/', {'username': 'campus', 'first_name': 'Lena', 'last_name': 'Hofmann', 'groups': [office.pk, *Person.objects.get(username='campus').groups.values_list('pk', flat=True)], 'is_active': 'on'})
-        own = Membership.objects.get(person__username='campus', office=office)
-        self.assertEqual(campus.post('/einstellungen/freigaben/', {'art': 'mitglied', 'id': own.pk, 'decision': 'yes'}).status_code, 404)  # nobody confirms their own
+        second.post('/einstellungen/freigaben/', {'art': 'recht', 'id': grant.pk, 'decision': 'yes'})
+        self.assertIn('grant_compensation', Person.objects.get(pk=clerk.pk).roles)
+        reader = Person.objects.create(username='reader')  # joining an office with a sensitive one waits too
+        campus.post(f'/einstellungen/konten/{reader.pk}/', {'username': 'reader', 'groups': [office.pk], 'is_active': 'on'})
+        self.assertFalse(Person.objects.get(pk=reader.pk).roles)
+        joining = Membership.objects.get(person=reader)
+        self.assertEqual(campus.post('/einstellungen/freigaben/', {'art': 'mitglied', 'id': joining.pk, 'decision': 'yes'}).status_code, 404)
+        second.post('/einstellungen/freigaben/', {'art': 'mitglied', 'id': joining.pk, 'decision': 'yes'})
+        self.assertIn('grant_compensation', Person.objects.get(pk=reader.pk).roles)
         joined = Change.objects.filter(person=clerk, table='core.person').first()
         self.assertEqual(joined.fields['groups'], [[], [office.pk]])
 

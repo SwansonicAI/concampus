@@ -3,22 +3,26 @@
 {% block content %}
 <p class="eyebrow"><a href="{% url 'setup:index' %}">Einstellungen</a></p>
 <h1>Berechtigungen im Überblick</h1>
-<p class="lead">Ändern unter <a href="{% url 'setup:list' 'aemter' %}">Ämter und Berechtigungen</a>, Mitglieder unter <a href="{% url 'setup:list' 'konten' %}">Konten</a>.</p>
-<div class="scroll">
+<p class="lead">Ein Klick auf ein Feld gibt oder entzieht die Berechtigung. Mitglieder unter <a href="{% url 'setup:list' 'konten' %}">Konten</a>.</p>
+<form method="post" class="scroll">
+  {% csrf_token %}
   <table class="matrix">
     <thead>
-      <tr><th></th>{% for o in offices %}<th class="office"><a href="{% url 'setup:edit' 'aemter' o.pk %}" title="{{ o.name }}{{ o.limit }}">{{ o.name }}</a></th>{% endfor %}</tr>
+      <tr><th></th>{% for o in offices %}<th class="office"><a href="{% url 'setup:edit' 'aemter' o.pk %}" title="{{ o.name }}{{ o.limit }}" data-panel>{{ o.name }}</a></th>{% endfor %}</tr>
       <tr class="people"><td>Personen</td>{% for o in offices %}<td title="{% for p in o.people %}{{ p }}{% if not forloop.last %}, {% endif %}{% endfor %}">{{ o.people|length|default:"–" }}</td>{% endfor %}</tr>
     </thead>
     {% for area, icon, rights in areas %}
     <tbody>
       <tr class="area"><th colspan="{{ offices|length|add:1 }}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="{{ icon }}"/></svg>{{ area }}</th></tr>
-      {% for short, label, marks in rights %}
-      <tr{% if 'done' not in marks and 'part' not in marks %} class="off"{% endif %}><td title="{{ label }}">{{ short }}</td>{% for mark in marks %}<td>{% if mark %}{% include "core/_mark.html" %}{% endif %}</td>{% endfor %}</tr>
+      {% for c, short, label, cells in rights %}
+      <tr id="{{ c }}"{% if c in nobody %} class="off"{% endif %}>
+        <td title="{{ label }}">{{ short }}{% if c in sensitive %}<svg class="lock" viewBox="0 0 24 24" role="img" aria-label="sensibel"><path d="{{ lock }}"/></svg>{% endif %}</td>
+        {% for o, mark in cells %}<td><button name="feld" value="{{ o.pk }} {{ c }}" title="{{ o.name }}: {% if mark == 'wait' %}nicht mehr beantragen{% elif mark %}entziehen{% else %}geben{% endif %}">{% include "core/_mark.html" %}</button></td>{% endfor %}
+      </tr>
       {% endfor %}
     </tbody>
     {% endfor %}
   </table>
-</div>
-{% include "core/_marks.html" with blank=True %}
+</form>
+{% include "core/_marks.html" with table=True %}
 {% endblock %}
