@@ -17,6 +17,7 @@ urlpatterns = [
     path('krankenkassen/', reregistration.insurers, name='insurers'),
     path('aussonderung/<int:pk>/akte/', archive.handover, name='handover'),
     path('<int:pk>/', study.study, name='study'),
+    path('<int:pk>/verlauf/', study.study, {'page': 'students/progress.html'}, name='progress'),
     path('<int:pk>/immatrikulieren/', enrolment.enrol, name='enrol'),
     path('immatrikulieren/', enrolment.enrol_many, name='enrol_many'),
     path('<int:pk>/hochschulzugang/', enrolment.checked, name='checked'),

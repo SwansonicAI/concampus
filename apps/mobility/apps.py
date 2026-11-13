@@ -1,7 +1,7 @@
 from django.apps import AppConfig
 from django.urls import reverse
 
-from core.apps import Tile, feature, plural, task
+from core.apps import Tile, feature, page, plural, task
 
 
 class MobilityConfig(Tile, AppConfig):
@@ -23,6 +23,11 @@ class MobilityConfig(Tile, AppConfig):
         today = timezone.localdate()
         abroad = Mobility.objects.filter(status=Mobility.Status.ACCEPTED, start__lte=today, end__gte=today).count()
         return f'{abroad} im Ausland'
+
+    def pages(self, person):
+        if 'manage_mobility' in person.roles:
+            return [page('Auslandsaufenthalte', 'mobility:index', 'mobility'), page('Partnerhochschulen', 'mobility:partners')]
+        return [page('Mein Auslandsaufenthalt', 'mobility:mine', 'mobility')]
 
     def features(self, person):
         from .models import Mobility

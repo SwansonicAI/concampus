@@ -2,7 +2,7 @@ from django.apps import AppConfig
 from django.urls import reverse
 from django.utils.formats import number_format
 
-from core.apps import Tile, feature
+from core.apps import Tile, feature, page
 
 
 class AnalyticsConfig(Tile, AppConfig):
@@ -29,6 +29,11 @@ class AnalyticsConfig(Tile, AppConfig):
             change = 100 * (tally(MEASURES['bewerbungen'], (), [rounds[-1]]) - before) / before
             found += f' · Bewerbungen {"+" if change >= 0 else "-"}{number_format(abs(change), 1 if abs(change) < 10 else 0)} % zum Vorjahr'
         return found
+
+    def pages(self, person):
+        roles = person.roles
+        found = [page('Überblick', 'analytics:index'), page('Abfrage', 'analytics:query', 'records')] if 'view_statistics' in roles else []
+        return found + ([page('Amtliche Statistik', 'analytics:official')] if 'report_statistics' in roles else [])
 
     def features(self, person):
         found = [

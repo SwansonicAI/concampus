@@ -228,7 +228,7 @@ def application(request, pk):
     personal = office or study.person == person  # the jury judges the performance: no contact or personal data
     items = checklist(study)
     return render(request, 'admissions/application.html', {
-        'study': study,
+        'trail': [(None, reverse('admissions:board' if office else 'admissions:juries'))], 'study': study,
         'personal': personal,
         'stages': steps,
         'recommendation': verdict(steps),

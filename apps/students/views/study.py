@@ -82,7 +82,8 @@ def findable(study, tree, choices, taking):
     return found
 
 
-def study(request, pk):
+def study(request, pk, page='students/study.html'):
+    """A study's file, or its Studienverlauf on a page of its own (`page`)."""
     person = request.user
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term', 'teacher', 'focus', 'advised'), pk=pk)
     if study.pk not in Study.reachable(person, Study.objects.filter(pk=study.pk)):
@@ -116,7 +117,7 @@ def study(request, pk):
     grades = own or files or study.teacher_id == person.pk  # the student office sees outcomes: Prüfungsanspruch, Abschluss
     options = study.options() if study.status == Study.Status.ENROLLED else []
     lost = exhausted(study) if study.status == Study.Status.ENROLLED else []  # the Prüfungsanspruch: no Rückmeldung then
-    return render(request, 'students/study.html', {
+    return render(request, page, {
         'study': study, 'today': today, 'trail': above(person, study)[:-1],
         'office': office,
         'own': own,
@@ -211,7 +212,7 @@ def focus(request, pk):
                 inhalt=contents(study, chosen), aendern=changes(study, chosen),
             )
         messages.success(request, f'Eingetragen: {chosen.title}. Bescheid versandt.' if office else f'Gewählt: {chosen.title}. Die Bestätigung liegt in Ihrem Postfach.')
-    return redirect(study)
+    return redirect('students:progress', study.pk)
 
 
 def contents(study, chosen):
@@ -246,7 +247,7 @@ def advise(request, pk):
     study.advised = next((o for o in study.program.choices() if str(o.pk) == request.POST.get('advised')), None)
     study.save(update_fields=['advised'])
     messages.success(request, f'Empfohlen: {study.advised.title}.' if study.advised else 'Keine Empfehlung.')
-    return redirect(study)
+    return redirect('students:progress', study.pk)
 
 
 def remedies(study, missing):

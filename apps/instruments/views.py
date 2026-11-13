@@ -55,7 +55,7 @@ def instrument(request, pk):
     instrument = get_object_or_404(pool(request.user), pk=pk)
     term = Term.current()  # lent for the semester, as a rule
     return render(request, 'instruments/instrument.html', {
-        'instrument': instrument, 'state': state(instrument), 'loans': instrument.loans.select_related('person'),
+        'trail': [(None, reverse('instruments:index'))], 'instrument': instrument, 'state': state(instrument), 'loans': instrument.loans.select_related('person'),
         'lending': LendForm(initial={'due': term and term.end, 'condition': instrument.note[:200]}) if state(instrument) == 'frei' else None,
     })
 

@@ -1,0 +1,7 @@
+<nav class="side no-print" aria-label="Bereiche">
+  <a href="{% url 'home' %}" class="area{% if here == 'home' or here == 'day' %} on{% endif %}">Start</a>
+  {% for app, title, pages in menu %}
+  <a href="{% url app.url %}" class="area{% if app.label == area %} on{% endif %}">{{ title }}</a>
+  {% if pages|length > 1 %}<div class="pages">{% for name, url, under in pages %}<a href="{{ url }}"{% if here in under %} class="on" aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}</div>{% endif %}
+  {% endfor %}
+</nav>

@@ -2,7 +2,7 @@
 {% block title %}Start{% endblock %}
 {% block content %}
 {% if term %}<p class="eyebrow">{{ term }}</p>{% endif %}
-<h1>Guten Tag, {{ user.first_name|default:user.username }}</h1>
+<h1>{{ greeting }}</h1>
 
 <div{% if calendar %} class="cols calendar"{% endif %} style="margin-top: 8px">
 {% if calendar %}
@@ -44,16 +44,4 @@
 {% endif %}
 </div>
 </div>
-
-<section>
-  <h2>Anwendungen</h2>
-  <div class="launch">
-    {% for tile in tiles %}
-    <a class="app" href="{% url tile.app.url %}">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="{{ tile.app.icon }}"/></svg>
-      <span><b>{{ tile.title }}</b><small>{{ tile.figure }}</small></span>
-    </a>
-    {% endfor %}
-  </div>
-</section>
 {% endblock %}

@@ -2,6 +2,7 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Exists, OuterRef
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
 
@@ -70,7 +71,7 @@ def mobility(request, pk):
     passed = set(Participation.objects.filter(study=found.study, passed=True, module__in=[c.module_id for c in lines if c.module_id]).values_list('module', flat=True))
     home = [(c, c.module_id in passed) for c in lines if c.table == Component.Table.HOME]
     return render(request, 'mobility/mobility.html', {
-        'mobility': found, 'abroad': [c for c in lines if c.table == Component.Table.ABROAD], 'home': home, 'own': own, 'office': office, 'editing': editing,
+        'trail': [(None, reverse('mobility:mine' if own else 'mobility:index'))], 'mobility': found, 'abroad': [c for c in lines if c.table == Component.Table.ABROAD], 'home': home, 'own': own, 'office': office, 'editing': editing,
         'credits': (sum(c.credits for c in lines if c.table == 'A'), sum(c.credits for c in lines if c.table == 'B')),
         'adding': {t: LineForm(initial={'table': t}, study=found.study) for t in Component.Table.values} if editing else {},
         'recognising': found.status == Mobility.Status.DONE and person.may('recognise', found.study),

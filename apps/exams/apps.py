@@ -7,7 +7,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
 
-from core.apps import Tile, feature, plural, task
+from core.apps import Tile, feature, page, plural, task
 
 
 def graded_by(exam):
@@ -44,6 +44,11 @@ class ExamsConfig(Tile, AppConfig):
             return f'{plural(person.teaching.filter(term=term, kind__in=EXAMS).count(), "Kommission", "Kommissionen")} im {term}'
         open_ = Participation.objects.filter(study__person=person, course__kind=Course.Kind.EXAM, course__released=None)
         return f'{plural(open_.count(), "Prüfung", "Prüfungen")} angemeldet'
+
+    def pages(self, person):
+        roles = person.roles
+        own = 'student' in roles and not roles & {'manage_exams', 'teacher'}
+        return [page('Meine Prüfungen' if own else 'Prüfungen', 'exams:index', 'exam', 'new', 'edit', 'thesis', 'roster')] + ([page('Anerkennung', 'exams:recognition')] if 'recognise' in roles else [])
 
     def features(self, person):
         roles, found = person.roles, []

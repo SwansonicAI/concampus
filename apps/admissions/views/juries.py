@@ -81,7 +81,7 @@ def audition(request, pk):
     if request.GET.get('sortierung') == 'punkte' and not any(getattr(p, 'blind', False) for p in rows):  # a ranking would tell the others' marks
         rows.sort(key=lambda p: p.grade if p.grade is not None else (p.mean or 0), reverse=True)
     return render(request, 'admissions/audition.html', {
-        'course': course,
+        'trail': [(None, reverse('admissions:juries' if member else 'admissions:board'))], 'course': course,
         'staff': staff,
         'rows': rows, 'timed': any(p.slot for p in rows), 'noted': any(p.note for p in rows),
         'columns': [e.pk for e in columns],
@@ -250,7 +250,7 @@ def review(request, pk):
             following = next((p for p in rows[at + 1:] + rows[:at] if p.pk in todo - {current.pk}), None)
             return redirect(f'{here}?bewerbung={following.pk}' if following else course)
     return render(request, 'admissions/review.html', {
-        'course': course,
+        'trail': [(None, reverse('admissions:juries' if member else 'admissions:board'))], 'course': course,
         'p': current, 'error': error, 'programme': programme(current.note),
         'juror': juror,
         'mine': mine[current.pk],

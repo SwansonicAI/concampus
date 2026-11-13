@@ -7,7 +7,7 @@ from django.db.models import Count, F, Q
 from django.urls import reverse
 from django.utils.formats import date_format, number_format
 
-from core.apps import Tile, feature, plural, task
+from core.apps import Tile, feature, page, plural, task
 
 WAITS = {  # the first word of what an accepted place still lacks: what it waits for, as the office's to-do says it
     'Versicherungsmeldung': 'die Krankenkasse', 'Semesterbeitrag': 'den Semesterbeitrag', 'Hochschulzugangsberechtigung': 'den Hochschulzugang',
@@ -51,6 +51,24 @@ class StudentsConfig(Tile, AppConfig):
         if not term.reregistration_open:
             return f'Rückmeldung {term} ab {date_format(term.reregistration_start, "j.n.Y")}'
         return f'Rückmeldung {term}: {"erledigt" if paid.filter(study__person=person).exists() else "offen"}'
+
+    def pages(self, person):
+        roles = person.roles
+        if not roles & {'view_students', 'manage_reregistration'}:
+            from .views.lists import own
+
+            study = roles & {'student', 'alumni'} and own(person)
+            if not study:
+                return []
+            return [
+                page('Überblick', 'students:study', args=[study.pk]), page('Studienverlauf', 'students:progress', args=[study.pk]),
+                page('Zeugnis' if study.status == study.Status.GRADUATED else 'Leistungsübersicht', 'exams:transcript', args=[study.pk]),
+            ]
+        found = [page('Studierende', 'students:list', 'study', 'compose', 'letters')] if 'view_students' in roles else []
+        found += [page('Rückmeldung', 'students:reregistration')] if 'manage_reregistration' in roles else []
+        found += [page('Versandte Bescheide', 'students:notices')] if 'manage_students' in roles else []
+        found += [page('Krankenkassen', 'students:insurers')] if person.everywhere('manage_students') else []
+        return found + ([page('Aussonderung', 'students:disposal')] if 'dispose_files' in roles else [])
 
     def features(self, person):
         from .models import Study
@@ -149,7 +167,7 @@ class StudentsConfig(Tile, AppConfig):
                 found.append(task(f'Rückmeldung {term}: {plural(unpaid, "Zahlung", "Zahlungen")} ausstehend', reverse('students:reregistration'), due))
         for own in enrolled.filter(person=person, focus=None).select_related('program'):  # in the semester before it begins
             if (options := own.options()) and own.semester >= (first := min(o.first or 99 for o in options)) - 1:
-                found.append(task(f'{options[0].choice.title} wählen', f'{own.get_absolute_url()}#studienverlauf', Study.choose_by(own.semester, first)))
+                found.append(task(f'{options[0].choice.title} wählen', reverse('students:progress', args=[own.pk]), Study.choose_by(own.semester, first)))
         study = enrolled.filter(person=person).first()
         from exams.results import exhausted
 

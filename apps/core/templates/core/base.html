@@ -9,7 +9,6 @@
 <script src="{% static 'core/app.js' %}" defer></script>
 </head>
 <body>
-{% with top=trail.0.1|resolved %}
 <a class="skip" href="#inhalt">Zum Inhalt</a>
 <header class="appbar">
   <div class="wrap appbar-row">
@@ -17,11 +16,6 @@
       <span class="house">{% for line in institution.lines %}{% if forloop.first %}{{ line }}{% else %}<br><span>{{ line }}</span>{% endif %}{% endfor %}</span>
       <span class="name">ConCampus</span>
     </a>
-    {% if nav %}
-    <nav class="apps">
-      {% for app, title in nav %}{% if app.label != 'setup' %}<a href="{% url app.url %}" class="{% if top.app_name|default:request.resolver_match.app_name == app.label %}on{% endif %}">{{ title }}</a>{% endif %}{% endfor %}
-    </nav>
-    {% endif %}
     {% if user.is_authenticated %}
     <div class="me">
       <form action="{% url 'search' %}" class="search" role="search"><input type="search" name="q" placeholder="Suchen …" aria-label="Suchen" title="Strg+K oder /" autocomplete="off"></form>
@@ -33,7 +27,6 @@
           <small class="muted">{{ user.email }}</small>
           <a href="{% url 'account' %}">Mein Konto</a>
           <a href="{% url 'password_change' %}">Passwort ändern</a>
-          {% for app, title in nav %}{% if app.label == 'setup' %}<a href="{% url app.url %}">{{ title }}</a>{% endif %}{% endfor %}
           {% if user.is_superuser %}<a href="{% url 'admin:index' %}">Datenpflege</a>{% endif %}
           <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link">Abmelden</button></form>
         </div>
@@ -42,12 +35,15 @@
     {% endif %}
   </div>
 </header>
-<main class="wrap page" id="inhalt">
-  {% block subnav %}{% endblock %}
-  {% if trail %}<nav class="eyebrow trail no-print" aria-label="Pfad">{% for title, url in trail %}<a href="{{ url }}">{{ title }}</a>{% endfor %}</nav>{% endif %}
+<div class="wrap{% if menu %} shell{% endif %}">
+{% if menu %}{% side %}{% endif %}
+<main class="page" id="inhalt">
+  {# the trail's first step, the page this one belongs to, is marked in the menu; only the steps below it show #}
+  {% with steps=trail|slice:"1:" %}{% if steps %}<nav class="eyebrow trail no-print" aria-label="Pfad">{% for title, url in steps %}<a href="{{ url }}">{{ title }}</a>{% endfor %}</nav>{% endif %}{% endwith %}
   {% for message in messages %}<p class="flash {{ message.tags }}">{{ message }}</p>{% endfor %}
   {% block content %}{% endblock %}
 </main>
+</div>
 <footer class="foot">
   <div class="wrap">
     <span>ConCampus · {{ institution.name }}</span>
@@ -69,6 +65,5 @@
   <div class="drawer-body"></div>
 </aside>
 {% endif %}
-{% endwith %}
 </body>
 </html>

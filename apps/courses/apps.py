@@ -6,7 +6,7 @@ from django.utils.formats import number_format
 
 from django.urls import reverse
 
-from core.apps import Tile, feature, plural, task
+from core.apps import Tile, feature, page, plural, task
 
 class CoursesConfig(Tile, AppConfig):
     name = 'courses'
@@ -39,6 +39,19 @@ class CoursesConfig(Tile, AppConfig):
             return f'{plural(courses.count(), "Veranstaltung", "Veranstaltungen")} · {number_format(deputat(courses, person))} SWS'
         count = Course.objects.filter(term=term, kind__in=TEACHING, participations__study__person=person).distinct().count()
         return f'{count} belegt im {term}'
+
+    def pages(self, person):
+        roles = person.roles
+        found = [page('Vorlesungsverzeichnis', 'courses:catalogue', 'course', 'new', 'edit', 'group')]
+        if roles & {'teacher', 'student'}:  # first where Lehre opens on it (catalogue.index): for all but the office
+            mine = page('Meine Lehre' if 'teacher' in roles else 'Meine Veranstaltungen', 'courses:mine')
+            found = found + [mine] if 'manage_courses' in roles else [mine] + found
+        found.append(page('Stundenplan', 'courses:timetable'))
+        if roles & {'teacher', 'view_teaching_load'}:
+            found.append(page('Deputat', 'courses:load'))
+        if roles & {'roll_over', 'publish_term'}:
+            found.append(page('Semesterwechsel', 'courses:rollover'))
+        return found
 
     def features(self, person):
         roles = person.roles
@@ -78,7 +91,7 @@ class CoursesConfig(Tile, AppConfig):
             )
             for s in advising:
                 if (options := choices.setdefault(s.program_id, s.program.choices())) and s.fs >= (first := min(o.first or 99 for o in options)) - 1:
-                    due, url = Study.choose_by(s.fs, first), f'{s.get_absolute_url()}#studienverlauf'
+                    due, url = Study.choose_by(s.fs, first), reverse('students:progress', args=[s.pk])
                     if s.advised_id is None:
                         found.append(task(f'Studienfachberatung: {s.person} ({options[0].choice.title})', url, due))
                     elif due < today:  # advised: the choice is the student's, who has the to-do

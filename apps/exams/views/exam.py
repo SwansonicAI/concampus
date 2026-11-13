@@ -172,7 +172,7 @@ def exam(request, pk):
     handed = handed_in(rows[0]) if course.kind == Course.Kind.THESIS and rows else None
     held = handed or course.bookings.filter(start__lte=timezone.now()).exists()  # marks are owed from then on, slots no more
     return render(request, 'exams/exam.html', {
-        'course': course,
+        'trail': [(None, reverse('exams:index'))], 'course': course,
         'staff': staff,
         'rows': rows, 'timed': any(p.slot for p in rows), 'noted': any(p.note for p in rows),
         'columns': [e.pk for e in columns],

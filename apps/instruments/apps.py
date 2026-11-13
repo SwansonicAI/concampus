@@ -4,7 +4,7 @@ from django.apps import AppConfig
 from django.urls import reverse
 from django.utils import timezone
 
-from core.apps import Tile, feature, plural, task
+from core.apps import Tile, feature, page, plural, task
 
 
 class InstrumentsConfig(Tile, AppConfig):
@@ -24,6 +24,10 @@ class InstrumentsConfig(Tile, AppConfig):
         out = person.within(Loan.objects.filter(returned=None), 'manage_instruments')
         late = out.filter(due__lt=timezone.localdate()).count()
         return f'{out.count() - late} verliehen' + (f' · {late} überfällig' if late else '')
+
+    def pages(self, person):
+        found = [page('Leihinstrumente', 'instruments:index', 'instrument')] if 'manage_instruments' in person.roles else []
+        return found + [page('Meine Leihinstrumente', 'instruments:mine')]
 
     def features(self, person):
         found = []

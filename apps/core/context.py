@@ -18,5 +18,6 @@ def platform(request):
     if settings.DEMO and not request.user.is_authenticated and admitted(request):
         context['demo'] = demo_people  # called only where a page lists them
     if request.user.is_authenticated:
-        context.update(nav=tiles(request.user), unread=request.user.messages.filter(read=None).count())
+        menu = [(app, title, app.pages(request.user)) for app, title in tiles(request.user)]
+        context.update(menu=menu, unread=request.user.messages.filter(read=None).count())
     return context

@@ -4,7 +4,7 @@ from django.apps import AppConfig
 from django.urls import reverse
 from django.utils.formats import number_format
 
-from core.apps import Tile, feature, plural, task
+from core.apps import Tile, feature, page, plural, task
 
 
 class RoomsConfig(Tile, AppConfig):
@@ -17,6 +17,10 @@ class RoomsConfig(Tile, AppConfig):
     def title(self, roles):
         if roles - {'applicant', 'alumni'}:
             return 'Räume'
+
+    def pages(self, person):
+        found = [page('Raumplan', 'rooms:index', 'room', 'new'), page('Meine Buchungen', 'rooms:mine', 'booking', 'day_off'), page('Veranstaltungen', 'rooms:events')]
+        return found + ([page('Anfragen', 'rooms:requests')] if 'manage_bookings' in person.roles else [])
 
     def features(self, person):
         if not self.title(person.roles):

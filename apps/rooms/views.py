@@ -168,7 +168,7 @@ def room(request, pk):
     room = get_object_or_404(Room.objects.prefetch_related('institutes'), pk=pk)
     day = understood(request.GET.get('tag', '')) or timezone.localdate()
     return render(request, 'rooms/room.html', {
-        'room': room, 'day': day, 'bookable': bookable(request.user).filter(pk=pk).exists(), 'central': Office.holding('book_any_room', linked=True),
+        'trail': [(None, reverse('rooms:index'))], 'room': room, 'day': day, 'bookable': bookable(request.user).filter(pk=pk).exists(), 'central': Office.holding('book_any_room', linked=True),
         'edit': request.user.may('manage_rooms', room), 'requestable': room.function.central and requestable(request.user),
         **week(room.bookings.filter(requested=False), day),
     })
@@ -265,7 +265,7 @@ def booking(request, pk=None):
         if not editable(booking, person) and private(booking, person):
             raise PermissionDenied
         return render(request, 'rooms/details.html', {
-            'booking': booking, 'participants': booking.participants.all(), 'past': past, 'history': bool(Booking.seen_by(person, booking.pk)),
+            'trail': [(None, reverse('rooms:mine' if booking.person_id == person.pk else 'rooms:index'))], 'booking': booking, 'participants': booking.participants.all(), 'past': past, 'history': bool(Booking.seen_by(person, booking.pk)),
         })
     initial, data = {}, request.POST.copy() or None
     if start := parse_datetime(request.GET.get('start', '')):
@@ -310,7 +310,7 @@ def booking(request, pk=None):
         told = [p.name for p in recipients(booking, person)]
         told = told if len(told) <= 3 else [f'alle {len(told)} Teilnehmenden']
     return render(request, 'rooms/_quick.html' if request.headers.get('X-Quick') else 'rooms/booking.html', {  # beside the room plan, or a page
-        'form': form, 'booking': booking, 'series': series, 'central': Office.holding('book_any_room', linked=True),
+        'trail': [(None, reverse('rooms:mine' if booking.pk and booking.person_id == person.pk else 'rooms:index'))], 'form': form, 'booking': booking, 'series': series, 'central': Office.holding('book_any_room', linked=True),
         'told': told, 'cancel': CancelForm(sent(request, 'absagen'), person=person), 'instead': form.instead(),
         'rules': Institution.get(), 'special': BookingCategory.objects.filter(students=True).exclude(ahead_hours=None, participants=0),
         'history': booking.pk and bool(Booking.seen_by(person, booking.pk)), 'now': timezone.now(), 'asking': bool(form.fields['room'].asked),

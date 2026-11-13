@@ -6,7 +6,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
 
-from core.apps import Tile, feature, plural, task
+from core.apps import Tile, feature, page, plural, task
 
 
 class AdmissionsConfig(Tile, AppConfig):
@@ -36,6 +36,14 @@ class AdmissionsConfig(Tile, AppConfig):
 
         days = Institution.get().accept_days
         return max((standing(s, days) for s in person.studies.filter(status__in=Study.APPLICATION)), default=(0, 'Jetzt bewerben'))[1]  # the furthest one
+
+    def pages(self, person):
+        roles = person.roles
+        found = [page('Bewerbungen', 'admissions:board', 'application', 'decide')] if 'view_applications' in roles else []
+        found += [page('Meine Kommissionen', 'admissions:juries', 'audition', 'review', 'plan')] if 'teacher' in roles else []
+        if 'applicant' in roles or not roles:
+            found += [page('Meine Bewerbung', 'admissions:mine'), page('Neue Bewerbung', 'admissions:apply')]
+        return found
 
     def features(self, person):
         roles, found = person.roles, []

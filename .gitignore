@@ -5,5 +5,5 @@ __pycache__/
 *.sqlite3
 media/
 images_old_program/
-static/
+/static/
 .env

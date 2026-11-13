@@ -33,6 +33,7 @@ from .backends import address
 from .days import busy, strip
 from .dossier import dossier
 from .forms import ContactForm, EmailForm, FeedbackForm
+from .greetings import greeting
 from .history import because, describe, former, restore, tables
 from .dates import months_before
 from .keys import DISTRICTS, replaced
@@ -44,18 +45,17 @@ def home(request):
     person, today = request.user, timezone.localdate()
     monday = today - timedelta(days=today.weekday())  # four whole weeks, this one first; a day opens in the side panel (day)
     marked = busy(agenda(person), monday, 28)
-    apps = tiles(person)
-    titles = dict(apps)
+    titles = dict(tiles(person))
     tasks = sorted(  # from every app, also one without a tile for the person, such as their own loan or stay abroad
         ({**t, 'app': titles.get(app, app.verbose_name)} for app in tile_apps() for t in app.tasks(person)),
         key=lambda t: (t['due'] is None, t['due'] or today),
     )
     return render(request, 'core/home.html', {
+        'greeting': greeting(person, timezone.localtime()),
         'term': Term.current(),
         'today': today,
         'soon': today + timedelta(days=7),
         'tasks': tasks,
-        'tiles': [{'app': app, 'title': title, 'figure': app.figure(person)} for app, title in apps],
         'calendar': bool(marked),
         'days': strip(monday, today, marked, 28),
         'letters': person.messages.filter(read=None)[:3],
@@ -309,9 +309,10 @@ def history(request, table, row):
     shown = tables(seen)
     changes = Change.objects.filter(model.history(row), table__in=shown).select_related('by')[:200]
     back = request.GET.get('next', '')
+    back = back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else getattr(record, 'get_absolute_url', lambda: '')()
     return render(request, 'core/history.html', {
         'record': record, 'changes': describe(changes, request.user), 'others': Change.objects.filter(model.history(row)).exclude(table__in=shown).exists(),
-        'back': back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else getattr(record, 'get_absolute_url', lambda: '')(),
+        'trail': [(None, back), (str(record), back)] if record and back else [],
     })
 
 
@@ -344,9 +345,10 @@ def undo(request, pk):
 def denied(request, exception):
     """Kein Zugriff: why, where the code says it, whom to ask for a right, and the way back."""
     back = request.headers.get('Referer', '')
+    back = back if back != request.build_absolute_uri() and url_has_allowed_host_and_scheme(back, {request.get_host()}) else ''
     return render(request, '403.html', {
-        'reason': str(exception), 'accounts': Office.holding('manage_accounts'),
-        'back': back if back != request.build_absolute_uri() and url_has_allowed_host_and_scheme(back, {request.get_host()}) else '',
+        'trail': [(None, back or reverse('home'))],  # the menu stays where one came from, not on the page refused
+        'reason': str(exception), 'accounts': Office.holding('manage_accounts'), 'back': back,
     }, status=403)
 
 

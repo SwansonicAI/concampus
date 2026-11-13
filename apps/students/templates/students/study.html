@@ -1,38 +1,8 @@
 {% extends base %}
 {% load texts %}
 {% block title %}{{ study.person.name }}{% endblock %}
-{% block subnav %}{% include "students/_nav.html" %}{% endblock %}
 {% block content %}
-<div class="head">
-  <h1>{{ study.person.first_name }} {{ study.person.last_name }}</h1>
-  <div class="actions">
-    {% if files %}<a class="btn ghost" href="{% url 'exams:transcript' study.pk %}">{% if study.status == 'graduated' %}Zeugnis{% else %}Leistungsübersicht{% endif %}</a>{% endif %}
-    {% if thesis %}<a class="btn ghost" href="{% url 'exams:thesis' study.pk %}">Abschlussarbeit anmelden</a>{% endif %}
-    {% if recognise %}<a class="btn ghost" href="{% url 'exams:recognition' %}?studium={{ study.pk }}">Leistung anerkennen</a>{% endif %}
-    {% if office %}<a class="btn ghost" href="{% url 'setup:edit' 'studien' study.pk %}?next={{ request.path|urlencode }}" data-panel>Studium bearbeiten</a>{% endif %}
-  </div>
-</div>
-<p class="actions">
-  {% if certify %}<small class="muted">Bescheinigungen:</small>
-  {% if study.status == 'enrolled' %}<a href="{% url 'students:certificate' study.pk %}">Immatrikulation</a><a href="{% url 'students:certificate' study.pk %}?bafoeg">für das BAföG-Amt (§ 9)</a>
-  {% if next.paid %}<a href="{% url 'students:certificate' study.pk %}?semester={{ upcoming.pk }}">Immatrikulation {{ upcoming }}</a><a href="{% url 'students:certificate' study.pk %}?semester={{ upcoming.pk }}&amp;bafoeg">für das BAföG-Amt, {{ upcoming }}</a>{% endif %}{% endif %}
-  {% if terms %}<a href="{% url 'students:periods' study.pk %}">Studienzeiten</a>{% endif %}
-  {% if study.status == 'graduated' or study.status == 'left' %}<a href="{% url 'students:exmatriculation' study.pk %}">Exmatrikulation</a>{% endif %}{% endif %}
-  {% if office %}<a href="{% url 'setup:edit' 'personen' study.person.pk %}?next={{ request.path|urlencode }}" data-panel>Stammdaten</a>{% endif %}
-  {% if history %}<a href="{% url 'history' 'core.person' study.person.pk %}" data-panel>Verlauf</a>{% endif %}
-</p>
-<p class="lead">{% if study.person.matriculation %}Matrikelnr. {{ study.person.matriculation }} · {% endif %}{{ study.program }} · {{ study.subject }}{% if study.focus %} · {{ focus_term }}: {{ study.focus.title }}{% endif %} · <span class="badge {{ study.status }}">{{ study.state }}</span>{% if study.person.hold and personal %} <span class="badge hold">Sperre: {{ study.person.hold }}</span>{% endif %}{% if study.person.restriction and personal %} <span class="badge hold">Verarbeitung eingeschränkt seit {{ study.person.restricted|date:'d.m.Y' }}</span>{% endif %}</p>
-{% for m in exhausted %}<div class="flash error">Prüfungsanspruch erloschen: {{ m.code }} {{ m.title }} endgültig nicht bestanden{% if grades %}, {% for p in m.failures %}{{ p.course.term }} {{ p.grade|floatformat:1|default:"nicht bestanden" }}{% if p.remark %} ({{ p.remark|upper }}){% endif %}{% if not forloop.last %} · {% endif %}{% endfor %}{% else %} im {{ m.failures|length }}. Versuch{% endif %}.<br><small>Widerspruch bis {{ m.appeal|date:"j.n.Y" }}{% if m.appeal < today %}, abgelaufen{% else %}; erst danach exmatrikulieren{% endif %}.</small></div>{% endfor %}
-
-<div class="stats">
-  {% if total and grades %}
-  <div class="stat"><b>{{ earned }} / {{ total }}</b><span>ECTS erworben</span><div class="bar"><i style="width: {% widthratio earned total 100 %}%"></i></div></div>
-  {% if study.status == 'graduated' and average %}<div class="stat"><b>{{ average|floatformat:1 }}</b><span>Gesamtnote</span></div>{% endif %}
-  {% endif %}
-  {% with fs=study.semester hs=study.university_semester rsz=study.program.semesters %}
-  <div class="stat"><b>{{ fs }} / {{ rsz }}</b><span>Fachsemester der Regelstudienzeit{% if hs != fs %} · {{ hs }}. Hochschulsemester{% endif %}{% if fs > rsz and study.status == 'enrolled' %}<br><span class="fail">über der Regelstudienzeit</span>{% endif %}</span><div class="bar"><i style="width: {% widthratio fs rsz 100 %}%"></i></div></div>
-  {% endwith %}
-</div>
+{% include "students/_head.html" %}
 
 <div class="cols">
   <section>
@@ -171,50 +141,5 @@
     </tbody>
   </table>
   {% if own or office %}<p class="muted"><small>Der Semesterbeitrag gilt je Person für alle ihre Studien.</small></p>{% endif %}
-</section>
-
-<section id="studienverlauf">
-  <h2>Studienverlauf</h2>
-  {% if options %}{% with first=options.0 %}
-  <form method="post" action="{% url 'students:focus' study.pk %}" class="panel choose">
-    {% csrf_token %}
-    <h3>{{ first.choice.title }} {% if study.focus %}ändern{% else %}wählen{% endif %}{% if choose_by %} <small class="{% if choose_by < today %}fail{% else %}muted{% endif %}">{% if choose_by < today %}überfällig seit{% else %}bis{% endif %} {{ choose_by|date:"j.n.Y" }}</small>{% endif %}</h3>
-    <p class="muted">{{ first.choice.description }} Vorher ist eine Studienfachberatung vorgesehen{% if study.teacher %}, etwa bei <a href="mailto:{{ study.teacher.email }}">{{ study.teacher }}</a>{% endif %}. {% if fs < first.first %}Bis zum Beginn des {{ first.first }}. Semesters können Sie die Wahl hier ändern, danach nur über: {% else %}Ändern lässt sie sich danach nur über: {% endif %}{{ changes|default:"die Hochschule" }}.</p>
-    <div class="choices">{% for o in options %}<label for="focus-{{ o.pk }}"><input type="radio" id="focus-{{ o.pk }}" name="focus" value="{{ o.pk }}" required{% if o.pk == study.focus_id %} checked{% endif %}> {{ o.title }}{% if o.pk == study.advised_id %} <span class="badge yes">von den Lehrenden empfohlen</span>{% endif %}</label>{% endfor %}</div>
-    <p style="margin: 20px 0 0"><button class="btn">{% if study.focus %}Ändern{% else %}Wählen{% endif %}</button></p>
-  </form>
-  {% endwith %}{% elif recording %}
-  <form method="post" action="{% url 'students:focus' study.pk %}" class="panel" style="margin-bottom: 16px">
-    {% csrf_token %}
-    <h3>{{ recording.0.choice.title }}</h3>
-    <p class="muted"><small>{% if study.focus %}Gewählt: {{ study.focus.title }}.{% else %}Noch nicht gewählt{% if study.advised %}; die Lehrenden empfehlen {{ study.advised.title }}{% endif %}.{% endif %} Hier eingetragen gilt die Wahl, etwa nach einer Erklärung oder einem Antrag.</small></p>
-    <div class="inline"><label>{{ recording.0.choice.title }}<select name="focus" required><option value="">Bitte wählen</option>{% for o in recording %}<option value="{{ o.pk }}"{% if o.pk == study.focus_id %} selected{% endif %}>{{ o.title }}</option>{% endfor %}</select></label><label>Grund<input name="reason" required placeholder="z. B. Erklärung vom 12.10."></label><button class="btn ghost">Eintragen</button></div>
-  </form>
-  {% elif advising %}{% with first=advising.0 %}
-  <form method="post" action="{% url 'students:advise' study.pk %}" class="panel" style="margin-bottom: 16px">
-    {% csrf_token %}
-    <h3>Studienfachberatung: {{ first.choice.title }}</h3>
-    <p class="muted"><small>{{ first.choice.description }} Die Wahl trifft {{ study.person }}; eine Empfehlung erscheint bei der Wahl.</small></p>
-    <div class="inline"><label>Empfehlung<select name="advised"><option value="">keine</option>{% for o in advising %}<option value="{{ o.pk }}"{% if o.pk == study.advised_id %} selected{% endif %}>{{ o.title }}</option>{% endfor %}</select></label><button class="btn ghost">Speichern</button></div>
-  </form>
-  {% endwith %}{% endif %}
-  {% if not grades %}<p class="lead">Der Studienverlaufs- und Prüfungsplan; was erbracht ist und mit welchen Noten, sieht die Prüfungsverwaltung.</p>{% else %}
-  <div class="legend">
-    <span class="legend-heading">Im Feld</span>
-    <span class="legend-items">
-      {% if credited %}<span class="legend-item legend-symbol"><span class="tile"><span class="tile-num">2</span></span>CP der Lehrveranstaltung</span>{% endif %}
-      <span class="legend-item legend-symbol"><span class="tile"><span class="tile-num">T</span></span>{% if credited %}Testat, ohne CP{% else %}Lehrveranstaltung{% endif %}</span>
-      <span class="legend-item legend-symbol"><span class="tile"><span class="tile-num dot">●</span></span>Prüfung</span>
-    </span>
-    <span class="legend-heading">Stand</span>
-    <span class="legend-items">
-      <span class="legend-item done"><span class="tile"><span class="tile-num">2</span></span>bestanden</span>
-      <span class="legend-item now"><span class="tile"><span class="tile-num">2</span></span><span>belegt, jetzt im <span class="legend-sem">{{ fs }}.</span> Semester</span></span>
-      <span class="legend-item late"><span class="tile"><span class="tile-num">2</span></span>überfällig</span>
-      <span class="legend-item legend-planned"><span class="tile"><span class="tile-num">2</span></span>geplant</span>
-    </span>
-  </div>
-  {% endif %}
-  {% include "curriculum/_plan.html" with progress=grades %}
 </section>
 {% endblock %}

@@ -1,4 +1,5 @@
 from django.apps import AppConfig, apps
+from django.urls import reverse
 
 
 class CoreConfig(AppConfig):
@@ -33,6 +34,10 @@ class Tile:
         """Places in the app the search offers to this person: [{'title', 'url', 'words'}]."""
         return []
 
+    def pages(self, person):
+        """The app's pages the side menu lists under it for this person: [page()]. With one or none, the app's name is all."""
+        return []
+
 
 def plural(n, one, many):
     return f'{n} {one if n == 1 else many}'
@@ -41,6 +46,13 @@ def plural(n, one, many):
 def feature(title, url, words=''):
     """A place in an app; the search finds it by its title or by these other words."""
     return {'title': title, 'url': url, 'words': words}
+
+
+def page(title, name, *under, args=()):
+    """A page in the side menu: its title, its link, and the pages it stands for, its own and those under it, such as a
+    course under the Vorlesungsverzeichnis, each as app:name; a name without app is the page's own app's."""
+    app = name.partition(':')[0]
+    return title, reverse(name, args=args), {name, *(u if ':' in u else f'{app}:{u}' for u in under)}
 
 
 def task(text, url, due=None):
