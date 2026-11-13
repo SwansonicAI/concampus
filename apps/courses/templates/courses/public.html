@@ -1,0 +1,40 @@
+{% extends base %}
+{% block title %}Vorlesungsverzeichnis{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Vorlesungsverzeichnis</h1>
+  <div class="actions"><a class="btn ghost" href="{% url 'curriculum:index' %}">Studiengänge</a></div>
+</div>
+<p class="lead">{{ term|default:"Noch kein Semester" }} · {{ courses|length }} Lehrveranstaltung{{ courses|length|pluralize:"en" }}</p>
+<form class="toolbar">
+  <div class="inline">
+    <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    <label>Fachgebiet<select name="fachgebiet" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for a in areas %}<option value="{{ a.pk }}"{% if a.pk|stringformat:'s' == area %} selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+    <label>Studiengang<select name="studiengang" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for p in programs %}<option value="{{ p.pk }}"{% if p.pk|stringformat:'s' == program %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Titel, Lehrende oder Modul"></label>
+  </div>
+</form>
+{% regroup courses by area as groups %}
+{% for group in groups %}
+<section>
+  <h2>{{ group.grouper|default:"Ohne Fachgebiet" }}</h2>
+  <table class="catalogue">
+    <thead><tr><th>Lehrveranstaltung</th><th>Lehrende</th><th class="num spare">SWS</th><th>Zeit und Raum</th><th>Anmeldung</th></tr></thead>
+    <tbody>
+      {% for c in group.list %}
+      <tr>
+        <td><a href="{% url 'public:course' c.pk %}"><b>{{ c.title }}</b></a>{% if c.cancelled %} <span class="badge no">entfällt</span>{% endif %}<br><small class="muted">{{ c.format|default:c.get_kind_display }}</small></td>
+        <td>{% for s in c.staff.all %}{{ s }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+        <td class="num spare">{{ c.hours|default_if_none:"" }}</td>
+        <td><small>{{ c.slot|default:"" }}</small></td>
+        <td><small>{% if c.cancelled %}{% elif c.allocation == 'staff' %}<span class="muted">Zuteilung durch Lehrende</span>{% elif c.upcoming %}ab {{ c.opens|date:"j.n." }}{% if c.deadline %} bis {{ c.deadline|date:"j.n." }}{% endif %}{% elif c.is_open %}{% if c.deadline %}bis {{ c.deadline|date:"j.n." }}{% else %}offen{% endif %}{% else %}<span class="muted">vorbei</span>{% endif %}</small></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% empty %}
+<p class="empty">Keine Lehrveranstaltungen.</p>
+{% endfor %}
+{% if not user.is_authenticated %}<p class="muted" style="margin-top: 32px">Anmelden zu Lehrveranstaltungen: <a href="{% url 'login' %}">mit dem Konto der Hochschule</a>.</p>{% endif %}
+{% endblock %}

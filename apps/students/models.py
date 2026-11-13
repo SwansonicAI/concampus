@@ -44,11 +44,13 @@ class Study(Tracked, models.Model):
         REJECTED = 'rejected', 'Abgelehnt'
         ENROLLED = 'enrolled', 'Immatrikuliert'
         GUEST = 'guest', 'Gasthörer:in'
+        SECOND = 'second', 'Zweithörer:in'  # enrolled at another Hochschule, attends and takes exams here
         GRADUATED = 'graduated', 'Abgeschlossen'
         LEFT = 'left', 'Ausgeschieden'
 
     APPLICATION = [Status.APPLIED, Status.ADMITTED, Status.WAITLISTED, Status.REJECTED]
     FORMER = [Status.GRADUATED, Status.LEFT]  # with registered terms: studied here once
+    ATTENDING = [Status.ENROLLED, Status.GUEST, Status.SECOND]  # in courses now
 
     person = models.ForeignKey(Person, models.CASCADE, related_name='studies', verbose_name='Person')
     program = models.ForeignKey(Program, models.PROTECT, related_name='studies', verbose_name='Studiengang')
@@ -71,6 +73,8 @@ class Study(Tracked, models.Model):
         verbose_name='Hauptfachlehrer:in', help_text='Bis zur Zulassung der Wunsch aus der Bewerbung.',
     )
     prior_terms = models.PositiveSmallIntegerField('Angerechnete Semester', default=0)
+    home_university = models.CharField('Heimathochschule', max_length=120, blank=True, help_text='Nur Zweithörer:innen: wo sie immatrikuliert sind.')
+    home_matriculation = models.CharField('Matrikelnummer dort', max_length=20, blank=True)
     exit_reason = models.CharField('Grund der Exmatrikulation', max_length=1, choices=EXITS, blank=True)
     structured = models.BooleanField('In einem strukturierten Promotionsprogramm', default=False)  # these three for a Promotion
     employed = models.BooleanField('An der Hochschule beschäftigt', default=False)
@@ -96,8 +100,8 @@ class Study(Tracked, models.Model):
 
     @classmethod
     def find(cls, text):
-        """Enrolled studies and guest auditors meant by a name, e-mail or Matrikelnummer, however it is typed; at most five."""
-        studies = cls.objects.filter(status__in=[cls.Status.ENROLLED, cls.Status.GUEST]).select_related('person', 'program')
+        """Enrolled studies, Gast- and Zweithörende meant by a name, e-mail or Matrikelnummer, however it is typed; at most five."""
+        studies = cls.objects.filter(status__in=cls.ATTENDING).select_related('person', 'program')
         if number := re.search(r'\d{5,}', text):
             if exact := list(studies.filter(person__matriculation=number.group())):
                 return exact
@@ -132,7 +136,7 @@ class Study(Tracked, models.Model):
 
             term = self.start_term if not was else Term.objects.filter(start__lte=self.since).order_by('-start').first()
             tell(Event.objects.create(person=person, kind=Event.Kind.LEFT if was else Event.Kind.ENROLLED, on=self.since, term=term))
-        if status in self.FORMER and person.private_email and not person.studies.filter(status__in=[self.Status.ENROLLED, self.Status.GUEST]).exists():
+        if status in self.FORMER and person.private_email and not person.studies.filter(status__in=self.ATTENDING).exists():
             person.email = person.private_email  # the Hochschul address ends with the study
             person.save(update_fields=['email'])
 
@@ -287,6 +291,8 @@ class StudyTerm(Tracked, models.Model):
     term = models.ForeignKey(Term, models.PROTECT, related_name='registrations', verbose_name='Semester')
     leave = models.BooleanField('Urlaubssemester', default=False)
     leave_reason = models.CharField('Grund der Beurlaubung', max_length=1, choices=LEAVES, blank=True)
+    part_time = models.BooleanField('Teilzeit', default=False, help_text='Auf Antrag, wo die Hochschule Teilzeitstudium anbietet.')
+    waived = models.BooleanField('Gebühren erlassen', default=False, help_text='Auf Antrag: in diesem Semester keine Gebühren über den Semesterbeitrag hinaus.')
     paid = models.DateField('Beitrag bezahlt am', null=True, blank=True)
     amount = models.DecimalField('Betrag', max_digits=7, decimal_places=2, null=True, blank=True)
     withdrawn = models.BooleanField(
@@ -302,6 +308,31 @@ class StudyTerm(Tracked, models.Model):
 
     def __str__(self):
         return f'{self.study} · {self.term}'
+
+
+class Fee(Tracked, models.Model):
+    """A fee the Hochschule's Gebührenordnung sets beyond the Semesterbeitrag, due at each Rückmeldung from those it
+    applies to: everyone of a status, in some Studiengänge or all (students.fees)."""
+
+    capabilities = ('manage_institution',)
+
+    class Who(models.TextChoices):
+        ENROLLED = Study.Status.ENROLLED.value, 'Studierende'
+        GUEST = Study.Status.GUEST.value, 'Gasthörende'
+        SECOND = Study.Status.SECOND.value, 'Zweithörende'
+
+    name = models.CharField('Bezeichnung', max_length=80, help_text='Wie der Bescheid und die Rückmeldung sie nennen, etwa „Gebühr Weiterbildungsstudium“.')
+    amount = models.DecimalField('Betrag je Semester', max_digits=7, decimal_places=2)
+    who = models.CharField('Von', max_length=10, choices=Who, default=Who.ENROLLED)
+    programs = models.ManyToManyField(Program, blank=True, related_name='fees', verbose_name='Nur in den Studiengängen', help_text='Leer: in allen.')
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Gebühr'
+        verbose_name_plural = 'Gebühren'
+
+    def __str__(self):
+        return f'{self.name} ({self.amount} €)'
 
 
 class DocumentType(Tracked, Keyed):

@@ -1,0 +1,12 @@
+{% extends base %}
+{% block title %}Gast- oder Zweithörende aufnehmen{% endblock %}
+{% block subnav %}{% include "students/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Gast- oder Zweithörende aufnehmen</h1>
+<p class="lead">Aus dem Antrag: Konto, Hörernummer, Bescheid und Einladung zum Anmelden. Die Lehrveranstaltungen danach dort eintragen, wo sie stattfinden.</p>
+<form method="post" class="form">
+  {% csrf_token %}
+  {{ form }}
+  <div class="actions"><button class="btn">Aufnehmen</button><a href="{% url 'students:list' %}">Abbrechen</a></div>
+</form>
+{% endblock %}

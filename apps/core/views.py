@@ -521,7 +521,7 @@ FIRST = {  # the group a search names first, by any word meaning the same: 'pian
 
 
 STANDING = [  # whose study a search for a name shows first
-    Study.Status.ENROLLED, Study.Status.GUEST, Study.Status.ADMITTED, Study.Status.APPLIED, Study.Status.WAITLISTED,
+    *Study.ATTENDING, Study.Status.ADMITTED, Study.Status.APPLIED, Study.Status.WAITLISTED,
     Study.Status.GRADUATED, Study.Status.LEFT, Study.Status.REJECTED,
 ]
 

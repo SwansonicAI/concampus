@@ -1,0 +1,30 @@
+{% extends base %}
+{% load marks %}
+{% block title %}{{ course.title }}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>{{ course.title }}</h1>
+  <div class="actions"><a class="btn ghost" href="{% url 'public:catalogue' %}?semester={{ course.term_id }}">Vorlesungsverzeichnis</a></div>
+</div>
+<p class="lead">{{ course.format|default:course.get_kind_display }} · {{ course.term }}{% if course.area %} · {{ course.area }}{% endif %}{% if course.cancelled %} · <span class="badge no">entfällt</span>{% endif %}</p>
+<div class="cols">
+  <div>
+    <dl class="facts">
+      <dt>Lehrende</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
+      <dt>Umfang</dt><dd>{{ course.hours|default_if_none:"–" }} SWS</dd>
+      <dt>Zeit und Raum</dt><dd>{% for g, slot in groups %}Gruppe {{ g.number }}: {{ slot|default:"–" }}{% if not forloop.last %}<br>{% endif %}{% empty %}{{ slot|default:"–" }}{% endfor %}</dd>
+      {% if course.capacity %}<dt>Plätze</dt><dd>{{ course.capacity }}</dd>{% endif %}
+      {% if course.allocation != 'staff' %}<dt>Anmeldung</dt><dd>{% if course.opens %}vom {{ course.opens|date:"j. F" }} {% endif %}{% if course.deadline %}bis {{ course.deadline|date:"j. F Y" }}{% elif not course.opens %}–{% endif %}</dd>{% endif %}
+      <dt>Anrechenbar für</dt><dd>{% for program, modules in counts.items %}<a href="{% url 'curriculum:program' program.pk %}">{{ program.title }}</a> <small class="muted">{% for m in modules %}{{ m|coded }}{% if not forloop.last %}, {% endif %}{% endfor %}</small>{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
+    </dl>
+    {% if course.description %}<p style="margin-top: 24px">{{ course.description|linebreaksbr }}</p>{% endif %}
+  </div>
+  <div>
+    <h3>Nächste Termine</h3>
+    <table>
+      {% for b in dates %}<tr><td>{{ b.start|date:"D j.n." }}</td><td>{{ b.start|time:"H:i" }}–{{ b.end|time:"H:i" }}</td>{% if groups %}<td>{% if b.group %}Gruppe {{ b.group.number }}{% else %}alle{% endif %}</td>{% endif %}<td>{{ b.room }}</td></tr>
+      {% empty %}<tr><td class="empty">Noch keine Termine.</td></tr>{% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}

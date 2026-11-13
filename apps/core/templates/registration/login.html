@@ -31,6 +31,11 @@
       <p>Sie möchten an der {{ institution.name }} studieren? Legen Sie ein Konto an und bewerben Sie sich für die Eignungsprüfung.</p>
       <p><a class="more" href="{% url 'admissions:signup' %}">Konto anlegen</a></p>
     </section>{% endif %}
+    {% if institution.public %}<section>
+      <h2>Lehrangebot</h2>
+      <p>Lehrveranstaltungen und Studienpläne, ohne Anmeldung.</p>
+      <p class="actions"><a class="more" href="{% url 'public:catalogue' %}">Vorlesungsverzeichnis</a><a class="more" href="{% url 'curriculum:index' %}">Studiengänge</a></p>
+    </section>{% endif %}
   </div>
 </div>
 {% endblock %}

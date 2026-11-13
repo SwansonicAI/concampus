@@ -197,6 +197,21 @@ class Institution(Tracked, models.Model):
     credit_hours = models.PositiveSmallIntegerField(
         'Arbeitsstunden je CP', null=True, blank=True, help_text='Wie die Prüfungsordnung einen Leistungspunkt rechnet, meist 30; leer: im Studienplan nicht genannt.',
     )
+    long_fee = models.DecimalField(
+        'Langzeitstudiengebühr', max_digits=7, decimal_places=2, default=0,
+        help_text='Je Semester, wer die Regelstudienzeit um mehr als die erlaubten Semester überschreitet; 0: keine.',
+    )
+    long_fee_grace = models.PositiveSmallIntegerField(
+        'Erlaubte Semester über der Regelstudienzeit', default=4,
+        help_text='Gezählt werden die Hochschulsemester ohne Urlaubssemester, ein Teilzeitsemester halb.',
+    )
+    part_time = models.BooleanField(
+        'Teilzeitstudium', default=True, help_text='Studierende studieren auf Antrag ein Semester in Teilzeit; es steht in Bescheinigungen und in der Statistik.',
+    )
+    public = models.BooleanField(
+        'Vorlesungsverzeichnis und Studienpläne öffentlich', default=True,
+        help_text='Ohne Anmeldung zu lesen: Lehrveranstaltungen mit Lehrenden, Zeit und Raum, und die Studienpläne; nie, wer teilnimmt.',
+    )
     clash_dates = models.PositiveSmallIntegerField(
         'Warnung bei Überschneidung ab (Termine)', default=3,
         help_text='Überschneiden sich so viele Termine einer Lehrveranstaltung mit dem Stundenplan, oder alle, warnt die Anmeldung rot und fragt nach; '

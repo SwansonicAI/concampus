@@ -16,7 +16,7 @@
     <dt>Studiengang</dt><dd>{{ study.program.title }}</dd>
     <dt>Hauptfach</dt><dd>{{ study.subject }}</dd>
     <dt>Abschlussziel</dt><dd>{{ study.program.qualification|default:study.program.degree }}</dd>
-    <dt>Studienart</dt><dd>{{ study.studienart }}, Vollzeitstudium</dd>
+    <dt>Studienart</dt><dd>{{ study.studienart }}, {% if registration.part_time %}Teilzeitstudium{% else %}Vollzeitstudium{% endif %}</dd>
     <dt>Fachsemester</dt><dd>{{ fs }}</dd>
     <dt>Hochschulsemester</dt><dd>{{ hs }}</dd>
     {% if bafoeg %}<dt>Beginn des Studiums</dt><dd>{{ study.start_term.lectures_start|date:"j. F Y" }} ({{ study.start_term }})</dd>

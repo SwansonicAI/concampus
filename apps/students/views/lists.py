@@ -69,7 +69,7 @@ CASES = [
     ('unterricht', 'Ohne Unterrichtszeit'), ('pruefung', 'Prüfung laut Plan überfällig'), ('regelstudienzeit', 'Über der Regelstudienzeit'),
     ('schwerpunkt', 'Schwerpunkt nicht gewählt'), ('beurlaubt', 'Beurlaubt in diesem Semester'),
 ]
-STATES = [('', 'Alle'), *((s.value, s.label) for s in [Study.Status.ENROLLED, Study.Status.GUEST, Study.Status.GRADUATED, Study.Status.LEFT])]  # who studies or studied here
+STATES = [('', 'Alle'), *((s.value, s.label) for s in [*Study.ATTENDING, Study.Status.GRADUATED, Study.Status.LEFT])]  # who studies or studied here
 
 
 def semesters(studies):

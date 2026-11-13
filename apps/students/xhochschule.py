@@ -17,7 +17,7 @@ XHS, XBD = 'http://xhochschule.de/def/xhochschule/1.2/xsd', 'http://xbildung.de/
 X, B, E = ElementMaker(namespace=XHS, nsmap={'xhs': XHS, 'xbd': XBD}), ElementMaker(namespace=XBD), ElementMaker()
 LANG = '{http://www.w3.org/XML/1998/namespace}lang'
 STATUS = 'http://xhochschule.de/def/xhochschule/1.0/code/'
-FULL_TIME = 'http://xbildung.de/def/xbildung/2025-02-04/code/lernzeitmodell/vollzeit'  # ConCampus knows no part-time study
+FULL_TIME = 'http://xbildung.de/def/xbildung/2025-02-04/code/lernzeitmodell/vollzeit'  # a semester in Teilzeit: …/teilzeit
 EQF = {'bachelor': '6', 'master': '7', 'diplom': '7'}  # Program.Level
 SCHEMAS = Path(__file__).parent / 'schemas' / 'xhochschule-1.2'
 
@@ -99,8 +99,8 @@ def period(term):
     return X.studienzeitraum(X.zeitraum(X.beginn(day(term.start)), X.ende(day(term.end))), text('semesterbezeichnung', term.name))
 
 
-def full_time():
-    return X.lernzeitmodell(code('code', FULL_TIME))
+def full_time(part=False):
+    return X.lernzeitmodell(code('code', FULL_TIME.replace('vollzeit', 'teilzeit') if part else FULL_TIME))
 
 
 def on_leave(leave):
@@ -119,7 +119,7 @@ def enrolment(study, term, registration, fs, first, check, bafoeg=False):
     address to check it at."""
     kind, title = ('immatrikulationsbescheinigungBAfoeGP9', 'Immatrikulationsbescheinigung nach § 9 BAföG') if bafoeg else ('immatrikulationsbescheinigung', 'Immatrikulationsbescheinigung')
     return document(
-        kind, title, hochschule(), person(study, first, bafoeg=bafoeg), subject(study, fs), full_time(), period(term),
+        kind, title, hochschule(), person(study, first, bafoeg=bafoeg), subject(study, fs), full_time(registration and registration.part_time), period(term),
         X.immatrikulationsstatus(code('code', f'{STATUS}immatrikulationsstatus/immatrikuliert')), on_leave(registration and registration.leave),
         X.verifikation(X.schluessel(check[0]), X.adresse(check[1]), X.inhaltstyp('text/html')),
     )

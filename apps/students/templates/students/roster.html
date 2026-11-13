@@ -4,7 +4,7 @@
 {% block content %}
 <div class="head">
   <h1>Studierende</h1>
-  <div class="actions"><a class="btn ghost" href="{% querystring format='csv' %}">Als CSV exportieren</a></div>
+  <div class="actions">{% if 'manage_students' in user.roles %}<a class="btn ghost" href="{% url 'students:guest' %}">Gast- oder Zweithörende aufnehmen</a>{% endif %}<a class="btn ghost" href="{% querystring format='csv' %}">Als CSV exportieren</a></div>
 </div>
 <p class="lead">{{ count }} Studi{{ count|pluralize:"um,en" }}</p>
 <form class="toolbar">

@@ -1,9 +1,45 @@
 from django import forms
 from django.db.models import Q
 
+from core.dates import DayField
 from core.models import Person
 from courses.models import Course
+from curriculum.models import Program, Subject
 from .models import Study
+
+
+class GuestForm(forms.Form):
+    """Taking on a Gasthörer:in, who attends courses, or a Zweithörer:in, enrolled elsewhere, who attends and takes exams
+    here (Immatrikulationsordnung): on paper application, entered by the office."""
+
+    status = forms.ChoiceField(label='Als', choices=[(s.value, s.label) for s in (Study.Status.GUEST, Study.Status.SECOND)], widget=forms.RadioSelect)
+    first_name = forms.CharField(label='Vorname', max_length=150)
+    last_name = forms.CharField(label='Nachname', max_length=150)
+    email = forms.EmailField(label='E-Mail')
+    birth_date = DayField(label='Geburtsdatum')
+    program = forms.ModelChoiceField(label='Studiengang', queryset=Program.objects.ordered(), help_text='Für Gasthörende die Gasthörerschaft; für Zweithörende der Studiengang, in dem sie hier hören.')
+    subject = forms.ModelChoiceField(label='Fach', queryset=Subject.objects.order_by('name'))
+    home_university = forms.CharField(label='Heimathochschule', max_length=120, required=False)
+    home_matriculation = forms.CharField(label='Matrikelnummer dort', max_length=20, required=False)
+
+    layout = [(None, ['status', ('first_name', 'last_name'), ('email', 'birth_date'), ('program', 'subject'), ('home_university', 'home_matriculation')])]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        for name in ('home_university', 'home_matriculation'):
+            self.fields[name].widget.attrs['data-for'] = 'status:second'
+
+    def clean_email(self):
+        email = self.cleaned_data['email'].lower()
+        if Person.objects.filter(Q(username=email) | Q(email__iexact=email)).exists():
+            raise forms.ValidationError('Mit dieser Adresse gibt es schon ein Konto; ein weiteres Studium legt die Studierendenverwaltung an der Person an.')
+        return email
+
+    def clean(self):
+        data = super().clean()
+        if data.get('status') == Study.Status.SECOND and not data.get('home_university'):
+            self.add_error('home_university', 'Bei Zweithörenden: wo sie immatrikuliert sind.')
+        return data
 
 
 class StudyForm(forms.ModelForm):

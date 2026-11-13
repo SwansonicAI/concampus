@@ -10,13 +10,15 @@ from django.utils import timezone
 from lxml import etree
 
 from core.apps import tiles
-from core.models import Message, Person, Term
+from core.models import Institution, Message, Person, Term
 from core.testing import Seeded, flashes
 from exams.results import exhausted
 from .disposal import due
-from .models import Document, InsuranceReport, Study, StudyTerm
+from .fees import counted, extras, owed
+from .models import Document, Fee, InsuranceReport, Study, StudyTerm
 from . import xhochschule
 from .smv import receive
+from .views.documents import first_enrolment
 
 
 class EnrolmentTest(Seeded):
@@ -140,6 +142,37 @@ class LeaveTest(Seeded):
         self.assertIn('höchstens 2 Urlaubssemester', ask(old, '4'))
         self.assertIn('Urlaubssemester eingetragen', ask(old, '4', self.login('asa')))
         self.assertEqual({s: StudyTerm.objects.get(study=s, term=term).leave for s in (new, old)}, {new: True, old: True})
+
+
+class StatusTest(Seeded):
+    """Who studies here other than full time and enrolled, and what they pay beyond the Semesterbeitrag."""
+
+    def test_part_time_and_second_auditors(self):
+        asa, term = self.login('asa'), Term.upcoming()
+        study = Study.objects.filter(status='enrolled').first()
+        self.assertIn('Teilzeit eingetragen', flashes(asa.post(f'/studierende/{study.pk}/teilzeit/', follow=True))[0])
+        registration = StudyTerm.objects.get(study=study, term=term)
+        self.assertIn('lernzeitmodell/teilzeit', xhochschule.enrolment(study, term, registration, 1, first_enrolment(study.person), ('x', 'https://x')).decode())
+        asa.post('/studierende/gasthoerende/', {
+            'status': 'second', 'first_name': 'Zora', 'last_name': 'Zweit', 'email': 'zora@uni-jena.de', 'birth_date': '3.4.2001',
+            'program': study.program_id, 'subject': study.subject_id, 'home_university': 'Universität Jena', 'home_matriculation': '123456',
+        })
+        second = Study.objects.get(person__email='zora@uni-jena.de')
+        self.assertEqual((second.status, second.home_university, second in Study.find('Zweit')), (Study.Status.SECOND, 'Universität Jena', True))
+
+    def test_fees_by_status_and_programme_the_long_fee_and_its_waiver(self):
+        term = Term.upcoming()
+        study = max(Study.objects.filter(status='enrolled').select_related('person', 'program'), key=lambda s: counted(s.person, term) - s.program.semesters)
+        over = int(counted(study.person, term)) - study.program.semesters  # semesters beyond the Regelstudienzeit already
+        Institution.objects.update(long_fee=500, long_fee_grace=over)
+        self.assertIn(('Langzeitstudiengebühr', 500), extras(study.person, term))
+        Institution.objects.update(long_fee_grace=over + 1)
+        self.assertEqual(extras(study.person, term), [])  # not yet beyond what the Land allows
+        fee = Fee.objects.create(name='Weiterbildung', amount=120, who=Fee.Who.ENROLLED)
+        fee.programs.add(study.program)
+        self.assertEqual(owed(study.person, term, term.start, 0), term.fee + 120)
+        self.login('asa').post(f'/studierende/{study.pk}/gebuehren/')
+        self.assertEqual(extras(study.person, term), [])  # waived on application
 
 
 class ExmatriculationTest(Seeded):

@@ -24,7 +24,7 @@ from instruments.models import Instrument
 from mobility.models import Agreement, Partner
 from rooms.models import Booking, BookingCategory, Building, Room, RoomFunction
 from students.forms import StudyForm
-from students.models import DocumentType, Study
+from students.models import DocumentType, Fee, Study
 
 
 @dataclass
@@ -362,7 +362,7 @@ EDITORS = {e.key: e for e in [
             ('Bewerbung und Immatrikulation', [('matriculation_start', 'student_mail', 'accept_days', 'pay_days'), 'signup', 'sender_number', 'insurers']),
             ('Eignungsprüfungen', [('audition_panel_main', 'audition_panel', 'audition_rounding')]),
             ('Aufbewahrung', [('retention_months', 'file_years'), ('core_years', 'staff_years')]),
-            ('Rückmeldung und Beurlaubung', [('late_fee', 'leave_terms'), 'first_term_leave', 'loans_hold', 'payee', ('iban', 'bic')]),
+            ('Rückmeldung und Beurlaubung', [('late_fee', 'leave_terms'), ('long_fee', 'long_fee_grace'), 'first_term_leave', 'part_time', 'loans_hold', 'payee', ('iban', 'bic')]),
             ('Prüfungen', [
                 ('withdraw_weeks', 'resits_registered'), ('panel_min', 'panel_max'), ('final_panel', 'final_professor'), 'thesis_gap',
                 ('oral_results_days', 'written_results_weeks', 'review_weeks'), ('certificate_weeks', 'certificate_overdue_days'), 'protocol_first',
@@ -371,7 +371,7 @@ EDITORS = {e.key: e for e in [
             ('Raumbuchung', [('student_daily_hours', 'student_ahead_hours'), ('last_minute_hours', 'teacher_ahead_days')]),
             ('Barrierefreiheit', ['feedback_days']),
             ('Deputat', [('load_since', 'load_years'), ('load_floor', 'lesson_minutes'), 'assignment_max']),
-            ('Studienpläne', ['credit_hours']),
+            ('Studienpläne', ['credit_hours', 'public']),
             ('Anmeldung zu Lehrveranstaltungen', ['clash_dates']),
             ('Amtliche Statistik', [('university', 'region', 'report_id')]),
         ],
@@ -423,6 +423,11 @@ EDITORS = {e.key: e for e in [
         queryset=lambda: Holiday.objects.order_by('-first'), form=HolidayForm,
     ),
     Editor('institute', Institute, 'Institute', 'manage_institution', 'Verwaltung', fields=['name', 'code'], columns=[('Institut', 'name'), ('Kennung', 'code')], search=['name', 'code']),
+    Editor(
+        'gebuehren', Fee, 'Gebühren', 'manage_institution', 'Verwaltung', sections=[(None, [('name', 'amount'), 'who', 'programs'])],
+        columns=[('Gebühr', 'name'), ('Betrag', 'amount'), ('Von', 'get_who_display'), ('Studiengänge', 'programs')], search=['name'],
+        words='gebührenordnung weiterbildung seniorenstudium gasthörer zweithörer postgradual langzeitstudiengebühr',
+    ),
     Editor(
         'personen', Person, 'Stammdaten', 'manage_students', deletable=False,
         sections=[  # what changes most often first

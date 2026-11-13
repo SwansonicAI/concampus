@@ -175,6 +175,8 @@ class StudentsConfig(Tile, AppConfig):
         from exams.results import exhausted
 
         if study and term and term.reregistration_open and not paid.filter(study__person=person).exists() and not exhausted(study):  # no Rückmeldung once the claim is lost
-            fee = term.due(today, Institution.get().late_fee)
-            found.append(task(f'Rückmeldung {term}: {number_format(fee, 2)} € überweisen' + (' (Nachfrist, mit Säumnisgebühr)' if fee > term.fee else ''), study.get_absolute_url(), due))
+            from .fees import owed
+
+            late = term.due(today, Institution.get().late_fee) > term.fee
+            found.append(task(f'Rückmeldung {term}: {number_format(owed(person, term, today, Institution.get().late_fee), 2)} € überweisen' + (' (Nachfrist, mit Säumnisgebühr)' if late else ''), study.get_absolute_url(), due))
         return found

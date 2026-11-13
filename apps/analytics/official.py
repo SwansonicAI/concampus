@@ -190,7 +190,7 @@ class Report:
                 art, reason = '3', ''
             else:  # first enrolment anywhere, or new here after studying elsewhere or before
                 art, reason = ('2' if before or person.first_university or person.external_terms or person.degree_university else '1'), ''
-            v[str(n)], v[str(n + 1)], v[str(n + 2)], v[str(n + 3)] = art, reason, '1', '1'
+            v[str(n)], v[str(n + 1)], v[str(n + 2)], v[str(n + 3)] = art, reason, '1', '2' if this and this.part_time else '1'  # Voll-, Teilzeit
             v[str(n + 4)] = s.prior_terms + sum(1 for r in own if not r.leave)
             v[str(n + 5)] = self.exam(s, person)
             v[f'{n + 6}U1'], v[f'{n + 6}U2'] = i.region[:2], i.region[2:]

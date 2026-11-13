@@ -48,6 +48,7 @@
       <label>Beleg oder Verwendungszweck<input name="reference" placeholder="z. B. Barzahlung, Quittung 112"></label>
       <button class="btn" name="pay" value="1">Zahlungseingang verbuchen</button>
       {% if overdue and open %}<button class="btn danger" name="exmatriculate" value="1">{{ open }} ohne Rückmeldung exmatrikulieren</button>{% endif %}
+      {% if long_fee %}<button class="btn ghost" name="langzeit" value="1" title="An alle, die sie für das {{ term }} zahlen und noch keinen Bescheid haben">Bescheide über die Langzeitstudiengebühr</button>{% endif %}
     </div>
     <small class="muted">Der Beitrag gilt je Person für alle ihre Studien.</small>
   </div>

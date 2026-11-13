@@ -2,7 +2,8 @@
 
 What replacing HISinOne at HfM takes, what selling ConCampus to other Hochschulen takes, and the order to build it. From
 a list of what HISinOne does at HfM today, October 2026. Legal requirements are in `docs/legal.md`, the reports to the
-health insurers in `docs/smv.md`.
+health insurers in `docs/smv.md`; what waits on HfM and others in `docs/waiting.md`, what the domain still lacks in
+`docs/gaps.md`.
 
 ## Replacing HISinOne
 

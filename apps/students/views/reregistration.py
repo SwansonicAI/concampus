@@ -23,7 +23,8 @@ from core.text import fold, matching
 from exams.results import exhausted
 from instruments.models import Loan
 from .. import payments, smv
-from ..models import InsuranceReport, Study, StudyTerm
+from ..fees import counted, extras, owed
+from ..models import Document, InsuranceReport, Study, StudyTerm
 
 
 class PaymentForm(forms.Form):
@@ -149,13 +150,13 @@ def reregistration(request):
             if not reference:
                 messages.error(request, 'Bitte den Beleg oder Verwendungszweck angeben, mit dem die Zahlung einging.')
                 return redirect('students:reregistration')
-            people = {s.person: (day, term.due(day, late_fee), reference) for s in enrolled.filter(person__in=request.POST.getlist('person'))}
+            people = {s.person: (day, owed(s.person, term, day, late_fee), reference) for s in enrolled.filter(person__in=request.POST.getlist('person'))}
             book(term, enrolled, people)
-            messages.success(request, f'Zahlung für {plural(len(people), "Person", "Personen")} verbucht, je {number_format(term.due(day, late_fee), 2)} € am {date_format(day, "j.n.Y")}.')
+            messages.success(request, f'Zahlung für {plural(len(people), "Person", "Personen")} verbucht, zusammen {number_format(sum(a for _, a, _ in people.values()), 2)} € am {date_format(day, "j.n.Y")}.')
         elif statement := request.FILES.get('statement'):  # read first, booked once checked
             unpaid = {s.person.matriculation: s.person for s in enrolled.exclude(person__in=paid)}
             request.session['kontoauszug'] = [
-                {'day': day.isoformat(), 'amount': str(amount), 'text': text[:300], 'person': person and person.pk, 'short': bool(person and amount < term.due(day, late_fee))}
+                {'day': day.isoformat(), 'amount': str(amount), 'text': text[:300], 'person': person and person.pk, 'short': bool(person and amount < owed(person, term, day, late_fee))}
                 for day, amount, text in payments.credits(statement.read())
                 for person in [next((unpaid[n] for n in payments.numbers(text) if n in unpaid), None)]
             ]
@@ -169,6 +170,16 @@ def reregistration(request):
             }
             book(term, enrolled, found)
             messages.success(request, f'{plural(len(found), "Zahlung", "Zahlungen")} verbucht.')
+        elif 'langzeit' in request.POST:  # once per person and semester, before they pay
+            institution, told = Institution.get(), set(Document.objects.filter(template='langzeitgebuehr', title__endswith=str(term)).values_list('person', flat=True))
+            due = {s.person_id: s for s in enrolled.exclude(person__in=paid | told) if 'Langzeitstudiengebühr' in dict(extras(s.person, term))}
+            for s in due.values():
+                limit = max(o.program.semesters for o in s.person.studies.filter(status=Study.Status.ENROLLED).select_related('program'))
+                s.notify(
+                    'langzeitgebuehr', s.get_absolute_url(), rueckmeldesemester=term, regelstudienzeit=limit, erlaubt=institution.long_fee_grace,
+                    gezaehlt=f'{counted(s.person, term) + 1:g}'.replace('.', ','), betrag=number_format(institution.long_fee, 2),
+                )
+            messages.success(request, f'{plural(len(due), "Bescheid", "Bescheide")} über die Langzeitstudiengebühr versandt.')
         elif 'exmatriculate' in request.POST and today > term.closes:  # a finished study or a lost Prüfungsanspruch leaves on its own ground
             unpaid = list(enrolled.exclude(person__in=paid))
             finished = [s for s in unpaid if s.issued]
@@ -208,6 +219,6 @@ def reregistration(request):
     counts = {key: len({row[0].person_id for row in rows if test(row)}) for key, (_, test) in states.items()}  # people: the fee is theirs
     return render(request, 'students/reregistration.html', {
         'term': term, 'rows': shown, 'total': len({row[0].person_id for row in rows}), 'open': counts['offen'], 'blocked': counts['gesperrt'], 'overdue': today > term.closes,
-        'late_fee': late_fee, 'statement': statement,
+        'late_fee': late_fee, 'statement': statement, 'long_fee': Institution.get().long_fee,
         'q': q, 'stand': stand, 'states': [(key, label, counts[key]) for key, (label, _) in states.items()],
     })

@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
@@ -19,6 +19,8 @@ from core.shortcuts import preview
 from core.text import handle
 from admissions.papers import papers
 from exams.results import exhausted
+from setup.views import invitation
+from ..forms import GuestForm
 from ..leaving import leaving
 from ..models import EXITS, FIRST_TERM_LEAVES, LEAVES, OFFICIAL, Document, DocumentType, Study, StudyTerm
 
@@ -131,6 +133,63 @@ def leave(request, pk):
     messages.success(request, f'{term}: {"Urlaubssemester eingetragen" if leave else "Urlaubssemester zurückgenommen"}, Bescheid versandt.')
     if rule:
         messages.warning(request, f'Als Ausnahme eingetragen: {rule} Antrag und Nachweis gehören zur Akte.')
+    return redirect(study.get_absolute_url())
+
+
+@require('manage_students')
+def guest(request):
+    """Take on a Gasthörer:in or Zweithörer:in from their application: an account with a Hörernummer from the
+    Matrikelnummern, the study, a Bescheid and an invitation to sign in. Courses they are entered in by name."""
+    form = GuestForm(request.POST or None)
+    if form.is_valid():
+        data = form.cleaned_data
+        with transaction.atomic():
+            person = Person.objects.create_user(
+                data['email'], data['email'], first_name=data['first_name'], last_name=data['last_name'], birth_date=data['birth_date'],
+                matriculation=str(next_matriculation()),
+            )
+            study = Study.objects.create(
+                person=person, program=data['program'], subject=data['subject'], start_term=Term.current(), status=data['status'],
+                home_university=data['home_university'], home_matriculation=data['home_matriculation'],
+            )
+            if not request.user.may('manage_students', study):
+                raise PermissionDenied('Diesen Studiengang verwaltet ein anderes Amt.')
+        study.notify('gaststudium', study.get_absolute_url(), art=study.get_status_display())
+        invitation(request, person)
+        messages.success(request, f'{person} als {study.get_status_display()} aufgenommen, Nummer {person.matriculation}. Bescheid und Einladung versandt; Lehrveranstaltungen dort eintragen.')
+        return redirect(study.get_absolute_url())
+    return render(request, 'students/guest.html', {'form': form})
+
+
+@require_POST
+def waive(request, pk):
+    """Lift the fees beyond the Semesterbeitrag for the upcoming term, on application (raising children, care, committee
+    work, as the Land allows), or charge them again; with a Bescheid."""
+    study = get_object_or_404(request.user.within(Study.objects.filter(status__in=Study.ATTENDING), 'manage_students'), pk=pk)
+    term = Term.upcoming()
+    registration, _ = StudyTerm.objects.get_or_create(study=study, term=term)
+    StudyTerm.objects.filter(study__person=study.person, term=term).update(waived=not registration.waived)  # the fees are the person's
+    study.notify('gebuehren_erlassen' if not registration.waived else 'gebuehren_erhoben', study.get_absolute_url(), rueckmeldesemester=term)
+    messages.success(request, f'{term}: Gebühren {"erhoben" if registration.waived else "erlassen"}, Bescheid versandt.')
+    return redirect(study.get_absolute_url())
+
+
+@require_POST
+def part_time(request, pk):
+    """Teilzeit for the upcoming term, or full time again: the office enters it on the student's application, with a
+    Bescheid; a semester on leave is neither."""
+    study = get_object_or_404(request.user.within(Study.objects.filter(status=Study.Status.ENROLLED), 'manage_students'), pk=pk)
+    if not Institution.get().part_time:
+        raise PermissionDenied
+    term = Term.upcoming()
+    registration, _ = StudyTerm.objects.get_or_create(study=study, term=term)
+    if registration.leave:
+        messages.error(request, f'{term}: Urlaubssemester, also weder Voll- noch Teilzeit.')
+        return redirect(study.get_absolute_url())
+    registration.part_time = not registration.part_time
+    registration.save(update_fields=['part_time'])
+    study.notify('teilzeit' if registration.part_time else 'teilzeit_aufgehoben', study.get_absolute_url(), rueckmeldesemester=term)
+    messages.success(request, f'{term}: {"Teilzeit eingetragen" if registration.part_time else "wieder Vollzeit"}, Bescheid versandt.')
     return redirect(study.get_absolute_url())
 
 

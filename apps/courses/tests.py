@@ -6,7 +6,7 @@ from django.db.models import Count
 from django.test import Client
 from django.utils import timezone
 
-from core.models import Holiday, Message, Person, Term
+from core.models import Holiday, Institution, Message, Person, Term
 from curriculum.models import Program
 from rooms.models import Booking, Room
 from rooms.plans import agenda
@@ -439,6 +439,17 @@ class FakeMoodle:
             self.enrolled = {e for e in self.enrolled if e[:2] not in out}
             return None
         raise AssertionError(function)
+
+
+class PublicTest(Seeded):
+    def test_visitors_read_courses_and_studienplaene_never_who_takes_part(self):
+        visitor = Client()
+        course = Course.objects.filter(kind='course', term__planning=False, participations__isnull=False).first()
+        page = visitor.get(f'/vorlesungsverzeichnis/{course.pk}/').content.decode()
+        self.assertEqual((course.title in page, course.participations.first().study.person.email in page), (True, False))
+        self.assertEqual((visitor.get('/vorlesungsverzeichnis/').status_code, visitor.get('/studiengaenge/').status_code), (200, 200))
+        Institution.objects.update(public=False)  # a Hochschule that keeps them to its members
+        self.assertEqual((visitor.get('/vorlesungsverzeichnis/').status_code, visitor.get('/studiengaenge/').status_code), (404, 404))
 
 
 class MoodleTest(Seeded):

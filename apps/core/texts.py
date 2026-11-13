@@ -81,6 +81,42 @@ TEXTS = {
         'Das Semester zählt als Fachsemester.',
         STUDY + ('rueckmeldesemester',),
     ),
+    'gaststudium': Spec(
+        BESCHEID, 'Zulassung', 'Bescheid über die Zulassung als {art}',
+        'Auf Ihren Antrag sind Sie ab dem {semester} als {art} zugelassen, im Studiengang {studiengang}, Fach {hauptfach}. '
+        'In welche Lehrveranstaltungen Sie gehen, sehen Sie in ConCampus; die Einladung zu Ihrem Konto kommt per E-Mail.',
+        STUDY + ('art',),
+    ),
+    'langzeitgebuehr': Spec(
+        BESCHEID, 'Langzeitstudiengebühr', 'Bescheid über die Langzeitstudiengebühr für das {rueckmeldesemester}',
+        'Mit dem {rueckmeldesemester} überschreiten Sie die Regelstudienzeit von {regelstudienzeit} Semestern um mehr als {erlaubt} '
+        'Semester: gezählt sind {gezaehlt} Semester, ohne Urlaubssemester, ein Teilzeitsemester halb. Für das Semester ist deshalb '
+        'eine Langzeitstudiengebühr von {betrag} € zu zahlen, mit dem Semesterbeitrag bei der Rückmeldung.\n\n'
+        'Wer Kinder erzieht, Angehörige pflegt oder in Gremien der Hochschule mitarbeitet, kann den Erlass beantragen.',
+        STUDY + ('rueckmeldesemester', 'regelstudienzeit', 'erlaubt', 'gezaehlt', 'betrag'), appeal=True,
+    ),
+    'gebuehren_erlassen': Spec(
+        BESCHEID, 'Gebühren erlassen', 'Bescheid über den Erlass von Gebühren',
+        'Auf Ihren Antrag werden Ihnen für das {rueckmeldesemester} die Gebühren über den Semesterbeitrag hinaus erlassen. '
+        'Der Semesterbeitrag bleibt zu zahlen.',
+        STUDY + ('rueckmeldesemester',),
+    ),
+    'gebuehren_erhoben': Spec(
+        BESCHEID, 'Gebühren', 'Bescheid über Gebühren',
+        'Der Erlass Ihrer Gebühren für das {rueckmeldesemester} ist aufgehoben. Mit der Rückmeldung sind sie zum Semesterbeitrag zu zahlen.',
+        STUDY + ('rueckmeldesemester',),
+    ),
+    'teilzeit': Spec(
+        BESCHEID, 'Teilzeitstudium', 'Bescheid über das Teilzeitstudium',
+        'Auf Ihren Antrag studieren Sie im {rueckmeldesemester} im Studiengang {studiengang}, Hauptfach {hauptfach}, in Teilzeit. '
+        'Ihre Bescheinigungen weisen das Semester als Teilzeitsemester aus.',
+        STUDY + ('rueckmeldesemester',),
+    ),
+    'teilzeit_aufgehoben': Spec(
+        BESCHEID, 'Teilzeitstudium aufgehoben', 'Bescheid über die Aufhebung des Teilzeitstudiums',
+        'Im {rueckmeldesemester} studieren Sie im Studiengang {studiengang}, Hauptfach {hauptfach}, wieder in Vollzeit.',
+        STUDY + ('rueckmeldesemester',),
+    ),
     'exmatrikulation_rueckmeldung': Spec(
         BESCHEID, 'Exmatrikulation ohne Rückmeldung', 'Exmatrikulationsbescheid',
         'Sie haben sich nicht fristgerecht zum {rueckmeldesemester} zurückgemeldet und sind daher mit Ablauf des {zum} aus dem '

@@ -1,13 +1,15 @@
 from collections import defaultdict
 
 from django.contrib import messages
+from django.contrib.auth.decorators import login_not_required
 from django.db.models import Count, Max
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from core.access import require
-from core.models import Office, Term
+from core.models import Institution, Office, Term
 from core.transfer import FORMAT, load, plan as written
 from courses.models import Course, Format
 from students.models import Study
@@ -16,12 +18,22 @@ from .models import Module, Program
 from .plans import columns, plan
 
 
+def visitor(request):
+    """Whether a visitor reads the Studienpläne without signing in (Institution.public); else they sign in first."""
+    if request.user.is_authenticated:
+        return False
+    if not Institution.get().public:
+        raise Http404
+    return True
+
+
+@login_not_required
 def index(request):
     sizes = dict(Module.counted().values('program').annotate(n=Count('pk')).values_list('program', 'n'))
     programs = list(Program.objects.ordered().prefetch_related('subjects'))
     for p in programs:
         p.size = sizes.get(p.pk, 0)
-    figures = bool(request.user.roles & OVERSIGHT)
+    figures = not visitor(request) and bool(request.user.roles & OVERSIGHT)
     if figures:
         counts = {(row['program'], row['status']): row['n'] for row in Study.objects.values('program', 'status').annotate(n=Count('pk'))}
         for p in programs:  # counted apart: joining studies and modules in one query multiplies them
@@ -29,7 +41,9 @@ def index(request):
     return render(request, 'curriculum/index.html', {'programs': programs, 'figures': figures, 'keepers': Office.holding('edit_curriculum', linked=True)})
 
 
+@login_not_required
 def program(request, pk):
+    guest = visitor(request)
     program = get_object_or_404(Program.objects.prefetch_related('subjects'), pk=pk)
     term = Term.current()
     offers = defaultdict(set)
@@ -40,10 +54,11 @@ def program(request, pk):
     for row in rows:
         if row['kind'] == 'part':
             row['offers'] = sorted({c for i in row['items'] for c in offers[i.pk]}, key=lambda c: c.title)
-    figures = bool(request.user.roles & OVERSIGHT)
+    figures = not guest and bool(request.user.roles & OVERSIGHT)
     return render(request, 'curriculum/program.html', {
-        'program': program, 'rows': rows, 'formats': Format.objects.exclude(short=''), **columns(rows, program, False), 'semesters': range(1, program.semesters + 1), 'term': term, 'edit': request.user.may('edit_curriculum', program),
-        'reachable': Course.reachable(request.user, Course.objects.filter(pk__in=[c.pk for found in offers.values() for c in found])),
+        'program': program, 'rows': rows, 'formats': Format.objects.exclude(short=''), **columns(rows, program, False), 'semesters': range(1, program.semesters + 1), 'term': term,
+        'edit': not guest and request.user.may('edit_curriculum', program), 'guest': guest,
+        'reachable': set() if guest else Course.reachable(request.user, Course.objects.filter(pk__in=[c.pk for found in offers.values() for c in found])),
         'total': sum(m.credits for m in tree), 'figures': figures, 'students': figures and program.studies.filter(status='enrolled').count(),
         'coming': Term.objects.filter(start__gt=timezone.localdate()).order_by('start'),
     })

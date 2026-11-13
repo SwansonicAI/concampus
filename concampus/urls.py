@@ -3,8 +3,13 @@ from django.contrib.auth.views import LoginView
 from django.urls import include, path
 
 from core.forms import SignInForm
+from courses.views import public
 
 urlpatterns = [
+    path('vorlesungsverzeichnis/', include(([  # without signing in (Institution.public)
+        path('', public.catalogue, name='catalogue'),
+        path('<int:pk>/', public.course, name='course'),
+    ], 'public'))),
     path('admin/', admin.site.urls),
     path('konto/login/', LoginView.as_view(redirect_authenticated_user=True, authentication_form=SignInForm), name='login'),  # signed in already: on to the start page
     path('konto/', include('django.contrib.auth.urls')),

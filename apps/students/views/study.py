@@ -17,6 +17,7 @@ from courses.models import Course, Format
 from curriculum.models import Program, Subject, coverage
 from curriculum.plans import columns, plan
 from exams.results import exhausted
+from ..fees import extras, owed
 from ..leaving import leaving
 from ..models import EXITS, LEAVES, DocumentType, Study, StudyTerm
 from ..trail import above
@@ -136,7 +137,7 @@ def study(request, pk, page='students/study.html'):
         'total': sum(m.credits for m in tree),
         'terms': terms,
         'upcoming': upcoming, 'late_fee': late_fee,
-        'bank': Institution.get(), 'owed': upcoming and upcoming.due(today, late_fee),
+        'bank': Institution.get(), 'owed': upcoming and owed(study.person, upcoming, today, late_fee), 'extras': upcoming and personal and extras(study.person, upcoming),
         'next': study.terms.filter(term=upcoming).first(),
         'paid': StudyTerm.objects.filter(study__person=study.person, term=upcoming, paid__isnull=False).exists(),
         'missing': remedies(study, study.person.missing()) if personal else [],
