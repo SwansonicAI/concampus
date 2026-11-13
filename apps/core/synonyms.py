@@ -36,7 +36,7 @@ ACTIONS = [
 
 SYNONYMS = [
     'planen plan schedule',
-    'zahlen bezahlen zahlung überweisung beitrag semesterbeitrag gebühr gebühren pay payment fee fees',
+    'zahlen bezahlen zahlung überweisung beitrag semesterbeitrag semesterticket gebühr gebühren pay payment fee fees ticket',
     'unbezahlt unpaid outstanding',
     'üben übezeit practice practise',
     'ergebnis ergebnisse result results outcome',
@@ -84,25 +84,27 @@ SYNONYMS = [
 MUSIC = [
     # instruments and voices
     'musik music',
-    'klavier pianoforte flügel piano pianist grand-piano',
-    'violine geige violin fiddle',
-    'viola bratsche',
-    'violoncello cello',
-    'kontrabass contrabass double-bass',
-    'harfe harp',
-    'gitarre guitar',
-    'flöte querflöte flute',
+    'klavier pianoforte flügel pianist pianistin piano grand-piano',
+    'violine geige geiger geigerin violinist violinistin violin fiddle',
+    'viola bratsche bratschist bratschistin violist',
+    'violoncello cello cellist cellistin',
+    'kontrabass kontrabassist kontrabassistin contrabass double-bass bassist',
+    'harfe harfenist harfenistin harp harpist',
+    'gitarre gitarrist gitarristin guitar guitarist',
+    'flöte querflöte flötist flötistin flute flutist flautist',
     'blockflöte recorder',
-    'klarinette clarinet',
-    'fagott bassoon',
-    'saxophon saxophone sax',
-    'trompete trumpet',
-    'posaune trombone',
-    'horn french-horn',
-    'schlagwerk schlagzeug percussion drums drum-kit',
-    'orgel organ organist',
-    'cembalo harpsichord',
-    'akkordeon accordion',
+    'klarinette klarinettist klarinettistin clarinet clarinettist clarinetist',
+    'fagott fagottist fagottistin bassoon bassoonist',
+    'oboe oboist oboistin',
+    'saxophon saxophonist saxophonistin saxophone sax',
+    'trompete trompeter trompeterin trumpet trumpeter',
+    'posaune posaunist posaunistin trombone trombonist',
+    'horn hornist hornistin french-horn',
+    'tuba tubist tubistin',
+    'schlagwerk schlagzeug schlagzeuger schlagzeugerin percussion percussionist drums drummer drum-kit',
+    'orgel organist organistin organ',
+    'cembalo cembalist cembalistin harpsichord harpsichordist',
+    'akkordeon akkordeonist akkordeonistin accordion accordionist',
     'gesang singen sänger sängerin vokal singing voice vocal vocals singer',
     'streicher streichinstrumente strings string-instruments',
     'bläser blasinstrumente winds woodwinds wind-instruments',
@@ -209,6 +211,10 @@ SYNONYMS += [
 # Words that carry no meaning of their own in a search for a page: „wie kann ich einen Raum buchen“, „how do I book a room“
 STOP = set('''
     der die das den dem des ein eine einen einem einer und oder für von vom zu zum zur im in an am auf mit wie wo was ich
-    kann möchte will bitte ist sind man es wann
-    a an the to for of on at by with how do does can i want where what when is are please me
+    kann möchte will bitte ist sind man es wann wer
+    a an the to for of on at by with how do does can i want where what when who is are please me
 '''.split())
+
+# Words that name a kind of what the search finds, not one of them: „violin teacher“, „piano students“, „new piano
+# course“. They rank the pages; records, which hold no such word, are found by the others (each word's whole line).
+KINDS = 'lehrende studierende bewerbung teilnehmende lehrveranstaltung unterricht raum modul studiengang prüfung amt termin note'

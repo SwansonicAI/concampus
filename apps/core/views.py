@@ -41,7 +41,7 @@ from .dates import months_before
 from .keys import DISTRICTS, replaced
 from .models import AccessRequest, Change, Consent, Export, Institution, Key, Message, Office, Person, Term, Tracked, limited
 from .index import find
-from .text import fit, fold, matching, meant, words
+from .text import ACTS, fit, fold, matching, meant, stem, words
 
 
 def home(request):
@@ -498,6 +498,11 @@ KINDS = {  # each group's, by an app's label or as drawn
     'Springen zu': 'rooms', 'Studierende und Bewerbungen': 'students', 'In Ihrem Unterricht': 'students', 'Personen': PERSON, 'Ämter': OFFICE,
     'Lehrveranstaltungen': 'courses', 'Prüfungen': 'exams', 'Studiengänge': 'curriculum', 'Module': 'curriculum', 'Räume': DOOR, 'Termine': 'rooms', 'Postfach': MAIL,
 }
+FIRST = {  # the group a search names first, by any word meaning the same: 'piano exam', 'violin teacher' (synonyms.KINDS)
+    'lehrende': 'Personen', 'studierende': 'Studierende und Bewerbungen', 'bewerbung': 'Studierende und Bewerbungen', 'teilnehmende': 'In Ihrem Unterricht',
+    'lehrveranstaltung': 'Lehrveranstaltungen', 'unterricht': 'Lehrveranstaltungen', 'prüfung': 'Prüfungen', 'raum': 'Räume', 'modul': 'Module',
+    'studiengang': 'Studiengänge', 'amt': 'Ämter', 'termin': 'Termine',
+}
 
 
 STANDING = [  # whose study a search for a name shows first
@@ -551,7 +556,7 @@ def found(person, q, limit, quick=False):
               (feature('Personen und Ämter', reverse('directory'), 'lehrende kollegium mitarbeiter verzeichnis kontakt zuständig e-mail'), '', PERSON)]
     places += [(f, app.title(roles) or app.verbose_name, app.icon) for app in tile_apps() for f in app.features(person)]
     if mail := Institution.get().email:  # as the footer offers it
-        places.append((feature('Hilfe und Hinweise', f'mailto:{mail}', 'frage problem kontakt'), '', MAIL))
+        places.append((feature('Hilfe und Hinweise', f'mailto:{mail}', 'frage kontakt'), '', MAIL))
     if person.is_superuser:
         places.append((feature('Datenpflege', reverse('admin:index'), 'admin stammdaten verwaltung'), '', PAGE))
     # the best fit first, of those that fit the most words, at least half; an empty box lists everything the person can do
@@ -560,7 +565,7 @@ def found(person, q, limit, quick=False):
     most, best = scored[0][0] if scored else (0, 0)
     fits = [(f, app, icon) for (n, _), f, app, icon in scored if not meaning or n == most > 0 and n >= 0.5][:limit if q else None]
     groups.append(functions := ('Funktionen', [hit(f['title'], f['url'], app, icon) for f, app, icon in fits]))
-    weak = fits and (most < 1 or best < 3 * len(meaning))  # some words only, or bits of them, as a name holds: after the records
+    weak = fits and best < 3 * len(meaning)  # bits of words only, as a name holds them: after the records
     if len(q) < 2 or quick:
         return groups
     if roles & {'view_files', 'manage_students', 'view_applications', 'teacher'}:  # only the files and applications the person may open
@@ -637,6 +642,9 @@ def found(person, q, limit, quick=False):
     groups.append(('Postfach', [hit(m.subject, m.get_absolute_url(), date_format(m.created, 'j.n.Y')) for m in matching(person.messages.all(), q, 'subject', 'body')[:limit]]))
     if weak:
         groups.append(groups.pop(groups.index(functions)))
+    if not any(forms <= ACTS for _, forms in meaning):  # 'new piano course': the page that does it stays first
+        named = {label for _, forms in meaning for kind, label in FIRST.items() if stem(fold(kind)) in forms}
+        groups.sort(key=lambda group: group[0] not in named)
     return groups
 
 

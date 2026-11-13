@@ -11,7 +11,7 @@ from threading import Lock
 from django.db.models import Case, Value, When
 from django.db.models.signals import post_delete, post_save
 
-from .text import ACTS, EXACT, KIN, close, fold, wanted
+from .text import ACTS, EXACT, KIN, SORTS, STOPPED, close, fold, wanted
 
 FRESH = 60  # seconds an index is read again after
 HEAD = '^'  # before a field's beginning, kept as a word of its own: 'Klavier (Pflichtfach)' begins with 'klavier'
@@ -105,10 +105,11 @@ class Index:
 def find(queryset, query, *fields, names='', starts=False):
     """text.matching(), from memory: the rows of `queryset` that hold every word sought in one of the fields, best
     first (`_fit`), then in the queryset's order. A word a letter off only where nothing the person may see holds the
-    words as typed; words of doing ('create', 'book') find nothing in records, which have no verbs."""
+    words as typed; words of doing ('create', 'book') and of kinds ('teacher' in 'violin teacher') find nothing in
+    records, which hold neither (synonyms.KINDS)."""
     if not (sought := wanted(query, names)):
         return queryset.annotate(_fit=Value(0))
-    sought = [w for w in sought if not (w in KIN and KIN[w] <= ACTS)] or sought
+    sought = [w for w in sought if not (w in SORTS or w in STOPPED or w in KIN and KIN[w] <= ACTS)] or sought
     with MAKING:
         if (key := (queryset.model, fields)) not in INDEXES:
             INDEXES[key] = Index(*key)

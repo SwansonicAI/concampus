@@ -9,7 +9,7 @@ from django.db.backends.signals import connection_created
 from django.db.models import Func, Q, TextField
 from django.dispatch import receiver
 
-from .synonyms import ACTIONS, MUSIC, STOP, SYNONYMS
+from .synonyms import ACTIONS, KINDS, MUSIC, STOP, SYNONYMS
 
 
 SPELLED = (('ae', 'a'), ('oe', 'o'), ('ue', 'u'))
@@ -56,6 +56,7 @@ for line in ACTIONS + SYNONYMS + MUSIC:
     for word in (meaning := set(words(line))):
         KIN[word] = KIN.get(word, set()) | meaning
 ACTS, EXACT = set(words(' '.join(ACTIONS))), set(words(' '.join(MUSIC)))
+SORTS = set().union(*(KIN[word] for word in words(KINDS)))
 STOPPED = set(words(' '.join(STOP)))
 
 
@@ -71,8 +72,9 @@ def terms(query):
 
 
 def close(a, b):
-    """At most one letter apart: one wrong, missing, extra, or two swapped ('cousre')."""
-    if abs(len(a) - len(b)) > 1:
+    """At most one letter apart: one wrong, missing, extra, or two swapped ('cousre'); the first right, as typing
+    keeps it ('Kroll' is no 'Rollen')."""
+    if abs(len(a) - len(b)) > 1 or a[:1] != b[:1]:
         return False
     i = next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b)))
     return a[i + 1:] == b[i + 1:] or a[i + 1:] == b[i:] or a[i:] == b[i + 1:] or a[i:i + 2] == b[i:i + 2][::-1] and a[i + 2:] == b[i + 2:]
