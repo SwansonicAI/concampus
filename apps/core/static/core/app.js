@@ -9,7 +9,7 @@ function init(root) {
   root.querySelectorAll('.form div[id^="id_"]').forEach(list => (list.dataset.search || list.querySelectorAll('input[type=checkbox]').length > 8) && filterable(list));
   root.querySelectorAll('form:has(#id_modules):has(#id_staff)').forEach(suggest);
   root.querySelectorAll('.weekplan .week[data-first]').forEach(preview);
-  root.querySelectorAll('datalist[data-suggest]').forEach(suggest);
+  root.querySelectorAll('datalist[data-suggest]').forEach(lookup);
   root.querySelectorAll('.form select').forEach(select => (select.options.length > 60 || 'find' in select.dataset) && findable(select));
   root.querySelectorAll('select[data-leads]').forEach(lead);
   root.querySelectorAll('select[data-town]').forEach(placed);
@@ -193,7 +193,7 @@ function lineChart(chart) {
 // People found by name from three letters, a few at a time: who can be added is found, never listed in full.
 const people = async (url, q) => q.length < 3 ? [] : (await (await fetch(`${url}?q=${encodeURIComponent(q)}`)).json()).found;
 
-function suggest(list) {
+function lookup(list) {
   const input = document.querySelector(`[list="${list.id}"]`);
   let timer;
   input?.addEventListener('input', () => {
@@ -311,7 +311,8 @@ function lead(select) {
   for (const name of select.dataset.leads.split(' ')) {
     const list = select.form.querySelector(`#id_${name}`);
     const children = [...list.children];
-    const find = list.previousElementSibling?.matches('input.filter') && list.previousElementSibling;
+    const filter = list.previousElementSibling?.matches('input.filter') && list.previousElementSibling;
+    const find = list.tagName === 'SELECT' && filter;  // a checkbox list's filter box narrows whatever the group leaves
     const widen = list.dataset.widen && Object.assign(document.createElement('button'), {type: 'button', className: 'link', textContent: list.dataset.widen});
     if (widen) list.after(widen);
     const narrow = (all = false) => {
@@ -329,6 +330,7 @@ function lead(select) {
         const label = heading(child);
         return !group || label === undefined || label === group || child.querySelector('input:checked');
       }));
+      if (filter) filter.dispatchEvent(new Event('filter'));  // rows back in the list take the words typed
       if (list.tagName === 'SELECT') {  // a dropdown keeps its choice where it still can, else none
         list.value = kept;
         if (list.selectedIndex < 0) list.value = '';
