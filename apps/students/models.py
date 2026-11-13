@@ -197,6 +197,12 @@ class Study(Tracked, models.Model):
         """Fachsemester: credited prior terms plus registered terms so far, leave excluded."""
         return self.prior_terms + self.terms.filter(leave=False, withdrawn=False, term__start__lte=timezone.localdate()).count()
 
+    @classmethod
+    def semesters(cls, studies):
+        """{study pk: Fachsemester} of these studies, as `semester` counts it, in one query."""
+        counted = models.Count('terms', filter=models.Q(terms__leave=False, terms__withdrawn=False, terms__term__start__lte=timezone.localdate()))
+        return dict(cls.objects.filter(pk__in=[s.pk for s in studies]).annotate(n=models.F('prior_terms') + counted).values_list('pk', 'n'))
+
     @property
     def university_semester(self):
         """Hochschulsemester: every term the person has been registered here, leave included, plus semesters elsewhere."""

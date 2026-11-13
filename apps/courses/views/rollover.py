@@ -175,7 +175,7 @@ def take_over(request, target, pending):
             copy = Course.objects.create(
                 term=target, kind=c.kind, title=c.title, area=c.area, format=c.format, subject=c.subject, hours=c.hours, capacity=c.capacity,
                 allocation=c.allocation, grouping=c.grouping, description=c.description, rhythm=c.rhythm, origin=c,
-                opens=target.course_signup_start, deadline=target.course_signup_end,
+                in_moodle=c.in_moodle, copy_content=c.copy_content, opens=target.course_signup_start, deadline=target.course_signup_end,
             )
             copy.modules.set({m.pk for m in c.modules.all()} | earlier[c.title])
             copy.staff.set(c.staff.all())

@@ -22,7 +22,7 @@ from rooms.models import Booking
 from students.models import Study
 from .. import moodle, panel
 from ..forms import AddForm, CourseForm, DateForm, EnsembleForm, Lessons, PlanForm, TeachingForm
-from ..models import Area, Course, Format, Group, Participation, Signup
+from ..models import Area, Course, Format, Group, MoodleCourse, Participation, Signup
 from ..modules import credited
 from .assignments import propose
 from .common import TEACHING, admit, ahead, queued, seen, since, teaches
@@ -56,6 +56,7 @@ def catalogue(request):
             next_start=Subquery(upcoming.values('start')[:1]),
             next_room=Subquery(upcoming.values('room__name')[:1]),
             booked=Exists(Booking.objects.filter(course=OuterRef('pk'))),
+            bare=~Exists(Course.modules.through.objects.filter(course=OuterRef('pk'))),
         )
     )
     offered = courses
@@ -72,8 +73,10 @@ def catalogue(request):
         courses = courses.filter(format=form)
     if open_ := term.planning and request.GET.get('stand') == 'offen':  # what its teachers have yet to confirm
         courses = courses.filter(confirmed=None, cancelled=None).exclude(origin=None)
+    if bare := request.GET.get('stand') == 'unvollstaendig':  # made by an Institut: SWS and modules are the Dekanatsreferat's (tasks)
+        courses = courses.filter(Q(hours=None) | Q(bare=True), kind=Course.Kind.COURSE, cancelled=None)
     if q := request.GET.get('q', '').strip():
-        courses = matching(courses, q, 'title', 'staff__last_name', 'subject__name', 'area__name', 'description', 'modules__title', 'modules__code')  # also by the module's name in the Studienplan
+        courses = matching(courses, q, *SEARCHED)
     if node := Module.objects.filter(pk=request.GET.get('modul', '')).first() if request.GET.get('modul', '').isdigit() else None:  # from the Studienplan
         courses = courses.filter(pk__in=Course.objects.filter(modules__in=node.within()).values('pk'))
     settled = set().union(*(s.settled() for s in studies))
@@ -102,6 +105,10 @@ def catalogue(request):
         c.open_groups = sum(g.size < g.capacity for g in groups) if groups else None
         if groups:
             c.capacity, c.free = sum(g.capacity for g in groups), sum(max(g.capacity - g.size, 0) for g in groups)
+    elsewhere = 0  # what the search finds past the Studiengang and the modules already done, never hidden unsaid
+    if q:
+        beyond = matching(offered, q, *SEARCHED).exclude(pk__in=[c.pk for c in courses])
+        elsewhere = (beyond.exclude(kind=Course.Kind.LESSON) if studies else beyond).values('pk').distinct().count()
     return render(request, 'courses/catalogue.html', {
         'term': term,
         'terms': Term.shown(person).filter(courses__kind__in=TEACHING).distinct().order_by('-start').filter(**since(request.user)), 'open': open_,
@@ -115,8 +122,11 @@ def catalogue(request):
         'q': q,
         'office': 'manage_courses' in person.roles,
         'scoped': scoped, 'reach': reach, 'student': studies.exists(), 'done': done, 'mine': mine, 'asked': asked,
-        'running': running, 'joinable': joinable, 'node': node,
+        'running': running, 'joinable': joinable, 'node': node, 'bare': bare, 'elsewhere': elsewhere,
     })
+
+
+SEARCHED = ('title', 'staff__last_name', 'subject__name', 'area__name', 'description', 'modules__title', 'modules__code')  # also by the module's name in the Studienplan
 
 
 def over(course):
@@ -183,6 +193,10 @@ def course(request, pk):
     gaps = unmet([(p.study_id, p.module_id) for p in rows]) if staffed and course.kind == Course.Kind.COURSE else {}
     for p in rows:  # what the teachers see of a registration the plan would not have
         p.missing = gaps.get((p.study_id, p.module_id))
+    signups = list(course.signups.select_related('study__person', 'study__program', 'study__subject', 'module')) if staffed else []
+    semesters = Study.semesters([p.study for p in [*rows, *signups]]) if staffed else {}
+    for p in [*rows, *signups]:
+        p.semester = semesters.get(p.study_id)
     upcoming = course.bookings.filter(start__gte=timezone.now())
     if course.allocation == Course.Allocation.ENSEMBLE and staffed and not person.may('manage_courses', course):  # a coach: the course's own dates and their ensembles'
         upcoming = upcoming.filter(Q(ensemble=None) | Q(ensemble__coach=person))
@@ -223,7 +237,11 @@ def course(request, pk):
         'rows': rows if staffed else [],
         'own': own,
         'wished': wished,
-        'signups': course.signups.select_related('study__person', 'study__program', 'study__subject') if staffed else [],
+        'signups': signups,
+        'varied': len({p.module_id for p in [*rows, *signups]}) > 1,  # the module only where it tells them apart
+        'mirror': MoodleCourse.objects.filter(course=course).first() if staffed else None,
+        'refused': refused,
+        'results': staffed and over(course) or any(p.grade is not None or p.passed is not None or p.remark for p in rows),  # open once there is something to enter
         'count': (count := len({p.study_id for p in rows})), 'placed': count - (waiting := len(set(waitlist.values()))), 'waiting': waiting,
         'free': course.capacity - count + waiting if course.capacity is not None else None,
         'dropping': staffed and course.kind == Course.Kind.COURSE and course.allocation != Course.Allocation.ENSEMBLE,
@@ -286,7 +304,7 @@ def remove(request, pk):
     return redirect(f"{reverse('courses:catalogue')}?semester={course.term_id}")
 
 
-COPIED = ['kind', 'title', 'area', 'format', 'subject', 'rhythm', 'hours', 'capacity', 'allocation', 'grouping', 'opens', 'deadline', 'description']  # what „Duplizieren“ takes
+COPIED = ['kind', 'title', 'area', 'format', 'subject', 'rhythm', 'hours', 'capacity', 'allocation', 'grouping', 'opens', 'deadline', 'description', 'in_moodle']  # what „Duplizieren“ takes
 
 
 def edit(request, pk=None):

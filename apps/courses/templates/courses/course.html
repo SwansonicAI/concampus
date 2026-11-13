@@ -104,7 +104,26 @@
 </div>
 {% endif %}
 
-<div class="cols">
+{% if staffed and playing is None %}
+<section id="teilnehmende" style="margin-top: 0">
+  <div class="head">
+    <h2>Teilnehmende</h2>
+    {% if rows %}<div class="actions">
+      <button class="btn ghost small" form="auswahl" data-ticked="Nachricht an {n} Angekreuzte">Nachricht an alle {{ count }}</button>
+      {% if regrouping %}<select name="gruppe" form="auswahl" aria-label="In Gruppe">{% for g in groups %}<option value="{{ g.pk }}">Gruppe {{ g.number }}</option>{% endfor %}</select><button class="btn ghost small" form="auswahl" formaction="{% url 'courses:regroup' course.pk %}" data-ticked="{n} verschieben">Verschieben</button>{% endif %}
+      {% if dropping %}<button class="btn ghost small" form="auswahl" formaction="{% url 'courses:drop' course.pk %}" data-ticked="{n} austragen" data-confirm="Die Angekreuzten austragen? Sie erhalten eine Nachricht; wer ein Ergebnis hat, bleibt.">Austragen</button>{% endif %}
+      <a class="btn ghost small" href="{% url 'courses:roster' course.pk %}">Liste (CSV)</a>
+    </div>{% endif %}
+  </div>
+  <p class="lead">{% if groups %}{{ taken }} von {{ places }} Plätzen, in {{ groups|length }} Gruppen{% else %}{{ placed }}{% if course.capacity %} von {{ course.capacity }} Plätzen{% else %} angemeldet{% endif %}{% endif %}{% if waiting %} · {{ waiting }} auf der Warteliste{% endif %}{% if signups %} · <a href="#anfragen">{{ signups|length }} Anfrage{{ signups|length|pluralize:"n" }}</a>{% endif %}{% if mirror.absent %} · {{ mirror.absent|length }} ohne Moodle-Konto{% endif %}{% if taught and not office %} · Ihre {% if taught|length > 1 %}Gruppen{% else %}Gruppe{% endif %} {% for g in taught %}{{ g.number }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</p>
+  <form id="auswahl" method="post" action="{% url 'courses:write' course.pk %}">{% csrf_token %}</form>
+  <form id="austragen" method="post" action="{% url 'courses:drop' course.pk %}">{% csrf_token %}</form>
+  {% include "courses/_add.html" %}
+  {% include "courses/_people.html" %}
+</section>
+{% endif %}
+
+<div class="cols"{% if staffed and playing is None %} style="margin-top: 52px"{% endif %}>
   <div>
     <dl class="facts">
       <dt>Lehrende</dt><dd>{% for s in staff %}{% if forloop.counter == 6 %}<details><summary>{{ staff|length|add:"-5" }} weitere</summary>{% endif %}{% if s.email %}<a href="mailto:{{ s.email }}">{{ s }}</a>{% else %}{{ s }}{% endif %}{% if not forloop.last and forloop.counter != 5 %}<br>{% elif forloop.last and forloop.counter > 5 %}</details>{% endif %}{% empty %}–{% endfor %}</dd>
@@ -206,27 +225,6 @@
 </section>
 {% endif %}
 
-{% if signups %}
-<section id="anfragen">
-  <h2>Anfragen</h2>
-  <p class="lead">{{ signups|length }} offen{% if groups %} · {% if open_groups %}Plätze frei in {{ open_groups }} von {{ groups|length }} Gruppen{% else %}alle Gruppen voll{% endif %}{% elif course.capacity %} · {% if free > 0 %}noch {{ free }} von {{ course.capacity }} Plätzen frei{% else %}alle {{ course.capacity }} Plätze vergeben{% endif %}{% endif %}. Wer zugelassen oder abgesagt wird, erhält eine Nachricht.</p>
-  <table>
-    <thead><tr><th>Name</th><th>Studium</th><th>Nachricht</th><th>Angefragt</th><th></th></tr></thead>
-    <tbody>
-      {% for s in signups %}
-      <tr>
-        <td>{% if s.study_id in reachable %}<a href="{{ s.study.get_absolute_url }}">{{ s.study.person.name }}</a>{% else %}{{ s.study.person.name }}{% endif %}</td>
-        <td><small>{{ s.study.subject }} · {{ s.study.program.degree }} · {{ s.study.semester }}. FS</small></td>
-        <td><small>{{ s.note|linebreaksbr }}</small></td>
-        <td data-value="{{ s.created|date:'c' }}">{{ s.created|date:"j.n. H:i" }}</td>
-        <td class="num"><form method="post" action="{% url 'courses:choose' s.pk %}" class="actions">{% csrf_token %}{% if groups %}<select name="gruppe" aria-label="In Gruppe">{% for g in groups %}<option value="{{ g.pk }}">Gruppe {{ g.number }} ({{ g.size }}/{{ g.capacity }})</option>{% endfor %}</select>{% endif %}<button class="btn small" name="decision" value="yes"{% if course.capacity and free <= 0 %} data-confirm="Alle Plätze sind vergeben. {{ s.study.person.name }} trotzdem zulassen?"{% endif %}>Zulassen</button><button class="btn ghost small" name="decision" value="no" data-confirm="Anfrage von {{ s.study.person.name }} absagen? Die Person erhält die Absage als Nachricht.">Absagen</button></form></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
-{% endif %}
-
 {% if lessons %}
 <section>
   <h2>Unterrichtszeiten</h2>
@@ -271,22 +269,14 @@
   {% if playing %}<div class="actions" style="margin-top: 16px"><button class="btn" name="begleitung" value="1">Begleitung speichern</button></div>{% endif %}
   </form>
 </section>
-{% elif staffed %}
-<section id="teilnehmende">
-  <div class="head">
-    <h2>Teilnehmende</h2>
-    {% if rows %}<div class="actions">
-      <button class="btn ghost small" form="auswahl" data-ticked="Nachricht an {n} Angekreuzte">Nachricht an alle {{ count }}</button>
-      {% if regrouping %}<select name="gruppe" form="auswahl" aria-label="In Gruppe">{% for g in groups %}<option value="{{ g.pk }}">Gruppe {{ g.number }}</option>{% endfor %}</select><button class="btn ghost small" form="auswahl" formaction="{% url 'courses:regroup' course.pk %}" data-ticked="{n} verschieben">Verschieben</button>{% endif %}
-      {% if dropping %}<button class="btn ghost small" form="auswahl" formaction="{% url 'courses:drop' course.pk %}" data-ticked="{n} austragen" data-confirm="Die Angekreuzten austragen? Sie erhalten eine Nachricht; wer ein Ergebnis hat, bleibt.">Austragen</button>{% endif %}
-      <a class="btn ghost small" href="{% url 'courses:roster' course.pk %}">Liste herunterladen (CSV)</a>
-    </div>{% endif %}
-  </div>
-  {% if taught and not office %}<p class="lead">Ihre {% if taught|length > 1 %}Gruppen{% else %}Gruppe{% endif %} {% for g in taught %}{{ g.number }}{% if not forloop.last %}, {% endif %}{% endfor %}. Die übrigen Gruppen sehen ihre eigenen Lehrenden.</p>{% endif %}
-  <form id="auswahl" method="post" action="{% url 'courses:write' course.pk %}">{% csrf_token %}</form>
-  {% include "courses/_add.html" %}
-  {% include "courses/_sheet.html" with panel=False decide=True columns=None %}
-  {% if unmarked > 1 %}<form method="post" class="actions" style="margin-top: 8px">{% csrf_token %}<button class="btn ghost small" name="alle_bestanden" value="1" data-confirm="Alle {{ unmarked }} ohne Ergebnis als bestanden eintragen, aus allen Studiengängen und für alle Lehrenden der Lehrveranstaltung?">Alle {{ unmarked }} ohne Ergebnis: bestanden</button></form>{% endif %}
+{% elif staffed and rows %}
+<section id="ergebnisse">
+  <h2>Ergebnisse</h2>
+  <details class="tail"{% if results or refused %} open{% endif %}>
+    <summary>{% if results %}Noten und Bestanden{% else %}Noten und Bestanden eintragen, meist zum Ende der Lehrveranstaltung{% endif %}</summary>
+    {% include "courses/_sheet.html" with panel=False decide=True columns=None %}
+    {% if unmarked > 1 %}<form method="post" class="actions" style="margin-top: 8px">{% csrf_token %}<button class="btn ghost small" name="alle_bestanden" value="1" data-confirm="Alle {{ unmarked }} ohne Ergebnis als bestanden eintragen, aus allen Studiengängen und für alle Lehrenden der Lehrveranstaltung?">Alle {{ unmarked }} ohne Ergebnis: bestanden</button></form>{% endif %}
+  </details>
 </section>
 {% endif %}
 {% endblock %}

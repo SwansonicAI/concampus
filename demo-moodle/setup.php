@@ -88,10 +88,18 @@ foreach ([
 }
 my_reset_page_for_all_users(MY_PAGE_PRIVATE, 'my-index');
 
+// Who takes part is ConCampus's to say: teachers see their participants but neither enrol nor remove them, and new
+// courses have no self-enrolment; what a teacher sets up by hand in a course stays theirs.
+$teacher = $DB->get_field('role', 'id', ['shortname' => 'editingteacher']);
+foreach (['enrol/manual:enrol', 'enrol/manual:unenrol', 'enrol/manual:manage'] as $capability) {
+    unassign_capability($capability, $teacher, $system->id);
+}
+set_config('defaultenrol', 0, 'enrol_self');
+
 $functions = ['core_course_get_categories', 'core_course_create_categories', 'core_course_get_courses_by_field',
     'core_course_create_courses', 'core_course_update_courses', 'core_user_get_users_by_field', 'core_user_create_users',
     'enrol_manual_enrol_users', 'enrol_manual_unenrol_users', 'core_group_get_course_groups', 'core_group_create_groups',
-    'core_group_get_group_members', 'core_group_add_group_members', 'core_group_delete_group_members'];
+    'core_group_get_group_members', 'core_group_add_group_members', 'core_group_delete_group_members', 'core_course_import_course'];
 $manager = new webservice();
 if (!$service = $DB->get_record('external_services', ['shortname' => 'campus'])) {
     $service = $DB->get_record('external_services', ['id' => $manager->add_external_service((object) [

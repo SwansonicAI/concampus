@@ -1,29 +1,35 @@
 # Moodle
 
 ConCampus keeps the Hochschule's Moodle up to date (`courses/moodle.py`, compose service `moodlesync`): each minute the
-courses changed since (`manage.py moodle --changed`), on its first run each day all of them (`manage.py moodle`),
-which also enrols whoever has signed in to Moodle since. Off without `MOODLE_URL` and `MOODLE_TOKEN`. ConCampus is the
-record, Moodle follows.
+courses changed since (`manage.py moodle --changed`), on its first run each day all of them (`manage.py moodle`).
+`manage.py moodle --probe` only reads Moodle and tells what would be done, to try a Hochschule's Moodle before it is
+changed. Off without `MOODLE_URL` and `MOODLE_TOKEN`. ConCampus is the record, Moodle follows; nothing comes back.
 
 ## What goes over
 
-- **Courses**: each Lehrveranstaltung of a published semester not yet over, as a Moodle course: its title, the
-  semester's dates, ID number `campus-course-<id>`, by which ConCampus finds it again should its own link be lost. Its
-  summary is laid out as HfM's „Kursinfo“, which teachers there write by hand: who teaches, the weekly date and room,
-  the Lehrform, the places, the modules it counts for, the Anmeldeschluss, then the description. A course called off is
-  hidden, its people kept. ConCampus keeps a checksum of what it last sent (`MoodleCourse.state`), so that each minute only
-  what changed goes.
+- **Courses**: each Lehrveranstaltung marked „In Moodle“ (the course form; on unless unticked) of a published semester
+  not yet over, as a Moodle course: its title, the semester's dates, ID number `campus-course-<id>`, by which ConCampus
+  finds it again should its own link be lost. Its summary is laid out as HfM's „Kursinfo“, which teachers there write
+  by hand: who teaches, the weekly date and room, the Lehrform, the places, the modules it counts for, the
+  Anmeldeschluss, a link to its page in ConCampus, then the description. A course called off or unticked is hidden, its
+  people kept. ConCampus keeps a checksum of what it last sent (`MoodleCourse.state`), so that each minute only what
+  changed goes.
+- **Material**: a course taken over in the Semesterwechsel gets, once, when its Moodle course is made, the material of
+  the one it was taken over from (`core_course_import_course`, as Moodle's „Import“: sections, activities and files,
+  no people, no submissions), unless „Inhalte übernehmen“ is unticked.
 - **Groups**: a course taught in parallel groups gets a Moodle group for each (`Gruppe 2`, ID number
   `campus-group-<id>`), with its participants and teachers; whoever changes group in ConCampus changes there too.
   ConCampus takes out of a group only whom it enrolled.
 - **Categories**: semester (`Wintersemester 2026/27`), Fachgebiet, Lehrform, as HfM's Moodle has them; ConCampus's carry
   ID numbers `campus-…`, so that it finds them again. They go under `MOODLE_CATEGORY` (0: the top).
 - **People**: teachers with the role `MOODLE_TEACHER_ROLE` (3, Moodle's „Trainer:in“), participants with
-  `MOODLE_STUDENT_ROLE` (5, „Teilnehmer:in“), by manual enrolment. ConCampus finds them in Moodle by e-mail address and
-  makes no accounts: whoever has not signed in to Moodle yet is enrolled the night after they have (on the demo, see
-  below, ConCampus makes them). Whoever leaves a
-  course in ConCampus is taken out; ConCampus takes out only whom it put in (`MoodleCourse.people`), so what teachers set up
-  themselves, self-enrolment or guests, stays.
+  `MOODLE_STUDENT_ROLE` (5, „Teilnehmer:in“), by manual enrolment; whoever waits for a place once they have one.
+  ConCampus finds them in Moodle by their Hochschule login (Moodle's username, where Moodle signs in through the
+  Hochschule too), else by e-mail address, and makes no accounts: whoever has not signed in to Moodle yet
+  (`MoodleCourse.absent`, shown on the course page) is looked for each minute and enrolled once they have (on the demo,
+  see below, ConCampus makes them). Whoever leaves a course in ConCampus is taken out; ConCampus takes out only whom it
+  put in (`MoodleCourse.people`), so what teachers set up themselves, self-enrolment or guests, stays. Teachers enrol and
+  remove in ConCampus; in Moodle they had better not be able to (as on the demo), or the next run undoes it.
 
 ## In Moodle
 
@@ -32,9 +38,10 @@ record, Moodle follows.
    `core_course_get_categories`, `core_course_create_categories`, `core_course_get_courses_by_field`,
    `core_course_create_courses`, `core_course_update_courses`, `core_user_get_users_by_field`,
    `enrol_manual_enrol_users`, `enrol_manual_unenrol_users`, `core_group_get_course_groups`, `core_group_create_groups`,
-   `core_group_get_group_members`, `core_group_add_group_members`, `core_group_delete_group_members`; on the demo also
-   `core_user_create_users`.
-3. Manual enrolment on for new courses (Moodle's default).
+   `core_group_get_group_members`, `core_group_add_group_members`, `core_group_delete_group_members`,
+   `core_course_import_course`; on the demo also `core_user_create_users`.
+3. Manual enrolment on for new courses (Moodle's default), self-enrolment off; the role „Trainer:in“ without
+   `enrol/manual:enrol`, `enrol/manual:unenrol` and `enrol/manual:manage`.
 
 ## Checked
 
@@ -59,8 +66,8 @@ the web service token and good for a minute (`courses/moodle.py` `entry`, the pl
 `demo-moodle/concampus`). ConCampus's own sign-in stays as it is, so one browser can be an office in ConCampus and a
 student in Moodle. Signing out of Moodle goes back to the choice; the admin signs in at `/login/index.php?noredirect=1`.
 ConCampus's account `campus-sync` is a site administrator; in production a role with only the functions above.
-Whoever waits for a place is enrolled once they have one. A course's page in ConCampus, „Meine Lehre“ and „Meine
-Lehrveranstaltungen“ link to its Moodle course.
+Teachers there can neither enrol nor remove, and new courses have no self-enrolment (`setup.php`). A course's page in
+ConCampus, „Meine Lehre“ and „Meine Lehrveranstaltungen“ link to its Moodle course.
 
 Set up once, on the server:
 

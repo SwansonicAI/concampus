@@ -196,6 +196,11 @@ class CoursesConfig(Tile, AppConfig):
             upcoming = Term.upcoming()
             if upcoming and (count := person.within(missing(upcoming), 'roll_over').exclude(rhythm=Course.Rhythm.ONCE).count()):
                 found.append(task(f'Semesterwechsel: {plural(count, "Lehrveranstaltung", "Lehrveranstaltungen")} für {upcoming} übernehmen', reverse('courses:rollover'), upcoming.ready_by or upcoming.start))
+        if 'plan_teaching' in person.roles:  # what an Institut made: its SWS count in the Deputat, its modules let students find it
+            for t in Term.objects.filter(end__gte=timezone.localdate()).order_by('start'):
+                bare = t.courses.filter(Q(hours=None) | Q(modules=None), kind=Course.Kind.COURSE, cancelled=None)
+                if n := person.within(bare, 'plan_teaching').values('pk').distinct().count():
+                    found.append(task(f'{t}: {plural(n, "Lehrveranstaltung", "Lehrveranstaltungen")} ohne Module oder SWS', f"{reverse('courses:catalogue')}?semester={t.pk}&stand=unvollstaendig"))
         found += self.staffing(person, term)
         if 'publish_term' in person.roles and (upcoming := Term.upcoming()) and upcoming.planning and upcoming.replies_by and upcoming.courses.filter(kind__in=TEACHING).exclude(origin=None).exists():  # taken over and asked
             found.append(task(f'{upcoming} prüfen und veröffentlichen', reverse('courses:rollover'), upcoming.ready_by))

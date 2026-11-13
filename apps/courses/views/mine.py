@@ -2,7 +2,7 @@
 from copy import copy
 from collections import defaultdict
 
-from django.db.models import Count, OuterRef, Prefetch, prefetch_related_objects
+from django.db.models import Count, OuterRef, Prefetch, Q, Subquery, prefetch_related_objects
 from django.shortcuts import render
 from django.utils import timezone
 
@@ -99,7 +99,9 @@ def mine(request):
     if 'teacher' in person.roles:
         teaching = person.teaching.filter(term=term, kind__in=TEACHING)
         here = OuterRef('pk')
+        coming = Booking.objects.filter(Q(group=None) | Q(group__staff=person), course=here, start__gte=timezone.now()).order_by('start')  # of groups, one's own
         taught_here = list(coaching(teaching, person).annotate(
+            next_start=Subquery(coming.values('start')[:1]), next_room=Subquery(coming.values('room__name')[:1]),
             asked=counted(Signup.objects.filter(course=here), 'course'),
             mine=counted(Ensemble.members.through.objects.filter(ensemble__course=here, ensemble__coach=person), 'ensemble__course', 'study'),
             ingroups=counted(Participation.objects.filter(course=here, group__staff=person), 'course', 'study'),
@@ -109,6 +111,8 @@ def mine(request):
         there = moodle.addresses(taught_here)
         for c in taught_here:  # as the Deputat counts it: a lesson class by its students' minutes
             c.sws, c.moodle_at = None if c.cancelled else sws(c, c.coached), there.get(c.pk)
+            c.waiting = max(c.size - c.capacity, 0) if c.allocation == Course.Allocation.ORDER and c.capacity is not None else 0
+            c.placed = c.size - c.waiting
         assignment = person.assignments.filter(term=term, granted__isnull=False).select_related('rate').prefetch_related('courses').first()  # a proposal is the office's
         if assignment:  # its Bescheid, and once they count the hours held, to confirm
             assignment.so_far = (assignment.held if assignment.settled_on else held([assignment]).get(assignment.pk, 0)) if payable(assignment) else None

@@ -4,6 +4,7 @@ from datetime import timedelta
 from decimal import Decimal
 
 from django import forms
+from django.conf import settings
 from django.db.models import F, Max, Min, Q
 from django.utils import timezone
 from django.utils.html import format_html
@@ -251,7 +252,7 @@ class CourseForm(forms.ModelForm):
         model = Course
         fields = [
             'term', 'title', 'kind', 'area', 'format', 'subject', 'rhythm', 'staff', 'modules', 'hours', 'capacity', 'allocation', 'grouping', 'opens', 'deadline',
-            'description',
+            'description', 'in_moodle', 'copy_content',
         ]
         labels = {'staff': 'Lehrende'}
         localized_fields = ['hours', 'pass_mark']  # a decimal comma, in a text box
@@ -263,7 +264,7 @@ class CourseForm(forms.ModelForm):
 
     layout = [  # what it counts for right under its name: the Studienpläne suggest the rest
         (None, ['correction', 'term', 'title', 'modules', ('format', 'hours'), ('kind', 'allocation'), ('capacity', 'opens', 'deadline'), 'grouping']),
-        (None, ['staff', ('area', 'subject', 'rhythm'), 'description']),
+        (None, ['staff', ('area', 'subject', 'rhythm'), 'description', ('in_moodle', 'copy_content')]),
     ]
     planned = ('kind', 'format', 'hours', 'modules')  # what counts in the Deputat and the Studienpläne
     moves = False  # a course stays in its semester; an audition may move
@@ -293,11 +294,15 @@ class CourseForm(forms.ModelForm):
             self.fields['modules'].choices = labelled(modules)
             if 'format' in self.fields:
                 self.plans = studienplan(modules)
-        if 'kind' in self.fields:  # places and how they are given only where people share the dates
-            for name in ('allocation', 'capacity'):
-                self.fields[name].widget.attrs['data-for'] = 'kind:course'
+        if not settings.MOODLE['url']:
+            for name in ('in_moodle', 'copy_content'):
+                self.fields.pop(name, None)
+        if 'kind' in self.fields:  # places and how they are given, and Moodle, only where people share the dates
+            for name in ('allocation', 'capacity', 'in_moodle', 'copy_content'):
+                if name in self.fields:
+                    self.fields[name].widget.attrs['data-for'] = 'kind:course'
         elif self.instance.kind == Course.Kind.LESSON:  # one person each, in the teachers' class
-            for name in ('allocation', 'capacity', 'opens', 'deadline'):
+            for name in ('allocation', 'capacity', 'opens', 'deadline', 'in_moodle', 'copy_content'):
                 self.fields.pop(name, None)
         if 'allocation' in self.fields:  # registration dates only where people register
             for name in ('opens', 'deadline'):
@@ -347,7 +352,7 @@ class TeachingForm(CourseForm):
     those, its staff and its kind are for the office."""
 
     class Meta(CourseForm.Meta):
-        fields = ['capacity', 'allocation', 'opens', 'deadline', 'description']
+        fields = ['capacity', 'allocation', 'opens', 'deadline', 'description', 'in_moodle', 'copy_content']
 
 
 class ExamForm(CourseForm):

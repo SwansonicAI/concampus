@@ -386,11 +386,13 @@ class IntakeTest(Seeded):
 
 
 class FakeMoodle:
-    """Moodle's web services as far as ConCampus calls them, kept in memory; users for these e-mail addresses only."""
+    """Moodle's web services as far as ConCampus calls them, kept in memory; users for these e-mail addresses and these
+    usernames (Hochschule logins) only."""
 
-    def __init__(self, emails):
+    def __init__(self, emails, logins=()):
         self.users = {e.lower(): n for n, e in enumerate(emails, 100)}
-        self.categories, self.courses, self.enrolled = [], {}, set()
+        self.logins = {u: n for n, u in enumerate(logins, 500)}
+        self.categories, self.courses, self.enrolled, self.imported = [], {}, set(), []
         self.groups, self.members = {}, defaultdict(set)
 
     def __call__(self, function, **p):
@@ -411,7 +413,12 @@ class FakeMoodle:
                 self.courses[c['id']].update(c)
             return {'warnings': []}
         if function == 'core_user_get_users_by_field':
-            return [{'id': self.users[v], 'email': v} for v in p['values'] if v in self.users]
+            if p['field'] == 'username':
+                return [{'id': self.logins[v], 'username': v, 'email': f'{v}@moodle'} for v in p['values'] if v in self.logins]
+            return [{'id': self.users[v], 'email': v, 'username': v} for v in p['values'] if v in self.users]
+        if function == 'core_course_import_course':
+            self.imported.append((p['importfrom'], p['importto']))
+            return None
         if function == 'enrol_manual_enrol_users':
             self.enrolled |= {(e['courseid'], e['userid'], e['roleid']) for e in p['enrolments']}
             return None
@@ -471,3 +478,21 @@ class MoodleTest(Seeded):
         sync(moodle)
         self.assertEqual((len(moodle.courses), MoodleCourse.objects.get(course=course).moodle_id), (made, mine))
         self.assertEqual(flat({'courses': [{'fullname': 'X', 'visible': True}]}), {'courses[0][fullname]': 'X', 'courses[0][visible]': 1})
+
+    def test_moodle_finds_people_by_login_takes_in_newcomers_and_carries_material_over(self):
+        """Someone whose e-mail address differs in Moodle is found by their Hochschule login; someone without a Moodle
+        account is enrolled within the minute they have one; a course taken over gets the material of the one before."""
+        course = Course.objects.filter(kind='course', term=Term.current(), cancelled=None, staff__isnull=False).annotate(n=Count('participations')).filter(n__gte=2).first()
+        Course.objects.filter(pk=course.pk).update(capacity=None)  # nobody waiting
+        first, second = [p.study.person for p in course.participations.select_related('study__person')[:2]]
+        Person.objects.filter(pk=first.pk).update(sso_id='Erste@hfm-weimar.de')
+        moodle = FakeMoodle([t.email for t in course.staff.all()], logins=['erste@hfm-weimar.de'])
+        sync(moodle)
+        mine = MoodleCourse.objects.get(course=course)
+        self.assertEqual(((mine.moodle_id, 500, 5) in moodle.enrolled, first.pk in mine.absent, second.pk in mine.absent), (True, False, True))
+        moodle.users[second.email.lower()] = 999  # signs in to Moodle for the first time
+        sync(moodle, changed=True)
+        self.assertIn((mine.moodle_id, 999, 5), moodle.enrolled)
+        follow = Course.objects.create(term=course.term, kind='course', title='Folgekurs', origin=course)
+        sync(moodle, changed=True)
+        self.assertEqual(moodle.imported, [(mine.moodle_id, MoodleCourse.objects.get(course=follow).moodle_id)])

@@ -1,0 +1,40 @@
+<div class="scroll">
+<table>
+  <thead>
+    <tr>
+      <th><input type="checkbox" form="auswahl" aria-label="Alle ankreuzen" onchange="this.closest('table').querySelectorAll('[name=study]').forEach(box => box.checked = this.checked)"></th>
+      <th>Name</th>
+      <th>E-Mail</th>
+      {% if varied %}<th>Modul</th>{% endif %}
+      <th>Status</th>
+      {% if moodle.0 %}<th title="Im Moodle-Kurs">Moodle</th>{% endif %}
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for s in signups %}
+    <tr{% if forloop.first %} id="anfragen"{% endif %}>
+      <td></td>
+      <td class="mid">{% if s.study_id in reachable %}<a href="{{ s.study.get_absolute_url }}">{{ s.study.person.name }}</a>{% else %}{{ s.study.person.name }}{% endif %}<br><small class="muted">{{ s.study.subject }} · {{ s.study.program.degree }} · {{ s.semester }}. FS</small>{% if s.note %}<br><small class="muted">„{{ s.note }}“</small>{% endif %}</td>
+      <td class="mid">{% if s.study.person.email %}<small><a href="mailto:{{ s.study.person.email }}">{{ s.study.person.email }}</a></small>{% endif %}</td>
+      {% if varied %}<td class="mid muted">{% if s.module %}<small title="{{ s.module.title }}">{{ s.module.code|default:s.module.title }}</small>{% endif %}</td>{% endif %}
+      <td class="mid"><span class="badge wait" title="Angefragt am {{ s.created|date:'j.n. H:i' }}">angefragt</span></td>
+      {% if moodle.0 %}<td></td>{% endif %}
+      <td class="num mid"><form method="post" action="{% url 'courses:choose' s.pk %}" class="actions" style="flex-wrap: nowrap">{% csrf_token %}{% if groups %}<select name="gruppe" aria-label="In Gruppe">{% for g in groups %}<option value="{{ g.pk }}">Gruppe {{ g.number }} ({{ g.size }}/{{ g.capacity }})</option>{% endfor %}</select>{% endif %}<button class="btn small" name="decision" value="yes"{% if course.capacity and free <= 0 %} data-confirm="Alle Plätze sind vergeben. {{ s.study.person.name }} trotzdem zulassen?"{% endif %}>Zulassen</button><button class="btn ghost small" name="decision" value="no" data-confirm="Anfrage von {{ s.study.person.name }} absagen? Die Person erhält die Absage als Nachricht.">Absagen</button></form></td>
+    </tr>
+    {% endfor %}
+    {% for p in rows %}
+    <tr{% if p.waiting %} class="wait"{% endif %}>
+      <td class="mid"><input type="checkbox" form="auswahl" name="study" value="{{ p.study_id }}" aria-label="{{ p.study.person.name }}"></td>
+      <td class="mid">{% if p.study_id in reachable %}<a href="{{ p.study.get_absolute_url }}">{{ p.study.person.name }}</a>{% else %}{{ p.study.person.name }}{% endif %}<br><small class="muted">{{ p.study.subject }} · {{ p.study.program.degree }} · {{ p.semester }}. FS{% if p.group %} · Gruppe {{ p.group.number }}{% endif %}{% if course.kind == 'course' %}{% if not p.module %} · <b class="caution">ohne Anrechnung</b>{% elif p.missing %} · <b class="caution">vorher fehlt {% for m in p.missing %}{{ m.title }}{% if not forloop.last %}, {% endif %}{% endfor %}</b>{% endif %}{% endif %}{% if p.study.compensation %} · <b title="Nachteilsausgleich">NTA: {{ p.study.compensation }}</b>{% endif %}</small>{% if p.note %}<br><small class="muted">„{{ p.note }}“</small>{% endif %}</td>
+      <td class="mid">{% if p.study.person.email %}<small><a href="mailto:{{ p.study.person.email }}">{{ p.study.person.email }}</a></small>{% endif %}</td>
+      {% if varied %}<td class="mid muted">{% if p.module %}<small title="{{ p.module.title }} · {{ p.module.program.title }}">{{ p.module.code|default:p.module.title }}</small>{% endif %}</td>{% endif %}
+      <td class="mid">{% if p.passed %}<span class="badge yes">bestanden</span>{% elif p.passed is False %}<span class="badge no">nicht bestanden</span>{% elif p.waiting %}<span class="badge wait" title="Angemeldet am {{ p.created|date:'j.n. H:i' }}; rückt nach, sobald ein Platz frei wird">Warteliste {{ p.waiting }}</span>{% else %}<span class="badge open" title="Angemeldet am {{ p.created|date:'j.n. H:i' }}">angemeldet</span>{% endif %}</td>
+      {% if moodle.0 %}<td class="mid">{% if not p.waiting %}{% if p.study.person_id in mirror.absent %}<span class="check" title="Noch kein Moodle-Konto: kommt in den Kurs, sobald sich {{ p.study.person.first_name }} in Moodle angemeldet hat"></span>{% elif p.created > mirror.synced %}<span class="check wait" title="Kommt in wenigen Minuten in den Moodle-Kurs"></span>{% else %}<span class="check done" title="Im Moodle-Kurs"></span>{% endif %}{% endif %}</td>{% endif %}
+      <td class="num mid">{% if dropping and p.passed is None and p.grade is None and not p.remark %}<button class="link" form="austragen" name="study" value="{{ p.study_id }}" data-confirm="{{ p.study.person.name }} austragen? Die Person erhält eine Nachricht."><small>austragen</small></button>{% endif %}</td>
+    </tr>
+    {% empty %}{% if not signups %}<tr><td colspan="7" class="empty">Noch niemand. Wer sich anmeldet, erscheint hier.</td></tr>{% endif %}
+    {% endfor %}
+  </tbody>
+</table>
+</div>

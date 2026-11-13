@@ -136,6 +136,10 @@ class Course(Tracked, models.Model):
         'Turnus', max_length=8, choices=Rhythm, default=Rhythm.YEAR, help_text='Wann der Semesterwechsel sie wieder vorschlägt; Einmaliges nur auf Wunsch.',
     )
     origin = models.ForeignKey('self', models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Übernommen aus')
+    in_moodle = models.BooleanField('In Moodle', default=True, help_text='Ein Moodle-Kurs mit den Lehrenden und Teilnehmenden, etwa für Material.')
+    copy_content = models.BooleanField(
+        'Inhalte übernehmen', default=True, help_text='Der neue Moodle-Kurs erhält die Inhalte des Moodle-Kurses, aus dem diese Lehrveranstaltung übernommen ist.',
+    )
     confirmed = models.DateTimeField('Bestätigt', null=True, blank=True, help_text='Für ein Semester in Planung: von den Lehrenden oder dem Institut.')
     cancelled = models.DateTimeField('Entfällt seit', null=True, blank=True)
     cancel_reason = models.CharField('Grund', max_length=200, blank=True)
@@ -754,6 +758,7 @@ class MoodleCourse(models.Model):
     course = models.OneToOneField(Course, models.CASCADE, related_name='moodle', verbose_name='Lehrveranstaltung')
     moodle_id = models.PositiveIntegerField('Kurs in Moodle')
     people = models.JSONField('Von ConCampus eingeschrieben', default=list, help_text='Die Nutzer-IDs in Moodle.')
+    absent = models.JSONField('Ohne Moodle-Konto', default=list, help_text='Wer teilnimmt oder lehrt, aber noch kein Moodle-Konto hat: ihre IDs in ConCampus.')
     synced = models.DateTimeField('Abgeglichen', default=timezone.now)
     state = models.CharField('Stand', max_length=64, blank=True, help_text='Prüfsumme dessen, was ConCampus zuletzt geschickt hat.')
 
