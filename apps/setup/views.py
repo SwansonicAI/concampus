@@ -1,10 +1,11 @@
+from collections import defaultdict
 from datetime import timedelta
 
 from django import forms
 from django.contrib import messages
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import PermissionDenied
-from django.db.models import F, ProtectedError, RestrictedError
+from django.db.models import F, Prefetch, ProtectedError, RestrictedError
 from django.forms import modelform_factory
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
@@ -14,10 +15,10 @@ from django.utils.encoding import force_bytes
 from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_encode
 from django.views.decorators.http import require_POST
 
-from core.access import kept, needs, require
+from core.access import CAPABILITIES, CODENAMES, kept, needs, require
 from core.history import because
 from core.keys import Edition, Key, review
-from core.models import Export, Feedback, Grant, Membership, Person, SignIn, Text
+from core.models import Export, Feedback, Grant, Membership, Office, Person, SignIn, Text, limited
 from core.text import matching
 from core.texts import TEXTS, Values, basics, mail, wording
 from core.shortcuts import SHOWN
@@ -43,6 +44,21 @@ def approvals(request):
     return render(request, 'setup/approvals.html', {
         'grants': Grant.objects.select_related('office', 'by'), 'members': Membership.objects.filter(confirmed_by=None).select_related('person', 'office', 'by'),
     })
+
+
+@require('manage_accounts')
+def rights(request):
+    """Who may do what: each right with the offices that hold it, how far, and who is in them, for good or until a day."""
+    offices = Office.objects.prefetch_related(
+        'permissions', 'institutes', 'programs', Prefetch('user_set', Person.objects.order_by('last_name')),
+        Prefetch('memberships', Membership.objects.exclude(confirmed_by=None).filter(until__gte=timezone.localdate()).select_related('person'), to_attr='standing_in'),
+    )
+    holding = defaultdict(list)
+    for o in offices:
+        o.limit = limited(o)
+        for p in o.permissions.all():
+            holding[p.codename].append(o)
+    return render(request, 'setup/rights.html', {'areas': [(area, [(label, holding[c]) for c, label in group]) for area, group in CAPABILITIES]})
 
 
 @require('manage_accounts')
@@ -79,6 +95,8 @@ def usable(person):
 def places(person):
     """(section, title, url, count) of everything under Einstellungen the person keeps up."""
     found = [(e.section, e.title, reverse('setup:list', args=[e.key]), e.objects(person).count()) for e in usable(person)]
+    if 'manage_accounts' in person.roles:
+        found.append(('Verwaltung', 'Rechte im Überblick', reverse('setup:rights'), len(CODENAMES)))
     if 'manage_institution' in person.roles:
         found.append(('Verwaltung', 'Texte', reverse('setup:texts'), len(TEXTS)))
     if person.roles & {'manage_institution', 'manage_students'}:

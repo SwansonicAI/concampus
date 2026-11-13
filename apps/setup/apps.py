@@ -26,6 +26,8 @@ class SetupConfig(Tile, AppConfig):
         from .views import usable
 
         found = [feature(e.title, reverse('setup:list', args=[e.key]), f'einstellungen pflegen anlegen {e.words}') for e in usable(person)]
+        if 'manage_accounts' in person.roles:
+            found.append(feature('Rechte im Überblick', reverse('setup:rights'), 'wer darf was berechtigungen rollen ämter zugriff'))
         if 'manage_institution' in person.roles:
             found.append(feature('Texte', reverse('setup:texts'), 'einstellungen bescheide nachrichten briefe vorlagen formulierung rechtsbehelfsbelehrung'))
         return found

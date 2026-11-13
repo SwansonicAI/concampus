@@ -511,8 +511,7 @@ class Person(Tracked, AbstractUser):
         if self.is_superuser:
             return dict.fromkeys(CODENAMES)
         reach = {}
-        held = models.Q(user=self) | models.Q(memberships__person=self, memberships__confirmed_by__isnull=False, memberships__until__gte=timezone.localdate())
-        for office in Office.objects.filter(held).distinct().prefetch_related('permissions', 'institutes', 'programs'):
+        for office in self.offices().prefetch_related('permissions', 'institutes', 'programs'):
             institutes, programs = {i.pk for i in office.institutes.all()}, {p.pk for p in office.programs.all()}
             for capability in (p.codename for p in office.permissions.all() if p.codename in CODENAMES):
                 if not (institutes or programs) or reach.get(capability, ()) is None:
@@ -522,6 +521,11 @@ class Person(Tracked, AbstractUser):
                     held[0].update(institutes)
                     held[1].update(programs)
         return reach
+
+    def offices(self):
+        """The offices the person holds: for good, or until a day once confirmed."""
+        held = models.Q(user=self) | models.Q(memberships__person=self, memberships__confirmed_by__isnull=False, memberships__until__gte=timezone.localdate())
+        return Office.objects.filter(held).distinct()
 
     def everywhere(self, capability):
         return capability in self.reach and self.reach[capability] is None
@@ -599,6 +603,12 @@ class Office(Tracked, Group):
     def remit(self):
         """Whom the office acts for, as its list shows it."""
         return ', '.join(map(str, [*self.institutes.all(), *self.programs.all()])) or 'ganze Hochschule'
+
+    @property
+    def rights(self):
+        """Its rights by area, in the order of core.access.CAPABILITIES: [(area, [label])]."""
+        held = {p.codename for p in self.permissions.all()}
+        return [(area, labels) for area, group in CAPABILITIES if (labels := [label for codename, label in group if codename in held])]
 
     @classmethod
     def holding(cls, capability, program=None, remit=False, linked=False, institute=None):

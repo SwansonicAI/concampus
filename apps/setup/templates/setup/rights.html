@@ -1,0 +1,23 @@
+{% extends base %}
+{% block title %}Rechte im Überblick{% endblock %}
+{% block content %}
+<p class="eyebrow"><a href="{% url 'setup:index' %}">Einstellungen</a></p>
+<h1>Rechte im Überblick</h1>
+<p class="lead">Welches Amt welches Recht hat und wer darin ist. Die Rechte eines Amts ändern Sie unter <a href="{% url 'setup:list' 'aemter' %}">Ämter und Rechte</a>, wer zu einem Amt gehört, unter <a href="{% url 'setup:list' 'konten' %}">Konten</a>. Was Studierende und Lehrende ohne Amt dürfen, ergibt sich aus ihrem Studium und ihrer Lehre.</p>
+{% for area, rights in areas %}
+<section>
+  <h2>{{ area }}</h2>
+  <table data-panel>
+    <thead><tr><th>Recht</th><th>Ämter</th></tr></thead>
+    <tbody>
+      {% for label, offices in rights %}
+      <tr>
+        <td>{{ label }}</td>
+        <td>{% for o in offices %}<a href="{% url 'setup:edit' 'aemter' o.pk %}">{{ o.name }}</a>{{ o.limit }}<br><small class="muted">{% for p in o.user_set.all %}{{ p }}{% if not forloop.last %}, {% endif %}{% endfor %}{% for m in o.standing_in %}{% if o.user_set.all or not forloop.first %}, {% endif %}{{ m.person }} bis {{ m.until|date:"j.n.Y" }}{% endfor %}{% if not o.user_set.all and not o.standing_in %}noch niemand{% endif %}</small>{% if not forloop.last %}<br>{% endif %}{% empty %}<span class="muted">noch kein Amt</span>{% endfor %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endfor %}
+{% endblock %}

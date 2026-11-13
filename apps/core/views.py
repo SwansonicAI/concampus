@@ -95,9 +95,14 @@ def account(request):
         messages.success(request, 'Kontaktdaten gespeichert.')
         return redirect('account')
     staff = not person.roles & {'student', 'applicant', 'alumni'}  # employees: their personnel file is HR's
+    offices = list(person.offices().prefetch_related('permissions', 'institutes', 'programs'))  # what one may do, to ask for more where it falls short
+    until = dict(person.memberships.exclude(confirmed_by=None).exclude(office__user=person).filter(until__gte=timezone.localdate()).values_list('office', 'until'))
+    for o in offices:
+        o.until = until.get(o.pk)
     return render(request, 'core/account.html', {
         'form': form, 'email_form': email, 'staff': staff, 'office': 'die Personalabteilung' if staff else Office.holding('manage_students', linked=True),
         'consents': person.consents.all(), 'sign_ins': person.sign_ins.all()[:5],
+        'offices': offices, 'accounts': offices and Office.holding('manage_accounts', linked=True),
     })
 
 
