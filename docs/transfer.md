@@ -40,7 +40,8 @@ Einstellungen › Verzeichnisse). Empty fields may be left out. Each section is 
 | Institut, Hauptfach | `name` |
 | Studiengang | `[degree, name, version]` |
 | Module | its `code` (Kürzel), else its titles from the top of the plan down, joined by „ › “; where two share them, give them a Kürzel |
-| Person | `matriculation`, else `username`; without `username` the Matrikelnummer becomes it |
+| Person | `matriculation`, `personnel_number` or `username`, the first that finds them; without `username` the Matrikelnummer becomes it |
+| Lehrverpflichtung | person and `term` |
 | Studium | person, Studiengang, `subject` and `start_term` |
 | Teacher of a study | `username` |
 
@@ -55,14 +56,30 @@ The model fields of the same name; their labels and choices are under Einstellun
 | `subjects` | `name`, `english`, `field`, `institute` |
 | `programs` | `name`, `degree`, `version`, `semesters`, `postgraduate`, `attempts`, `rounding`, `mean_rounding`, `honours`, `thesis_weeks`, `level`, `qualification`, `english`, `outcomes`, `exam`, `kind`, `field`, `exam_office`, `subjects`, `modules` |
 | `modules` | `code`, `title`, `credits`, `semester`, `exam`, `final`, `weight`, `description`, `waived` (Hauptfächer), `modules` (below it) |
-| `people` | `username`, `first_name`, `last_name`, `email`, `is_active`, `title`, `given_names`, `birth_name`, `gender`, `birth_date`, `birth_place`, `nationality`, `second_nationality`, `address`, `phone`, `private_email`, `home`, `home_town`, `residence`, `residence_town`, `entrance`, `entrance_date`, `entrance_region`, `entrance_town`, `first_university`, `first_term`, `external_terms`, `degree_university`, `degree_exam`, `degree_field`, `degree_date`, `degree_grade`, `vocational`, `internship`, `insurer`, `insurance`, `insurance_confirmed`, `insurer_number`, `insurance_arrears`, `electronic`, `entrance_checked`, `matriculation`, `sso_id`, `hold`, `employment`, `obligation`, `institute`, `studies` |
+| `people` | `username`, `first_name`, `last_name`, `email`, `is_active`, `title`, `given_names`, `birth_name`, `gender`, `birth_date`, `birth_place`, `nationality`, `second_nationality`, `address`, `phone`, `private_email`, `home`, `home_town`, `residence`, `residence_town`, `entrance`, `entrance_date`, `entrance_region`, `entrance_town`, `first_university`, `first_term`, `external_terms`, `degree_university`, `degree_exam`, `degree_field`, `degree_date`, `degree_grade`, `vocational`, `internship`, `insurer`, `insurance`, `insurance_confirmed`, `insurer_number`, `insurance_arrears`, `electronic`, `entrance_checked`, `matriculation`, `sso_id`, `hold`, `personnel_number`, `employment`, `institute`, `studies`, `obligations` |
 | `studies` | `program`, `subject`, `start_term`, `teacher`, `focus`, `advised` (modules), `status`, `since`, `issued`, `grade`, `prior_terms`, `exit_reason`, `structured`, `employed`, `cumulative`, `compensation`, `terms`, `results` |
 | `terms` of a study | `term`, `leave`, `leave_reason`, `paid`, `amount`, `withdrawn`, `reference` |
 | `results` | `module`, `term`, `on`, `grade`, `passed`, `remark`, `note` |
+| `obligations` of a person | `term`, `hours` (LVS), `basis` |
 
 A result comes in as an exam of its semester, released and told on its day (`on`); a second one in the same module and
 semester as a second date. Passwords never travel: people loaded sign in through the Hochschule's login or set a
 password by e-mail.
+
+## Teachers from the personnel system
+
+Whoever takes teachers on (`manage_staff`) loads them under Einstellungen › Lehrende › „Aus CSV laden“, as a personnel
+system such as MACH exports them (`core/transfer.py`, `staff()`): a line each, separated by semicolons, under the
+headings `Personalnummer`, `Titel`, `Vorname`, `Nachname`, `E-Mail`, `Benutzername`, `Institut`, `Beschäftigung`,
+`Lehrverpflichtung`, `Grundlage`, in any order and any of them left out; „Vorlage“ gives a file with the headings.
+`Beschäftigung` as its label („Professur“, „Lehrauftrag“ …) or key; the Lehrverpflichtung, with a decimal comma or
+point, for the semester being planned, else the current one; a Lehrauftrag's SWS are agreed in the Lehrauftrag instead.
+
+A person is found by Personalnummer, then E-Mail, then username, and keeps all the file leaves out; someone new gets
+their address's local part as username and signs in through the Hochschule's login, whose first sign-in finds them by
+e-mail. The file is read first: each line shows as new, changed (with what) or unchanged, a fault with its line, and
+nothing is kept until it is loaded, all or nothing. An office for some Institute loads only their teachers. Nobody
+missing from the file is let go: leaving is ticked by hand.
 
 ## A complete copy
 
@@ -74,7 +91,7 @@ Unlike the document above it is not for loading into another ConCampus, but for 
 
 ## Not carried by the document
 
-Offices and rights, courses and room bookings, documents and messages, the Verlauf, applications' auditions, the
+Offices and rights, courses and room bookings, Lehraufträge, documents and messages, the Verlauf, applications' auditions, the
 reports with the health insurers (`docs/smv.md`), stays abroad (`docs/mobility.md`): each is set up anew or stays where
 it was. A thesis comes in as a result, without its topic.
 

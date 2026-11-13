@@ -91,7 +91,8 @@ no Matrikelnummer (`students/views.py`, `suggest()`). Who already knows a Matrik
 A teacher's Beschäftigung (`Person.employment`), Lehrverpflichtung per semester (`courses.Obligation`) and Lehrauftrag
 (`courses.Assignment`) show only on the Deputat, in a course's form beside its teachers, and on the Lehraufträge: to the
 teacher for their own, and to `view_teaching_load` within the Institute its office is limited to (`courses/views/load.py`,
-`courses/views/assignments.py`). `manage_staff` takes teachers on and enters their Lehrverpflichtung with its Grundlage;
+`courses/views/assignments.py`). `manage_staff` takes teachers on, by hand or from the personnel system's export, and
+enters their Lehrverpflichtung with its Grundlage; their Personalnummer shows only to it and in the payroll's CSV;
 `grant_assignments` grants Lehraufträge and confirms the hours held. Ermäßigungen (`courses.Reduction`) show the same
 way, their reason as the function (Dekan:in, Studiendekan:in …); `manage_teaching_load` enters them. A reduction for a
 Schwerbehinderung is health data (Art. 9): its reason shows only as that, never the condition; the course form shows the

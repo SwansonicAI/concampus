@@ -8,6 +8,7 @@ urlpatterns = [
     path('texte/', views.texts, name='texts'),
     path('texte/<str:key>/', views.text, name='text'),
     path('konten/<int:pk>/einladung/', views.invite, name='invite'),
+    path('lehrende/laden/', views.staff_import, name='staff_import'),
     path('freigaben/', views.approvals, name='approvals'),
     path('rechte/', views.rights, name='rights'),
     path('exporte/', views.exports, name='exports'),

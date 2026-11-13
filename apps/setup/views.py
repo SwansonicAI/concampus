@@ -7,7 +7,7 @@ from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import PermissionDenied
 from django.db.models import F, ProtectedError, RestrictedError
 from django.forms import modelform_factory
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -18,7 +18,8 @@ from django.views.decorators.http import require_POST
 from core.access import CAPABILITIES, CODENAMES, EVERYWHERE, LOCK, SENSITIVE, SHORT, Refused, areas, kept, require
 from core.history import because
 from core.keys import Edition, Key, review
-from core.models import AccessRequest, Export, Feedback, Grant, Membership, Office, Person, SignIn, Text, limited, waiting
+from core import transfer
+from core.models import AccessRequest, Export, Feedback, Grant, Institute, Membership, Office, Person, SignIn, Term, Text, limited, waiting
 from core.text import matching
 from core.texts import TEXTS, Values, basics, mail, wording
 from core.shortcuts import SHOWN
@@ -288,6 +289,42 @@ def text(request, key):
     return render(request, 'setup/text.html', {
         'spec': spec, 'form': form, 'record': record, 'own': bool(record.pk),
         'preview': [part.format_map(sample) for part in wording(key)],  # as saved: the form may hold a broken draft
+    })
+
+
+@require('manage_staff')
+def staff_import(request):
+    """Teachers from a personnel system's export (core.transfer.staff): read first, each line shown new, changed with
+    what, or at fault; loaded once confirmed, all or nothing. A Lehrverpflichtung goes to the semester being planned, else
+    this one; an office for some Institute loads only theirs. ?vorlage: the headings to start a file from."""
+    term = Term.upcoming() or Term.current()
+    if 'vorlage' in request.GET:
+        response = HttpResponse('\N{BYTE ORDER MARK}' + ';'.join(transfer.COLUMNS) + '\r\n', content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="lehrende.csv"'
+        return response
+    if term and request.method == 'POST' and (upload := request.FILES.get('datei')):
+        request.session['lehrende'] = transfer.staff(upload.read().decode('utf-8-sig', errors='replace'), term)
+        return redirect('setup:staff_import')
+    document = request.session.get('lehrende')
+    if not (document and term):
+        return redirect('setup:list', 'lehrende')
+    ours = None if request.user.everywhere('manage_staff') else set(Institute.objects.filter(pk__in=request.user.ours('manage_staff')).values_list('name', flat=True))
+    faults = [f'Zeile {i + 2}: Institut {p.get("institute") or "fehlt"}, außerhalb Ihres Amtes' for i, p in enumerate(document['people']) if ours is not None and p.get('institute') not in ours]
+    faults += transfer.check(document)
+    if request.method == 'POST' and 'laden' in request.POST and not faults:
+        counts = transfer.load(document)
+        del request.session['lehrende']
+        messages.success(request, 'Geladen: ' + ', '.join(f'{n} {what}' for what, n in counts.items()) + '.')
+        return redirect('setup:list', 'lehrende')
+    kinds = dict(Person.Employment.choices)
+    rows = [
+        {'line': i + 2, 'p': p, 'person': person, 'changed': changed, 'kind': kinds.get(p.get('employment'), p.get('employment', '')),
+         'hours': next((o['hours'] for o in p.get('obligations', [])), ''), 'faults': [f.split(': ', 1)[1] for f in faults if f.startswith(f'Zeile {i + 2}:')]}
+        for i, (p, person, changed) in enumerate(transfer.changes(document))
+    ]
+    return render(request, 'setup/staff_import.html', {
+        'term': term, 'rows': rows, 'faults': faults, 'new': sum(1 for r in rows if not r['person'] and not r['faults']),
+        'changed': sum(1 for r in rows if r['person'] and r['changed'] and not r['faults']), 'same': sum(1 for r in rows if r['person'] and not r['changed'] and not r['faults']),
     })
 
 

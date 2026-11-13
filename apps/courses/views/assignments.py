@@ -160,14 +160,14 @@ def export(request):
     rows = request.user.within(term.assignments.filter(status=Assignment.Status.GRANTED), 'grant_assignments').select_related('person__institute', 'settled_by').prefetch_related('courses')
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = f'attachment; filename="lehrauftraege-{term.pk}.csv"'
-    response.write('﻿')
+    response.write('\N{BYTE ORDER MARK}')
     writer = csv.writer(response, delimiter=';')
-    writer.writerow(['Nachname', 'Vorname', 'Institut', 'Lehrveranstaltungen', 'Vereinbart (SWS)', 'Erteilt am', 'Gehalten (LVS)', 'Von der Person bestätigt', 'Bestätigt von', 'Bestätigt am'])
+    writer.writerow(['Personalnummer', 'Nachname', 'Vorname', 'Institut', 'Lehrveranstaltungen', 'Vereinbart (SWS)', 'Erteilt am', 'Gehalten (LVS)', 'Von der Person bestätigt', 'Bestätigt von', 'Bestätigt am'])
     rows = list(rows.order_by('person__last_name', 'person__first_name'))
     Export.log(request.user, f'Lehraufträge {term}', len(rows))
     for a in rows:
         writer.writerow([
-            a.person.last_name, a.person.first_name, a.person.institute or '', ', '.join(sorted(c.title for c in a.courses.all())), number_format(a.hours),
+            a.person.personnel_number, a.person.last_name, a.person.first_name, a.person.institute or '', ', '.join(sorted(c.title for c in a.courses.all())), number_format(a.hours),
             f'{a.granted:%d.%m.%Y}' if a.granted else '', '' if a.held is None else number_format(a.held),
             f'{timezone.localtime(a.affirmed):%d.%m.%Y}' if a.affirmed else '', a.settled_by or '', f'{a.settled_on:%d.%m.%Y}' if a.settled_on else '',
         ])

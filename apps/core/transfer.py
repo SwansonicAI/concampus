@@ -3,10 +3,14 @@ Studienplan, and people with their studies, semesters and results. Records are n
 Matrikelnummer, a Semester's name, a Studiengang's Abschluss, name and PO-Version, a module's Kürzel or its place in the
 plan, never by database ids, so that a former system maps onto it. Loading updates what is there and adds what is not;
 it removes nothing, and loads all or nothing."""
+import csv
+import io
 import json
+import re
 import shutil
 import zipfile
 from datetime import datetime, time
+from decimal import Decimal, InvalidOperation
 
 from django.apps import apps
 from django.core.exceptions import ValidationError
@@ -14,7 +18,7 @@ from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models, transaction
 from django.utils import timezone
 
-from courses.models import Course, Participation
+from courses.models import Course, Obligation, Participation
 from curriculum.models import Module, Program, Subject
 from students.models import Study, StudyTerm
 from . import history
@@ -22,6 +26,7 @@ from .models import Institute, Person, Term
 
 FORMAT = 'campus/1'
 SKIPPED = {'id', 'password', 'last_login', 'is_superuser', 'is_staff', 'date_joined'}  # never travel
+KEYS = ('matriculation', 'personnel_number', 'username')  # what finds a person, the first that does
 
 
 def own(model):
@@ -87,6 +92,9 @@ def dump(people=None, programs=None):
     terms = {}
     for t in StudyTerm.objects.filter(study__in=studies).select_related('term').order_by('term__start'):
         terms.setdefault(t.study_id, []).append(record(t, term=t.term.name))
+    owed = {}
+    for o in Obligation.objects.filter(person__in=people).select_related('term').order_by('term__start'):
+        owed.setdefault(o.person_id, []).append(record(o, term=o.term.name))
     per_person = {}
     for s in studies:
         key = keys[s.program_id]
@@ -101,7 +109,7 @@ def dump(people=None, programs=None):
         'institutes': [record(i) for i in Institute.objects.all()],
         'subjects': [record(s, institute=s.institute and s.institute.name) for s in Subject.objects.select_related('institute')],
         'programs': plans,
-        'people': [record(p, institute=p.institute and p.institute.name, studies=per_person.get(p.pk, [])) for p in people],
+        'people': [record(p, institute=p.institute and p.institute.name, studies=per_person.get(p.pk, []), obligations=owed.get(p.pk, [])) for p in people],
     }
 
 
@@ -187,6 +195,9 @@ class Loader:
             for i, (person, p) in enumerate(zip(found, people)):  # once everyone is in, as a teacher may come later
                 for j, s in enumerate(p.get('studies', []) if person else []):
                     self.study(person, s, f'people[{i}].studies[{j}]')
+                for j, o in enumerate(p.get('obligations', []) if person else []):
+                    if term := self.named(Term, f'people[{i}].obligations[{j}]', name=o.get('term')):
+                        self.keep(Obligation.objects.filter(person=person, term=term).first() or Obligation(person=person, term=term), f'people[{i}].obligations[{j}]', **o)
             if self.faults:
                 raise ValueError('\n'.join(self.faults))
         return self.counts
@@ -210,8 +221,7 @@ class Loader:
         place(p.get('modules', []), None, '', where)
 
     def person(self, p, where):
-        key = {'matriculation': p['matriculation']} if p.get('matriculation') else {'username': p.get('username')}
-        person = Person.objects.filter(**key).first() or Person()
+        person = find(p) or Person()
         if person.pk is None:
             person.set_unusable_password()  # signs in through the Hochschule's login, or sets a password by e-mail
         person.institute = p.get('institute') and self.named(Institute, where, name=p['institute'])
@@ -260,3 +270,72 @@ class Loader:
 def load(document):
     """Load a document; returns {what: how many}, or raises ValueError naming each record that does not fit."""
     return Loader(document).run()
+
+
+def find(p):
+    """The person a document's record is about: by Matrikelnummer, Personalnummer or username, the first that finds them."""
+    return next((found for key in KEYS if p.get(key) and (found := Person.objects.filter(**{key: p[key]}).first())), None)
+
+
+COLUMNS = {  # a personnel system's export, by its German headings or the field names
+    'Personalnummer': 'personnel_number', 'Titel': 'title', 'Vorname': 'first_name', 'Nachname': 'last_name', 'E-Mail': 'email',
+    'Benutzername': 'username', 'Institut': 'institute', 'Beschäftigung': 'employment', 'Lehrverpflichtung': 'hours', 'Grundlage': 'basis',
+}
+
+
+def staff(text, term):
+    """A document of the teachers in a CSV as a personnel system exports it (docs/transfer.md), a line each under COLUMNS'
+    headings; a Lehrverpflichtung for `term`. Whoever is there already, by Personalnummer, E-Mail or username, keeps what
+    the file leaves out; someone new is named by their address's local part."""
+    first = text.split('\n', 1)[0]
+    reader = csv.DictReader(io.StringIO(text), delimiter=';' if ';' in first else '\t' if '\t' in first else ',')
+    kinds = {label.lower(): key for key, label in Person.Employment.choices} | {key: key for key in Person.Employment.values}
+    people = []
+    for row in reader:
+        found = {COLUMNS.get(k.strip(), k.strip()): (v or '').strip() for k, v in row.items() if k}
+        found = {k: v for k, v in found.items() if v and k in set(COLUMNS.values())}
+        hours, basis = found.pop('hours', ''), found.pop('basis', '')
+        if 'employment' in found:
+            found['employment'] = kinds.get(found['employment'].lower(), found['employment'])
+        known = next((p for key, lookup in (('personnel_number', 'personnel_number'), ('email', 'email__iexact'), ('username', 'username'))
+                      if found.get(key) and (p := Person.objects.filter(**{lookup: found[key]}).first())), None)
+        base = record(known, institute=known.institute and known.institute.name) if known else {'username': found.get('email', '').split('@')[0] or found.get('personnel_number')}
+        person = base | found
+        if hours and person.get('employment') != Person.Employment.LEHRAUFTRAG:  # a Lehrauftrag's SWS are agreed in it
+            person['obligations'] = [compact({'term': term.name, 'hours': hours.replace(',', '.'), 'basis': basis})]
+        people.append(person)
+    return json.loads(json.dumps({'format': FORMAT, 'people': people}, cls=DjangoJSONEncoder))  # as a session keeps it
+
+
+def changes(document):
+    """[(record, person or None, changed)] for each person of a document: whom it would change, None for someone new, and
+    the labels of the fields it changes."""
+    found = []
+    for p in document.get('people', []):
+        person = find(p)
+        if person is None:
+            found.append((p, None, []))
+            continue
+        was = json.loads(json.dumps(record(person, institute=person.institute and person.institute.name), cls=DjangoJSONEncoder))
+        changed = [str(Person._meta.get_field(k).verbose_name) for k, v in p.items() if k not in ('obligations', 'studies') and was.get(k) != v]
+        for o in p.get('obligations', []):
+            hours = Obligation.objects.filter(person=person, term__name=o['term']).values_list('hours', flat=True).first()
+            try:
+                same = hours == Decimal(o['hours'])  # „18“ is 18.0
+            except InvalidOperation:
+                same = False  # check() names it
+            if not same:
+                changed.append('Lehrverpflichtung')
+        found.append((p, person, changed))
+    return found
+
+
+def check(document):
+    """The faults loading a document would meet, by line of the file it came from; nothing is kept."""
+    with transaction.atomic():
+        try:
+            load(document)
+        except ValueError as error:
+            return [re.sub(r'^people\[(\d+)\][^:]*', lambda m: f'Zeile {int(m[1]) + 2}', line) for line in str(error).split('\n')]
+        transaction.set_rollback(True)
+    return []

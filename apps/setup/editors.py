@@ -16,6 +16,7 @@ from django.utils.html import format_html, format_html_join
 from core.access import CAPABILITIES, EVERYWHERE
 from core.dates import DayField, PastField, months_before
 from core.models import Grant, Holiday, Institute, Institution, Membership, Office, Person, Term, waiting
+from core.transfer import COLUMNS
 from courses.forms import AuditionForm
 from courses.models import Appointment, Area, Course, Format, Obligation, Reduction, ReductionGround
 from curriculum.forms import ModuleForm, ProgramForm
@@ -48,6 +49,8 @@ class Editor:
     invite: bool = False  # people: its form offers to send a sign-in invitation
     carry: str = ''  # URL name of a step that takes the last period's entries over, offered above the list
     carried: str = 'Aus dem Vorjahr übernehmen'  # its button
+    upload: str = ''  # URL name of a page loading the list from a CSV file, offered above it
+    upload_columns: str = ''  # that file's headings
 
     def __post_init__(self):
         if self.sections:
@@ -212,10 +215,10 @@ class StaffForm(AccountForm):
     and whether they still teach here. Offices and rights stay with the accounts (manage_accounts)."""
 
     class Meta(AccountForm.Meta):
-        fields = ['title', 'first_name', 'last_name', 'email', 'username', 'institute', 'employment', 'is_active']
+        fields = ['title', 'first_name', 'last_name', 'personnel_number', 'email', 'username', 'institute', 'employment', 'is_active']
         help_texts = AccountForm.Meta.help_texts | {'is_active': 'Ohne Haken ausgeschieden: kein Zugriff mehr; ab dem Tag läuft die Frist für die Daten früherer Beschäftigter.'}
 
-    layout = [(None, [('title', 'first_name', 'last_name'), ('email', 'username'), ('institute', 'employment'), 'is_active'])]
+    layout = [(None, [('title', 'first_name', 'last_name'), ('personnel_number', 'email', 'username'), ('institute', 'employment'), 'is_active'])]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -439,9 +442,11 @@ EDITORS = {e.key: e for e in [
     ),
     Editor(
         'lehrende', Person, 'Lehrende', 'manage_staff', 'Studium und Lehre', form=StaffForm,
-        columns=[('Name', 'name'), ('Institut', 'institute'), ('Beschäftigung', 'employment'), ('E-Mail', 'email'), ('Aktiv', 'is_active')],
-        search=['first_name', 'last_name', 'email', 'username'], words='personal personalabteilung einstellen neue lehrkraft dozent lehrbeauftragte professur mitarbeit ausscheiden einladung', invite=True,
+        columns=[('Name', 'name'), ('Personalnummer', 'personnel_number'), ('Institut', 'institute'), ('Beschäftigung', 'employment'), ('E-Mail', 'email'), ('Aktiv', 'is_active')],
+        search=['first_name', 'last_name', 'email', 'username', 'personnel_number'],
+        words='personal personalabteilung personalnummer einstellen neue lehrkraft dozent lehrbeauftragte professur mitarbeit ausscheiden einladung import mach csv', invite=True,
         queryset=lambda: Person.teachers().select_related('institute'), deletable=False,
+        upload='setup:staff_import', upload_columns=', '.join(COLUMNS),
     ),
     Editor(
         'lehrverpflichtungen', Obligation, 'Lehrverpflichtungen', 'manage_staff', 'Studium und Lehre', form=ObligationForm,

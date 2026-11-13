@@ -412,6 +412,9 @@ class Person(Tracked, AbstractUser):
         MITARBEIT = 'mitarbeit', 'Künstlerische oder wissenschaftliche Mitarbeit'
         LEHRAUFTRAG = 'lehrauftrag', 'Lehrauftrag'
 
+    personnel_number = models.CharField(
+        'Personalnummer', max_length=20, blank=True, help_text='Wie im Personalsystem: so finden ein Import und die Vergütung die Person.',
+    )
     employment = models.CharField(
         'Beschäftigung', max_length=12, choices=Employment, blank=True,
         help_text='Für Lehrende. Die Lehrverpflichtung je Semester unter Lehrverpflichtungen, ein Lehrauftrag unter Lehraufträge (courses).',
@@ -421,6 +424,7 @@ class Person(Tracked, AbstractUser):
         ordering = ['last_name', 'first_name']
         verbose_name = 'Person'
         verbose_name_plural = 'Personen'
+        constraints = [models.UniqueConstraint(fields=['personnel_number'], condition=~models.Q(personnel_number=''), name='unique_personnel_number')]
 
     def __str__(self):
         return ' '.join(filter(None, [self.title, self.first_name, self.last_name])) or self.username

@@ -3,6 +3,7 @@ import json
 import re
 import tempfile
 from datetime import date, timedelta
+from decimal import Decimal
 from io import BytesIO
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -29,7 +30,7 @@ from .apps import tile_apps, tiles
 from .history import acting, restore
 from .models import Change, Institute, Institution, Message, Office, Person, Term, Text
 from .testing import Empty, Seeded, flashes
-from .transfer import FORMAT, dump, everything, load
+from .transfer import FORMAT, check, dump, everything, load, staff
 from .texts import TEXTS, render, send
 from .views import demo_people, found, ticket
 
@@ -521,6 +522,22 @@ class TransferTest(Seeded):
         with self.assertRaisesMessage(ValueError, 'people[0].studies[0]: Studiengang X, Y, 1 gibt es nicht'):
             load({'format': FORMAT, 'people': [wrong]})
         self.assertFalse(Person.objects.filter(last_name='Geändert').exists())
+
+    def test_teachers_from_the_personnel_system_keep_what_the_file_leaves_out(self):
+        """An export's line found by e-mail gives a teacher their Personalnummer and Lehrverpflichtung and keeps the rest;
+        nothing is kept until it is loaded, and a line at fault is named."""
+        prof, term = Person.objects.filter(title='Prof.', institute__isnull=False).first(), Term.upcoming()
+        text = (
+            'Personalnummer;E-Mail;Nachname;Vorname;Institut;Beschäftigung;Lehrverpflichtung\n'
+            f'4711;{prof.email};{prof.last_name};{prof.first_name};{prof.institute};Professur;16,5\n;neu@example.org;Neu;Nina;Kein Institut;Lehrauftrag;\n'
+        )
+        document = staff(text, term)
+        self.assertEqual(check(document), ['Zeile 3: Institut Kein Institut gibt es nicht'])
+        self.assertEqual(Person.objects.get(pk=prof.pk).personnel_number, '')
+        document['people'].pop()
+        load(document)
+        prof.refresh_from_db()
+        self.assertEqual((prof.personnel_number, prof.obligations.get(term=term).hours, prof.title), ('4711', Decimal('16.5'), 'Prof.'))
 
     def test_a_complete_copy_holds_every_table_but_no_password(self):
         """For a change of provider: every table, with what each field is, and no password."""

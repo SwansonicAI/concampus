@@ -1,0 +1,28 @@
+{% extends base %}
+{% block title %}Lehrende laden{% endblock %}
+{% block content %}
+<p class="eyebrow"><a href="{% url 'setup:index' %}">Einstellungen</a> › <a href="{% url 'setup:list' 'lehrende' %}">Lehrende</a></p>
+<h1>Lehrende laden</h1>
+<p class="lead">{% if new %}<span class="badge yes">{{ new }} neu</span> {% endif %}{% if changed %}<span class="badge open">{{ changed }} geändert</span> {% endif %}{% if same %}<span class="badge">{{ same }} unverändert</span> {% endif %}{% if faults %}<span class="badge no">{{ faults|length }} Fehler</span>{% endif %} · Lehrverpflichtungen für das {{ term }}. Noch ist nichts gespeichert.</p>
+<table>
+  <thead><tr><th class="num">Zeile</th><th>Name</th><th>Personalnummer</th><th>Institut</th><th>Beschäftigung</th><th class="num">LVS</th><th>Stand</th></tr></thead>
+  <tbody>
+    {% for r in rows %}
+    <tr>
+      <td class="num muted">{{ r.line }}</td>
+      <td><b>{{ r.p.last_name }}, {{ r.p.first_name }}</b>{% if r.p.email %}<br><small class="muted">{{ r.p.email }}</small>{% endif %}</td>
+      <td>{{ r.p.personnel_number|default:"–" }}</td>
+      <td>{{ r.p.institute|default:"–" }}</td>
+      <td>{{ r.kind|default:"–" }}</td>
+      <td class="num">{{ r.hours|default:"–" }}</td>
+      <td>{% if r.faults %}<span class="badge no" title="{{ r.faults|join:' · ' }}">Fehler</span><br><small class="fail">{{ r.faults.0 }}</small>{% elif not r.person %}<span class="badge yes">neu</span>{% elif r.changed %}<span class="badge open" title="{{ r.changed|join:', ' }}">geändert</span><br><small class="muted">{{ r.changed|join:", " }}</small>{% else %}<span class="badge">unverändert</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<div class="actions" style="margin-top: 24px">
+  {% if not faults %}<form method="post">{% csrf_token %}<button class="btn" name="laden" value="1">{{ rows|length }} Zeilen laden</button></form>{% endif %}
+  <form method="post" enctype="multipart/form-data" class="inline">{% csrf_token %}<input type="file" name="datei" accept=".csv,text/csv" required aria-label="CSV-Datei"><button class="btn ghost">{% if faults %}Berichtigte Datei prüfen{% else %}Andere Datei{% endif %}</button></form>
+  <a class="btn ghost" href="{% url 'setup:list' 'lehrende' %}">Abbrechen</a>
+</div>
+{% endblock %}
