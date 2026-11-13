@@ -270,7 +270,7 @@ def group(request, pk, number=None):
                 return redirect(f"{reverse('courses:group', args=[course.pk])}?wie={group.number}")
             return redirect(f'{course.get_absolute_url()}#gruppen')
     return render(request, 'courses/form.html', {
-        'form': form, 'course': course, 'menu': 'courses/_nav.html', 'back': course.get_absolute_url(), 'group': group, 'another': True,
+        'form': form, 'course': course,'back': course.get_absolute_url(), 'group': group, 'another': True,
         'part': f'Gruppe {group.number}' if group else 'Neue Gruppe',
         'week': week_of(course, groups, before=before), 'groups': groups, 'before': before,
         'note': 'Bucht den Raum jede Woche bis zum Ende der Unterrichtszeit, ohne die unterrichtsfreien Tage, nur wenn Raum und Lehrende an allen Terminen frei sind. Jede Gruppe zählt im Deputat ihrer Lehrenden.',

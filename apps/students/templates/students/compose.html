@@ -1,6 +1,5 @@
 {% extends base %}
 {% block title %}Nachricht{% endblock %}
-{% block subnav %}{% include menu|default:"students/_nav.html" %}{% endblock %}
 {% block content %}
 {% if course %}<p class="eyebrow"><a href="{{ course.get_absolute_url }}">{{ course.title }}</a></p>{% endif %}
 <h1>Nachricht an {{ people|length }} Person{{ people|length|pluralize:"en" }}</h1>

@@ -122,7 +122,7 @@ def write(request, pk):
         messages.success(request, f'Nachricht an {plural(len(people), "Person", "Personen")} gesendet.')
         return redirect(course)
     return render(request, 'students/compose.html', {
-        'form': form, 'people': people, 'studies': studies, 'back': course.get_absolute_url(), 'sender': request.user, 'course': course, 'menu': 'courses/_nav.html',
+        'form': form, 'people': people, 'studies': studies, 'back': course.get_absolute_url(), 'sender': request.user, 'course': course,
     })
 
 

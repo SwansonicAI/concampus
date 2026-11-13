@@ -1,6 +1,5 @@
 {% extends base %}
 {% block title %}{% if course.pk %}{{ course.title }}{% else %}{{ heading }}{% endif %}{% endblock %}
-{% block subnav %}{% include menu %}{% endblock %}
 {% block content %}
 <h1>{% if course.pk %}{{ course.title }}{% else %}{{ heading }}{% endif %}</h1>
 {% if course.pk %}<p class="lead">{% if part %}{{ part }} · {% endif %}{{ course.term }}</p>{% endif %}

@@ -42,7 +42,7 @@ def thesis(request, pk):
         messages.success(request, 'Abschlussarbeit angemeldet. Bescheid versandt.')
         return redirect(course)
     return render(request, 'courses/form.html', {
-        'form': form, 'course': course, 'menu': 'exams/_nav.html', 'heading': f'Abschlussarbeit {study.person}', 'back': study.get_absolute_url(),
+        'form': form, 'course': course,'heading': f'Abschlussarbeit {study.person}', 'back': study.get_absolute_url(),
     })
 
 

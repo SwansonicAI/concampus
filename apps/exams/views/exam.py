@@ -227,7 +227,7 @@ def edit(request, pk=None):
                          + (f' {plural(len(resits), "Person", "Personen")} zur Wiederholung automatisch angemeldet.' if resits else ''))
         return redirect(course)
     back = course.get_absolute_url() if pk else reverse('exams:index')
-    return render(request, 'courses/form.html', {'form': form, 'course': course, 'menu': 'exams/_nav.html', 'heading': 'Neue Prüfung', 'back': back})
+    return render(request, 'courses/form.html', {'form': form, 'course': course,'heading': 'Neue Prüfung', 'back': back})
 
 
 def protocol(request, pk):

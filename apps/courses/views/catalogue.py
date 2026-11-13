@@ -318,7 +318,7 @@ def edit(request, pk=None):
             return redirect(saved)
     back = course.get_absolute_url() if pk else reverse('courses:catalogue')
     return render(request, 'courses/form.html', {
-        'form': form, 'course': course, 'menu': 'courses/_nav.html', 'heading': f'Kopie von {source.title}' if source else 'Neue Veranstaltung', 'back': back, 'twin': twin,
+        'form': form, 'course': course,'heading': f'Kopie von {source.title}' if source else 'Neue Veranstaltung', 'back': back, 'twin': twin,
         'joining': twin and [p.pk for p in form.cleaned_data.get('staff', ())],
         'note': None if office and planning else format_html(
             '{} trägt {} ein: sie zählen im Deputat und in den Studienplänen.', 'Umfang (SWS), Lehrform und Module' if office else 'Umfang (SWS), Lehrende, Module und Lehrform',
