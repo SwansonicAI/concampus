@@ -309,8 +309,8 @@ def booking(request, pk=None):
         messages.success(request, f'Buchung gespeichert. {free or ""}'.strip())
         if way := next((b for b in around(booking.person, booking.start, booking.end, exclude=booking.pk) if b.room.building != booking.room.building), None):
             messages.warning(request, f'Zwischen {way.label} in {way.room.building} und dieser Buchung bleiben keine {rules.walk_minutes} Minuten für den Weg.')
-        return redirect(f"{reverse('rooms:index')}?tag={timezone.localtime(booking.start):%Y-%m-%d}")
-    series = Booking.objects.filter(series=booking.series).count() if booking.series else 0
+        return redirect(f"{reverse('rooms:index')}?{urlencode({'tag': f'{timezone.localtime(booking.start):%Y-%m-%d}', 'raeume': f'haus:{booking.room.building}'})}")  # where it shows
+    series =Booking.objects.filter(series=booking.series).count() if booking.series else 0
     on = timezone.localtime(form.instance.start).date() if form.instance.start else start.date() if start else timezone.localdate()  # the day the quota is for
     told = None  # a date others come to can be called off and they hear of it
     if booking.pk and (booking.course_id or booking.participants.exists()):
@@ -485,7 +485,8 @@ def answer(request, pk):
         texts.send('raumanfrage_bestaetigt', booking.person, reverse('rooms:booking', args=[booking.pk]), raum=booking.room, termin=when, buchung=booking.label)
         messages.success(request, f'{booking.room} für {booking.person} bestätigt.')
     else:
-        texts.send('raumanfrage_abgesagt', booking.person, reverse('rooms:index'), raum=booking.room, termin=when, buchung=booking.label, grund=request.POST.get('note', '').strip() or '–')
+        reason = request.POST.get('note', '').strip()[:300] or ('Der Raum ist zu der Zeit schon belegt.' if booking.clashes().exists() else '')
+        texts.send('raumanfrage_abgesagt', booking.person, reverse('rooms:index'), raum=booking.room, termin=when, buchung=booking.label, grund=reason)
         booking.delete()
         messages.success(request, f'Anfrage von {booking.person} abgesagt.')
     return redirect('rooms:requests')

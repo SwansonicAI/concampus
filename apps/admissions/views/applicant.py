@@ -7,7 +7,7 @@ from django.contrib.auth.decorators import login_not_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Q
-from django.http import FileResponse, Http404
+from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -17,7 +17,7 @@ from django.views.decorators.http import require_POST
 from core import texts
 from core.forms import again, sent
 from core.models import Consent, Institution, Office, Term
-from core.shortcuts import ics
+from core.shortcuts import ics, ranged
 from courses.models import Course, Participation
 from students.models import Document, DocumentType, Study, StudyTerm
 from ..auditions import after, held
@@ -258,7 +258,7 @@ def document(request, pk):
     if not d.file or not d.file.storage.exists(d.file.name):  # never uploaded, or lost from the storage
         raise Http404
     suffix = Path(d.file.name).suffix.lower()  # of the file stored, checked at upload; a title may be cut short
-    response = FileResponse(d.file.open('rb'), as_attachment=suffix not in SHOWN, filename=Path(d.title).stem + suffix)
+    response = ranged(request, d.file.open('rb'), as_attachment=suffix not in SHOWN, filename=Path(d.title).stem + suffix)
     response['Content-Security-Policy'] = 'sandbox'  # whatever it holds never runs as part of ConCampus
     return response
 

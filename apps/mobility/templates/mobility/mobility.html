@@ -13,6 +13,7 @@
   <dt>Abkommen</dt><dd>{% if mobility.agreement %}{{ mobility.agreement.years }}{% if mobility.agreement.language %} · empfohlen {{ mobility.agreement.language }}{% endif %}{% else %}–{% endif %}</dd>
 </dl>
 
+<section>
 <h2>Learning Agreement</h2>
 <p class="muted">Was {% if own %}Sie{% else %}die oder der Studierende{% endif %} dort belegt (A) und wofür es hier zählt (B). Wird eine Zeile geändert, nachdem unterschrieben ist, wird neu unterschrieben{% if mobility.changes %}; bisher {{ mobility.changes }} Änderung{{ mobility.changes|pluralize:"en" }}{% endif %}.</p>
 
@@ -45,7 +46,7 @@
     </tr>
     {% empty %}<tr><td colspan="4" class="empty">Noch kein Modul.</td></tr>
     {% endfor %}
-    {% if home %}<tr><td><b>Zusammen</b></td><td class="num"><b>{{ credits.1 }}</b></td></tr>{% endif %}
+    {% if home %}<tr><td><b>Zusammen</b></td><td class="num"><b>{{ credits.1 }}</b>{% if abroad and credits.1 != credits.0 %} <small class="caution" title="Was dort belegt ist, zählt hier nicht ganz">von {{ credits.0 }}</small>{% endif %}</td>{% if recognising %}<td></td>{% endif %}{% if editing %}<td></td>{% endif %}</tr>{% endif %}
   </tbody>
 </table>
 {% if editing %}{% with form=adding.B %}
@@ -59,8 +60,9 @@
   <dt>Studierende:r</dt>
   <dd>{% if mobility.signed_student %}unterschrieben am {{ mobility.signed_student|date:"j.n.Y" }}{% elif own and editing and abroad and home %}<form method="post" class="inline">{% csrf_token %}<button class="btn small" name="unterschreiben" value="1" data-confirm="Learning Agreement unterschreiben? Danach prüft es die Hochschule.">Unterschreiben</button></form>{% else %}<span class="muted">noch nicht{% if own and editing %}: erst beide Tabellen ausfüllen{% endif %}</span>{% endif %}</dd>
   <dt>Hochschule</dt>
-  <dd>{% if mobility.signed_here %}genehmigt am {{ mobility.signed_here|date:"j.n.Y" }} von {{ mobility.signed_here_by|default:"–" }}{% elif office and mobility.signed_student %}<form method="post" class="inline">{% csrf_token %}<button class="btn small" name="genehmigen" value="1">Genehmigen</button></form>{% else %}<span class="muted">noch nicht</span>{% endif %}</dd>
+  <dd>{% if mobility.signed_here %}genehmigt am {{ mobility.signed_here|date:"j.n.Y" }} von {{ mobility.signed_here_by|default:"–" }}{% elif office and mobility.signed_student %}<form method="post" class="inline">{% csrf_token %}<button class="btn small" name="genehmigen" value="1" data-confirm="Learning Agreement für die Hochschule genehmigen?">Genehmigen</button></form>{% else %}<span class="muted">noch nicht</span>{% endif %}</dd>
   <dt>Partnerhochschule</dt>
   <dd>{% if mobility.signed_partner %}genehmigt am {{ mobility.signed_partner|date:"j.n.Y" }}{% elif office and mobility.signed_here %}<form method="post" class="inline">{% csrf_token %}<label>Genehmigt am<input name="am" data-day autocomplete="off" size="11" required></label><button class="btn ghost small" name="partner" value="1">Vermerken</button></form><small class="muted">Über Erasmus Without Paper kommt sie künftig von selbst.</small>{% else %}<span class="muted">noch nicht</span>{% endif %}</dd>
 </dl>
+</section>
 {% endblock %}

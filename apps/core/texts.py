@@ -58,9 +58,9 @@ TEXTS = {
         STUDY + ('grund', 'zum'),
     ),
     'schwerpunkt_eingetragen': Spec(
-        BESCHEID, 'Schwerpunkt eingetragen', 'Bescheid über den Schwerpunkt',
-        'Für Ihr Studium im Studiengang {studiengang}, Hauptfach {hauptfach}, ist als Schwerpunkt {schwerpunkt} eingetragen. Grund: {grund}.',
-        STUDY + ('schwerpunkt', 'grund'),
+        BESCHEID, 'Schwerpunkt eingetragen', 'Bescheid zur Wahl im Studium: {schwerpunkt}',
+        'Für Ihr Studium im Studiengang {studiengang}, Hauptfach {hauptfach}, ist als {wahl} eingetragen: {schwerpunkt}. Grund: {grund}.',
+        STUDY + ('wahl', 'schwerpunkt', 'grund'),
     ),
     'fachwechsel': Spec(
         BESCHEID, 'Fachwechsel', 'Bescheid über den Fachwechsel',
@@ -193,10 +193,10 @@ TEXTS = {
         ('beitrag', 'frist'),
     ),
     'schwerpunkt': Spec(
-        NACHRICHT, 'Schwerpunkt gewählt', 'Schwerpunkt: {schwerpunkt}',
-        'Sie haben im Studiengang {studiengang} den Schwerpunkt {schwerpunkt} gewählt.\n\n{inhalt}\n\n'
+        NACHRICHT, 'Schwerpunkt gewählt', '{wahl}: {schwerpunkt}',
+        'Ihre Wahl im Studiengang {studiengang}, {wahl}: {schwerpunkt}.\n\n{inhalt}\n\n'
         'Belegen Sie die Lehrveranstaltungen dazu in den genannten Semestern. Ändern lässt sich die Wahl {aendern}.',
-        ('studiengang', 'schwerpunkt', 'inhalt', 'aendern'),
+        ('studiengang', 'wahl', 'schwerpunkt', 'inhalt', 'aendern'),
     ),
     'semesterplanung': Spec(
         NACHRICHT, 'Planung des nächsten Semesters', 'Planung {semester}: bitte bis zum {frist} bestätigen',

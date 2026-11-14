@@ -72,7 +72,7 @@ def register(request, pk):
         if refused := join(course, study, module, group, reason):
             messages.error(request, refused)
         else:
-            messages.success(request, f'Sie sind angemeldet, in Gruppe {group.number}.{besides}' if group else f'Sie sind angemeldet. Ihre Gruppe teilt das Institut zu; Sie erfahren sie per Nachricht.{besides}')
+            messages.success(request, f'Angemeldet: {course.title}, Gruppe {group.number}.{besides}' if group else f'Angemeldet: {course.title}. Ihre Gruppe teilt das Institut zu; Sie erfahren sie per Nachricht.{besides}')
     elif course.participations.filter(study__person=request.user).exists():
         messages.error(request, 'Sie sind bereits angemeldet.')
     else:
@@ -80,9 +80,9 @@ def register(request, pk):
         if place := course.waitlist().get(participation.pk):
             if created:
                 texts.send('warteliste', request.user, course.get_absolute_url(), veranstaltung=course.title, semester=course.term, platz=place)
-            messages.success(request, f'Sie stehen auf Platz {place} der Warteliste. Wird ein Platz frei, rücken Sie nach und erhalten eine Nachricht.{besides}')
+            messages.success(request, f'{course.title}: Sie stehen auf Platz {place} der Warteliste. Wird ein Platz frei, rücken Sie nach und erhalten eine Nachricht.{besides}')
         else:
-            messages.success(request, f'Sie sind angemeldet.{besides}')
+            messages.success(request, f'Angemeldet: {course.title}.{besides}')
     return back(request, course)
 
 

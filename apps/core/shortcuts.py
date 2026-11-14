@@ -1,9 +1,10 @@
-"""Responses many apps' views give: a confirmation before Bescheide go out, a page for work that needs a semester, a calendar."""
+"""Responses many apps' views give: a confirmation before Bescheide go out, a page for work that needs a semester, a calendar,
+a file a player may ask for in parts."""
 import csv
 import re
 from datetime import UTC
 
-from django.http import HttpResponse
+from django.http import FileResponse, HttpResponse
 from django.shortcuts import render
 from django.utils import timezone
 
@@ -11,6 +12,7 @@ from .models import Institution
 
 SHOWN = 300  # rows a long list shows; filters narrow it, exports have all
 FORMULA, NUMBER = ('=', '+', '-', '@', '\t', '\r'), re.compile(r'-?[\d.,]+')  # what Excel takes for a formula; a number
+RANGE = re.compile(r'bytes=(\d+)-(\d*)')  # one span of a file, as players ask for it
 
 
 def preview(request, title, groups, send, back, notes=()):
@@ -39,6 +41,26 @@ class Sheet:
     def writerows(self, rows):
         for row in rows:
             self.writerow(row)
+
+
+def ranged(request, file, **kwargs):
+    """A FileResponse that also answers `Range: bytes=…` with just those bytes: browsers ask so to play a video from any
+    point, a jury from where the Prüfungsprogramm says, without loading all that comes before."""
+    response = FileResponse(file, **kwargs)
+    response['Accept-Ranges'] = 'bytes'
+    match, size = RANGE.fullmatch(request.headers.get('Range', '')), file.size
+    if match and (start := int(match[1])) <= (end := min(int(match[2] or size - 1), size - 1)):
+
+        def span(left=end - start + 1):
+            file.seek(start)
+            while left > 0 and (chunk := file.read(min(left, 1 << 16))):
+                left -= len(chunk)
+                yield chunk
+
+        response.streaming_content = span()  # the file is still closed with the response
+        response.status_code = 206
+        response['Content-Range'], response['Content-Length'] = f'bytes {start}-{end}/{size}', end - start + 1
+    return response
 
 
 def without_term(request, what):

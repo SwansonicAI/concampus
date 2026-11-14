@@ -47,6 +47,7 @@ class LineForm(forms.ModelForm):
     def __init__(self, *args, study, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['module'].queryset = Module.objects.filter(program=study.program, children=None).order_by('code')
+        self.fields['module'].widget.attrs['data-find'] = ''  # the Studiengang's every part: found by typing
         self.fields['credits'].localize, self.fields['credits'].widget.is_localized = True, True
 
     def clean(self):

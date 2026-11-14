@@ -147,6 +147,8 @@ class VideoTest(Seeded):
         self.assertEqual(video.title, 'take2.webm')
         self.assertTrue(video.playable)
         self.assertIn('<video controls', self.applicant.get('/aufnahme/meine/').text)
+        part = self.applicant.get(video.href, headers={'Range': 'bytes=4-7'})  # a jury seeks: only those bytes
+        self.assertEqual((part.status_code, part['Content-Range'], b''.join(part.streaming_content)), (206, 'bytes 4-7/12', b'ftyp'))
         self.applicant.post(f'/aufnahme/unterlagen/{video.pk}/entfernen/')
         self.assertFalse(Document.objects.filter(pk=video.pk).exists())
 

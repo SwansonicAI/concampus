@@ -206,10 +206,10 @@ def focus(request, pk):
         study.focus = chosen
         study.save(update_fields=['focus'])
         if office:
-            study.notify('schwerpunkt_eingetragen', study.get_absolute_url(), schwerpunkt=chosen.title, grund=reason)
+            study.notify('schwerpunkt_eingetragen', study.get_absolute_url(), wahl=chosen.choice.title, schwerpunkt=chosen.title, grund=reason)
         else:
             texts.send(
-                'schwerpunkt', study.person, study.get_absolute_url(), studiengang=study.program.title, schwerpunkt=chosen.title,
+                'schwerpunkt', study.person, study.get_absolute_url(), studiengang=study.program.title, wahl=chosen.choice.title, schwerpunkt=chosen.title,
                 inhalt=contents(study, chosen), aendern=changes(study, chosen),
             )
         messages.success(request, f'Eingetragen: {chosen.title}. Bescheid versandt.' if office else f'Gewählt: {chosen.title}. Die Bestätigung liegt in Ihrem Postfach.')
@@ -235,8 +235,8 @@ def changes(study, chosen):
     """Until when the student changes a Schwerpunkt themselves, and through whom after that."""
     office = Office.holding('decide_results', study.program) or 'die Hochschule'
     if chosen.first and study.semester < chosen.first:
-        return f'bis zum Beginn des {chosen.first}. Fachsemesters selbst unter Ihrem Studium, danach nur über {office}'
-    return f'nur über {office}'
+        return f'bis zum Beginn des {chosen.first}. Fachsemesters selbst unter Ihrem Studium, danach nur über: {office}'
+    return f'nur über: {office}'
 
 
 @require_POST
@@ -256,7 +256,7 @@ def remedies(study, missing):
     found = []
     for reason in missing:
         if reason.startswith('Sperre'):
-            found.append((reason, format_html('aufzuheben über {}', Office.holding('manage_students', study.program, linked=True))))
+            found.append((reason, format_html('aufzuheben über: {}',Office.holding('manage_students', study.program, linked=True))))
         elif reason.startswith('Versicherungsmeldung'):
             number = Institution.get().sender_number
             found.append((reason, 'bitte Ihre Krankenkasse, Ihren Versicherungsstatus elektronisch an die Hochschule zu melden' + (f', mit der Absendernummer {number}' if number else '')))

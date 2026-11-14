@@ -109,7 +109,7 @@ class GroupTest(Seeded):
             return flashes(student.post(f'/lehre/{course.pk}/anmelden/', {'study': study.pk, 'gruppe': group.pk}, follow=True))
 
         self.assertEqual(register(full), [f'Gruppe {full.number} ist inzwischen voll. Bitte eine andere wählen.'])
-        self.assertEqual(register(first), [f'Sie sind angemeldet, in Gruppe {first.number}.'])
+        self.assertEqual(register(first), [f'Angemeldet: {course.title}, Gruppe {first.number}.'])
         self.assertEqual(register(second), [f'Sie haben schon einen Platz in Gruppe {first.number}. Die Gruppe wechseln Sie oben unter „Meine Anmeldung“.'])
         place = Participation.objects.get(course=course, study=study)
         student.post(f'/lehre/teilnahme/{place.pk}/wechseln/', {'gruppe': full.pk})

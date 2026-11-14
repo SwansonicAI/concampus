@@ -160,8 +160,9 @@ class ApplicationForm(forms.Form):
         studies = person.studies.all()  # who applied before: their instrument first, then its Institut's, at their level
         applied = studies.filter(program=OuterRef('program'), subject=OuterRef('subject'), start_term=OuterRef('term'))
         level = Q(program__postgraduate__in=studies.values('program__postgraduate'))
+        running = Course.objects.filter(kind=Course.Kind.AUDITION, program__isnull=False, deadline__gte=timezone.localdate())
         auditions = self.fields['audition'].queryset = (
-            Course.objects.filter(kind=Course.Kind.AUDITION, program__isnull=False, deadline__gte=timezone.localdate()).exclude(Exists(applied))
+            running.exclude(Exists(applied))
             .select_related('program', 'subject__institute', 'term')
             .annotate(near=Case(
                 When(level & Q(subject__in=studies.values('subject')), then=0), When(level & Q(subject__institute__in=studies.values('subject__institute')), then=1), default=2,
@@ -169,8 +170,8 @@ class ApplicationForm(forms.Form):
             .order_by('near', 'program__degree', 'program__name', 'subject__name')
         )
         offered, own = {course.subject_id: course.subject for course in auditions}, set(studies.values_list('subject', flat=True))
-        self.closed = sorted(  # Hauptfächer with an Eignungsprüfung in another term, but none open now
-            set(Course.objects.filter(kind=Course.Kind.AUDITION, program__isnull=False, subject__isnull=False).exclude(subject__in=offered).values_list('subject__name', flat=True))
+        self.closed = sorted(  # Hauptfächer with an Eignungsprüfung in another term, but none open now, applied for or not
+            set(Course.objects.filter(kind=Course.Kind.AUDITION, program__isnull=False, subject__isnull=False).exclude(subject__in=running.filter(subject__isnull=False).values('subject')).values_list('subject__name', flat=True))
         )
         institutes = defaultdict(list)  # the Hauptfächer one can apply for, by Institut; one's own first
         for s in sorted(offered.values(), key=lambda s: s.name):

@@ -12,7 +12,7 @@ function init(root) {
   root.querySelectorAll('form[data-standing]').forEach(standing);
   root.querySelectorAll('.weekplan .week[data-first]').forEach(preview);
   root.querySelectorAll('datalist[data-suggest]').forEach(lookup);
-  root.querySelectorAll('.form select').forEach(select => (select.options.length > 60 || 'find' in select.dataset) && findable(select));
+  root.querySelectorAll('.form select, select[data-find]').forEach(select => (select.options.length > 60 || 'find' in select.dataset) && findable(select));
   root.querySelectorAll('select[data-leads]').forEach(lead);
   root.querySelectorAll('select[data-town]').forEach(placed);
   root.querySelectorAll('form:has([name=worst])').forEach(converted);
@@ -855,7 +855,7 @@ document.addEventListener('submit', event => {
 // closing the panel asks here first.
 const dirty = root => [...root.querySelectorAll('form[method=post]')].some(form => form.dataset.dirty);
 const leave = () => window.confirm('Ungespeicherte Eingaben verwerfen?');
-document.addEventListener('input', ({target}) => { if (target.form?.method === 'post') target.form.dataset.dirty = '1'; });
+document.addEventListener('input', ({target}) => { if (target.form?.method === 'post' && !target.matches('input.filter')) target.form.dataset.dirty = '1'; });  // a list filtered is nothing typed in
 document.addEventListener('submit', ({target}) => { delete target.dataset.dirty; });
 addEventListener('beforeunload', event => { if (dirty(document)) event.preventDefault(); });
 document.addEventListener('click', event => {

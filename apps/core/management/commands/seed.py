@@ -13,7 +13,9 @@ import uuid
 from collections import Counter, defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+from functools import cached_property
 from typing import NamedTuple
+from urllib.request import Request, urlopen
 
 from django.conf import settings
 from django.contrib.auth.hashers import make_password
@@ -959,6 +961,7 @@ class Command(BaseCommand):
             call_command('flush', interactive=False, verbosity=0)
         elif Person.objects.exists():
             raise CommandError('The database is not empty. Use --reset to replace everything.')
+        self.fetch = reset  # the video stand-in from the net; never for the tests' database
         self.rng = random.Random(1872)  # the year the Hochschule was founded
         self.password = make_password(get_random_string(32))  # one nobody knows: the demo has its access code and profiles
         self.logins, self.names, self.mails = set(), set(), set()
@@ -2251,6 +2254,19 @@ class Command(BaseCommand):
         played = '' if not leaf.title.startswith(ARTISTIC) else 'Klavier' if module.startswith('Klavier') else subject
         return played, f'{module} · {leaf.title}' + (f' · {played}' if played and not module.startswith(played) else '')
 
+    @cached_property
+    def video(self):
+        """Where every audition video's stand-in is: kept with the uploads, fetched once by `--reset`, so that it plays as
+        an upload would; failing that, linked at Wikimedia Commons, which may turn players away."""
+        name = 'dokumente/demo/vorspiel.webm'
+        if self.fetch and not default_storage.exists(name):
+            try:
+                with urlopen(Request(DEMO_VIDEO[1], headers={'User-Agent': 'ConCampus-seed'}), timeout=120) as response:
+                    default_storage.save(name, ContentFile(response.read()))
+            except OSError as error:
+                self.stdout.write(self.style.WARNING(f'Video not fetched, linked instead: {error}'))
+        return {'file': name} if default_storage.exists(name) else {'url': DEMO_VIDEO[1]}
+
     def placeholder(self):
         """The one file the demo's documents share: opened through the same check as real uploads."""
         name = 'dokumente/demo/platzhalter.pdf'
@@ -2363,7 +2379,7 @@ class Command(BaseCommand):
             if study.person.nationality != '000' and rng.random() < 0.5:
                 handed.append('language')
             if video:
-                documents.append(Document(person=study.person, study=study, kind_id='video', title=DEMO_VIDEO[0], url=DEMO_VIDEO[1], created=at(study.since, hour=11)))
+                documents.append(Document(person=study.person, study=study, kind_id='video', title=DEMO_VIDEO[0], **self.video, created=at(study.since, hour=11)))
             documents += [
                 Document(person=study.person, study=study, kind_id=kind, title=names[kind], file=self.placeholder(), created=at(study.since, hour=11))
                 for kind in handed

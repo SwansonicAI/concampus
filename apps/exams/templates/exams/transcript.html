@@ -13,7 +13,7 @@
     <dt>Matrikelnummer</dt><dd>{{ study.person.matriculation|default:"–" }}</dd>
     <dt>Studiengang</dt><dd>{{ study.program.title }}, Prüfungsordnung {{ study.program.version }}</dd>
     <dt>Hauptfach</dt><dd>{{ study.subject }}</dd>
-    {% if study.focus %}<dt>Schwerpunkt</dt><dd>{{ study.focus.title }}</dd>{% endif %}
+    {% if study.focus %}<dt>{{ study.focus.parent.title }}</dt><dd>{{ study.focus.title }}</dd>{% endif %}
     {% if thesis %}<dt>Abschlussarbeit</dt><dd>{{ thesis }}</dd>{% endif %}
     {% if complete %}<dt>Datum der letzten Prüfungsleistung</dt><dd>{{ completed|date:"j. F Y"|default:"–" }}, das Datum des Zeugnisses</dd>
     <dt>Ausgefertigt am</dt><dd>{% if study.issued %}{{ study.issued|date:"j. F Y" }}{% else %}noch nicht{% endif %}</dd>{% endif %}

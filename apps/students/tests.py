@@ -219,7 +219,7 @@ class FocusTest(Seeded):
         student.post(f'/studierende/{study.pk}/schwerpunkt/', {'focus': other.pk, 'bestaetigt': '1'})  # under way: only the office changes it
         study.refresh_from_db()
         self.assertEqual(study.focus_id, study.advised_id)
-        self.assertTrue(study.person.messages.filter(subject__startswith='Schwerpunkt').exists())
+        self.assertTrue(study.person.messages.filter(subject__startswith=f'{options[0].choice.title}:').exists())  # the programme's own word
 
 
 class FileTest(Seeded):
