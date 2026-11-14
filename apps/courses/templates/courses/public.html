@@ -19,13 +19,13 @@
 <section>
   <h2>{{ group.grouper|default:"Ohne Fachgebiet" }}</h2>
   <table class="catalogue">
-    <thead><tr><th>Lehrveranstaltung</th><th>Lehrende</th><th class="num spare">SWS</th><th>Zeit und Raum</th><th>Anmeldung</th></tr></thead>
+    <thead><tr><th>Lehrveranstaltung</th><th>Lehrende</th><th class="num spare" title="Minuten je Woche">Min.</th><th>Zeit und Raum</th><th>Anmeldung</th></tr></thead>
     <tbody>
       {% for c in group.list %}
       <tr>
         <td><a href="{% url 'public:course' c.pk %}"><b>{{ c.title }}</b></a>{% if c.cancelled %} <span class="badge no">entfällt</span>{% endif %}<br><small class="muted">{{ c.format|default:c.get_kind_display }}</small></td>
         <td>{% for s in c.staff.all %}{{ s }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
-        <td class="num spare">{{ c.hours|default_if_none:"" }}</td>
+        <td class="num spare"{% if c.hours is not None %} title="{{ c.hours|floatformat:'-1' }} SWS"{% endif %}>{{ c.minutes|default_if_none:"" }}</td>
         <td><small>{{ c.slot|default:"" }}</small></td>
         <td><small>{% if c.cancelled %}{% elif c.allocation == 'staff' %}<span class="muted">Zuteilung durch Lehrende</span>{% elif c.upcoming %}ab {{ c.opens|date:"j.n." }}{% if c.deadline %} bis {{ c.deadline|date:"j.n." }}{% endif %}{% elif c.is_open %}{% if c.deadline %}bis {{ c.deadline|date:"j.n." }}{% else %}offen{% endif %}{% else %}<span class="muted">vorbei</span>{% endif %}</small></td>
       </tr>

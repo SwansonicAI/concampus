@@ -395,7 +395,9 @@ LATER = {  # courses that start after the first week of lectures: Musikwissensch
     ], date(2026, 10, 12)),
     'Hochschulchor': date(2026, 10, 13),
 }
-GROUPED = ['Satztechniken des 20./21. Jh. 1', 'Werkanalyse 2', 'Gehörbildung 2/Harmonielehre 2']  # taught in groups of six, as the rooms allow
+GROUPED = [  # taught in groups of six, as the rooms allow; Gehörbildung as at HfM, in groups assigned at the start of term
+    'Satztechniken des 20./21. Jh. 1', 'Werkanalyse 2', 'Gehörbildung 1/Harmonielehre 1', 'Gehörbildung 2/Harmonielehre 2', 'Gehörbildung 3/Harmonielehre 3',
+]
 GROUP_STARTS = [9 * 60, 10 * 60 + 15, 11 * 60 + 30, 13 * 60, 14 * 60 + 15, 15 * 60 + 30, 16 * 60 + 45]  # an hour each, a quarter to change rooms
 PHASES = {'Hochschulorchester': ('Festsaal', date(2026, 11, 2), 5, '10:00', 420)}  # project weeks instead of weekly rehearsals: room, first day, days, start, minutes
 
@@ -826,9 +828,40 @@ REPERTOIRE = {  # works as applicants and candidates list them, with their lengt
         ('J. S. Bach: Partita a-Moll BWV 1013, Allemande, auf der Marimba', 5), ('J. Delécluse: Douze Études für Kleine Trommel, Nr. 9', 3),
         ('E. Carter: Eight Pieces for Four Timpani, Saëta', 4), ('N. Rosauro: Konzert für Marimba Nr. 1, 1. Satz', 6),
     ],
-    'winds': [
-        ('W. A. Mozart oder J. Haydn: Konzert für {i}, 1. Satz mit Kadenz', 9), ('P. Hindemith: Sonate für {i} und Klavier, 1. Satz', 5),
-        ('C. Saint-Saëns, F. Poulenc oder C. Debussy: ein Werk für {i} und Klavier', 7), ('Orchesterstellen nach der Liste der Hochschule', 5),
+    'Flöte': [
+        ('W. A. Mozart: Flötenkonzert G-Dur KV 313, 1. Satz mit Kadenz', 9), ('C. Debussy: Syrinx', 3), ('J. S. Bach: Partita a-Moll BWV 1013, Allemande', 5),
+        ('P. Hindemith: Sonate für Flöte und Klavier, 1. Satz', 5), ('F. Poulenc: Sonate für Flöte und Klavier, 1. Satz', 5),
+        ('Orchesterstellen: F. Mendelssohn Bartholdy, Ein Sommernachtstraum, Scherzo; L. van Beethoven, Leonoren-Ouvertüre Nr. 3', 4),
+    ],
+    'Oboe': [
+        ('W. A. Mozart: Oboenkonzert C-Dur KV 314, 1. Satz mit Kadenz', 8), ('R. Schumann: Drei Romanzen op. 94, Nr. 1', 4),
+        ('B. Britten: Six Metamorphoses after Ovid op. 49, „Pan“ und „Bacchus“', 5), ('F. Poulenc: Sonate für Oboe und Klavier, 1. Satz', 5),
+        ('Orchesterstellen: J. Brahms, Violinkonzert, 2. Satz; M. Ravel, Le tombeau de Couperin, Prélude', 4),
+    ],
+    'Klarinette': [
+        ('W. A. Mozart: Klarinettenkonzert A-Dur KV 622, 1. Satz', 12), ('C. M. von Weber: Klarinettenkonzert Nr. 1 f-Moll op. 73, 1. Satz', 8),
+        ('C. Debussy: Première Rhapsodie', 8), ('I. Strawinsky: Drei Stücke für Klarinette solo', 4),
+        ('Orchesterstellen: L. van Beethoven, Sinfonie Nr. 6, 2. Satz; N. Rimski-Korsakow, Capriccio espagnol', 4),
+    ],
+    'Fagott': [
+        ('W. A. Mozart: Fagottkonzert B-Dur KV 191, 1. Satz mit Kadenz', 8), ('C. M. von Weber: Andante e Rondo ungarese op. 35', 9),
+        ('C. Saint-Saëns: Sonate für Fagott und Klavier op. 168, 1. Satz', 4), ('Orchesterstellen: P. Dukas, L’apprenti sorcier; M. Ravel, Boléro', 4),
+    ],
+    'Horn': [
+        ('W. A. Mozart: Hornkonzert Nr. 4 Es-Dur KV 495, 1. Satz', 7), ('R. Strauss: Hornkonzert Nr. 1 Es-Dur op. 11, 1. Satz', 6), ('P. Dukas: Villanelle', 6),
+        ('Orchesterstellen: R. Strauss, Till Eulenspiegels lustige Streiche; P. I. Tschaikowski, Sinfonie Nr. 5, 2. Satz', 4),
+    ],
+    'Trompete': [
+        ('J. Haydn: Trompetenkonzert Es-Dur Hob. VIIe:1, 1. Satz', 7), ('J. N. Hummel: Trompetenkonzert E-Dur, 1. Satz', 9), ('A. Arutjunjan: Trompetenkonzert As-Dur', 8),
+        ('Orchesterstellen: G. Mahler, Sinfonie Nr. 5, Beginn; M. Mussorgski / M. Ravel, Bilder einer Ausstellung, Promenade', 4),
+    ],
+    'Posaune': [
+        ('F. David: Concertino Es-Dur op. 4, 1. Satz', 6), ('A. Guilmant: Morceau symphonique op. 88', 6), ('L.-E. Larsson: Concertino op. 45 Nr. 7, 1. Satz', 5),
+        ('Orchesterstellen: M. Ravel, Boléro; W. A. Mozart, Requiem, „Tuba mirum“', 4),
+    ],
+    'Tuba': [
+        ('R. Vaughan Williams: Tubakonzert f-Moll, 1. Satz', 5), ('P. Hindemith: Sonate für Basstuba und Klavier, 1. Satz', 5),
+        ('E. Gregson: Tubakonzert, 1. Satz', 6), ('Orchesterstellen: R. Wagner, Die Meistersinger von Nürnberg, Vorspiel; S. Prokofjew, Sinfonie Nr. 5, 1. Satz', 4),
     ],
     'voice': [
         ('W. A. Mozart: „Porgi, amor“ aus Le nozze di Figaro', 4), ('F. Schubert: „Erlkönig“ D 328', 4), ('J. Brahms: „Wie Melodien zieht es mir“ op. 105 Nr. 1', 2),

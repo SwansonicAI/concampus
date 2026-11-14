@@ -279,6 +279,22 @@ def demo(request):
     return redirect('home')
 
 
+@require_POST
+def demo_day(request):
+    """Only in the demo: the session lives on the day chosen (core/clock.py), to show ConCampus as it is then; empty, today
+    again. What is done meanwhile is dated that day."""
+    if not settings.DEMO:
+        raise Http404
+    if not (text := request.POST.get('tag', '').strip()):
+        request.session.pop('demo_day', None)
+    elif chosen := dates.day(text):
+        request.session['demo_day'] = chosen.isoformat()
+    else:
+        messages.error(request, f'„{text}“ ist kein Datum, z. B. 3.2.2027.')
+    back = request.POST.get('next', '')
+    return redirect(back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else 'home')
+
+
 @login_not_required
 def demo_moodle(request):
     """Only in the demo, past its access code: where the demo's Moodle sends whoever signs in (docs/moodle.md); one of its
@@ -613,7 +629,7 @@ def found(person, q, limit, quick=False):
         subjects = find(Subject.objects.all(), q, 'name', starts=True)
         teaching = known.filter(teaching__kind=Course.Kind.LESSON, teaching__subject__in=subjects).exclude(pk__in=[p.pk for p in named]).order_by('last_name')
         groups.append(('Personen', [
-            hit(str(p), reverse('colleague', args=[p.pk]), ' · '.join(filter(None, [p.institute and str(p.institute), ', '.join(sorted({str(c.subject) for c in p.lessons})), p.email])))
+            hit(str(p), reverse('colleague', args=[p.pk]), ' · '.join(filter(None, [p.institute and str(p.institute), ', '.join(sorted({str(c.subject) for c in p.lessons} - {str(p.institute)})), p.email])))  # Klavier once, not as institute and subject
             for p in [*named, *teaching[:limit - len(named)]]
         ]))
     offices = []  # and the offices: for applicants and alumni by their shared address only, without who works there

@@ -39,6 +39,7 @@
           {% if course.points or course.kind == 'recognition' %}<input class="cell{% if p.error %} bad{% endif %}" type="text" inputmode="decimal" name="score-{{ p.pk }}-{{ e.pk }}" value="{{ value|mark }}" aria-label="Wertung {{ e.last_name }}">
           {% else %}<select class="cell{% if p.error %} bad{% endif %}" name="score-{{ p.pk }}-{{ e.pk }}" aria-label="Note {{ e.last_name }}"><option value="">–</option>{% for s in steps %}<option{% if value|mark == s %} selected{% endif %}>{{ s }}</option>{% endfor %}{% if value is not None and value|mark not in steps %}<option selected>{{ value|mark }}</option>{% endif %}</select>{% endif %}
           {% elif p.blind %}<span class="muted" title="Zu sehen, sobald alle gewertet haben">·</span>
+          {% elif value is None and not course.released %}{% if decide and institution.protocol_first and not course.protocol_received %}<small class="muted" title="Das Amt überträgt die Wertung aus dem Protokoll, sobald es verbucht ist">nach Protokoll</small>{% else %}<span class="muted">–</span>{% endif %}
           {% else %}{{ value|mark }}{% endif %}
           {% if e not in staff %}<br><small class="muted" title="Ersatz für eine befangene Person">Ersatz: {{ e.last_name }}</small>{% endif %}
           {% with by=p.copied|of:e.pk %}{% if by %}<br><small class="muted" title="Nach Protokoll übertragen von {{ by }}">übertragen: {{ by.last_name }}</small>{% endif %}{% endwith %}

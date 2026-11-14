@@ -11,7 +11,7 @@
   <div>
     <dl class="facts">
       <dt>Lehrende</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}</dd>
-      <dt>Umfang</dt><dd>{{ course.hours|default_if_none:"–" }} SWS</dd>
+      <dt>Umfang</dt><dd>{% if course.hours is not None %}{{ course.minutes }} Minuten je Woche <small class="muted">({{ course.hours|floatformat:"-1" }} SWS)</small>{% else %}–{% endif %}</dd>
       <dt>Zeit und Raum</dt><dd>{% for g, slot in groups %}Gruppe {{ g.number }}: {{ slot|default:"–" }}{% if not forloop.last %}<br>{% endif %}{% empty %}{{ slot|default:"–" }}{% endfor %}</dd>
       {% if course.capacity %}<dt>Plätze</dt><dd>{{ course.capacity }}</dd>{% endif %}
       {% if course.allocation != 'staff' %}<dt>Anmeldung</dt><dd>{% if course.opens %}vom {{ course.opens|date:"j. F" }} {% endif %}{% if course.deadline %}bis {{ course.deadline|date:"j. F Y" }}{% elif not course.opens %}–{% endif %}</dd>{% endif %}

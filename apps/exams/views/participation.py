@@ -13,6 +13,7 @@ from core.access import require
 from core.models import Consent, Office
 from courses.models import Course, Participation
 from students.models import Document, DocumentType, Study
+from ..results import exhausted
 
 
 def filed(study, request, what):
@@ -107,6 +108,8 @@ def register(request, pk):
         messages.error(request, 'Die Anmeldefrist ist abgelaufen.')
     elif refused := course.refuses(study, module):
         messages.error(request, refused)
+    elif exhausted(study):  # as for courses: with one module failed for good, nothing new is taken
+        messages.error(request, 'Der Prüfungsanspruch ist erloschen; neue Anmeldungen sind nicht möglich.')
     elif (module.semester or 0) > study.semester:
         messages.error(request, f'{module.code} ist erst ab dem {module.semester}. Fachsemester vorgesehen.')
     else:

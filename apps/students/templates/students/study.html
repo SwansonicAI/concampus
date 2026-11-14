@@ -71,7 +71,7 @@
       <summary>Urlaubssemester {% if own %}beantragen{% else %}eintragen{% endif %}</summary>
       <form method="post" enctype="multipart/form-data" action="{% url 'students:leave' study.pk %}" class="inline" style="margin-top: 8px">
         {% csrf_token %}
-        <label>Grund<select name="reason" required><option value="">–</option>{% for code, name in leaves %}<option value="{{ code }}">{{ name }}</option>{% endfor %}</select></label>
+        <label>Grund<select name="reason" required><option value="">Grund wählen</option>{% for code, name in leaves %}<option value="{{ code }}">{{ name }}</option>{% endfor %}</select></label>
         <label>Nachweis, etwa ein Attest<input type="file" name="file" accept="{{ attest_kind.extensions|join:',' }}" data-max="{% widthratio attest_kind.size 1 1048576 %}" data-too-big="Höchstens {{ attest_kind.limit }}. Bitte verkleinern."></label>
         <small class="muted">{{ attest_kind.accepted }}</small>
         <div class="choices"><label><input type="checkbox" name="consent" value="1"> {% if own %}Mit Nachweis: {% text 'einwilligung_gesundheit' zweck='zum Urlaubssemester' %}{% else %}Einwilligung zum Nachweis liegt unterschrieben vor{% endif %}</label></div>

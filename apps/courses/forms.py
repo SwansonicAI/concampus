@@ -367,11 +367,12 @@ class TeachingForm(CourseForm):
 
 class ExamForm(CourseForm):
     class Meta(CourseForm.Meta):
-        fields = ['title', 'staff', 'oral', 'assessor', 'modules', 'opens', 'deadline', 'pass_mark', 'max_points', 'description']
+        fields = ['title', 'subject', 'staff', 'oral', 'assessor', 'modules', 'opens', 'deadline', 'pass_mark', 'max_points', 'description']
         labels = {'staff': 'Kommission', 'modules': 'Prüft das Modul'}
+        help_texts = {'subject': 'Leer: für alle Hauptfächer. Mit einem Hauptfach legen nur dessen Studierende sie ab, und die Kommission folgt den Regeln im Hauptfach.'}
 
     layout = [
-        (None, ['title', 'modules']),
+        (None, ['title', 'subject', 'modules']),
         ('Kommission', ['staff', ('oral', 'assessor')]),
         ('Anmeldung und Bewertung', [('opens', 'deadline', 'pass_mark', 'max_points')]),
         (None, ['description']),

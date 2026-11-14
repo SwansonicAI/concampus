@@ -748,8 +748,9 @@ def block(key, **values):
 
 
 def send(key, person, link='', **values):
+    """A message to the Postfach; a Bescheid with its sender, which gives it an Aktenzeichen to quote in a Widerspruch."""
     subject, body = render(key, vorname=person.first_name, nachname=person.last_name, **values)
-    return Message.send(person, subject, body, link)
+    return Message.send(person, subject, body, link, sender=block('absender_bescheide') if TEXTS[key].group == BESCHEID else '')
 
 
 def mail(key, person, **values):

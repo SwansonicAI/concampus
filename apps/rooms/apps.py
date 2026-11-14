@@ -35,7 +35,7 @@ class RoomsConfig(Tile, AppConfig):
         ]
         if 'manage_bookings' in person.roles:
             found += [
-                feature('Veranstaltung anlegen', f"{reverse('rooms:new')}?kategorie=konzert", 'konzert klassenabend'),
+                feature('Veranstaltung anlegen', f"{reverse('rooms:new')}?veranstaltung", 'konzert klassenabend'),
                 feature('Raumanfragen', reverse('rooms:requests'), 'entscheiden'),
             ]
         return found

@@ -44,7 +44,7 @@
   {% csrf_token %}
   <div class="toolbar">
     <div class="actions">
-      <label>Eingegangen am<input name="paid" data-day autocomplete="off" size="11" value="{% now 'd.m.Y' %}"></label>
+      <label>Eingegangen am<input name="paid" data-day autocomplete="off" size="11" value="{{ today|date:'d.m.Y' }}"></label>
       <label>Beleg oder Verwendungszweck<input name="reference" placeholder="z. B. Barzahlung, Quittung 112"></label>
       <button class="btn" name="pay" value="1">Zahlungseingang verbuchen</button>
       {% if overdue and open %}<button class="btn danger" name="exmatriculate" value="1">{{ open }} ohne Rückmeldung exmatrikulieren</button>{% endif %}

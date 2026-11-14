@@ -196,6 +196,12 @@ class Course(Tracked, models.Model):
         return reverse(app.get(self.kind, 'courses:course'), args=[self.pk])
 
     @property
+    def minutes(self):
+        """The weekly time as Studienpläne state it (V 90, G 60): its SWS at the Lehrform's minutes, to a quarter hour."""
+        if self.hours is not None:
+            return round(self.hours * per_sws(self.format.short if self.format_id else '') / 15) * 15
+
+    @property
     def is_open(self):
         today = timezone.localdate()
         return (self.opens is None or self.opens <= today) and (self.deadline is None or today <= self.deadline)

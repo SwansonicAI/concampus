@@ -58,11 +58,11 @@ def module_keys(program):
 
 
 def plan(program):
-    keys, modules = module_keys(program), list(program.modules.order_by('pk').prefetch_related('waived'))
+    keys, modules = module_keys(program), list(program.modules.order_by('pk').prefetch_related('waived', 'requires'))
 
     def below(parent):
         return [
-            record(m, waived=[s.name for s in m.waived.all()], modules=below(m.pk))
+            record(m, waived=[s.name for s in m.waived.all()], requires=sorted(keys[r.pk] for r in m.requires.all()), modules=below(m.pk))
             for m in modules if m.parent_id == parent
         ]
 
@@ -207,7 +207,7 @@ class Loader:
         if not self.keep(program, where, **p):
             return
         program.subjects.set([s for name in p.get('subjects', []) if (s := self.named(Subject, where, name=name))])
-        keys = {key: pk for pk, key in module_keys(program).items()}
+        keys, placed = {key: pk for pk, key in module_keys(program).items()}, []
 
         def place(modules, parent, path, where):
             for i, m in enumerate(modules):
@@ -216,9 +216,14 @@ class Loader:
                 module.parent = parent
                 if self.keep(module, here, **m):
                     module.waived.set([s for name in m.get('waived', []) if (s := self.named(Subject, here, name=name))])
+                    placed.append((module, m.get('requires', []), here))
                     place(m.get('modules', []), module, f'{path} › {module.title}' if path else module.title, here)
 
         place(p.get('modules', []), None, '', where)
+        keys = {key: pk for pk, key in module_keys(program).items()}  # every module of the plan now there, to be required
+        for module, required, here in placed:
+            self.faults += [f'{here}: Voraussetzung {key} ist kein Modul dieses Studienplans' for key in required if key not in keys]
+            module.requires.set([keys[key] for key in required if key in keys])
 
     def person(self, p, where):
         person = find(p) or Person()

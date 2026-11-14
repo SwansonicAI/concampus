@@ -1,11 +1,14 @@
 import time
+from datetime import date, timedelta
 
 from django.conf import settings
 from django.db import transaction
 from django.contrib.auth.views import redirect_to_login
 from django.http import HttpResponse
 from django.urls import reverse
+from django.utils import timezone
 
+from . import clock
 from .history import acting
 from .models import looked_up
 from .views import admitted
@@ -21,6 +24,23 @@ def gate(get_response):
         if settings.DEMO_CODE and not request.user.is_authenticated and not admitted(request) and not free:
             return redirect_to_login(request.get_full_path(), reverse('gate'))
         return get_response(request)
+
+    return middleware
+
+
+def demo_day(get_response):
+    """In the demo, a session may live on another day (core/clock.py, core.views.demo_day): its requests see that day,
+    at the time it is now. Sessions themselves are loaded and saved outside, on the real clock."""
+
+    def middleware(request):
+        day = settings.DEMO and request.session.get('demo_day')
+        if not day:
+            return get_response(request)
+        token = clock.shift.set(timedelta(days=(date.fromisoformat(day) - timezone.localdate()).days))
+        try:
+            return get_response(request)
+        finally:
+            clock.shift.reset(token)
 
     return middleware
 

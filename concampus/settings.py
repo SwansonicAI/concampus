@@ -45,6 +45,9 @@ DEMO = [
 DEMO_LABELS = {'korrepetition': 'Lehrauftrag · Korrepetition'}  # where neither an office nor a role says it
 # The demo's shared access code (core.views.gate), only in the server's .env; without one nobody gets into the demo.
 DEMO_CODE = os.environ.get('DEMO_CODE', 'demo' if DEBUG else '')
+if DEMO:  # a demo session may live on another day (core/clock.py), installed before any model takes timezone.now
+    from core.clock import install
+    install()
 
 ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '').split()
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')  # the app is only reached through the proxy
@@ -90,6 +93,7 @@ MIDDLEWARE = [
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'core.middleware.renewal',
+    'core.middleware.demo_day',
     'core.middleware.lookups',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',

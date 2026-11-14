@@ -1,3 +1,5 @@
+from datetime import date
+
 from django.core.management.base import BaseCommand
 from django.utils import timezone
 
@@ -23,9 +25,9 @@ class Command(BaseCommand):
         self.stdout.write(f'{SignIn.objects.filter(at__lt=now - SignIn.KEEP).delete()[0]} Zugriffe gelöscht.')
         self.stdout.write(f'{Feedback.objects.filter(answered__lt=timezone.localdate() - Feedback.KEEP).delete()[0]} Hinweise zur Barrierefreiheit gelöscht.')
         self.stdout.write(f'{Export.objects.filter(created__lt=now - Export.KEEP).delete()[0]} Einträge im Exportprotokoll gelöscht.')
-        if months := Institution.get().retention_months:
-            documents, people = forget(cutoff := months_before(timezone.localdate(), months))
-            dropped = InsuranceReport.objects.filter(person=None, created__date__lt=cutoff).delete()[0]  # about nobody here
-            self.stdout.write(f'{documents} Unterlagen gelöscht, {people} Personen anonymisiert, {dropped} Meldungen der Krankenkassen ohne Person gelöscht.')
+        months = Institution.get().retention_months  # 0: applications are kept, but health data still goes once decided
+        documents, people = forget(cutoff := months_before(timezone.localdate(), months) if months else date.min)
+        dropped = InsuranceReport.objects.filter(person=None, created__date__lt=cutoff).delete()[0]  # about nobody here
+        self.stdout.write(f'{documents} Unterlagen gelöscht, {people} Personen anonymisiert, {dropped} Meldungen der Krankenkassen ohne Person gelöscht.')
         self.stdout.write(f'{reduce()} Studierendenakten auf die Grunddaten gekürzt, {expire()} Grunddaten anonymisiert.')
         self.stdout.write(f'{departure.reduce()} frühere Beschäftigte auf den Namen gekürzt, {departure.expire()} anonymisiert.')

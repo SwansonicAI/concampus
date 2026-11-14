@@ -16,7 +16,7 @@ from core import texts
 from core.access import require
 from core.apps import plural
 from core.models import Export, Holiday, Institute, Institution, Office, Person, Term
-from core.shortcuts import Sheet, ids, without_term
+from core.shortcuts import Sheet, ids, preview, without_term
 from core.text import matching
 from rooms.models import Booking
 from ..models import Assignment, Group, Rate, per_sws
@@ -172,15 +172,14 @@ def back(request, a=None):
     return redirect(f"{reverse('courses:assignments')}?semester={request.POST.get('semester', '')}")
 
 
-def bescheid(a, by):
-    """The Bescheid granting a Lehrauftrag, to the person's Postfach: its term and period, courses with their SWS, scope
-    and pay."""
+def bescheid(a, courses, by):
+    """What the Bescheid granting a Lehrauftrag says: its term and period, courses with their SWS, scope and pay."""
     taught = dict(hours(a.term, {a.person_id}).get(a.person, []))
-    texts.send(
-        'lehrauftrag', a.person, reverse('courses:mine'), semester=a.term, von=by,
+    return dict(
+        semester=a.term, von=by,
         zeitraum=f'{date_format(a.term.lectures_start, "j.n.Y")} bis {date_format(a.term.lectures_end, "j.n.Y")}',
         umfang=f'{number_format(a.hours)} SWS' if a.hours else 'nach gehaltenen Stunden',
-        veranstaltungen='; '.join(f'{c.title} ({number_format(taught.get(c) or 0)} SWS)' for c in sorted(a.courses.all(), key=lambda c: c.title)),
+        veranstaltungen='; '.join(f'{c.title} ({number_format(taught.get(c) or 0)} SWS)' for c in sorted(courses, key=lambda c: c.title)),
         verguetung=f'{number_format(a.rate.euros, 2)} € je gehaltener Lehrveranstaltungsstunde ({a.rate.name})' if a.rate else 'nach den Vergütungssätzen der Hochschule',
     )
 
@@ -189,27 +188,34 @@ def bescheid(a, by):
 @require_POST
 def grant(request):
     """Grant the Lehraufträge ticked, or the one from its panel, at what each teaches now, with those courses, at the
-    Vergütungsstufe chosen or the person's last; the Bescheid goes to the person. Granting one again agrees the SWS and
-    courses it has come to."""
+    Vergütungsstufe chosen or the person's last; the Bescheide go to the people once the office has seen one. Granting
+    one again agrees the SWS and courses it has come to."""
     rate = Rate.objects.filter(pk=request.POST.get('stufe') or None).first()
-    limit, granted, beyond, a = Institution.get().assignment_max, 0, [], None
-    for a in chosen(request).exclude(status=WITHDRAWN):
-        courses = list(a.term.courses.filter(kind__in=TEACHING, cancelled=None, staff=a.person))
-        if not courses:
-            continue
+    limit, granting, a = Institution.get().assignment_max, [], None
+    ticked = chosen(request).exclude(status=WITHDRAWN)
+    if request.POST.get('von') != 'auftrag':  # from the list only the proposed: one granted, ticked to confirm its hours, stays as it is
+        ticked = ticked.filter(status=PROPOSED)
+    for a in ticked:
+        if courses := list(a.term.courses.filter(kind__in=TEACHING, cancelled=None, staff=a.person)):
+            a.hours = agreed(a.term.courses.filter(pk__in=[c.pk for c in courses]), a.person)
+            a.rate = rate or a.rate or Rate.objects.filter(assignments__person=a.person).order_by('-assignments__term__start').first()
+            granting.append((a, courses))
+    if not granting:
+        messages.error(request, 'Nichts erteilt: ohne Lehrveranstaltung kein Lehrauftrag.')
+        return back(request, a)
+    beyond = [a.person.last_name for a, _ in granting if limit and a.hours > limit]
+    if not request.POST.get('bestaetigt'):
+        a, courses = granting[0]
+        wording = texts.render('lehrauftrag', vorname=a.person.first_name, nachname=a.person.last_name, **bescheid(a, courses, request.user))
+        notes = [f'Über {number_format(limit)} SWS: {", ".join(beyond)}. Viel Lehre im Auftrag kann als Beschäftigung gelten.'] if beyond else []
+        return preview(request, 'Lehraufträge erteilen', [('Lehrauftrag erteilt', [a.person for a, _ in granting], wording)],
+                       f'{plural(len(granting), "Lehrauftrag", "Lehraufträge")} erteilen und Bescheide versenden', back(request, a).url, notes)
+    for a, courses in granting:
         a.status, a.granted_by, a.granted, a.accepted = GRANTED, request.user, timezone.localdate(), None  # a new Bescheid, to accept anew
-        a.hours = agreed(a.term.courses.filter(pk__in=[c.pk for c in courses]), a.person)
-        a.rate = rate or a.rate or Rate.objects.filter(assignments__person=a.person).order_by('-assignments__term__start').first()
         a.save()
         a.courses.set(courses)
-        bescheid(a, request.user)
-        granted += 1
-        if limit and a.hours > limit:
-            beyond.append(a.person.last_name)
-    if granted:
-        messages.success(request, f'{plural(granted, "Lehrauftrag", "Lehraufträge")} erteilt; {"der Bescheid ist" if granted == 1 else "die Bescheide sind"} im Postfach.')
-    else:
-        messages.error(request, 'Nichts erteilt: ohne Lehrveranstaltung kein Lehrauftrag.')
+        texts.send('lehrauftrag', a.person, reverse('courses:mine'), **bescheid(a, courses, request.user))
+    messages.success(request, f'{plural(len(granting), "Lehrauftrag", "Lehraufträge")} erteilt; {"der Bescheid ist" if len(granting) == 1 else "die Bescheide sind"} im Postfach.')
     if beyond:
         messages.warning(request, f'Über {number_format(limit)} SWS: {", ".join(beyond)}. Viel Lehre im Auftrag kann als Beschäftigung gelten.')
     return back(request, a)

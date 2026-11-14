@@ -6,6 +6,7 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('demo/', views.demo, name='demo'),
     path('demo/moodle/', views.demo_moodle, name='demo_moodle'),
+    path('demo/datum/', views.demo_day, name='demo_day'),
     path('zugang/', views.gate, name='gate'),
     path('barrierefreiheit/', views.accessibility, name='accessibility'),
     path('logo/', views.logo, name='logo'),

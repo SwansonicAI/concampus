@@ -19,6 +19,7 @@
     {% if user.is_authenticated %}
     <div class="me">
       <button type="button" class="search" title="Strg+K oder /">Suchen …<kbd>Strg K</kbd></button>
+      {% if demo_day %}<span class="badge wait" title="Demo: ConCampus zeigt diesen Tag; zurück im Menü">{{ today|date:"D j.n.Y" }}</span>{% endif %}
       <a href="{% url 'inbox' %}">Postfach{% if unread %}<span class="count">{{ unread }}</span>{% endif %}</a>
       <details class="menu">
         <summary>{{ user.first_name|default:user.username }}</summary>
@@ -28,6 +29,7 @@
           <a href="{% url 'account' %}">Mein Konto</a>
           <a href="{% url 'password_change' %}">Passwort ändern</a>
           {% if user.is_superuser %}<a href="{% url 'admin:index' %}">Datenpflege</a>{% endif %}
+          {% if day_control %}<form method="post" action="{% url 'demo_day' %}" class="inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><label>Demo-Datum<input name="tag" data-day autocomplete="off" size="11" value="{{ today|date:'d.m.Y' }}"></label><button class="btn ghost small">Springen</button>{% if demo_day %}<button class="link" name="tag" value="">Zurück zu heute</button>{% endif %}</form>{% endif %}
           <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="link">Abmelden</button></form>
         </div>
       </details>

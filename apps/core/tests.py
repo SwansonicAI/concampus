@@ -153,6 +153,16 @@ class LoginTest(Seeded):
         r = Client(enforce_csrf_checks=True).post('/konto/login/', {'username': 'student'}, HTTP_REFERER='http://testserver/konto/login/')
         self.assertContains(r, 'href="http://testserver/konto/login/"', status_code=403)
 
+    def test_a_demo_session_lives_on_its_day_alone(self):  # core/clock.py: no other session, nor the server, travels with it
+        day = timezone.localdate() + timedelta(days=100)
+        traveller, other = self.login('student'), self.login('lehre')
+        traveller.post('/demo/datum/', {'tag': f'{day:%d.%m.%Y}'})
+        self.assertEqual(traveller.get('/').context['today'], day)
+        self.assertNotEqual(timezone.localdate(), day)  # outside the request: the real day
+        self.assertEqual(other.get('/').context['today'], timezone.localdate())
+        traveller.post('/demo/datum/', {'tag': ''})
+        self.assertEqual(traveller.get('/').context['today'], timezone.localdate())
+
     def test_demo_logins_only_past_the_code_and_only_for_its_people(self):
         client = Client()
         self.assertEqual(client.post('/demo/', {'konto': 'student'}).status_code, 404)  # no code set: no way in

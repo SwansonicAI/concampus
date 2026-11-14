@@ -130,6 +130,9 @@ main.page { padding-top: 32px; padding-bottom: 96px; }
 .link:hover { text-decoration: underline; }
 .link[data-armed] { padding: 2px 8px; border: 1px solid currentColor; border-radius: var(--radius); font-size: 14px; text-align: left; }
 .unconfirm { margin-left: 10px; color: var(--muted); font-size: 14px; }
+/* A file field: the page's own button and the file's name; the browser's field stays for its checks, unseen */
+.picker { position: relative; display: inline-flex; align-items: center; gap: 8px; }
+.picker input[type=file] { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; }
 /* Arrows are drawn, not taken from the font, so they are as strong in every browser; they take the colour of their text */
 .arrow, .more::before, .todo .what::before, th[aria-sort] button::after, .menu summary::after, .trail a + a::before {
   content: "";

@@ -237,7 +237,7 @@ def application(request, pk):
         'remind': office and (accepted and missing or study.status == Study.Status.APPLIED and uploads_open(study) and incomplete(study)),
         'show_results': office or juror,
         'checklist': items if personal else [item for item in items if item['kind'].jury],
-        'documents': study.documents.exclude(message=None) if personal else [],
+        'documents': study.documents.exclude(message=None) if study.person == person or any(person.may(c, study) for c in ('manage_students', 'decide_results')) else [],  # as core.views.letter opens them
         'decide': person.may('decide_applications', study) and study.status in UNDECIDED and not accepted,
         'enrol': person.may('manage_students', study),
         'history': bool(tables(person.roles)),

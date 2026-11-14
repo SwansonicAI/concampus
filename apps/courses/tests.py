@@ -303,10 +303,13 @@ class AssignmentTest(Seeded):
         assignment = Assignment.objects.get(person=teacher, term=target)
         self.assertEqual((assignment.status, list(assignment.courses.values_list('origin', flat=True))), (Assignment.Status.PROPOSED, [course.pk]))
         self.assertEqual(self.login('institut').post('/lehre/lehrauftraege/erteilen/', {'auftrag': [assignment.pk]}).status_code, 403)
-        self.login('dekanat').post('/lehre/lehrauftraege/erteilen/', {'auftrag': [assignment.pk], 'semester': target.pk})
+        dekanat = self.login('dekanat')
+        self.assertContains(dekanat.post('/lehre/lehrauftraege/erteilen/', {'auftrag': [assignment.pk], 'semester': target.pk}), 'Bescheide versenden')  # first the preview
+        self.assertEqual(Assignment.objects.get(pk=assignment.pk).status, Assignment.Status.PROPOSED)
+        dekanat.post('/lehre/lehrauftraege/erteilen/', {'auftrag': [assignment.pk], 'semester': target.pk, 'bestaetigt': '1'})
         assignment.refresh_from_db()
         self.assertEqual(assignment.status, Assignment.Status.GRANTED)
-        self.assertTrue(teacher.messages.filter(subject=f'Bescheid: Lehrauftrag {target}').exists())
+        self.assertTrue(teacher.messages.get(subject=f'Bescheid: Lehrauftrag {target}').reference)  # an Aktenzeichen, as every Bescheid
 
     def test_hours_held_leave_out_dates_called_off(self):
         assignment = Assignment.objects.filter(status=Assignment.Status.GRANTED, courses__bookings__end__lt=timezone.now(), courses__groups=None).first()

@@ -279,7 +279,9 @@ def booking(request, pk=None):
         room = Room.objects.filter(pk=initial['room']).first() if str(initial['room']).isdigit() else None
         if data is None and room:  # picked in the plan: what stands in the way shows at once, not after saving
             data = tried(person, room, start.date(), start.time(), end.time()).data.copy()
-    if kind := request.GET.get('kategorie'):  # e.g. a new event
+    if 'veranstaltung' in request.GET:  # a new event: in the first category the public sees, whatever the Hochschule calls it
+        initial['category'] = BookingCategory.objects.filter(public=True).order_by('order').values_list('pk', flat=True).first()
+    elif kind := request.GET.get('kategorie'):
         initial['category'] = kind
     if data and (instead := data.pop('instead', [''])[0]):  # another room or a later time, offered when the room was taken
         what, _, value = instead.partition(':')

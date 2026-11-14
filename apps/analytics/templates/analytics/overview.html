@@ -2,7 +2,7 @@
 {% block title %}Auswertungen{% endblock %}
 {% block subnav %}{% include "analytics/_nav.html" %}{% endblock %}
 {% block content %}
-<p class="eyebrow">Stand {% now "j. F Y" %}</p>
+<p class="eyebrow">Stand {{ today|date:"j. F Y" }}</p>
 <h1>Auswertungen</h1>
 
 <div class="sections" data-panel>

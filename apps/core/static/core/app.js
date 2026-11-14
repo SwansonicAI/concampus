@@ -22,6 +22,7 @@ function init(root) {
   root.querySelectorAll('.lines').forEach(lineChart);
   root.querySelectorAll('table:not(.hours)').forEach(sortable);
   root.querySelectorAll('table').forEach(scrolling);
+  root.querySelectorAll('input[type=file]').forEach(picker);
 }
 
 // A wide table scrolls within itself, never the page.
@@ -551,6 +552,7 @@ document.addEventListener('click', event => {
   document.querySelectorAll('button[data-armed]').forEach(armed => armed === button || disarm(armed));
   if (!button || button.dataset.armed) return;
   event.preventDefault();
+  if (button.form && !button.formNoValidate && !button.form.reportValidity()) return;  // what is missing first, then the question
   button.style.minWidth = `${button.offsetWidth}px`;
   button.dataset.label = button.innerHTML;
   button.dataset.armed = '1';
@@ -787,6 +789,18 @@ async function swap(url) {
   if (again?.type === 'search') again.setSelectionRange(typed.length, typed.length);
 }
 
+// A file field reads like the page, a button and the chosen file's name in German, whatever the browser's language.
+function picker(input) {
+  if (input.closest('.picker')) return;
+  const box = Object.assign(document.createElement('span'), {className: 'picker'});
+  const choose = Object.assign(document.createElement('button'), {type: 'button', className: 'btn ghost small', textContent: input.multiple ? 'Dateien wählen' : 'Datei wählen'});
+  const chosen = Object.assign(document.createElement('small'), {className: 'muted', textContent: 'keine gewählt'});
+  input.before(box);
+  box.append(input, choose, chosen);
+  choose.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => { chosen.textContent = [...input.files].map(file => file.name).join(', ') || 'keine gewählt'; });
+}
+
 // A file over its limit is caught before a long upload starts.
 document.addEventListener('change', event => {
   const input = event.target;
@@ -818,7 +832,7 @@ document.addEventListener('submit', event => {
   const form = event.target;
   if (!form.matches('[data-upload]') || !form.checkValidity()) return;
   event.preventDefault();
-  const button = form.querySelector('button');
+  const button = form.querySelector('button:not([type=button])');
   const label = button.textContent;
   const request = new XMLHttpRequest();
   const failed = () => {
@@ -1066,6 +1080,18 @@ if (drawer) {
     const top = document.querySelector('.plan').getBoundingClientRect().top;
     await swap(new URL(location.href));
     scrollBy(0, document.querySelector('.plan').getBoundingClientRect().top - top);  // the plan stays where it was, the message above it
+  });
+  quick.addEventListener('change', event => {  // another time is checked anew, so no note from the old one stays
+    const {begin, until} = event.target.form?.elements ?? {};
+    if (event.target !== begin && event.target !== until) return;
+    const hhmm = text => { const m = text.trim().match(/^(\d{1,2})(?:[:.]?(\d{2}))?$/); return m && `${m[1].padStart(2, '0')}:${m[2] ?? '00'}`; };
+    const url = new URL(event.target.form.getAttribute('action'), location.href);
+    const day = url.searchParams.get('start')?.slice(0, 11), from = hhmm(begin.value), to = hhmm(until.value);
+    if (!day || !from || !to) return;  // one's own booking, or a time not yet clear: checked when saved
+    url.searchParams.set('start', day + from);
+    url.searchParams.set('ende', day + to);
+    pick.textContent = `${from}–${to}`;
+    open(url, quick.anchor);
   });
 
   // Keys: Ctrl+K or / searches, Esc closes the panel, and links marked data-key answer to their key.

@@ -17,13 +17,13 @@
       {% csrf_token %}
       <h3>Ihre Wertung</h3>
       <div class="inline">
-        <label>Punkte (0–{{ course.max_points }})<input class="cell{% if error %} bad{% endif %}" type="text" inputmode="decimal" name="score-{{ p.pk }}-{{ user.pk }}" value="{{ mine|mark }}"></label>
+        <label>Punkte (0–{{ course.max_points }})<input class="cell{% if error %} bad{% endif %}" type="text" inputmode="decimal" name="score-{{ p.pk }}-{{ user.pk }}" value="{{ mine|mark }}" autofocus></label>
         <button class="btn">Speichern und weiter</button>
       </div>
       {% if error %}<p class="fail" style="margin: 8px 0 0"><small>{{ error }}</small></p>{% endif %}
       <p class="muted" style="margin: 12px 0 0"><small>Bestanden ab {{ course.pass_mark }} Punkten im Mittel der Kommission, {% if institution.audition_rounding == 'cut' %}nach der ersten Nachkommastelle abgeschnitten{% else %}auf eine Nachkommastelle kaufmännisch gerundet{% endif %}. Die Wertungen der anderen sehen Sie, sobald alle gewertet haben; dann ist Ihre gesperrt. Weiter geht es zur nächsten Bewerbung ohne Ihre Wertung.</small></p>
     </form>
-    {% if mine is None %}
+    {% if not scored %}
     <form method="post" action="{% url 'courses:recuse' course.pk %}" class="inline" style="margin-top: 12px">
       {% csrf_token %}
       <input type="hidden" name="participation" value="{{ p.pk }}"><input type="hidden" name="next" value="{{ request.get_full_path }}">
