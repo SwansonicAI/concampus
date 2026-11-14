@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 
 from core.models import Institute, Person, Tracked
+from core.text import COLLATION
 
 
 class Instrument(Tracked, models.Model):
@@ -11,7 +12,7 @@ class Instrument(Tracked, models.Model):
     scope = (['institute'], [])
 
     number = models.CharField('Inventarnummer', max_length=30, unique=True)
-    name = models.CharField('Instrument', max_length=80, help_text='Z. B. „Violoncello 4/4“ oder „Cajón“.')
+    name = models.CharField('Instrument', max_length=80, db_collation=COLLATION, help_text='Z. B. „Violoncello 4/4“ oder „Cajón“.')
     maker = models.CharField('Hersteller und Baujahr', max_length=120, blank=True)
     institute = models.ForeignKey(Institute, models.SET_NULL, null=True, blank=True, related_name='instruments', verbose_name='Institut')
     note = models.TextField('Zustand und Zubehör', blank=True)

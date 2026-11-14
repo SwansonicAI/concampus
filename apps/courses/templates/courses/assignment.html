@@ -44,7 +44,7 @@
 {% if a.status == 'proposed' or a.more %}
 <form method="post" action="{% url 'courses:grant' %}" class="inline" style="margin-top: 24px">
   {% csrf_token %}<input type="hidden" name="auftrag" value="{{ a.pk }}"><input type="hidden" name="von" value="auftrag">
-  {% if rates %}<label>Vergütungsstufe<select name="stufe">{% for r in rates %}<option value="{{ r.pk }}"{% if r.pk == rate %} selected{% endif %}>{{ r }}</option>{% endfor %}</select></label>{% endif %}
+  {% if rates %}<label>Vergütungsstufe<select name="stufe" required>{% if not rate %}<option value="">Bitte wählen</option>{% endif %}{% for r in rates %}<option value="{{ r.pk }}"{% if r.pk == rate %} selected{% endif %}>{{ r }}</option>{% endfor %}</select></label>{% endif %}
   <button class="btn">{% if a.status == 'granted' %}Erneut erteilen{% else %}Erteilen{% endif %}</button>
 </form>
 {% endif %}

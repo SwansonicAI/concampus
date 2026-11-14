@@ -13,6 +13,7 @@ from core.dates import ClockField, DayField, starting
 from core.apps import plural
 from core.models import Institution, Person, Term
 from core.shortcuts import ids
+from core.text import collated
 from .models import Booking, BookingCategory, Room, later, span
 from .plans import agenda
 
@@ -96,7 +97,7 @@ class Nearby(forms.models.ModelChoiceIterator):
     def __iter__(self):
         picked = {str(pk) for pk in self.field.picked}
         shown = self.queryset.filter(Q(pk__in=self.field.picked) | self.field.near).distinct()
-        for person in sorted(shown, key=lambda p: (str(p.pk) not in picked, p.last_name, p.first_name)):
+        for person in sorted(shown, key=lambda p: (str(p.pk) not in picked, collated(p.name))):
             yield self.choice(person)
 
 
@@ -241,7 +242,7 @@ class BookingForm(forms.ModelForm):
         if not (self.errors and b.room_id and b.start and b.end and b.clashes().exists()):
             return None
         taken = Booking.objects.filter(start__lt=b.end, end__gt=b.start, category__blocks=True).values('room')
-        rooms = sorted(self.fields['room'].queryset.exclude(pk__in=taken), key=lambda r: (r.function_id != b.room.function_id, r.building != b.room.building, r.name))
+        rooms = sorted(self.fields['room'].queryset.exclude(pk__in=taken), key=lambda r: (r.function_id != b.room.function_id, r.building != b.room.building, collated(r.name)))
         length = b.end - b.start
         start = free_again(b.room_id, b.start, length, exclude=b.pk)
         return {'rooms': rooms[:4], 'later': start and (start, start + length)}

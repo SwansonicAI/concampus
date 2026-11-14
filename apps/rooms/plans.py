@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from core.dates import starting
 from core.models import Institution, Person
+from core.text import collated
 from courses.models import Course, Group, Participation
 from .models import Booking, BookingCategory
 
@@ -119,7 +120,7 @@ def recipients(booking, by):
         people |= set(Person.objects.filter(studies__participations__course=booking.course_id))
     people.add(booking.person)
     people.discard(by)
-    return sorted(people, key=lambda p: p.name)
+    return sorted(people, key=lambda p: collated(p.name))
 
 
 def called_off(booking, by):

@@ -14,6 +14,7 @@ from core.shortcuts import Sheet, ids
 from core.apps import plural
 from core.forms import ComposeForm
 from core.models import Export, Person
+from core.text import collated
 from students.models import Study
 from .. import panel
 from ..forms import AddForm
@@ -98,7 +99,7 @@ def roster(request, pk):
     writer = Sheet(response)
     writer.writerow(['Matrikelnummer', 'Nachname', 'Vorname', 'Studiengang', 'Hauptfach', 'Modul', 'Gruppe', 'Angemeldet', 'Warteliste', 'Note', 'Bestanden'])
     Export.log(request.user, f'Teilnehmende {course.title}, {course.term}', len(rows))
-    for p in sorted(rows, key=lambda p: (p.study.person.last_name, p.study.person.first_name)):
+    for p in sorted(rows, key=lambda p: collated(p.study.person.name)):
         writer.writerow([
             p.study.person.matriculation, p.study.person.last_name, p.study.person.first_name, p.study.program.title, p.study.subject,
             p.module.code if p.module else '', p.group.number if p.group else '', f'{timezone.localtime(p.created):%d.%m.%Y %H:%M}', queued(p) or '',
@@ -115,7 +116,7 @@ def write(request, pk):
     chosen = set(request.POST.getlist('study'))
     rows = seen(course, request.user, list(course.participations.select_related('study__person')))
     studies = list({p.study_id: p.study for p in rows if not chosen or str(p.study_id) in chosen}.values())
-    people = sorted({s.person for s in studies}, key=lambda p: p.name)
+    people = sorted({s.person for s in studies}, key=lambda p: collated(p.name))
     form = ComposeForm(request.POST if 'subject' in request.POST else None)
     if people and form.is_valid():
         form.send(people, str(request.user), course.get_absolute_url())

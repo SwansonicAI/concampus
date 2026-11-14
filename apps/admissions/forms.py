@@ -12,6 +12,7 @@ from core.dates import PastField
 from core.keys import COUNTRIES, PLACES, TOWNS, KeyChoice, TownInput, choices, find
 from core.forms import frequent
 from core.models import Institution, Person
+from core.text import collated
 from courses.models import Course
 
 
@@ -110,7 +111,7 @@ class DetailsForm(forms.Form):
         own = found.get(study.subject.name, set())
         self.fields['teacher'].queryset = Person.objects.filter(pk__in=people)
         self.fields['teacher'].choices = [('', 'Keine Angabe')] + [
-            (group, [(p.pk, str(p)) for p in sorted((p for pk, p in people.items() if (pk in own) == mine), key=lambda p: p.name)])
+            (group, [(p.pk, str(p)) for p in sorted((p for pk, p in people.items() if (pk in own) == mine), key=lambda p: collated(p.name))])
             for group, mine in [(f'Hauptfach {study.subject}', True), ('Weitere', False)]
         ]
         if not accompaniment:
@@ -174,7 +175,7 @@ class ApplicationForm(forms.Form):
             set(Course.objects.filter(kind=Course.Kind.AUDITION, program__isnull=False, subject__isnull=False).exclude(subject__in=running.filter(subject__isnull=False).values('subject')).values_list('subject__name', flat=True))
         )
         institutes = defaultdict(list)  # the Hauptfächer one can apply for, by Institut; one's own first
-        for s in sorted(offered.values(), key=lambda s: s.name):
+        for s in sorted(offered.values(), key=lambda s: collated(s.name)):
             institutes[str(s.institute or 'Weitere')].append((s.pk, s.name))
         mine = [(s.pk, s.name) for s in offered.values() if s.pk in own]
         self.fields['subject'].choices = [('', 'Bitte wählen'), *([('Ihr Hauptfach', mine)] if mine else []), *sorted(institutes.items())]
@@ -186,7 +187,7 @@ class ApplicationForm(forms.Form):
         teachers = self.fields['teacher'].queryset = Person.objects.filter(pk__in={pk for pks in taught.values() for pk in pks})
         people = teachers.in_bulk()
         self.fields['teacher'].choices = [('', 'Keine Angabe')] + [
-            (subject, [(p.pk, str(p)) for p in sorted((people[pk] for pk in pks), key=lambda p: p.name)]) for subject, pks in sorted(taught.items())
+            (subject, [(p.pk, str(p)) for p in sorted((people[pk] for pk in pks), key=lambda p: collated(p.name))]) for subject, pks in sorted(taught.items(), key=lambda item: collated(item[0]))
         ]
 
 

@@ -40,7 +40,7 @@ from .dates import months_before
 from .keys import DISTRICTS, replaced
 from .models import AccessRequest, Change, Consent, Export, Institution, Key, Message, Office, Person, Term, Tracked, deliver, limited
 from .index import find
-from .text import ACTS, fit, fold, matching, meant, stem, words
+from .text import ACTS, collated, fit, fold, matching, meant, stem, words
 
 
 def home(request):
@@ -180,7 +180,7 @@ def demo_students(first):
     firsts = enrolled.exclude(person__username__in=settings.DEMO).values('program', 'subject').annotate(first=Min('pk')).values('first')
     studies = enrolled.filter(Q(person=first) | Q(pk__in=firsts)).select_related('person', 'program', 'subject')
     chosen = {}
-    for s in sorted(studies, key=lambda s: (s.person != first, s.program.degree, s.subject.name)):
+    for s in sorted(studies, key=lambda s: (s.person != first, s.program.degree, collated(s.subject.name))):
         detail = f'{s.program.degree} {s.subject}'
         if s.person not in chosen and detail not in chosen.values():
             chosen[s.person] = detail

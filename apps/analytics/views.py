@@ -11,6 +11,7 @@ from django.utils.text import slugify
 from core.access import require
 from core.models import Export, Term
 from core.shortcuts import SHOWN, Sheet, without_term
+from core.text import collated
 from .charts import SPANS, Query, chart, label, lines
 from .figures import MEASURES, narrowed, semesters, table
 from .official import Report
@@ -72,7 +73,7 @@ def official(request):
         response = HttpResponse(content, content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename="{kind}-{report.year if kind == "promovierende" else slugify(term.name)}.csv"'
         return response
-    missing = sorted(report.missing.items(), key=lambda item: item[0].name)
+    missing = sorted(report.missing.items(), key=lambda item: collated(item[0].name))
     return render(request, 'analytics/official.html', {
         'report': report, 'term': term, 'terms': terms, 'setup': report.setup.items(), 'missing': missing[:SHOWN], 'count': len(missing),
     })

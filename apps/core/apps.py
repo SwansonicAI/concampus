@@ -7,7 +7,7 @@ class CoreConfig(AppConfig):
     verbose_name = 'Plattform'
 
     def ready(self):
-        from . import backends, history, text  # noqa: F401  backends logs sign-ins, text registers the fold() SQL function
+        from . import backends, history  # noqa: F401  backends logs sign-ins
         history.connect()
 
 

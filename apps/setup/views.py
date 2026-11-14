@@ -21,7 +21,7 @@ from core.keys import Edition, Key, review
 from core import transfer
 from core.apps import plural
 from core.models import AccessRequest, Export, Feedback, Grant, Institute, Membership, Office, Person, SignIn, Term, Text, limited, waiting
-from core.text import matching
+from core.text import collated, matching
 from core.texts import TEXTS, Values, basics, mail, wording
 from core.shortcuts import SHOWN
 from .editors import EDITORS, formfield
@@ -61,7 +61,7 @@ def approvals(request):
     labels = dict(c for _, group in CAPABILITIES for c in group)
     for a in asks:  # the offices that hold it, those for the person's own Institut first
         a.short, a.label = SHORT.get(a.capability, a.capability), labels.get(a.capability, '')
-        a.offices = sorted(holding(a.capability), key=lambda o: (a.person.institute_id not in {i.pk for i in o.institutes.all()}, o.name))
+        a.offices = sorted(holding(a.capability), key=lambda o: (a.person.institute_id not in {i.pk for i in o.institutes.all()}, collated(o.name)))
     return render(request, 'setup/approvals.html', {
         'asks': asks, 'grants': Grant.objects.select_related('office', 'by'), 'members': Membership.objects.filter(confirmed_by=None).select_related('person', 'office', 'by'),
     })

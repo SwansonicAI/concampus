@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core.models import Institution, Person, Term, Tracked
+from core.text import COLLATION
 from curriculum.models import Module, Program, Subject
 from students.models import Study, stored
 
@@ -86,7 +87,7 @@ class Course(Tracked, models.Model):
 
     term = models.ForeignKey(Term, models.PROTECT, related_name='courses', verbose_name='Semester')
     kind = models.CharField('Art', max_length=12, choices=Kind, default=Kind.COURSE)
-    title = models.CharField('Titel', max_length=200)
+    title = models.CharField('Titel', max_length=200, db_collation=COLLATION)
     area = models.ForeignKey(Area, models.SET_NULL, null=True, blank=True, related_name='courses', verbose_name='Fachgebiet')
     format = models.ForeignKey(Format, models.SET_NULL, null=True, blank=True, related_name='courses', verbose_name='Lehrform')
     program = models.ForeignKey(

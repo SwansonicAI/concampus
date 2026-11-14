@@ -1,6 +1,7 @@
 """The Vorlesungsverzeichnis and a course's own page, with creating, editing and deleting courses."""
 from collections import Counter
 
+from django.apps import apps
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, Exists, F, Max, OuterRef, Prefetch, Q, Subquery
@@ -35,7 +36,9 @@ from .timetable import clashes, fits, unmet, weight
 
 
 def index(request):
-    return redirect('courses:catalogue' if 'manage_courses' in request.user.roles else 'courses:mine')
+    """Lehre opens on the first page of its menu (courses/apps.py): one's own courses, else the Vorlesungsverzeichnis,
+    never an empty „Meine Lehrveranstaltungen“ for an office that neither teaches nor studies."""
+    return redirect(apps.get_app_config('courses').pages(request.user)[0][1])
 
 
 def catalogue(request):

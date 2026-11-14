@@ -1,19 +1,30 @@
 """Forgiving text matching: letter case, accents and German umlaut spellings don't matter (Müller = Mueller = muller),
-nor the ending of a word (Studienpläne finds Studienplan)."""
+nor the ending of a word (Studienpläne finds Studienplan). And German order, for names and titles."""
 import re
 import unicodedata
 from functools import lru_cache, reduce
 from operator import or_
 
-from django.db.backends.signals import connection_created
 from django.db.models import Func, Q, TextField
-from django.dispatch import receiver
 
 from .synonyms import ACTIONS, KINDS, MUSIC, STOP, SYNONYMS
 
 
 SPELLED = (('ae', 'a'), ('oe', 'o'), ('ue', 'u'))
 ENDINGS = ('ern', 'en', 'er', 'es', 'e', 'n', 's')  # German plural and case endings, longest first
+COLLATION = 'de-x-icu'  # the columns lists are sorted by: Postgres has it from ICU, SQLite from german() (core/sqlite)
+
+
+@lru_cache(maxsize=1 << 16)
+def collated(text):
+    """What German order sorts by: an umlaut as its vowel, ß as ss, case and accents aside (Böttcher before Bruno)."""
+    return ''.join(c for c in unicodedata.normalize('NFKD', (text or '').casefold()) if not unicodedata.combining(c))
+
+
+def german(a, b):
+    """The SQLite collation for COLLATION; spelled alike, in a set order still."""
+    a, b = (collated(a), a), (collated(b), b)
+    return (a > b) - (a < b)
 
 
 def handle(first, last):
@@ -122,12 +133,6 @@ def fit(sought, title, more=''):
         best = max([2 * near(word, forms, t) for t in heads] + [near(word, forms, t) for t in rest] + [0])
         found, score = found + bool(best and forms in counted), score + best
     return found / max(len(counted), 1), score
-
-
-@receiver(connection_created)
-def teach_sqlite(sender, connection, **kwargs):
-    if connection.vendor == 'sqlite':
-        connection.connection.create_function('fold', 1, fold, deterministic=True)
 
 
 class Fold(Func):

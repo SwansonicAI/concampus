@@ -10,6 +10,7 @@ from django.urls import reverse
 from core import destatis
 from core.keys import DEGREES, FIELDS, KeyField
 from core.models import Rounding, Term, Tracked, looked_up, once
+from core.text import COLLATION
 
 
 def rounded(value, rounding):
@@ -54,7 +55,7 @@ class Subject(Tracked, models.Model):
     capabilities = ('edit_curriculum',)
     scope = (['institute'], ['programs'])
 
-    name = models.CharField('Name', max_length=80, unique=True)
+    name = models.CharField('Name', max_length=80, unique=True, db_collation=COLLATION)
     institute = models.ForeignKey('core.Institute', models.SET_NULL, null=True, blank=True, related_name='subjects', verbose_name='Institut')
     english = models.CharField('Englisch', max_length=80, blank=True, help_text='Für das Diploma Supplement.')
     field = KeyField('Studienfach', max_length=3, keys=FIELDS, blank=True, help_text='Für die amtliche Statistik, z. B. Orchestermusik.')
@@ -91,7 +92,7 @@ class Program(Tracked, models.Model):
         MASTER = 'master', 'Master, zweiter Abschluss (EQR 7)'
         DIPLOMA = 'diplom', 'Diplom, grundständig (EQR 7)'
 
-    name = models.CharField('Name', max_length=120)
+    name = models.CharField('Name', max_length=120, db_collation=COLLATION)
     degree = models.CharField('Abschluss', max_length=40)
     version = models.PositiveSmallIntegerField('PO-Version')
     starts = models.ForeignKey(

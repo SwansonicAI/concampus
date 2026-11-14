@@ -17,7 +17,7 @@ from core.access import require
 from core.apps import plural
 from core.models import Export, Holiday, Institute, Institution, Office, Person, Term
 from core.shortcuts import Sheet, ids, preview, without_term
-from core.text import matching
+from core.text import collated, matching
 from rooms.models import Booking
 from ..models import Assignment, Group, Rate, per_sws
 from .common import TEACHING
@@ -151,7 +151,7 @@ def assignment(request, pk):
     figures([a], a.term)
     taught = dict(hours(a.term, {a.person_id}).get(a.person, []))
     on = set(a.courses.all())
-    courses = [(c, taught.get(c), c in on) for c in sorted(on | set(taught), key=lambda c: c.title)]
+    courses = [(c, taught.get(c), c in on) for c in sorted(on | set(taught), key=lambda c: collated(c.title))]
     previous = Assignment.objects.filter(person=a.person, rate__isnull=False).exclude(pk=a.pk).order_by('-term__start').values_list('rate', flat=True).first()
     return render(request, 'courses/assignment.html', {
         'a': a, 'courses': courses, 'granting': 'grant_assignments' in person.roles and person.may('grant_assignments', a), 'weeks': weeks(a.term),
@@ -179,7 +179,7 @@ def bescheid(a, courses, by):
         semester=a.term, von=by,
         zeitraum=f'{date_format(a.term.lectures_start, "j.n.Y")} bis {date_format(a.term.lectures_end, "j.n.Y")}',
         umfang=f'{number_format(a.hours)} SWS' if a.hours else 'nach gehaltenen Stunden',
-        veranstaltungen='; '.join(f'{c.title} ({number_format(taught.get(c) or 0)} SWS)' for c in sorted(courses, key=lambda c: c.title)),
+        veranstaltungen='; '.join(c.title + (f' ({number_format(taught[c])} SWS)' if taught.get(c) else '') for c in sorted(courses, key=lambda c: collated(c.title))),
         verguetung=f'{number_format(a.rate.euros, 2)} € je gehaltener Lehrveranstaltungsstunde ({a.rate.name})' if a.rate else 'nach den Vergütungssätzen der Hochschule',
     )
 
@@ -207,7 +207,12 @@ def grant(request):
     if not request.POST.get('bestaetigt'):
         a, courses = granting[0]
         wording = texts.render('lehrauftrag', vorname=a.person.first_name, nachname=a.person.last_name, **bescheid(a, courses, request.user))
-        notes = [f'Über {number_format(limit)} SWS: {", ".join(beyond)}. Viel Lehre im Auftrag kann als Beschäftigung gelten.'] if beyond else []
+        unscoped, unrated = [a.person.last_name for a, _ in granting if not a.hours], [a.person.last_name for a, _ in granting if not a.rate]
+        notes = [
+            *([f'Über {number_format(limit)} SWS: {", ".join(beyond)}. Viel Lehre im Auftrag kann als Beschäftigung gelten.'] if beyond else []),
+            *([f'Ohne SWS, nach gehaltenen Stunden: {", ".join(unscoped)}. Der Umfang kommt aus den Lehrveranstaltungen.'] if unscoped else []),
+            *([f'Ohne Vergütungsstufe: {", ".join(unrated)}. Der Bescheid nennt dann keinen Satz.'] if unrated else []),
+        ]
         return preview(request, 'Lehraufträge erteilen', [('Lehrauftrag erteilt', [a.person for a, _ in granting], wording)],
                        f'{plural(len(granting), "Lehrauftrag", "Lehraufträge")} erteilen und Bescheide versenden', back(request, a).url, notes)
     for a, courses in granting:

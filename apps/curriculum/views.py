@@ -10,6 +10,7 @@ from django.views.decorators.http import require_POST
 
 from core.access import require
 from core.models import Institution, Office, Term
+from core.text import collated
 from core.transfer import FORMAT, load, plan as written
 from courses.models import Course, Format
 from students.models import Study
@@ -53,7 +54,7 @@ def program(request, pk):
     rows = plan(tree, program.semesters, program.choices())
     for row in rows:
         if row['kind'] == 'part':
-            row['offers'] = sorted({c for i in row['items'] for c in offers[i.pk]}, key=lambda c: c.title)
+            row['offers'] = sorted({c for i in row['items'] for c in offers[i.pk]}, key=lambda c: collated(c.title))
     figures = not guest and bool(request.user.roles & OVERSIGHT)
     return render(request, 'curriculum/program.html', {
         'program': program, 'rows': rows, 'formats': Format.objects.exclude(short=''), **columns(rows, program, False), 'semesters': range(1, program.semesters + 1), 'term': term,

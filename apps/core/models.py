@@ -21,6 +21,7 @@ from django.utils.text import slugify
 from . import destatis
 from .access import CAPABILITIES, CODENAMES, SENSITIVE, SHORT, areas
 from .keys import COUNTRIES, DEGREES, DISTRICTS, FIELDS, GERMAN, PLACES, TOWNS, UNIVERSITIES, Edition, Key, KeyField  # noqa: F401, the key lists' models
+from .text import COLLATION
 
 looked_up = ContextVar('looked_up', default=None)  # what a GET request has looked up: core.middleware.lookups
 
@@ -314,7 +315,7 @@ class Institute(Tracked, models.Model):
 
     capabilities = ('manage_institution',)
 
-    name = models.CharField('Name', max_length=80, unique=True)
+    name = models.CharField('Name', max_length=80, unique=True, db_collation=COLLATION)
     code = models.CharField('Kennung im Personalsystem', max_length=30, blank=True, help_text='Wie das Personalsystem die Einheit nennt; ein Import nimmt sie wie den Namen.')
 
     class Meta:
@@ -346,8 +347,10 @@ class Person(Tracked, AbstractUser):
         STATUTORY = 'gesetzlich', 'gesetzlich versichert'
         EXEMPT = 'befreit', 'von der Versicherungspflicht befreit'
 
+    first_name = models.CharField('Vorname', max_length=150, blank=True, db_collation=COLLATION)  # in German order, as every list of people
+    last_name = models.CharField('Nachname', max_length=150, blank=True, db_collation=COLLATION)
     title = models.CharField('Titel', max_length=40, blank=True)
-    given_names = models.CharField('Alle Vornamen', max_length=120, blank=True, help_text='Wie im Ausweis, für Urkunden; leer heißt nur der Rufname.')
+    given_names =models.CharField('Alle Vornamen', max_length=120, blank=True, help_text='Wie im Ausweis, für Urkunden; leer heißt nur der Rufname.')
     birth_name = models.CharField('Geburtsname', max_length=80, blank=True)
     gender = models.CharField('Geschlecht', max_length=1, choices=Gender, blank=True)
     birth_date = models.DateField('Geburtsdatum', null=True, blank=True)

@@ -18,7 +18,7 @@ from core.apps import plural
 from core.dates import day as understood
 from core.models import Institute, Office, Person, Term
 from core.shortcuts import ids, without_term
-from core.text import matching
+from core.text import collated, matching
 from curriculum.models import Module, Program
 from rooms.models import Booking
 from students.models import Study
@@ -123,7 +123,7 @@ def rollover(request):
     slots = usual([c.pk for c in rows if c.kind == Course.Kind.COURSE])
     for c in rows:
         c.slot = described(slots.get(c.pk))
-    rows.sort(key=lambda c: (c.kind == Course.Kind.LESSON, c.group, c.title))
+    rows.sort(key=lambda c: (c.kind == Course.Kind.LESSON, c.group, collated(c.title)))
     planned = target.courses.filter(kind__in=TEACHING).exclude(origin=None)  # taken over: for their teachers to confirm
     live = planned.filter(cancelled=None)
     waiting = live.filter(confirmed=None)

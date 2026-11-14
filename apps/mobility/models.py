@@ -8,6 +8,7 @@ from django.db import models
 from django.utils import timezone
 
 from core.models import COUNTRIES, KeyField, Person, Tracked
+from core.text import COLLATION
 from curriculum.models import Module, Subject
 from students.models import Study
 
@@ -17,8 +18,8 @@ class Partner(Tracked, models.Model):
 
     capabilities = ('manage_mobility',)
 
-    name = models.CharField('Name', max_length=200, unique=True)
-    city = models.CharField('Ort', max_length=80, blank=True)
+    name = models.CharField('Name', max_length=200, unique=True, db_collation=COLLATION)
+    city =models.CharField('Ort', max_length=80, blank=True)
     country = KeyField('Staat', max_length=60, keys=COUNTRIES)
     erasmus = models.CharField('Erasmus-Code', max_length=20, blank=True, help_text='Wie die Erasmus-Charta sie nennt, z. B. „A WIEN05“.')
     hei = models.CharField('Kennung in Erasmus Without Paper', max_length=100, blank=True, help_text='Ihr SCHAC-Code, z. B. „mdw.ac.at“.')

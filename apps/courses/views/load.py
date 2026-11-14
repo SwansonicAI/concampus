@@ -13,7 +13,7 @@ from django.utils import timezone
 from core.access import require
 from core.models import Institute, Institution, Person, Term
 from core.shortcuts import without_term
-from core.text import fold
+from core.text import collated, fold
 from curriculum.models import Module
 from students.models import Study
 from ..models import Assignment, Course, Ensemble, Format, Group, Obligation, Participation, Reduction
@@ -163,7 +163,7 @@ def loads(term, person, institute='', words=()):
             low=bool(floor) and owed is not None and total * 100 < owed * floor,
             account=None if owed is None or t.employment == Person.Employment.LEHRAUFTRAG or not since or term.start < since else account[t.pk] + total - owed,
         ))
-    return sorted(rows, key=lambda row: row.teacher.last_name)
+    return sorted(rows, key=lambda row: collated(row.teacher.name))
 
 
 @require('view_teaching_load')

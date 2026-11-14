@@ -14,7 +14,7 @@ from core.forms import ComposeForm
 from core.apps import plural
 from core.models import Export, Office, Person, Term
 from core.shortcuts import SHOWN, Sheet, ids
-from core.text import matching
+from core.text import collated, matching
 from courses.lessons import untimed
 from courses.models import Participation
 from curriculum.models import Module, Program, Subject, preload
@@ -181,7 +181,7 @@ def compose(request):
     list's filter finds, beyond the rows it shows."""
     chosen = listed(request)[0].values('pk') if request.GET.get('alle') else ids(request.POST.getlist('study') or request.GET.getlist('study'))
     studies = request.user.within(Study.objects.filter(pk__in=chosen), 'message_students').select_related('person')
-    people = sorted({s.person for s in studies}, key=lambda p: p.name)
+    people = sorted({s.person for s in studies}, key=lambda p: collated(p.name))
     back = request.POST.get('next') or request.GET.get('next', '')
     if not url_has_allowed_host_and_scheme(back, {request.get_host()}):
         back = ''
