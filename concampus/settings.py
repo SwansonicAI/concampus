@@ -63,6 +63,8 @@ SECURE_CSP = {
     'default-src': [CSP.SELF], 'script-src': [CSP.SELF], 'style-src': [CSP.SELF, CSP.UNSAFE_INLINE], 'img-src': [CSP.SELF, 'data:'],
     'object-src': [CSP.NONE], 'base-uri': [CSP.NONE], 'frame-ancestors': [CSP.NONE],
 }
+if DEMO:  # the demo's audition videos are stand-ins from Wikimedia Commons (core/management/commands/seed.py)
+    SECURE_CSP['media-src'] = [CSP.SELF, 'https://upload.wikimedia.org']
 
 
 # Application definition
