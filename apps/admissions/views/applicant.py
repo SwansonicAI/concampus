@@ -26,6 +26,8 @@ from ..papers import Condition, checklist, document_types, owed, stages
 from .common import accept_by, lapsed, uploads_open
 from .juries import programme
 
+SHOWN = {'.pdf', '.jpg', '.jpeg', '.png', '.webp', '.gif'}  # opened in the browser; any other kind of file only downloads
+
 
 def standing(study, days):
     """(how far an application got, its state in the applicant's words): an offer lapsed counts for little, one accepted
@@ -253,9 +255,12 @@ def document(request, pk):
         or d.kind_id == 'abschlussarbeit' and examining.filter(kind=Course.Kind.THESIS, participations__study=d.study_id).exists()
     ):
         raise PermissionDenied
-    if not d.file:
+    if not d.file or not d.file.storage.exists(d.file.name):  # never uploaded, or lost from the storage
         raise Http404
-    return FileResponse(d.file.open('rb'), filename=d.title if Path(d.title).suffix else d.title + Path(d.file.name).suffix)  # the type follows the name
+    suffix = Path(d.file.name).suffix.lower()  # of the file stored, checked at upload; a title may be cut short
+    response = FileResponse(d.file.open('rb'), as_attachment=suffix not in SHOWN, filename=Path(d.title).stem + suffix)
+    response['Content-Security-Policy'] = 'sandbox'  # whatever it holds never runs as part of ConCampus
+    return response
 
 
 @require_POST

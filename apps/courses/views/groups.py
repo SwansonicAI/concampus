@@ -15,6 +15,7 @@ from core import history, texts
 from core.apps import plural
 from core.forms import again
 from core.models import Person
+from core.shortcuts import ids
 from rooms.models import Booking
 from rooms.plans import agenda, side_by_side, walk
 from students.models import Study
@@ -72,6 +73,9 @@ def ensemble(request, pk):
     course = get_object_or_404(Course.objects.select_related('term'), pk=pk, kind__in=TEACHING, allocation=Course.Allocation.ENSEMBLE)
     study = get_object_or_404(Study, pk=request.POST.get('study'), person=request.user, status=Study.Status.ENROLLED)
     form = EnsembleForm(request.POST, course=course, person=request.user)
+    if course.cancelled or course.term.planning or course.term.end < timezone.localdate():  # as registering does
+        messages.error(request, 'Diese Lehrveranstaltung entfällt.' if course.cancelled else 'Das Semester ist noch nicht veröffentlicht.' if course.term.planning else 'Das Semester ist vorbei.')
+        return redirect(course)
     if not course.is_open:
         messages.error(request, 'Der Anmeldeschluss ist vorbei.' if not course.upcoming else f'Die Anmeldung beginnt am {date_format(course.opens, "j.n.Y")}.')
         return redirect(course)
@@ -85,8 +89,9 @@ def ensemble(request, pk):
     with transaction.atomic():
         group = Ensemble.objects.create(course=course, name=form.cleaned_data['name'], repertoire=form.cleaned_data['repertoire'], wish=form.cleaned_data['wish'])
         group.members.set(members)
-        for s in members:
-            Participation.objects.get_or_create(course=course, study=s, defaults={'module': course.modules.filter(program=s.program_id).order_by('semester').first()})
+        for s in members:  # a place each, unless they have one already (a course of two parts of a module: two)
+            if not course.participations.filter(study=s).exists():
+                Participation.objects.create(course=course, study=s, module=course.modules.filter(program=s.program_id).order_by('semester').first())
     for s in members[1:]:
         texts.send('ensemble', s.person, course.get_absolute_url(), veranstaltung=course.title, besetzung=group.name, von=request.user)
     messages.success(request, f'„{group.name}“ angemeldet. Wer es betreut, erfahren Sie im Postfach.')
@@ -175,7 +180,7 @@ def regroup(request, pk):
     if not teaches(request.user, course) or course.term.over:
         raise PermissionDenied
     group = get_object_or_404(course.groups.prefetch_related('bookings__room'), pk=request.POST.get('gruppe') or None)
-    chosen = seen(course, request.user, list(course.participations.filter(study__in=request.POST.getlist('study')).exclude(group=group).select_related('study__person')))
+    chosen = seen(course, request.user, list(course.participations.filter(study__in=ids(request.POST.getlist('study'))).exclude(group=group).select_related('study__person')))
     if not chosen:
         messages.error(request, 'Niemand verschoben. Bitte ankreuzen, wen.')
         return redirect(course)

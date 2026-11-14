@@ -15,7 +15,7 @@ from core import dates
 from core.access import require
 from core.apps import plural
 from core.models import Consent, Institution, Person, Term
-from core.shortcuts import preview
+from core.shortcuts import ids, preview
 from core.text import handle
 from admissions.papers import papers
 from exams.results import exhausted
@@ -68,7 +68,7 @@ def enrol(request, pk):
 @require_POST
 def enrol_many(request):
     """Immatrikulation of the ticked applicants whose places are taken up and complete."""
-    studies = request.user.within(Study.objects.filter(pk__in=request.POST.getlist('study'), status=Study.Status.ADMITTED), 'manage_students')
+    studies = request.user.within(Study.objects.filter(pk__in=ids(request.POST.getlist('study')), status=Study.Status.ADMITTED), 'manage_students')
     ready = [s for s in papers(studies).select_related('subject', 'start_term').order_by('person__last_name') if not s.missing()]
     back = request.POST.get('next', '')
     back = back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else reverse('admissions:board')

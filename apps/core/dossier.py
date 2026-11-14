@@ -16,6 +16,7 @@ from .history import describe, show
 from .models import Change, Export
 
 SKIPPED = {'id', 'password', 'is_superuser', 'is_staff', 'person', 'study', 'file'}
+COURSE = ('term', 'subject', 'area', 'format', 'program', 'assessor', 'accompaniment__term', 'origin__term')  # what a course's values name, in one query
 
 
 def values(record):
@@ -43,7 +44,7 @@ def contents(person):
         'Studien': [
             values(s) | {
                 'Semester': [values(t) for t in s.terms.select_related('term')],
-                'Leistungen': [values(p) for p in s.participations.select_related('course', 'module')],
+                'Leistungen': [values(p) for p in s.participations.select_related('course__term', 'module', 'group', 'accompanist')],
             }
             for s in person.studies.select_related('program', 'subject', 'start_term', 'teacher')
         ],
@@ -61,8 +62,8 @@ def contents(person):
             values(m) | {'Learning Agreement': [values(c) for c in m.components.select_related('module')]}
             for m in Mobility.objects.filter(study__person=person).select_related('partner', 'agreement', 'study')
         ],
-        'Raumbuchungen': [values(b) for b in Booking.objects.filter(Q(person=person) | Q(participants=person)).select_related('room', 'category', 'course').distinct()],
-        'Lehre': [values(c) for c in Course.objects.filter(staff=person).select_related('term', 'subject')],
+        'Raumbuchungen': [values(b) for b in Booking.objects.filter(Q(person=person) | Q(participants=person)).select_related('room', 'category', 'course__term', 'group', 'ensemble').distinct()],
+        'Lehre': [values(c) for c in Course.objects.filter(staff=person).select_related(*COURSE)],
         'Ermäßigungen': [values(r) for r in Reduction.objects.filter(person=person)],
         'Exporte': [values(e) for e in Export.objects.filter(person=person)],
     }

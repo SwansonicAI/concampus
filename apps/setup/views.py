@@ -46,7 +46,8 @@ def approvals(request):
     if request.method == 'POST':
         model ={'recht': Grant, 'mitglied': Membership}.get(request.POST.get('art'))
         mine = {'confirmed_by': None} if model is Membership else {}
-        pending = get_object_or_404(model.objects.exclude(by=request.user).exclude(**({'person': request.user} if model is Membership else {})), pk=request.POST.get('id'), **mine) if model else None
+        own = {'person': request.user} if model is Membership else {'office__in': request.user.groups.values('pk')}  # never rights one gets oneself
+        pending = get_object_or_404(model.objects.exclude(by=request.user).exclude(**own), pk=request.POST.get('id'), **mine) if model else None
         if pending is None:
             raise PermissionDenied('Bestätigen kann nur eine zweite Person.')
         if request.POST.get('decision') == 'yes':
@@ -317,6 +318,14 @@ def staff_import(request):
     ours = None if request.user.everywhere('manage_staff') else set(Institute.objects.filter(pk__in=request.user.ours('manage_staff')).values_list('name', flat=True))
     faults = [f'Zeile {i + 2}: Institut {p.get("institute") or "fehlt"}, außerhalb Ihres Amtes' for i, p in enumerate(document['people']) if ours is not None and p.get('institute') not in ours]
     faults += transfer.check(document)
+    found, mine = transfer.changes(document), set(request.user.within(Person.teachers(), 'manage_staff').values_list('pk', flat=True))
+    for i, (p, person, _) in enumerate(found):  # who is there already, matched across the Hochschule: only one's own teachers change
+        if person is None:
+            continue
+        if person.pk not in mine and Person.teachers().filter(pk=person.pk).exists():
+            faults.append(f'Zeile {i + 2}: {person} lehrt in einem Institut außerhalb Ihres Amtes')
+        elif (person.reach or person.pk not in mine) and (p.get('email', person.email).lower() != person.email.lower() or p.get('username', person.username) != person.username):
+            faults.append(f'Zeile {i + 2}: E-Mail und Benutzername von {person} ändert nur die Kontenverwaltung')
     if request.method == 'POST' and 'laden' in request.POST and not faults:
         counts = transfer.load(document)
         del request.session['lehrende']
@@ -326,7 +335,7 @@ def staff_import(request):
     rows = [
         {'line': i + 2, 'p': p, 'person': person, 'changed': changed, 'kind': kinds.get(p.get('employment'), p.get('employment', '')),
          'hours': next((o['hours'] for o in p.get('obligations', [])), ''), 'faults': [f.split(': ', 1)[1] for f in faults if f.startswith(f'Zeile {i + 2}:')]}
-        for i, (p, person, changed) in enumerate(transfer.changes(document))
+        for i, (p, person, changed) in enumerate(found)
     ]
     return render(request, 'setup/staff_import.html', {
         'term': term, 'rows': rows, 'faults': faults, 'new': sum(1 for r in rows if not r['person'] and not r['faults']),

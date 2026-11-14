@@ -15,14 +15,14 @@ from core import history
 from core.access import kept
 from core.forms import sent
 from core.models import Office, Term
-from core.shortcuts import without_term
+from core.shortcuts import ids, without_term
 from core.text import matching
 from curriculum.models import Module, Program
 from rooms.models import Booking
 from rooms.views import ROOMS
 from students.models import Study
 from .. import moodle, panel
-from ..forms import AddForm, CourseForm, DateForm, EnsembleForm, Lessons, PlanForm, TeachingForm
+from ..forms import AddForm, CourseForm, DateForm, EnsembleForm, Lessons, PlanForm, TeachingForm, twinned
 from ..models import Area, Course, Format, Group, MoodleCourse, Participation, Signup
 from ..modules import credited
 from .assignments import propose
@@ -159,7 +159,7 @@ def course(request, pk):
         if not staffed:
             raise PermissionDenied
         players = {str(t.pk): t for t in course.staff.all()}
-        for p in accompanied(course).filter(pk__in=request.POST.getlist('teilnahme')):
+        for p in accompanied(course).filter(pk__in=ids(request.POST.getlist('teilnahme'))):
             p.accompanist = players.get(request.POST.get(f'begleitung-{p.pk}'))
             p.save(update_fields=['accompanist'])
         messages.success(request, 'Begleitung eingeteilt.')
@@ -334,12 +334,15 @@ def edit(request, pk=None):
     planning = person.may('plan_teaching', course) if pk else 'plan_teaching' in person.roles
     form = CourseForm(request.POST or None, instance=course, initial=initial, person=person, planning=planning, over=over) if office else TeachingForm(request.POST or None, instance=course, person=person)
     before = course.waitlist() if pk else []  # before the form changes the places
+    shared = set(course.modules.values_list('pk', flat=True)) if pk else set()
     twin = not pk and not source and form.is_valid() and 'doppelt' not in request.POST and twin_of(form.cleaned_data, course.term)
     if form.is_valid() and not twin:
         with history.because(form.cleaned_data.get('correction', '')):
             saved = kept(form, person, 'manage_courses') if office else form.save()
         if saved:
             admit(saved, before)
+            if office and (twins := twinned(saved, shared, request.POST.getlist('modules'))):
+                messages.info(request, twins)
             made = propose(saved.term, person, saved.staff.all()) if office else []  # a Lehrbeauftragte:r on it: their Lehrauftrag proposed or extended
             messages.success(request, ('Gespeichert. Jetzt Termine planen und Teilnehmende eintragen.' if not pk else 'Gespeichert.') + (
                 f' Lehrauftrag vorgeschlagen für {", ".join(str(t) for t in made)}; {Office.holding("grant_assignments") or "das zuständige Amt"} erteilt ihn.' if made else ''

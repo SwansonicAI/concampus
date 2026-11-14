@@ -17,7 +17,7 @@ from core.access import require
 from core.apps import plural
 from core.dates import day as understood
 from core.models import Institute, Office, Person, Term
-from core.shortcuts import without_term
+from core.shortcuts import ids, without_term
 from core.text import matching
 from curriculum.models import Module, Program
 from rooms.models import Booking
@@ -116,6 +116,8 @@ def rollover(request):
         if c.title not in titles:  # the newest offering once
             titles.add(c.title)
             c.others = sorted({str(s.institute) for s in c.staff.all() if s.institute_id and s.institute_id not in ours}) if ours else []
+            c.leaving = {s.pk for s in c.staff.all() if s.contract_end and s.contract_end < target.start}  # their contract ends before it
+            c.gone = bool(c.leaving) and len(c.leaving) == len(c.staff.all())
             c.group = f'Einzelunterricht · {c.subject.institute}' if c.kind == Course.Kind.LESSON and c.subject and c.subject.institute else c.area.name if c.area else 'Ohne Fachgebiet'
             rows.append(c)
     slots = usual([c.pk for c in rows if c.kind == Course.Kind.COURSE])
@@ -161,7 +163,7 @@ def take_over(request, target, pending):
     as the same semester a year before had them; registration as the semester sets it; lesson classes without their
     students, who come once they have re-registered (fill)."""
     chosen, titles = [], set()
-    for c in pending.filter(pk__in=request.POST.getlist('course')).prefetch_related('modules', 'staff', 'groups__staff').order_by('-term__start'):
+    for c in pending.filter(pk__in=ids(request.POST.getlist('course'))).prefetch_related('modules', 'staff', 'groups__staff').order_by('-term__start'):
         if c.title not in titles:
             titles.add(c.title)
             chosen.append(c)
@@ -212,7 +214,7 @@ def ask(request, target, pending):
 
 def schedule(request, target, pending):
     """Book the ticked drafts weekly as their course took place last time, where the room is free on every date."""
-    courses = list(target.courses.filter(pk__in=request.POST.getlist('course'), kind=Course.Kind.COURSE, cancelled=None, bookings__isnull=True).exclude(origin=None).prefetch_related('groups__staff'))
+    courses = list(request.user.within(target.courses.all(), 'roll_over').filter(pk__in=ids(request.POST.getlist('course')), kind=Course.Kind.COURSE, cancelled=None, bookings__isnull=True).exclude(origin=None).prefetch_related('groups__staff'))
     slots, booked, taken = usual([c.origin_id for c in courses]), 0, []
     source = {c.pk: (p.pk if c.grouping == Course.Grouping.CONTINUED and (p := predecessor(c)) else c.origin_id) for c in courses}  # where its groups met
     before = {(g.course_id, g.number): g.pk for g in Group.objects.filter(course__in=source.values())}
@@ -253,7 +255,7 @@ def fill(request, target, pending):
         fs=F('prior_terms') + Count('terms', filter=Q(terms__leave=False, terms__withdrawn=False, terms__term__start__lte=today)),
     ).in_bulk()
     added = 0
-    for c in target.courses.filter(kind=Course.Kind.LESSON, cancelled=None).prefetch_related('modules', 'staff'):
+    for c in request.user.within(target.courses.all(), 'roll_over').filter(kind=Course.Kind.LESSON, cancelled=None).prefetch_related('modules', 'staff'):
         staff = {p.pk for p in c.staff.all()}
         had = set(Participation.objects.filter(course=c.origin_id).values_list('study', flat=True)) if c.origin_id else set()
         new = {s.pk for s in studies.values() if s.start_term_id == target.pk and s.teacher_id in staff and s.subject_id == c.subject_id}
@@ -265,7 +267,7 @@ def fill(request, target, pending):
             rows.append(Participation(course=c, study=s, module=module))
         history.saved(Participation.objects.bulk_create(rows))
         added += len(rows)
-    for c in target.courses.filter(kind=Course.Kind.COURSE, cancelled=None, grouping=Course.Grouping.CONTINUED).prefetch_related('groups', 'modules'):
+    for c in request.user.within(target.courses.all(), 'roll_over').filter(kind=Course.Kind.COURSE, cancelled=None, grouping=Course.Grouping.CONTINUED).prefetch_related('groups', 'modules'):
         if (p := predecessor(c)) is None:
             continue
         taken, rows = set(c.participations.values_list('study', flat=True)), []
@@ -343,7 +345,7 @@ def carry(request, target, pending):
     now, taken = Term.current(), set(target.reductions.values_list('person', flat=True))
     made = [
         Reduction(person_id=r.person_id, term=target, ground_id=r.ground_id, hours=r.hours, note=r.note)
-        for r in now.reductions.exclude(ground__leave=True).exclude(person__in=taken)
+        for r in request.user.within(now.reductions.all(), 'manage_teaching_load').exclude(ground__leave=True).exclude(person__in=taken)
     ] if now else []
     history.saved(Reduction.objects.bulk_create(made))
     messages.success(request, f'{plural(len(made), "Ermäßigung", "Ermäßigungen")} aus dem {now} übernommen.' if made else 'Nichts zu übernehmen.')

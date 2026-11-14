@@ -1,6 +1,5 @@
 """Lehraufträge: proposed when a Lehrbeauftragte:r is put on a course, granted in writing at a Vergütungsstufe, accepted
 by the person, the hours held confirmed after the term by the person and the office, for the payroll (MACH)."""
-import csv
 from collections import Counter, defaultdict
 from datetime import timedelta
 from decimal import Decimal
@@ -17,7 +16,7 @@ from core import texts
 from core.access import require
 from core.apps import plural
 from core.models import Export, Holiday, Institute, Institution, Office, Person, Term
-from core.shortcuts import without_term
+from core.shortcuts import Sheet, ids, without_term
 from core.text import matching
 from rooms.models import Booking
 from ..models import Assignment, Group, Rate, per_sws
@@ -163,7 +162,7 @@ def assignment(request, pk):
 
 
 def chosen(request):
-    return request.user.within(Assignment.objects.filter(pk__in=request.POST.getlist('auftrag')), 'grant_assignments').select_related('person', 'term', 'rate')
+    return request.user.within(Assignment.objects.filter(pk__in=ids(request.POST.getlist('auftrag'))), 'grant_assignments').select_related('person', 'term', 'rate')
 
 
 def back(request, a=None):
@@ -262,7 +261,7 @@ def export(request):
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = f'attachment; filename="lehrauftraege-{term.pk}.csv"'
     response.write('\N{BYTE ORDER MARK}')
-    writer = csv.writer(response, delimiter=';')
+    writer = Sheet(response)
     writer.writerow([
         'Personalnummer', 'Nachname', 'Vorname', 'Institut', 'Lehrveranstaltungen', 'Vereinbart (SWS)', 'Erteilt am', 'Angenommen am', 'Zurückgezogen am',
         'Gehalten (LVS)', 'Vergütungsstufe', 'Je LVS (€)', 'Betrag (€)', 'Von der Person bestätigt', 'Bestätigt von', 'Bestätigt am',

@@ -18,7 +18,7 @@ from core import texts
 from core.access import require
 from core.apps import plural
 from core.models import Term
-from core.shortcuts import SHOWN
+from core.shortcuts import SHOWN, ids
 from core.text import matching
 from .. import xhochschule
 from ..models import Document, Study, StudyTerm
@@ -57,7 +57,7 @@ def notices(request):
 def printed(request):
     """Bescheide by post marked printed, after printing them all."""
     done = Document.objects.filter(
-        pk__in=request.POST.getlist('bescheid'), kind='notice', printed=None, study__in=request.user.within(Study.objects.all(), 'manage_students'),
+        pk__in=ids(request.POST.getlist('bescheid')), kind='notice', printed=None, study__in=request.user.within(Study.objects.all(), 'manage_students'),
     ).update(printed=timezone.now())
     messages.success(request, f'{plural(done, "Bescheid", "Bescheide")} als gedruckt markiert.')
     return redirect(f"{reverse('students:notices')}?zustellung=post")

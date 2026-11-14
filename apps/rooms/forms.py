@@ -6,11 +6,13 @@ from django import forms
 from django.db.models import Min, Q
 from django.utils import timezone
 from django.utils.formats import number_format
+from django.utils.html import escape
 
 from core import history
 from core.dates import ClockField, DayField, starting
 from core.apps import plural
 from core.models import Institution, Person, Term
+from core.shortcuts import ids
 from .models import Booking, BookingCategory, Room, later, span
 from .plans import agenda
 
@@ -173,7 +175,7 @@ class BookingForm(forms.ModelForm):
         enrolled, field = Q(studies__status='enrolled'), self.fields['participants']
         field.queryset = Person.objects.filter(enrolled).annotate(subject=Min('studies__subject__name', filter=enrolled)).exclude(pk=person.pk)
         field.near = Q(studies__teacher=person) | Q(studies__ensembles__coach=person) if 'teacher' in roles else Q(pk__in=[]) if ensembles else Q(studies__ensembles__members__person=person)
-        field.picked = self.data.getlist('participants') if self.is_bound else list(  # with an ensemble, only who joins it
+        field.picked = ids(self.data.getlist('participants')) if self.is_bound else list(  # with an ensemble, only who joins it
             self.instance.participants.exclude(studies__ensembles=self.instance.ensemble_id).values_list('pk', flat=True) if self.instance.ensemble_id
             else self.instance.participants.values_list('pk', flat=True)
         ) if self.instance.pk else []
@@ -184,7 +186,7 @@ class BookingForm(forms.ModelForm):
             for name in ('title', 'participants', 'ensemble'):
                 if name in self.fields:
                     self.fields[name].widget.attrs['data-for'] = f'category:{",".join(c.key for c in together)}'
-            field.help_text += ''.join(f' Bei „{c.name}“ mindestens {plural(c.participants, "weitere Person", "weitere Personen")}.' for c in together)
+            field.help_text += ''.join(f' Bei „{escape(c.name)}“ mindestens {plural(c.participants, "weitere Person", "weitere Personen")}.' for c in together)
             if 'ensemble' in self.fields:
                 self.fields['participants'].help_text = 'Mit einem Ensemble nehmen seine Mitglieder teil; hier nur, wer dazukommt.'
         if self.student or self.instance.pk:

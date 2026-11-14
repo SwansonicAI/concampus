@@ -293,6 +293,8 @@ def change(request, pk):
         return preview(request, 'Fachwechsel', [('Fachwechsel', [study.person], new.wording('fachwechsel', **values))], 'Fachwechsel eintragen und Bescheid versenden', study.get_absolute_url(), notes)
     with transaction.atomic():
         new.save()
+        if not request.user.may('manage_students', new):  # into a Studiengang another office keeps: undone with it
+            raise PermissionDenied('Diesen Studiengang verwaltet ein anderes Amt.')
         StudyTerm.objects.create(study=new, term=term, paid=timezone.localdate())
         study.set_status(Study.Status.LEFT)
     new.notify('fachwechsel', **values)

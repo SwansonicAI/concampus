@@ -15,7 +15,7 @@ class CourseAdmin(admin.ModelAdmin):
     list_display = ['title', 'kind', 'term', 'subject', 'hours', 'capacity', 'released']
     list_filter = ['kind', 'term', 'subject']
     search_fields = ['title']
-    filter_horizontal = ['modules', 'staff']
+    raw_id_fields = ['assessor', 'accompaniment', 'origin', 'modules', 'staff']  # thousands each: never all in one list
     inlines = [ParticipationInline]
 
 
@@ -23,7 +23,9 @@ class CourseAdmin(admin.ModelAdmin):
 class ParticipationAdmin(admin.ModelAdmin):
     list_display = ['study', 'course', 'module', 'grade', 'passed']
     list_filter = ['course__kind', 'course__term']
-    raw_id_fields = ['study', 'course', 'module']
+    raw_id_fields = ['study', 'course', 'module', 'accompanist']
 
 
-admin.site.register(Score)
+@admin.register(Score)
+class ScoreAdmin(admin.ModelAdmin):
+    raw_id_fields = ['participation', 'examiner', 'entered_by']

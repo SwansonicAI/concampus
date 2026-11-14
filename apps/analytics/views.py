@@ -1,6 +1,5 @@
 """Auswertungen: how the Hochschule is doing at a glance, a free query over everything counted, the records behind any
 number for whoever may see them, and the official statistics for the Statistisches Landesamt."""
-import csv
 
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
@@ -11,7 +10,7 @@ from django.utils.text import slugify
 
 from core.access import require
 from core.models import Export, Term
-from core.shortcuts import SHOWN, without_term
+from core.shortcuts import SHOWN, Sheet, without_term
 from .charts import SPANS, Query, chart, label, lines
 from .figures import MEASURES, narrowed, semesters, table
 from .official import Report
@@ -48,7 +47,7 @@ def export(q):
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = f'attachment; filename="auswertung-{q.measure.key}.csv"'
     response.write('﻿')
-    writer = csv.writer(response, delimiter=';')
+    writer = Sheet(response)
     if len(q.keys) == 1:
         writer.writerow([t.dims[0].title, q.measure.title])
         writer.writerows([label, t.row_totals.get(v, 0)] for v, label in t.rows.items())

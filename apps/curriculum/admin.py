@@ -6,6 +6,7 @@ from .models import Module, Program, Subject
 class ModuleInline(admin.TabularInline):
     model = Module
     fields = ['code', 'title', 'credits', 'semester', 'parent']
+    raw_id_fields = ['parent']  # not every module of every Studiengang in each row
     extra = 0
 
 

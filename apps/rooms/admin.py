@@ -16,4 +16,4 @@ class BookingAdmin(admin.ModelAdmin):
     list_filter = ['category', 'room__building', 'room']
     date_hierarchy = 'start'
     autocomplete_fields = ['person']
-    raw_id_fields = ['course', 'participants']
+    raw_id_fields = ['course', 'participants', 'absent', 'parent']

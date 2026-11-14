@@ -476,7 +476,7 @@ class Document(Tracked, models.Model):
             for old in study.documents.filter(kind=kind):
                 old.drop_file()
                 old.delete()
-        return cls.objects.create(person=study.person, study=study, kind=kind, title=file.name[:120], file=file, consent=consent)
+        return cls.objects.create(person=study.person, study=study, kind=kind, title=Path(file.name).stem[:110] + Path(file.name).suffix[:10], file=file, consent=consent)
 
     @classmethod
     def purge(cls, documents):

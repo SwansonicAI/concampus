@@ -1,5 +1,4 @@
 """The list of students: filters, cases needing attention, and writing to many at once."""
-import csv
 from collections import defaultdict
 
 from django.contrib import messages
@@ -14,7 +13,7 @@ from core.access import CODENAMES, require
 from core.forms import ComposeForm
 from core.apps import plural
 from core.models import Export, Office, Person, Term
-from core.shortcuts import SHOWN
+from core.shortcuts import SHOWN, Sheet, ids
 from core.text import matching
 from courses.lessons import untimed
 from courses.models import Participation
@@ -144,13 +143,14 @@ def roster(request):
         response = HttpResponse(content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = 'attachment; filename="studierende.csv"'
         response.write('﻿')
-        writer = csv.writer(response, delimiter=';')
+        writer = Sheet(response)
         personal = 'manage_students' in request.user.roles  # gender and nationality for the student office only (docs/privacy.md)
+        managed = set(request.user.within(Study.objects.all(), 'manage_students').values_list('pk', flat=True)) if personal else set()  # and only where it is that office
         writer.writerow(['Matrikelnummer', 'Nachname', 'Vorname', *(['Geschlecht', 'Staatsangehörigkeit'] if personal else []), 'E-Mail', 'Studiengang', 'Hauptfach', 'Fachsemester', 'Status'])
         Export.log(request.user, f'Studierende ({request.GET.urlencode()})', studies.count())
         for s in studies:
             writer.writerow([
-                s.person.matriculation, s.person.last_name, s.person.first_name, *([s.person.get_gender_display(), s.person.get_nationality_display()] if personal else []),
+                s.person.matriculation, s.person.last_name, s.person.first_name, *(([s.person.get_gender_display(), s.person.get_nationality_display()] if s.pk in managed else ['', '']) if personal else []),
                 s.person.email, s.program, s.subject, s.fs, s.state,
             ])
         return response
@@ -169,7 +169,7 @@ def roster(request):
 @require('manage_students')
 def letters(request):
     """The latest Bescheid of each chosen study, ready to print."""
-    studies = request.user.within(Study.objects.filter(pk__in=request.GET.getlist('study')), 'manage_students').select_related('person')
+    studies = request.user.within(Study.objects.filter(pk__in=ids(request.GET.getlist('study'))), 'manage_students').select_related('person')
     issued = Document.objects.filter(study__in=studies, message__isnull=False).select_related('message__person').order_by('created')
     latest = {d.study_id: d.message for d in issued}
     return render(request, 'core/letter.html', {'letters': latest.values(), 'missing': [s.person.name for s in studies if s.pk not in latest]})
@@ -179,7 +179,7 @@ def letters(request):
 def compose(request):
     """One message to the chosen people, e.g. everyone in their first semester: the ticked, or with ?alle every study the
     list's filter finds, beyond the rows it shows."""
-    chosen = listed(request)[0].values('pk') if request.GET.get('alle') else request.POST.getlist('study') or request.GET.getlist('study')
+    chosen = listed(request)[0].values('pk') if request.GET.get('alle') else ids(request.POST.getlist('study') or request.GET.getlist('study'))
     studies = request.user.within(Study.objects.filter(pk__in=chosen), 'message_students').select_related('person')
     people = sorted({s.person for s in studies}, key=lambda p: p.name)
     back = request.POST.get('next') or request.GET.get('next', '')

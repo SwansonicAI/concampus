@@ -1488,7 +1488,7 @@ class Command(BaseCommand):
         self.courses, links, staff, rows, scores = {}, set(), set(), {}, []
         self.chose, self.foci = [], {}  # studies whose Vertiefung plan() put on record; the Schwerpunkte of each programme
         self.finished = next(s for s in self.enrolled if s.program == self.bmsh and s.fs > s.program.semesters and s.person != self.demo)  # all done, the Zeugnis due
-        self.lessons, booked = [], set()  # weekly one-to-one lessons this term: (person, course, teacher, rooms, minutes)
+        self.lessons, booked, counted = [], set(), {}  # weekly one-to-one lessons this term: (person, course, teacher, rooms, minutes)
         for study in [*self.enrolled, self.graduate]:  # and the graduate's whole record
             subject, enrolled = study.subject.name, study.status == Study.Status.ENROLLED
             behind = enrolled and study.fs > study.program.semesters and study is not self.finished  # over the Regelstudienzeit: the last semester taken now
@@ -1528,14 +1528,17 @@ class Command(BaseCommand):
                     continue
                 else:
                     course, teacher, rooms = self.course_for(study, leaf, term)
+                    double = counted.setdefault((course.pk, study.pk), leaf.parent_id) != leaf.parent_id  # a course counts for the parts of one module, never for two (no Doppelanrechnung)
                     staff.add((course.pk, teacher.pk))
                     if study.person == self.demo and not done and leaf.code.startswith('BM-XX-MW-P2'):  # Professionalisierung II still to choose: her start page says so
                         links.add((course.pk, leaf.pk))
                         continue
-                    rows[(course.pk, study.pk, leaf.pk)] = Participation(
+                    participation = Participation(
                         course=course, study=study, module=leaf, passed=True if done else None,
                         created=at(term.start + timedelta(days=rng.randint(0, 14)), hour=rng.randint(8, 20)),
                     )
+                    if not double:  # drawn all the same, so the rest of the demo stays as it was
+                        rows[(course.pk, study.pk, leaf.pk)] = participation
                     if not done and rooms and (study.person.pk, course.pk) not in booked:
                         booked.add((study.person.pk, course.pk))
                         self.lessons.append((study.person, course, teacher, rooms, length(self.teach[leaf.pk][2])))

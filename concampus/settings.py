@@ -216,3 +216,13 @@ if url := os.environ.get('EMAIL_URL'):  # smtp://user:password@host:587 with STA
         'host': url.hostname, 'port': url.port, 'username': unquote(url.username or ''), 'password': unquote(url.password or ''),
         'use_ssl': url.scheme == 'smtps', 'use_tls': url.scheme == 'smtp',
     }}
+
+
+# Logging: on a server errors and mail that failed go to stderr, where the container keeps them; in development
+# Django shows them anyway.
+LOGGING = {
+    'version': 1, 'disable_existing_loggers': False,
+    'filters': {'server': {'()': 'django.utils.log.RequireDebugFalse'}},
+    'handlers': {'stderr': {'class': 'logging.StreamHandler', 'filters': ['server']}},
+    'loggers': {'django': {'handlers': ['stderr'], 'level': 'ERROR'}, 'concampus': {'handlers': ['stderr'], 'level': 'WARNING'}},
+}

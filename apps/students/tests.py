@@ -276,6 +276,8 @@ class DisposalTest(Seeded):
         archive = self.login('archiv')
         copy = ZipFile(BytesIO(b''.join(archive.get(f'/studierende/aussonderung/{person.pk}/akte/').streaming_content)))
         self.assertIn(person.last_name, copy.read('akte.json').decode())
+        student = Person.objects.get(username='student')
+        self.assertEqual(archive.get(f'/studierende/aussonderung/{student.pk}/akte/').status_code, 404)  # only files offered
         archive.post('/studierende/aussonderung/', {'archivwuerdig': 'nein', 'person': [person.pk]})
         call_command('prune', stdout=StringIO())
         person.refresh_from_db()

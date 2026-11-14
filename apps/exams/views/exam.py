@@ -17,13 +17,14 @@ from django.utils.formats import date_format
 from django.views.decorators.http import require_POST
 
 from core import dates, texts
+from core.shortcuts import Sheet
 from core.access import kept, require
 from core.apps import plural
 from core.models import Export, Institution, Message, Office, Term
 from core.text import matching
 from core.forms import again, sent
 from courses import panel
-from courses.forms import AddForm, DateForm, ExamForm, SlotForm, ThesisForm, substitutes
+from courses.forms import AddForm, DateForm, ExamForm, SlotForm, ThesisForm, substitutes, twinned
 from courses.models import Course, Participation, attempts
 from courses.modules import credited
 from curriculum.models import Program
@@ -217,8 +218,11 @@ def edit(request, pk=None):
     course = get_object_or_404(exams, pk=pk) if pk else Course(term=term, kind=Course.Kind.EXAM, opens=term and term.exam_signup_start, deadline=term and term.exam_signup_end)
     thesis = course.kind == Course.Kind.THESIS
     form = (ThesisForm if thesis else ExamForm)(request.POST or None, instance=course, person=request.user)
+    before = set(course.modules.values_list('pk', flat=True)) if pk else set()
     if form.is_valid() and (saved := kept(form, request.user, 'manage_exams')):
         course = saved
+        if twins := twinned(course, before, request.POST.getlist('modules')):
+            messages.info(request, twins)
         if thesis and 'deadline' in form.changed_data:
             study = course.participations.select_related('study__person', 'study__program', 'study__subject', 'study__start_term').get().study
             study.notify('verlaengerung', reverse('exams:index'), thema=course.title, frist=f'{course.deadline:%d.%m.%Y}')
@@ -244,13 +248,18 @@ def protocol(request, pk):
         except forms.ValidationError as error:
             messages.error(request, f'Protokoll eingegangen am: {error.messages[0]}')
             return redirect(course)
-        course.protocol = request.FILES.get('file') or course.protocol
+        if (scan := request.FILES.get('file')) and (not scan.name.lower().endswith('.pdf') or scan.size > 20 * 2 ** 20):
+            messages.error(request, 'Das Protokoll bitte als PDF bis 20 MB hochladen.')
+            return redirect(course)
+        course.protocol = scan or course.protocol
         course.save(update_fields=['protocol', 'protocol_received'])
         messages.success(request, f'Protokoll vom {date_format(course.protocol_received, "j.n.Y")} verbucht. Die Wertungen lassen sich jetzt übertragen.')
         return redirect(course)
     if not (office or person.may('correct_scores', course) or course.staff.filter(pk=person.pk).exists()) or not course.protocol:
         raise PermissionDenied('Das Protokoll lesen die Prüfenden und die Ämter, die Ergebnisse eintragen oder berichtigen.')
-    return FileResponse(course.protocol.open('rb'), filename=f'Protokoll {course.title}.pdf')
+    response = FileResponse(course.protocol.open('rb'), filename=f'Protokoll {course.title}.pdf')
+    response['Content-Security-Policy'] = 'sandbox'  # a scan, never a page of ConCampus
+    return response
 
 
 @require('manage_exams')
@@ -309,7 +318,7 @@ def roster(request, pk):
         response = HttpResponse(content_type='text/csv; charset=utf-8')
         response['Content-Disposition'] = f'attachment; filename="notenliste-{course.pk}.csv"'
         response.write('\ufeff')
-        writer = csv.writer(response, delimiter=';')
+        writer = Sheet(response)
         writer.writerow(['Matrikelnummer', 'Nachname', 'Vorname', 'Studiengang', 'Hauptfach', 'Termin', *(e.last_name for e in staff), 'Note', 'Ergebnis', 'Vermerk'])
         Export.log(person, f'Notenliste {course.title}, {course.term}', len(rows))
         for p in rows:

@@ -224,6 +224,9 @@ class StaffForm(AccountForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['institute'].required = self.fields['employment'].required = True  # what makes them a teacher, and how the Deputat counts them
+        if self.instance.pk and self.instance.reach:  # an office's account: its sign-in stays with the accounts, or anyone taking teachers on could take it over
+            for name in ('email', 'username', 'is_active'):
+                self.fields[name].disabled, self.fields[name].help_text = True, 'Ändert die Kontenverwaltung, denn die Person hat ein Amt.'
 
 
 class ObligationForm(forms.ModelForm):
@@ -283,6 +286,8 @@ class MembershipForm(forms.ModelForm):
     def save(self, commit=True):
         membership = self.instance
         membership.by = membership.by or self.by
+        if {'person', 'office', 'until'} & set(self.changed_data):  # someone else, another office or longer: confirmed anew
+            membership.confirmed_by = None
         if membership.confirmed_by is None and not waiting(membership.office.marks, self.by, membership.person):
             membership.confirmed_by = self.by
         self.pending = membership.confirmed_by is None

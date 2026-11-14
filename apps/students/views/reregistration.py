@@ -18,7 +18,7 @@ from core import dates, texts
 from core.access import require
 from core.apps import plural
 from core.models import Institution, Person, Term
-from core.shortcuts import SHOWN, preview, without_term
+from core.shortcuts import SHOWN, ids, preview, without_term
 from core.text import fold, matching
 from exams.results import exhausted
 from instruments.models import Loan
@@ -150,7 +150,7 @@ def reregistration(request):
             if not reference:
                 messages.error(request, 'Bitte den Beleg oder Verwendungszweck angeben, mit dem die Zahlung einging.')
                 return redirect('students:reregistration')
-            people = {s.person: (day, owed(s.person, term, day, late_fee), reference) for s in enrolled.filter(person__in=request.POST.getlist('person'))}
+            people = {s.person: (day, owed(s.person, term, day, late_fee), reference) for s in enrolled.filter(person__in=ids(request.POST.getlist('person')))}
             book(term, enrolled, people)
             messages.success(request, f'Zahlung für {plural(len(people), "Person", "Personen")} verbucht, zusammen {number_format(sum(a for _, a, _ in people.values()), 2)} € am {date_format(day, "j.n.Y")}.')
         elif statement := request.FILES.get('statement'):  # read first, booked once checked

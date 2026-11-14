@@ -16,6 +16,7 @@ from core.access import CODENAMES, require
 from core.apps import plural
 from core.history import tables
 from core.models import Institution, Message, Term
+from core.shortcuts import ids
 from core.text import matching
 from core.templatetags.marks import mark
 from courses.models import Course
@@ -275,7 +276,7 @@ def decide_many(request):
     if chosen and chosen not in DECISIONS:
         raise PermissionDenied
     advice = {s.pk: s.advice for s in recommendations(term, request.user)}
-    ticked = set(map(int, request.POST.getlist('study')))
+    ticked = set(ids(request.POST.getlist('study')))
     studies = request.user.within(Study.objects.filter(pk__in=ticked & advice.keys()), 'decide_applications').select_related('person', 'program', 'subject', 'start_term')
     if not request.POST.get('bestaetigt'):
         days, plan = Institution.get().accept_days, defaultdict(list)
@@ -311,7 +312,7 @@ def remind(request):
     taken up needs before the Immatrikulation. The ticked ones, else every incomplete application of the term; nobody
     twice a day."""
     studies = request.user.within(Study.objects.select_related('person', 'program', 'subject', 'start_term'), 'view_applications')
-    if picked := request.POST.getlist('study'):
+    if picked := ids(request.POST.getlist('study')):
         studies = studies.filter(pk__in=picked)
     else:
         studies = studies.filter(start_term=request.POST.get('semester'), status=Study.Status.APPLIED)

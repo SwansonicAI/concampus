@@ -163,6 +163,7 @@ class KeyChoice(forms.ChoiceField):
     def __init__(self, *, keys, max_length=None, empty_value=None, town=None, **kwargs):  # the last as a CharField's formfield passes them
         self.keys = keys
         attrs = {'data-town': town} if town else {}
+        kwargs.pop('widget', None)  # its own, also where the admin offers another
         super().__init__(choices=lambda: [('', '–'), *choices(keys)], widget=KeySelect(keys, attrs), **kwargs)
 
     def valid_value(self, value):

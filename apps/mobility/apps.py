@@ -50,7 +50,7 @@ class MobilityConfig(Tile, AppConfig):
         if n := waiting(person).count():
             found.append(task(f'{plural(n, "Learning Agreement", "Learning Agreements")} genehmigen', f"{reverse('mobility:index')}?stand=nominiert"))
         for m in unrecognised(person):
-            found.append(task(f'Anerkennen: {m.study.person}, zurück von der {m.partner}', m.get_absolute_url()))
+            found.append(task(f'Anerkennen: {m.study.person}, zurück vom Auslandsaufenthalt ({m.partner})', m.get_absolute_url()))
         for m in Mobility.objects.filter(study__person=person, signed_student=None, status__in=[Mobility.Status.NOMINATED, Mobility.Status.ACCEPTED]).select_related('partner'):
             found.append(task(f'Learning Agreement für die {m.partner} ausfüllen und unterschreiben', m.get_absolute_url(), m.start))
         return found

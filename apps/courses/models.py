@@ -237,6 +237,8 @@ class Course(Tracked, models.Model):
             return f'Diese Prüfung ist für das Hauptfach {self.subject}.'
         if study.focus_id and (option := study.program.chosen_by().get(module.pk)) and option.pk != study.focus_id:
             return f'{module.code} gehört zum Schwerpunkt {option.title}; Ihr Schwerpunkt ist {study.focus.title}.'
+        if Participation.objects.filter(study__person=study.person_id, module=module, passed=True).exists():
+            return f'{module.code} ist bereits bestanden.'
         if attempts(study.person_id, module) >= study.program.attempts:
             return f'Alle {study.program.attempts} Versuche für {module.code} sind ausgeschöpft.'
         return ''

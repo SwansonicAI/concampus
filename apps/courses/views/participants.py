@@ -1,5 +1,4 @@
 """Who takes part in a course, as its staff see and change it."""
-import csv
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
@@ -11,6 +10,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from core import texts
+from core.shortcuts import Sheet, ids
 from core.apps import plural
 from core.forms import ComposeForm
 from core.models import Export, Person
@@ -73,7 +73,7 @@ def drop(request, pk):
     if exam:
         chosen = [get_object_or_404(rows, pk=request.POST.get('participation'))]
     else:
-        chosen = [p for p in seen(course, request.user, list(rows.filter(passed=None, study__in=request.POST.getlist('study'))))]
+        chosen = [p for p in seen(course, request.user, list(rows.filter(passed=None, study__in=ids(request.POST.getlist('study')))))]
         if not chosen:
             messages.error(request, 'Niemand ausgetragen. Bitte ankreuzen, wen; wer ein Ergebnis hat, bleibt.')
             return redirect(course)
@@ -95,7 +95,7 @@ def roster(request, pk):
     response = HttpResponse(content_type='text/csv; charset=utf-8')
     response['Content-Disposition'] = f'attachment; filename="teilnehmende-{course.pk}.csv"'
     response.write('\ufeff')
-    writer = csv.writer(response, delimiter=';')
+    writer = Sheet(response)
     writer.writerow(['Matrikelnummer', 'Nachname', 'Vorname', 'Studiengang', 'Hauptfach', 'Modul', 'Gruppe', 'Angemeldet', 'Warteliste', 'Note', 'Bestanden'])
     Export.log(request.user, f'Teilnehmende {course.title}, {course.term}', len(rows))
     for p in sorted(rows, key=lambda p: (p.study.person.last_name, p.study.person.first_name)):

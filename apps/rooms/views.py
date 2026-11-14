@@ -167,10 +167,15 @@ def tried(person, room, day, begin, until):
 def room(request, pk):
     room = get_object_or_404(Room.objects.prefetch_related('institutes'), pk=pk)
     day = understood(request.GET.get('tag', '')) or timezone.localdate()
+    plan = week(room.bookings.filter(requested=False), day)
+    for b in plan['placed']:  # as the room plan shows them: practice and others' private bookings only as taken
+        b.hidden = not editable(b, request.user) and private(b, request.user)
+        if b.hidden:
+            b.title, b.course = 'belegt', None
     return render(request, 'rooms/room.html', {
         'trail': [(None, reverse('rooms:index'))], 'room': room, 'day': day, 'bookable': bookable(request.user).filter(pk=pk).exists(), 'central': Office.holding('book_any_room', linked=True),
         'edit': request.user.may('manage_rooms', room), 'requestable': room.function.central and requestable(request.user),
-        **week(room.bookings.filter(requested=False), day),
+        **plan,
     })
 
 
@@ -493,7 +498,7 @@ def feed(request):
 def calendar(request, token):
     """The person's agenda as iCalendar, a week back and six months ahead."""
     try:
-        person = get_object_or_404(Person, pk=signing.loads(token, salt=FEED))
+        person = get_object_or_404(Person, pk=signing.loads(token, salt=FEED), is_active=True)  # ends with the account
     except signing.BadSignature:
         raise Http404
     now = timezone.now()

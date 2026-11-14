@@ -99,6 +99,9 @@ def give_back(request, pk):
     loan = get_object_or_404(request.user.within(Loan.objects.filter(returned=None), 'manage_instruments'), pk=pk)
     loan.returned, loan.returned_condition = timezone.localdate(), request.POST.get('condition', '').strip()[:200]
     loan.save(update_fields=['returned', 'returned_condition'])
+    if loan.returned_condition:  # as it came back is how it goes out next
+        loan.instrument.note = loan.returned_condition
+        loan.instrument.save(update_fields=['note'])
     messages.success(request, f'{loan.instrument.name} zurückgenommen.')
     return redirect('instruments:instrument', pk=loan.instrument_id)
 

@@ -23,4 +23,4 @@ class DocumentAdmin(admin.ModelAdmin):
     list_display = ['title', 'person', 'study', 'created']
     search_fields = ['title', 'person__last_name']
     autocomplete_fields = ['person']
-    raw_id_fields = ['study']
+    raw_id_fields = ['study', 'message']

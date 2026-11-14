@@ -10,7 +10,7 @@ from core.access import require
 from core.dossier import dossier
 from core.apps import plural
 from core.models import Export, Institution, Person
-from core.shortcuts import SHOWN
+from core.shortcuts import SHOWN, ids
 from ..disposal import assess, due, offer
 from ..models import Disposal, Study
 
@@ -28,7 +28,7 @@ def disposal(request):
             n = Disposal.objects.filter(assessed__isnull=False, reduced=None).update(assessed=None, archival=None, assessed_by=None)
             messages.success(request, f'{plural(n, "Bewertung", "Bewertungen")} zurückgenommen; die Akten sind wieder angeboten.')
         elif (archival := request.POST.get('archivwuerdig')) and 'assess_files' in roles:
-            if n := assess(request.POST.getlist('person'), archival == 'ja', request.user):
+            if n := assess(ids(request.POST.getlist('person')), archival == 'ja', request.user):
                 messages.success(request, f'{plural(n, "Akte", "Akten")} bewertet; heute Nacht werden sie bis auf die Grunddaten gelöscht.')
             else:
                 messages.error(request, 'Bitte die Akten ankreuzen, die bewertet werden.')
@@ -48,6 +48,6 @@ def disposal(request):
 @require('assess_files')
 def handover(request, pk):
     """A copy of an offered file for the archive to take over."""
-    person = get_object_or_404(Person, pk=pk, disposal__reduced=None)
+    person = get_object_or_404(Person, pk=pk, disposal__isnull=False, disposal__reduced=None)  # offered, not everyone without an offer
     Export.log(request.user, f'Akte {person} für das Archiv', 1)
     return FileResponse(dossier(person), as_attachment=True, filename=f'akte-{person.matriculation or person.pk}.zip')

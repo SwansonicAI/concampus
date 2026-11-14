@@ -1,3 +1,4 @@
+import logging
 from contextvars import ContextVar
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
@@ -464,9 +465,8 @@ class Person(Tracked, AbstractUser):
 
     def institutes(self):
         """Their own Institut as teachers, and those of the Hauptfächer they are enrolled in."""
-        return Institute.objects.filter(
-            models.Q(staff=self) | models.Q(subjects__studies__person=self, subjects__studies__status='enrolled'),
-        ).distinct()
+        enrolled = self.studies.filter(status='enrolled').values('subject__institute')  # a small subquery, not every study joined
+        return Institute.objects.filter(models.Q(pk=self.institute_id) | models.Q(pk__in=enrolled))
 
     @property
     def abroad(self):
@@ -917,7 +917,16 @@ class Message(models.Model):
     def mail(person, subject, body):
         """By e-mail only, once the transaction commits, so no mail goes out for what was rolled back."""
         sender = Institution.get().email or None
-        transaction.on_commit(lambda: send_mail(subject, body, sender, [person.email], fail_silently=True))
+        transaction.on_commit(lambda: deliver(subject, body, sender, [person.email]))
+
+
+def deliver(subject, body, sender, to):
+    """Send a mail. One that fails is logged for whoever runs the server; the person who caused it carries on, and the
+    Postfach has it either way."""
+    try:
+        send_mail(subject, body, sender, to)
+    except Exception:  # SMTP, DNS, TLS: anything the mail server answers
+        logging.getLogger('concampus').exception('Mail an %s nicht zugestellt: %s', ', '.join(to), subject)
 
 
 class Change(models.Model):

@@ -1,6 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.views import LoginView
 from django.urls import include, path
+from django.views.generic import RedirectView
 
 from core.forms import SignInForm
 from courses.views import public
@@ -10,6 +11,7 @@ urlpatterns = [
         path('', public.catalogue, name='catalogue'),
         path('<int:pk>/', public.course, name='course'),
     ], 'public'))),
+    path('admin/login/', RedirectView.as_view(pattern_name='login', query_string=True)),  # one sign-in, with its lockout (SignInForm)
     path('admin/', admin.site.urls),
     path('konto/login/', LoginView.as_view(redirect_authenticated_user=True, authentication_form=SignInForm), name='login'),  # signed in already: on to the start page
     path('konto/', include('django.contrib.auth.urls')),

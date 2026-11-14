@@ -11,6 +11,7 @@ from django.utils.html import format_html
 
 from core.dates import ClockField, DayField, MomentField, working
 from core.models import Institution, Person, Term
+from core.shortcuts import ids
 from curriculum.models import Module, Program
 from rooms.forms import Participants, People, RoomField, bookable
 from rooms.models import Booking, Room
@@ -286,9 +287,9 @@ class CourseForm(forms.ModelForm):
         if person and not self.instance.pk and 'teacher' in person.roles and not self.initial.get('staff'):  # who creates a course mostly teaches it
             self.initial['staff'] = [person.pk]
         if 'accompaniment' in self.fields:
-            self.fields['accompaniment'].queryset = Course.objects.filter(kind=Course.Kind.LESSON, term=self.instance.term_id).order_by('title')
+            self.fields['accompaniment'].queryset = Course.objects.filter(kind=Course.Kind.LESSON, term=self.instance.term_id).select_related('term').order_by('title')
         if 'after' in self.fields:  # the stages of the same intake
-            self.fields['after'].queryset = Course.objects.filter(kind=Course.Kind.AUDITION, term=self.instance.term_id).exclude(pk=self.instance.pk).order_by('title')
+            self.fields['after'].queryset = Course.objects.filter(kind=Course.Kind.AUDITION, term=self.instance.term_id).exclude(pk=self.instance.pk).select_related('term').order_by('title')
         if 'modules' in self.fields:
             modules = leaf_modules(chosen=self.initial.get('modules', ()))
             self.fields['modules'].choices = labelled(modules)
@@ -347,6 +348,13 @@ class CourseForm(forms.ModelForm):
         pairs = {(m.code, m.title) for m in chosen if m.code}
         twins = Module.objects.filter(children=None, code__in={c for c, _ in pairs}, title__in={t for _, t in pairs}) if pairs else Module.objects.none()
         return Module.objects.filter(pk__in={m.pk for m in chosen} | {m.pk for m in twins if (m.code, m.title) in pairs})
+
+
+def twinned(course, before, chosen):
+    """What a save tells of the Studiengänge its shared modules were added for (CourseForm.clean_modules), unseen in the
+    form, which shows such a module once."""
+    added = course.modules.exclude(pk__in={*before, *chosen}).select_related('program')
+    return f'Dasselbe Modul gilt auch in {", ".join(sorted({str(m.program) for m in added}))}; dort jetzt ebenfalls angerechnet.' if added else ''
 
 
 class TeachingForm(CourseForm):
@@ -463,7 +471,7 @@ class EnsembleForm(forms.Form):
         enrolled, field = Q(studies__status='enrolled'), self.fields['members']
         field.queryset = Person.objects.filter(enrolled).annotate(subject=Min('studies__subject__name', filter=enrolled)).exclude(pk=person.pk)
         field.near = Q(studies__teacher__in=person.studies.values('teacher')) | Q(studies__ensembles__members__person=person)
-        field.picked = self.data.getlist('members') if self.is_bound else []
+        field.picked = ids(self.data.getlist('members')) if self.is_bound else []
 
     def clean_members(self):
         """Each person picked, by the study the course counts for."""

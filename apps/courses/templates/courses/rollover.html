@@ -34,8 +34,8 @@
         <tr><th class="mid"><input type="checkbox" data-all="{{ forloop.counter }}" aria-label="{{ g.grouper }}"></th><th colspan="5">{{ g.grouper }} <span class="muted">· {{ g.list|length }}</span></th></tr>
         {% for c in g.list %}
         <tr>
-          <td class="mid"><input type="checkbox" name="course" value="{{ c.pk }}" data-part="{{ forloop.parentloop.counter }}"{% if c.rhythm != 'once' %} checked{% endif %} aria-label="{{ c.title }}"></td>
-          <td><a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a><br><small class="muted">{% for s in c.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% empty %}ohne Lehrende{% endfor %}{% if c.others %} · auch {{ c.others|join:", " }}{% endif %}</small></td>
+          <td class="mid"><input type="checkbox" name="course" value="{{ c.pk }}" data-part="{{ forloop.parentloop.counter }}"{% if c.rhythm != 'once' and not c.gone %} checked{% endif %} aria-label="{{ c.title }}"></td>
+          <td><a href="{% url 'courses:course' c.pk %}">{{ c.title }}</a><br><small class="muted">{% for s in c.staff.all %}{% if s.pk in c.leaving %}<span class="fail" title="Vertrag bis {{ s.contract_end|date:'j.n.Y' }}">{{ s.last_name }} ✕</span>{% else %}{{ s.last_name }}{% endif %}{% if not forloop.last %}, {% endif %}{% empty %}ohne Lehrende{% endfor %}{% if c.others %} · auch {{ c.others|join:", " }}{% endif %}</small></td>
           <td class="num">{{ c.hours|default_if_none:"" }}</td>
           <td class="num">{{ c.capacity|default_if_none:"" }}</td>
           <td>{{ c.get_rhythm_display }}</td>

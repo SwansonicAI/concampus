@@ -112,5 +112,5 @@ def recognition(request):
         return redirect(f'{reverse("exams:recognition")}?studium={study.pk}')
     return render(request, 'exams/recognition.html', {
         'form': form, 'course': course, 'study': study,
-        'recent': course.participations.select_related('study__person', 'module').order_by('-created')[:20],
+        'recent': course.participations.filter(study__in=request.user.within(Study.objects.all(), 'recognise')).select_related('study__person', 'module').order_by('-created')[:20],
     })

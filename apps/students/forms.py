@@ -1,7 +1,7 @@
 from django import forms
 from django.db.models import Q
 
-from core.dates import DayField
+from core.dates import PastField
 from core.models import Person
 from courses.models import Course
 from curriculum.models import Program, Subject
@@ -16,7 +16,7 @@ class GuestForm(forms.Form):
     first_name = forms.CharField(label='Vorname', max_length=150)
     last_name = forms.CharField(label='Nachname', max_length=150)
     email = forms.EmailField(label='E-Mail')
-    birth_date = DayField(label='Geburtsdatum')
+    birth_date = PastField(label='Geburtsdatum')
     program = forms.ModelChoiceField(label='Studiengang', queryset=Program.objects.ordered(), help_text='Für Gasthörende die Gasthörerschaft; für Zweithörende der Studiengang, in dem sie hier hören.')
     subject = forms.ModelChoiceField(label='Fach', queryset=Subject.objects.order_by('name'))
     home_university = forms.CharField(label='Heimathochschule', max_length=120, required=False)

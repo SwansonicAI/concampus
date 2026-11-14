@@ -9,7 +9,6 @@ from django.contrib.auth.decorators import login_not_required
 from django.contrib import messages
 from django.core.cache import cache
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.core.mail import send_mail
 from django.db import transaction
 from django.db.models import Case, Exists, F, Min, OuterRef, Prefetch, Q, When, Window
 from django.db.models.functions import RowNumber
@@ -39,7 +38,7 @@ from .greetings import greeting
 from .history import because, describe, former, restore, tables
 from .dates import months_before
 from .keys import DISTRICTS, replaced
-from .models import AccessRequest, Change, Consent, Export, Institution, Key, Message, Office, Person, Term, Tracked, limited
+from .models import AccessRequest, Change, Consent, Export, Institution, Key, Message, Office, Person, Term, Tracked, deliver, limited
 from .index import find
 from .text import ACTS, fit, fold, matching, meant, stem, words
 
@@ -90,7 +89,7 @@ def account(request):
     if email and email.is_valid():
         address, token = email.cleaned_data['email'], signing.dumps({'person': person.pk, 'email': email.cleaned_data['email']}, salt='email')
         subject, body = texts.render('email_bestaetigen', vorname=person.first_name, nachname=person.last_name, link=request.build_absolute_uri(reverse('confirm_email', args=[token])))
-        send_mail(subject, body, Institution.get().email or None, [address], fail_silently=True)
+        deliver(subject, body, Institution.get().email or None, [address])
         messages.success(request, f'Bestätigungslink an {address} gesendet; bis Sie ihn öffnen, gilt die bisherige Adresse.')
         return redirect('account')
     if form.is_valid():
@@ -230,10 +229,14 @@ def accessibility(request):
     barrier; signed in, name and address come filled in."""
     person = request.user if request.user.is_authenticated else None
     form = FeedbackForm(request.POST or None, initial={'page': request.GET.get('seite', '')} | ({'name': str(person), 'email': person.email} if person else {}))
-    if form.is_valid():
+    sent = f'barriere:{address(request)}'  # open to anyone: a few an hour from one address, never a flood of mail
+    if form.is_valid() and cache.get(sent, 0) >= 5:
+        form.add_error(None, 'Schon mehrere Meldungen in kurzer Zeit. Bitte in einer Stunde erneut.')
+    elif form.is_valid():
+        cache.set(sent, cache.get(sent, 0) + 1, 3600)
         feedback = form.save()
         if to := Institution.get().email:
-            transaction.on_commit(lambda: send_mail('Barriere in ConCampus gemeldet', f'{feedback.text}\n\n{feedback.page}\n{feedback.name} <{feedback.email}>', None, [to], fail_silently=True))
+            transaction.on_commit(lambda: deliver('Barriere in ConCampus gemeldet', f'{feedback.text}\n\n{feedback.page}\n{feedback.name} <{feedback.email}>', None, [to]))
         messages.success(request, f'Danke. Wir antworten bis zum {date_format(feedback.due, "j. F Y")}.')
         return redirect('accessibility')
     return render(request, 'core/accessibility.html', {'form': form})

@@ -1,4 +1,6 @@
 """Responses many apps' views give: a confirmation before Bescheide go out, a page for work that needs a semester, a calendar."""
+import csv
+import re
 from datetime import UTC
 
 from django.http import HttpResponse
@@ -8,6 +10,7 @@ from django.utils import timezone
 from .models import Institution
 
 SHOWN = 300  # rows a long list shows; filters narrow it, exports have all
+FORMULA, NUMBER = ('=', '+', '-', '@', '\t', '\r'), re.compile(r'-?[\d.,]+')  # what Excel takes for a formula; a number
 
 
 def preview(request, title, groups, send, back, notes=()):
@@ -16,6 +19,26 @@ def preview(request, title, groups, send, back, notes=()):
     body) of one Bescheid)."""
     fields = [(name, value) for name in request.POST if name not in ('csrfmiddlewaretoken', 'bestaetigt') for value in request.POST.getlist(name)]
     return render(request, 'core/preview.html', {'title': title, 'groups': groups, 'send': send, 'back': back, 'notes': notes, 'fields': fields})
+
+
+def ids(values):
+    """The record ids among submitted values (getlist): a box ticked, never something typed in that breaks a query."""
+    return [int(v) for v in values if v.isdigit()]
+
+
+class Sheet:
+    """A CSV writer for files opened in Excel: a cell that would start a formula (=, +, -, @) begins with ' and stays
+    text, so a name like „=HYPERLINK(…)“ runs nothing (OWASP, CSV injection); negative numbers stay numbers."""
+
+    def __init__(self, out):
+        self.writer = csv.writer(out, delimiter=';')
+
+    def writerow(self, row):
+        self.writer.writerow([f"'{v}" if isinstance(v, str) and v[:1] in FORMULA and not NUMBER.fullmatch(v) else v for v in row])
+
+    def writerows(self, rows):
+        for row in rows:
+            self.writerow(row)
 
 
 def without_term(request, what):
