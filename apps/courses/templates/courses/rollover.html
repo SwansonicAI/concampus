@@ -17,9 +17,9 @@
   <p class="lead">Vorgeschlagen nach Turnus: was jedes Semester stattfindet und Einzelunterricht aus dem laufenden Semester, was jährlich stattfindet aus demselben Semester ein Jahr zuvor. Einmaliges steht ohne Haken. Übernommen wird als Entwurf; die Vorlage bleibt, wie sie war. Klassen kommen ohne Studierende, sie füllen sich nach der Rückmeldung (4).</p>
   <form class="toolbar">
     <div class="inline">
-      <label>Institut<select name="institut" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>
-      <label>Fachgebiet<select name="fachgebiet" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for a in areas %}<option value="{{ a.pk }}"{% if a.pk|stringformat:'s' == area %} selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
-      <label>Art<select name="art" onchange="this.form.requestSubmit()"><option value="">Alle</option><option value="course"{% if kind == 'course' %} selected{% endif %}>Gruppenunterricht</option><option value="lesson"{% if kind == 'lesson' %} selected{% endif %}>Einzelunterricht</option></select></label>
+      <label>Institut<select name="institut" data-submit><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>
+      <label>Fachgebiet<select name="fachgebiet" data-submit><option value="">Alle</option>{% for a in areas %}<option value="{{ a.pk }}"{% if a.pk|stringformat:'s' == area %} selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+      <label>Art<select name="art" data-submit><option value="">Alle</option><option value="course"{% if kind == 'course' %} selected{% endif %}>Gruppenunterricht</option><option value="lesson"{% if kind == 'lesson' %} selected{% endif %}>Einzelunterricht</option></select></label>
       <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Titel oder Lehrende"></label>
     </div>
   </form>

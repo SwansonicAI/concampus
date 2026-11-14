@@ -46,7 +46,7 @@
 <section id="kalender">
   <h2>Kalender abonnieren</h2>
   <p>Alle Ihre Termine, Unterricht, Proben und Buchungen, erscheinen automatisch im Kalender auf Handy und Rechner.</p>
-  <p class="actions"><a class="btn" href="webcal:{{ feed|cut:'https:'|cut:'http:' }}">Im Kalender öffnen</a><input value="{{ feed }}" readonly size="60" aria-label="Adresse des Kalenders" onfocus="this.select()"></p>
+  <p class="actions"><a class="btn" href="webcal:{{ feed|cut:'https:'|cut:'http:' }}">Im Kalender öffnen</a><input value="{{ feed }}" readonly size="60" aria-label="Adresse des Kalenders" data-select></p>
   <p class="muted"><small>Die Adresse ist persönlich. Wer sie kennt, sieht Ihre Termine.</small></p>
 </section>
 {% endblock %}

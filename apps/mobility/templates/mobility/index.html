@@ -16,8 +16,8 @@
 </details>
 <form class="toolbar">
   <div class="inline">
-    <label>Studienjahr<select name="jahr" onchange="this.form.requestSubmit()">{% for y, label in years %}<option value="{{ y }}"{% if y == chosen %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
-    <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for value, label, n in states %}<option value="{{ value }}"{% if value == stand %} selected{% endif %}>{{ label }} ({{ n }})</option>{% endfor %}</select></label>
+    <label>Studienjahr<select name="jahr" data-submit>{% for y, label in years %}<option value="{{ y }}"{% if y == chosen %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Stand<select name="stand" data-submit><option value="">Alle</option>{% for value, label, n in states %}<option value="{{ value }}"{% if value == stand %} selected{% endif %}>{{ label }} ({{ n }})</option>{% endfor %}</select></label>
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name oder Partnerhochschule"></label>
   </div>
 </form>

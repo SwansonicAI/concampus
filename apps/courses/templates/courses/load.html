@@ -9,10 +9,10 @@
 </div>
 <form class="toolbar">
   <div class="inline">
-    <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    <label>Semester<select name="semester" data-submit>{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
     {% if everyone %}
-    <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option><option value="ueber"{% if stand == 'ueber' %} selected{% endif %}>Über dem Soll</option><option value="unter"{% if stand == 'unter' %} selected{% endif %}>Unter dem Soll</option></select></label>
-    <label>Institut<select name="institut" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>
+    <label>Stand<select name="stand" data-submit><option value="">Alle</option><option value="ueber"{% if stand == 'ueber' %} selected{% endif %}>Über dem Soll</option><option value="unter"{% if stand == 'unter' %} selected{% endif %}>Unter dem Soll</option></select></label>
+    <label>Institut<select name="institut" data-submit><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name"></label>
     {% endif %}
   </div>

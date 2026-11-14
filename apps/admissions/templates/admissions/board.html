@@ -8,8 +8,8 @@
 </div>
 <form class="toolbar">
   <div class="inline">
-    <label>Studienbeginn<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
-    <label>Hauptfach<select name="fach" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for s in subjects %}<option value="{{ s.pk }}"{% if s.pk|stringformat:'s' == subject %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+    <label>Studienbeginn<select name="semester" data-submit>{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    <label>Hauptfach<select name="fach" data-submit><option value="">Alle</option>{% for s in subjects %}<option value="{{ s.pk }}"{% if s.pk|stringformat:'s' == subject %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
   </div>
 </form>
 
@@ -41,7 +41,7 @@
   <form method="post" action="{% url 'admissions:decide_many' %}">
     {% csrf_token %}<input type="hidden" name="semester" value="{{ term.pk }}">
     <table data-panel>
-      <thead><tr><th><input type="checkbox" onchange="this.form.querySelectorAll('[name=study]').forEach(box => box.checked = this.checked)" aria-label="Alle ankreuzen"></th><th>Name</th><th>Studiengang und Hauptfach</th><th>Prüfungsstufen</th><th>Empfehlung</th></tr></thead>
+      <thead><tr><th><input type="checkbox" data-tick="study" aria-label="Alle ankreuzen"></th><th>Name</th><th>Studiengang und Hauptfach</th><th>Prüfungsstufen</th><th>Empfehlung</th></tr></thead>
       <tbody>
         {% for s in decidable %}
         <tr>
@@ -69,7 +69,7 @@
   <form method="post" action="{% url 'students:enrol_many' %}">
     {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
     <table data-panel>
-      <thead><tr><th>{% if ready %}<input type="checkbox" onchange="this.form.querySelectorAll('[name=study]').forEach(box => box.checked = this.checked)" aria-label="Alle ankreuzen">{% endif %}</th><th>Name</th><th>Studiengang und Hauptfach</th><th>Es fehlt noch</th></tr></thead>
+      <thead><tr><th>{% if ready %}<input type="checkbox" data-tick="study" aria-label="Alle ankreuzen">{% endif %}</th><th>Name</th><th>Studiengang und Hauptfach</th><th>Es fehlt noch</th></tr></thead>
       <tbody>
         {% for s in accepted %}
         <tr>

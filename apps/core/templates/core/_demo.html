@@ -1,4 +1,4 @@
-<div class="people" onsubmit="this.setAttribute('aria-busy', 'true'); (event.submitter.lastElementChild || event.submitter).textContent = 'Wird geöffnet …'">
+<div class="people" data-busy="Wird geöffnet …">
   {% for role, people in demo %}<form method="post" action="{{ action }}">{% csrf_token %}
     {% if people|length > 1 %}<label><b>{{ role }}</b><select name="konto">{% for person, detail in people %}<option value="{{ person.username }}">{{ person }}{% if detail %} · {{ detail }}{% endif %}</option>{% endfor %}</select></label><button class="btn small">Öffnen</button>
     {% else %}{% with person=people.0.0 %}<button name="konto" value="{{ person.username }}"><b>{{ role }}</b><span class="muted">{{ person }}</span></button>{% endwith %}{% endif %}

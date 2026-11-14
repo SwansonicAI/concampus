@@ -4,7 +4,7 @@
 {% block content %}
 <h1>Termine am {{ day|date:"l, j. F" }} absagen{% if building %} · {{ building }}{% elif teaching %} · alle Lehrveranstaltungen{% endif %}</h1>
 <p class="lead">{% if building %}Etwa wenn das Gebäude geschlossen ist. {% elif teaching %}Der Tag ist unterrichtsfrei. {% else %}Etwa bei Krankheit. {% endif %}Die Termine bleiben als „Abgesagt“ im Plan, die Räume werden frei. Wer teilnimmt, erhält eine Nachricht mit allen Terminen des Tages{% if not building and not teaching %}; einen Grund müssen Sie nicht nennen{% endif %}. Prüfungen sind ausgenommen: sie verlegt, wer sie plant.</p>
-{% if buildings %}<form class="toolbar"><div class="inline"><input type="hidden" name="tag" value="{{ day|date:'Y-m-d' }}"><label>Gebäude schließen<select name="gebaeude" onchange="this.form.requestSubmit()"><option value="">Nur meine Termine</option>{% for b in buildings %}<option{% if b == building %} selected{% endif %}>{{ b }}</option>{% endfor %}</select></label></div></form>{% endif %}
+{% if buildings %}<form class="toolbar"><div class="inline"><input type="hidden" name="tag" value="{{ day|date:'Y-m-d' }}"><label>Gebäude schließen<select name="gebaeude" data-submit><option value="">Nur meine Termine</option>{% for b in buildings %}<option{% if b == building %} selected{% endif %}>{{ b }}</option>{% endfor %}</select></label></div></form>{% endif %}
 <form method="post" class="form">
   {% csrf_token %}
   <div>

@@ -11,13 +11,13 @@
   <div class="inline">
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name, E-Mail, Matrikelnummer"></label>
     <input type="hidden" name="sortierung" value="{{ sort }}">
-    <label>Status<select name="status" onchange="this.form.requestSubmit()">{% for value, label in statuses %}<option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
-    <label>Studiengang<select name="studiengang" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for p in programs %}<option value="{{ p.pk }}"{% if p.pk|stringformat:'s' == studiengang %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
-    <label>Hauptfach<select name="fach" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for s in subjects %}<option value="{{ s.pk }}"{% if s.pk|stringformat:'s' == fach %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
-    <label>Klasse<select name="klasse" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for t in classes %}<option value="{{ t.pk }}"{% if t.pk|stringformat:'s' == klasse %} selected{% endif %}>{{ t.last_name }}, {{ t.first_name }}</option>{% endfor %}</select></label>
-    <label>Fachsemester<select name="fs" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for n in semesters %}<option value="{{ n }}"{% if n|stringformat:'s' == fs %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
-    <label>Studienbeginn<select name="beginn" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for t in terms %}<option value="{{ t.pk }}"{% if t.pk|stringformat:'s' == beginn %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
-    <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for key, label in cases %}<option value="{{ key }}"{% if key == stand %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Status<select name="status" data-submit>{% for value, label in statuses %}<option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Studiengang<select name="studiengang" data-submit><option value="">Alle</option>{% for p in programs %}<option value="{{ p.pk }}"{% if p.pk|stringformat:'s' == studiengang %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+    <label>Hauptfach<select name="fach" data-submit><option value="">Alle</option>{% for s in subjects %}<option value="{{ s.pk }}"{% if s.pk|stringformat:'s' == fach %} selected{% endif %}>{{ s }}</option>{% endfor %}</select></label>
+    <label>Klasse<select name="klasse" data-submit><option value="">Alle</option>{% for t in classes %}<option value="{{ t.pk }}"{% if t.pk|stringformat:'s' == klasse %} selected{% endif %}>{{ t.last_name }}, {{ t.first_name }}</option>{% endfor %}</select></label>
+    <label>Fachsemester<select name="fs" data-submit><option value="">Alle</option>{% for n in semesters %}<option value="{{ n }}"{% if n|stringformat:'s' == fs %} selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+    <label>Studienbeginn<select name="beginn" data-submit><option value="">Alle</option>{% for t in terms %}<option value="{{ t.pk }}"{% if t.pk|stringformat:'s' == beginn %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    <label>Stand<select name="stand" data-submit><option value="">Alle</option>{% for key, label in cases %}<option value="{{ key }}"{% if key == stand %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
   </div>
 </form>
 <form>
@@ -29,7 +29,7 @@
     {% if 'manage_students' in user.roles %}<button class="btn ghost small" formaction="{% url 'students:letters' %}">Bescheide drucken</button>{% endif %}
   </div>
   <table data-panel>
-    <thead><tr><th><input type="checkbox" onchange="this.form.querySelectorAll('[name=study]').forEach(box => box.checked = this.checked)" aria-label="Alle ankreuzen"></th>{% for title, key, order in columns %}<th data-sort="{{ key }}"{% if order %} aria-sort="{{ order }}"{% endif %}{% if key == 'fs' %} class="num"{% endif %}>{{ title }}</th>{% endfor %}</tr></thead>
+    <thead><tr><th><input type="checkbox" data-tick="study" aria-label="Alle ankreuzen"></th>{% for title, key, order in columns %}<th data-sort="{{ key }}"{% if order %} aria-sort="{{ order }}"{% endif %}{% if key == 'fs' %} class="num"{% endif %}>{{ title }}</th>{% endfor %}</tr></thead>
     <tbody>
       {% for s in studies %}
       <tr>

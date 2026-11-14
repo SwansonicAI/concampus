@@ -30,7 +30,7 @@
     <small class="muted">Archivwürdige Akten erst herunterladen und übernehmen, dann bewerten.</small>
   </div>
   <table data-panel>
-    <thead><tr><th><input type="checkbox" onchange="this.form.querySelectorAll('[name=person]').forEach(box => box.checked = this.checked)" aria-label="Alle ankreuzen"></th><th>Matrikelnr.</th><th>Name</th><th>Studium</th><th>Angeboten</th><th></th></tr></thead>
+    <thead><tr><th><input type="checkbox" data-tick="person" aria-label="Alle ankreuzen"></th><th>Matrikelnr.</th><th>Name</th><th>Studium</th><th>Angeboten</th><th></th></tr></thead>
     <tbody>
       {% for p in offered %}
       <tr>

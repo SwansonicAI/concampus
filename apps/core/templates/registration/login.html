@@ -17,8 +17,8 @@
       <div class="actions"><button class="btn">Anmelden</button><a href="{% url 'password_reset' %}">Passwort vergessen?</a></div>
     </form>
     {% if demo %}
-    <p class="demo-entry"><button type="button" class="btn ghost small" onclick="document.getElementById('demo').showModal()">Demo-Profil wählen</button></p>
-    <dialog id="demo" class="demo" aria-labelledby="demo-title" onclick="event.target === this && this.close()">
+    <p class="demo-entry"><button type="button" class="btn ghost small" data-open="demo">Demo-Profil wählen</button></p>
+    <dialog id="demo" class="demo" aria-labelledby="demo-title" data-dismiss>
       <div class="head"><h2 id="demo-title">Demo-Profil wählen</h2><form method="dialog"><button class="link">Schließen</button></form></div>
       <p class="muted">Ohne Passwort anmelden und ConCampus mit den Augen dieser Person sehen.</p>
       {% url 'demo' as action %}{% include "core/_demo.html" %}

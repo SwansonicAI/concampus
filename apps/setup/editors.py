@@ -13,9 +13,9 @@ from django.utils import timezone
 from django.utils.formats import date_format
 from django.utils.html import format_html, format_html_join
 
-from core.access import CAPABILITIES, EVERYWHERE
+from core.access import CAPABILITIES, EVERYWHERE, SENSITIVE
 from core.dates import DayField, PastField, months_before
-from core.models import Grant, Holiday, Institute, Institution, Membership, Office, Person, Term, waiting
+from core.models import Grant, Holiday, Institute, Institution, Membership, Message, Office, Person, Term, waiting
 from courses.forms import AuditionForm
 from courses.models import Appointment, Area, Course, Format, Obligation, Post, Rate, Reduction, ReductionGround
 from curriculum.forms import ModuleForm, ProgramForm
@@ -134,6 +134,9 @@ class OfficeForm(forms.ModelForm):
         if later:
             Grant.objects.create(office=office, rights=sorted(later), by=self.by)
         self.pending = bool(later)
+        if (held - chosen) & SENSITIVE:  # taken from everyone in it at once: they hear of it, as with a single account
+            labels = dict(c for _, group in CAPABILITIES for c in group)
+            alert(self.by, office, [f'ohne „{labels.get(c, c)}“' for c in sorted((held - chosen) & SENSITIVE)], office.user_set.filter(is_active=True), reverse('setup:edit', args=['aemter', office.pk]))
         return office
 
 
@@ -191,6 +194,7 @@ class AccountForm(forms.ModelForm):
         """Leaving an office takes effect at once, joining one too, unless it holds a sensitive Berechtigung: then it waits
         for a second person to confirm it (Membership)."""
         person = super().save(commit=False)
+        privileged = bool(person.pk and set(person.reach) & SENSITIVE)  # as it was, before the offices change below
         if not person.pk:
             person.set_unusable_password()  # signs in with the Hochschule's login
         if 'is_active' in self.changed_data:  # the day someone leaves starts the period for their data (core/departure.py)
@@ -208,7 +212,24 @@ class AccountForm(forms.ModelForm):
         for office in later:
             Membership.objects.get_or_create(person=person, office=office, until=None, confirmed_by=None, defaults={'by': self.by})
         self.pending = bool(later)
+        if privileged and (changed := [str(self.fields[n].label) for n in self.changed_data if n in WATCHED and (n != 'groups' or held - chosen)]):
+            alert(self.by, person, changed, [person], reverse('setup:edit', args=['konten', person.pk]), self.initial.get('email', ''))
         return person
+
+
+WATCHED = ('email', 'username', 'is_active', 'groups')  # how an account holding sensitive rights could be taken over or shut out
+
+
+def alert(by, changed_on, changed, told, link, address=''):
+    """A change that could take over or shut out whoever holds sensitive rights, told at once, as access management
+    advises, rather than held back: blocking would lock the Hochschule out while its administrators are away. The others
+    who give Berechtigungen hear of it, those it is about, and an account's former address."""
+    subject = f'Berechtigungen geändert: {changed_on}'
+    body = f'{by} hat am {date_format(timezone.localdate(), "j.n.Y")} geändert: {changed_on}, {", ".join(changed)}. War das nicht abgesprochen, bitte gleich im Verlauf prüfen.'
+    for person in {*Person.holding('manage_accounts'), *told} - {by}:
+        Message.send(person, subject, body, link)
+    if address and isinstance(changed_on, Person) and address.lower() != changed_on.email.lower():
+        Message.mail(Person(email=address), subject, body)
 
 
 class StaffForm(AccountForm):

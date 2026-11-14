@@ -5,7 +5,7 @@
 {% block content %}
 <div class="head">
   <h1>{% if teaching is not None %}Meine Lehre{% else %}Meine Lehrveranstaltungen{% endif %}</h1>
-  <form class="actions"><select name="semester" onchange="this.form.requestSubmit()" aria-label="Semester">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></form>
+  <form class="actions"><select name="semester" data-submit aria-label="Semester">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></form>
 </div>
 
 {% if teaching is not None %}

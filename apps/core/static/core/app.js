@@ -617,6 +617,27 @@ document.addEventListener('change', ({target}) => {
   target.form.querySelectorAll(target.dataset.all ? `[data-part="${target.dataset.all}"]` : '[data-part], [data-all]').forEach(box => { box.checked = target.checked; });
 });
 
+// No script in the pages themselves, which the Content-Security-Policy forbids: a choice that sends its form at once
+// (data-submit, on the field or its form); a box that ticks every box of a name in its table (data-tick="study"); a print
+// button (data-print); an address selected to copy (data-select); a dialog opened (data-open="demo") and closed by a click
+// beside it (data-dismiss); forms that say they are busy (data-busy="Wird geöffnet …").
+document.addEventListener('change', ({target}) => {
+  if (target.matches('[data-submit]') || target.form?.matches('[data-submit]')) target.form.requestSubmit();
+  if (target.dataset.tick) (target.closest('table') || target.form).querySelectorAll(`[name="${target.dataset.tick}"]`).forEach(box => { box.checked = target.checked; });
+});
+document.addEventListener('click', ({target}) => {
+  if (target.closest('[data-print]')) print();
+  if (target.closest('[data-open]')) document.getElementById(target.closest('[data-open]').dataset.open).showModal();
+  if (target.matches('dialog[data-dismiss]')) target.close();
+});
+document.addEventListener('focusin', ({target}) => { if (target.matches('[data-select]')) target.select(); });
+document.addEventListener('submit', ({target, submitter}) => {
+  const busy = target.closest('[data-busy]');
+  if (!busy) return;
+  busy.setAttribute('aria-busy', 'true');
+  (submitter.lastElementChild || submitter).textContent = busy.dataset.busy;
+});
+
 // Fields that matter only for some choices of another (data-for="category:kammermusik") show only then. A choice hidden
 // so hides what hangs on it, as a course's registration dates with its Platzvergabe in one-to-one teaching; the rules
 // go in page order, so it is hidden first.

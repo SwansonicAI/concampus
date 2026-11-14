@@ -2,7 +2,7 @@
 {% block title %}{% if letters|length == 1 %}{% for letter in letters %}{{ letter.subject }}{% endfor %}{% else %}Bescheide{% endif %}{% endblock %}
 {% block content %}
 <p class="no-print actions">
-  {% if letters %}<button class="btn" onclick="window.print()">Drucken / PDF</button>{% endif %}
+  {% if letters %}<button class="btn" data-print>Drucken / PDF</button>{% endif %}
   {% if missing %}<span class="muted">Ohne Bescheid: {{ missing|join:", " }}</span>{% endif %}
 </p>
 {% if printing %}<form method="post" action="{% url 'students:printed' %}" class="no-print actions">{% csrf_token %}{% for pk in printing %}<input type="hidden" name="bescheid" value="{{ pk }}">{% endfor %}<button class="btn ghost">Gedruckt: {{ printing|length }} per Post als gedruckt markieren</button></form>{% endif %}

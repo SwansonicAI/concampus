@@ -15,6 +15,8 @@ import sys
 from pathlib import Path
 from urllib.parse import parse_qsl, unquote, urlsplit
 
+from django.utils.csp import CSP
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 APPS_DIR = BASE_DIR / 'apps'
@@ -51,6 +53,13 @@ SECURE_HSTS_SECONDS = 365 * 86400  # browsers come back over HTTPS only
 SESSION_COOKIE_AGE = 2 * 3600  # signed out after two hours without a request, and when the browser closes
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True  # renewed by core.middleware.renewal
 CSRF_FAILURE_VIEW = 'core.views.stale'
+# Content-Security-Policy: scripts only from ConCampus's own files, never in a page (core/static/core/app.js does what
+# pages need), so text that slipped through unescaped would run nothing. Styles in pages stay allowed: the plans place
+# their entries by `style`, and the Hochschule's colours come in its head. Files served for download set their own.
+SECURE_CSP = {
+    'default-src': [CSP.SELF], 'script-src': [CSP.SELF], 'style-src': [CSP.SELF, CSP.UNSAFE_INLINE], 'img-src': [CSP.SELF, 'data:'],
+    'object-src': [CSP.NONE], 'base-uri': [CSP.NONE], 'frame-ancestors': [CSP.NONE],
+}
 
 
 # Application definition
@@ -77,6 +86,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'django.middleware.csp.ContentSecurityPolicyMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'core.middleware.renewal',

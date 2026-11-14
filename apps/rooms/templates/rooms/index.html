@@ -15,7 +15,7 @@
 </div>
 <p class="lead">{{ day|date:"l, j. F Y" }}{% if left is not None %} · Übezeit: noch {{ left|floatformat:"-1" }} von {{ institution.student_daily_hours }} Std.{% endif %}{% for category, until in reach %} · {{ category }} bis {{ until|date:"D j.n., H:i" }} Uhr{% endfor %}</p>
 {% include "core/_days.html" %}
-<form class="toolbar" onchange="this.requestSubmit()">
+<form class="toolbar" data-submit>
   <input type="hidden" name="tag" value="{{ day|date:'Y-m-d' }}">
   <div class="inline">
     <label>Räume

@@ -9,7 +9,7 @@
 <form class="toolbar">
   <div class="inline">
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name oder Matrikelnummer"></label>
-    <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for key, label, n in states %}<option value="{{ key }}"{% if key == stand %} selected{% endif %}>{{ label }} ({{ n }})</option>{% endfor %}</select></label>
+    <label>Stand<select name="stand" data-submit><option value="">Alle</option>{% for key, label, n in states %}<option value="{{ key }}"{% if key == stand %} selected{% endif %}>{{ label }} ({{ n }})</option>{% endfor %}</select></label>
   </div>
 </form>
 {% if statement %}

@@ -8,7 +8,7 @@
     <a class="btn ghost" href="?monat={{ prev|date:'Y-m' }}" data-key="ArrowLeft"><i class="arrow left"></i> {{ prev|date:"F" }}</a>
     <a class="btn ghost" href="?" data-key="h">Dieser Monat</a>
     <a class="btn ghost" href="?monat={{ next|date:'Y-m' }}" data-key="ArrowRight">{{ next|date:"F" }} <i class="arrow"></i></a>
-    <button class="btn ghost" onclick="window.print()">Drucken</button>
+    <button class="btn ghost" data-print>Drucken</button>
     {% if office %}<a class="btn" href="{% url 'rooms:new' %}?kategorie=konzert">Veranstaltung anlegen</a>{% endif %}
   </div>
 </div>
@@ -17,7 +17,7 @@
   <div class="inline">
     <input type="hidden" name="monat" value="{{ month|date:'Y-m' }}">
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Titel, Programm, Ort"></label>
-    <label>Kategorie<select name="kategorie" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for c in categories %}<option value="{{ c.key }}"{% if c.key == picked %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
+    <label>Kategorie<select name="kategorie" data-submit><option value="">Alle</option>{% for c in categories %}<option value="{{ c.key }}"{% if c.key == picked %} selected{% endif %}>{{ c }}</option>{% endfor %}</select></label>
   </div>
 </form>
 <table data-panel>
@@ -39,6 +39,6 @@
 <section class="no-print">
   <h2>Kalender für die Website</h2>
   <p>Alle öffentlichen Veranstaltungen des nächsten halben Jahres, ohne die internen, zum Abonnieren oder Einbinden.</p>
-  <p class="actions"><input value="{{ feed }}" readonly size="60" aria-label="Adresse des Kalenders" onfocus="this.select()"></p>
+  <p class="actions"><input value="{{ feed }}" readonly size="60" aria-label="Adresse des Kalenders" data-select></p>
 </section>
 {% endblock %}

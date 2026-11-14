@@ -102,6 +102,13 @@ class EditorTest(Seeded):
         self.assertIn('grant_compensation', Person.objects.get(pk=reader.pk).roles)
         joined = Change.objects.filter(person=clerk, table='core.person').first()
         self.assertEqual(joined.fields['groups'], [[], [office.pk]])
+        reuter = Person.objects.get(username='jan.reuter')  # one who gives Berechtigungen shut out by another: told at once
+        campus.post(f'/einstellungen/konten/{reuter.pk}/', {
+            'first_name': reuter.first_name, 'last_name': reuter.last_name, 'email': reuter.email, 'username': reuter.username,
+            'groups': list(reuter.groups.values_list('pk', flat=True)), 'anyway': 'on',
+        })
+        self.assertFalse(Person.objects.get(pk=reuter.pk).is_active)
+        self.assertTrue(reuter.messages.filter(subject__startswith='Berechtigungen geändert').exists())
 
 
 class CurriculumEditorTest(Seeded):

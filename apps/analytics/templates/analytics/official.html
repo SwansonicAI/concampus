@@ -14,7 +14,7 @@
 <p class="lead">Für das Statistische Landesamt, zum Hochladen in eSTATISTIK.core: Studierende und Prüfungen je Semester, Gasthörer und Promovierende (Stichtag 1. Dezember) je Jahr.</p>
 <form class="toolbar">
   <div class="inline">
-    <label>Berichtssemester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    <label>Berichtssemester<select name="semester" data-submit>{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
   </div>
 </form>
 <h2>Noch offen</h2>

@@ -39,7 +39,12 @@ periods and rules: `docs/rules.md`; the legal requirements: `docs/legal.md`.
   an Institut or Studiengänge (`Person.within()`). Everything else follows from what someone does: their own file, their
   courses, the auditions they judge. Who may see which data is set out tier by tier in `docs/privacy.md`.
 - Four eyes for rights: joining an office and new rights for an office take effect only once a second person who keeps
-  accounts confirms them (`Membership`, `Grant`, Einstellungen › Freigaben).
+  accounts confirms them (`Membership`, `Grant`, Einstellungen › Freigaben); nobody confirms rights for themselves or
+  their own office. Taking sensitive rights away, deactivating such an account or changing its address or username goes
+  at once, so the Hochschule is never locked out, but everyone who keeps accounts and the person hear of it straight away,
+  also at the former address (`setup/editors.py` `alert()`).
+- **Open**: a first sign-in through the Hochschule's login is matched to an existing account by its address; an
+  applicant's self-chosen address is not yet confirmed. To settle with the Hochschule's login (`core/sso.py`).
 - Uploaded files are not served from a public folder: each goes out through a view that checks who may open it
   (`admissions/views.py` `document()`); the jury sees only documents marked for it. Health data is opened only to the
   person and the offices whose decision depends on it.
@@ -73,10 +78,14 @@ periods and rules: `docs/rules.md`; the legal requirements: `docs/legal.md`.
   recorded; Bescheide go out only after the office has seen a preview (`docs/rules.md`).
 - Forms check what is typed in as the database would, and keep what was refused in the session, never in the address
   (`core/forms.py`). Every form is protected against cross-site requests (CSRF); pages are not framed by others
-  (`X-Frame-Options`), content types are not guessed (`nosniff`).
-- Files: by type and size per kind of document (`DocumentType.file_types`, `max_mb`, 20 MB by default). A logo, the only
-  file shown in the page, is served sandboxed (`Content-Security-Policy: sandbox`). **Open**: no scan for malware; no
-  Content-Security-Policy for the pages themselves.
+  (`X-Frame-Options`), content types are not guessed (`nosniff`). A Content-Security-Policy lets scripts come only from
+  ConCampus's own files, none written in a page, so text that ever slipped through unescaped would run nothing
+  (`SECURE_CSP`); styles in pages stay allowed, as the plans place their entries by them. Lists exported to Excel never
+  carry a formula (`core.shortcuts.Sheet`).
+- Files: by type and size per kind of document (`DocumentType.file_types`, `max_mb`, 20 MB by default). Every file a
+  person handed in, the Protokoll of an exam and the logo are served sandboxed (`Content-Security-Policy: sandbox`), as
+  the type checked at upload, never as one guessed from a name; only PDFs and photos open in the browser, anything else
+  downloads. **Open**: no scan for malware.
 
 ### Transfer (Weitergabekontrolle)
 

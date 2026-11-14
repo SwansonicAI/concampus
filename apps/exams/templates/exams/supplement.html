@@ -5,7 +5,7 @@
 {% language lang %}
 {% with p=study.person program=study.program %}
 <div class="document">
-  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button>{% if de %}<a class="btn ghost" href="?">English</a>{% else %}<a class="btn ghost" href="?sprache=de">Deutsch</a>{% endif %}<a class="more" href="{% url 'exams:transcript' study.pk %}">Zum Zeugnis</a></p>
+  <p class="no-print actions"><button class="btn" data-print>Drucken / PDF</button>{% if de %}<a class="btn ghost" href="?">English</a>{% else %}<a class="btn ghost" href="?sprache=de">Deutsch</a>{% endif %}<a class="more" href="{% url 'exams:transcript' study.pk %}">Zum Zeugnis</a></p>
   {% if not finished %}<p class="fail">{% if de %}Entwurf: {{ earned }} von {{ total }} ECTS-Leistungspunkten erworben; die Gesamtnote folgt mit dem Abschluss.{% else %}Draft: {{ earned }} of {{ total }} ECTS credits earned; the overall grade follows with the degree.{% endif %}</p>{% endif %}
   {% include "core/_letterhead.html" with office=awarding|linebreaksbr %}
   <h1>Diploma Supplement</h1>

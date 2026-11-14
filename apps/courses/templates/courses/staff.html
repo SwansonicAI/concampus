@@ -12,9 +12,9 @@
 </div>
 <form class="toolbar">
   <div class="inline">
-    <label>Institut<select name="institut" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>
-    <label>Beschäftigung<select name="art" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for value, label in kinds %}<option value="{{ value }}"{% if value == kind %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
-    <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Aktiv</option>{% for key, label, n in stands %}<option value="{{ key }}"{% if key == stand %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Institut<select name="institut" data-submit><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>
+    <label>Beschäftigung<select name="art" data-submit><option value="">Alle</option>{% for value, label in kinds %}<option value="{{ value }}"{% if value == kind %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Stand<select name="stand" data-submit><option value="">Aktiv</option>{% for key, label, n in stands %}<option value="{{ key }}"{% if key == stand %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name, Personalnummer, E-Mail"></label>
   </div>
 </form>

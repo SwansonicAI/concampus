@@ -2,7 +2,7 @@
 {% block title %}Studienzeitbescheinigung{% endblock %}
 {% block content %}
 <div class="document">
-  <p class="no-print actions"><button class="btn" onclick="window.print()">Drucken / PDF</button><a class="btn ghost" href="?xml">Als XHochschule-Datei</a><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
+  <p class="no-print actions"><button class="btn" data-print>Drucken / PDF</button><a class="btn ghost" href="?xml">Als XHochschule-Datei</a><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
   {% include "core/_letterhead.html" with office=sender %}
   <h1>Studienzeit&shy;bescheinigung</h1>
   <p>Hiermit werden die Studienzeiten an der {{ institution.name }} bescheinigt für</p>

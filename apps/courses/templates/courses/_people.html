@@ -2,7 +2,7 @@
 <table>
   <thead>
     <tr>
-      <th><input type="checkbox" form="auswahl" aria-label="Alle ankreuzen" onchange="this.closest('table').querySelectorAll('[name=study]').forEach(box => box.checked = this.checked)"></th>
+      <th><input type="checkbox" form="auswahl" aria-label="Alle ankreuzen" data-tick="study"></th>
       <th>Name</th>
       <th>E-Mail</th>
       {% if varied %}<th>Modul</th>{% endif %}

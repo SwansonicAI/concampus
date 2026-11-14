@@ -10,9 +10,9 @@
 </div>
 <form class="toolbar">
   <div class="inline">
-    <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% empty %}<option>{{ term }}</option>{% endfor %}</select></label>
-    <label>Institut<select name="institut" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>
-    <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for value, label in statuses %}<option value="{{ value }}"{% if value == stand %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+    <label>Semester<select name="semester" data-submit>{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% empty %}<option>{{ term }}</option>{% endfor %}</select></label>
+    <label>Institut<select name="institut" data-submit><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>
+    <label>Stand<select name="stand" data-submit><option value="">Alle</option>{% for value, label in statuses %}<option value="{{ value }}"{% if value == stand %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name oder Lehrveranstaltung"></label>
   </div>
 </form>

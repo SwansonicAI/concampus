@@ -10,14 +10,14 @@
 <p class="lead">{{ term }} · {{ courses|length }} Lehrveranstaltung{{ courses|length|pluralize:"en" }}{% if term.planning %} · <span class="badge wait">in Planung</span> Studierende sehen das Semester ab der Veröffentlichung{% if open %} · nur noch nicht bestätigte{% endif %}{% endif %}</p>
 <form class="toolbar">
   <div class="inline">
-    <label>Semester<select name="semester" onchange="this.form.requestSubmit()">{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
-    {% if scoped %}<label>Lehrveranstaltungen<select name="bereich" onchange="this.form.requestSubmit()"><option value="eigene">in Ihrer Zuständigkeit</option><option value="alle"{% if reach == 'alle' %} selected{% endif %}>alle</option></select></label>{% endif %}
-    <label>Fachgebiet<select name="fachgebiet" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for a in areas %}<option value="{{ a.pk }}"{% if a.pk|stringformat:'s' == area %} selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
-    <label>Lehrform<select name="lehrform" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for f in formats %}<option value="{{ f.pk }}"{% if f.pk|stringformat:'s' == form %} selected{% endif %}>{{ f }}</option>{% endfor %}</select></label>
-    <label>Studiengang<select name="studiengang" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for p in programs %}<option value="{{ p.pk }}"{% if p.pk|stringformat:'s' == program %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
+    <label>Semester<select name="semester" data-submit>{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    {% if scoped %}<label>Lehrveranstaltungen<select name="bereich" data-submit><option value="eigene">in Ihrer Zuständigkeit</option><option value="alle"{% if reach == 'alle' %} selected{% endif %}>alle</option></select></label>{% endif %}
+    <label>Fachgebiet<select name="fachgebiet" data-submit><option value="">Alle</option>{% for a in areas %}<option value="{{ a.pk }}"{% if a.pk|stringformat:'s' == area %} selected{% endif %}>{{ a }}</option>{% endfor %}</select></label>
+    <label>Lehrform<select name="lehrform" data-submit><option value="">Alle</option>{% for f in formats %}<option value="{{ f.pk }}"{% if f.pk|stringformat:'s' == form %} selected{% endif %}>{{ f }}</option>{% endfor %}</select></label>
+    <label>Studiengang<select name="studiengang" data-submit><option value="">Alle</option>{% for p in programs %}<option value="{{ p.pk }}"{% if p.pk|stringformat:'s' == program %} selected{% endif %}>{{ p }}</option>{% endfor %}</select></label>
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Titel oder Lehrende"></label>
-    {% if student %}<label>Module<select name="bestandene" onchange="this.form.requestSubmit()"><option value="">noch offene</option><option value="1"{% if done %} selected{% endif %}>auch erledigte</option></select></label>
-    <label>Anmeldung<select name="anmeldung" onchange="this.form.requestSubmit()"><option value="">alle</option><option value="moeglich"{% if joinable %} selected{% endif %}>noch möglich</option></select></label>{% endif %}
+    {% if student %}<label>Module<select name="bestandene" data-submit><option value="">noch offene</option><option value="1"{% if done %} selected{% endif %}>auch erledigte</option></select></label>
+    <label>Anmeldung<select name="anmeldung" data-submit><option value="">alle</option><option value="moeglich"{% if joinable %} selected{% endif %}>noch möglich</option></select></label>{% endif %}
     {% if node %}<input type="hidden" name="modul" value="{{ node.pk }}">{% endif %}
   </div>
 </form>

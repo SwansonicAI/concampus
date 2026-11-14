@@ -9,8 +9,8 @@
 <p class="lead">{% for key, label, n in states %}{{ n }} {{ label }}{% if not forloop.last %} · {% endif %}{% endfor %}</p>
 <form class="toolbar">
   <div class="inline">
-    <label>Stand<select name="stand" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for key, label, n in states %}<option value="{{ key }}"{% if key == stand %} selected{% endif %}>{{ label }} ({{ n }})</option>{% endfor %}</select></label>
-    {% if institutes|length > 1 %}<label>Institut<select name="institut" onchange="this.form.requestSubmit()"><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>{% endif %}
+    <label>Stand<select name="stand" data-submit><option value="">Alle</option>{% for key, label, n in states %}<option value="{{ key }}"{% if key == stand %} selected{% endif %}>{{ label }} ({{ n }})</option>{% endfor %}</select></label>
+    {% if institutes|length > 1 %}<label>Institut<select name="institut" data-submit><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>{% endif %}
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Instrument, Inventarnummer, Name"></label>
   </div>
 </form>
