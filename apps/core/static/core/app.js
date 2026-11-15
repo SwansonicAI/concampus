@@ -694,6 +694,15 @@ function dated(input) {
   });
 }
 
+// Part of a page, as text. Sent on to the login instead, the session has ended: the page reloads to the login, nothing
+// of it is shown meanwhile.
+const part = async (url, options) => {
+  const response = await fetch(url, options);
+  if (!response.redirected) return response.text();
+  location.reload();
+  return new Promise(() => {});
+};
+
 // Search palette: the box in the bar, Ctrl+K or / opens it in the middle of the page. Results while typing, the best
 // first and chosen; arrow keys choose another, Enter goes there, also before the results for the last letters are in.
 const finder = document.querySelector('.finder');
@@ -715,7 +724,7 @@ if (finder) {
       render(q, '');
       return true;
     }
-    const ask = quick => fetch(`${form.action}?q=${encodeURIComponent(q)}${quick ? '&schnell' : ''}`, {headers: {'X-Fragment': '1'}}).then(r => r.text());
+    const ask = quick => part(`${form.action}?q=${encodeURIComponent(q)}${quick ? '&schnell' : ''}`, {headers: {'X-Fragment': '1'}});
     const all = ask(false), first = await ask(true);
     if (q !== input.value.trim()) return false;
     render(q, first);
@@ -778,7 +787,7 @@ document.addEventListener('submit', event => {
 async function swap(url) {
   const field = document.activeElement, typed = field.value;
   document.querySelector('main').setAttribute('aria-busy', 'true');  // the new page replaces it, and the mark with it
-  const html = await (await fetch(url)).text();
+  const html = await part(url);
   if (field.value !== typed) return;  // typing went on; its own request follows
   const main = new DOMParser().parseFromString(html, 'text/html').querySelector('main');
   document.querySelector('main').replaceWith(main);
