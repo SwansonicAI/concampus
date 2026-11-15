@@ -60,11 +60,12 @@ the semesters, the information courses the dashboard links to, open to guests; E
 too. Moodle's PHP image (`moodlehq/moodle-php-apache:8.3`), its cron, its own Postgres, served by ConCampus's Caddy.
 Sign-in required, no mail (`noemailever`: the people are made up, their addresses not); no Shibboleth. There, ConCampus
 makes the accounts too (`core_user_create_users`, on with `DEMO`), for the participants and teachers of its courses and
-for the people its login page offers, and signs them in: Moodle's login page sends on to ConCampus (`/demo/moodle/`),
-which asks for the access code and offers the same people; the one chosen opens Moodle signed in, by a link signed with
-the web service token and good for a minute (`courses/moodle.py` `entry`, the plugin `auth_concampus` in
-`demo-moodle/concampus`). ConCampus's own sign-in stays as it is, so one browser can be an office in ConCampus and a
-student in Moodle. Signing out of Moodle goes back to the choice; the admin signs in at `/login/index.php?noredirect=1`.
+for the people its login page offers. Moodle's login page sends on to a page of its own, in Moodle's theme (the plugin
+`auth_concampus` in `demo-moodle/concampus`, `index.php`): the demo's access code, then the same people as ConCampus
+offers; the one chosen is signed in. Moodle asks ConCampus (`/demo/moodle/`, with the web service token) whether the
+code is right, from the visitor's address, which waits after too many wrong as at ConCampus's gate, and whom to offer;
+it keeps the ticket ConCampus gives for the code a month, until the code changes. ConCampus's own sign-in stays as it
+is, so one browser can be an office in ConCampus and a student in Moodle. Signing out of Moodle goes back to the choice; the admin signs in at `/login/index.php?noredirect=1`.
 ConCampus's account `campus-sync` is a site administrator; in production a role with only the functions above.
 Teachers there can neither enrol nor remove, and new courses have no self-enrolment (`setup.php`). A course's page in
 ConCampus, „Meine Lehre“ and „Meine Lehrveranstaltungen“ link to its Moodle course.

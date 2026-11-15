@@ -4,10 +4,8 @@ Lehrform, with the material of the course they were taken over from; their teach
 left taken out again, a course called off hidden; a course taught in groups with a Moodle group for each. ConCampus is
 the record and Moodle follows. People are found there by their Hochschule login, else by e-mail address; whoever has not
 signed in to Moodle yet is enrolled within a minute of their first sign-in. Off without settings.MOODLE."""
-import hmac
 import json
 import secrets
-import time as clock
 from collections import Counter
 from datetime import datetime, time
 from hashlib import sha256
@@ -83,19 +81,11 @@ def stamp(day):
 
 
 def account(person):
-    """The demo's Moodle account for someone: signed in only through ConCampus (entry), never by password."""
+    """The demo's Moodle account for someone: signed in only by choosing them there (demo-moodle/concampus), never by password."""
     return {
         'username': person.username.lower(), 'email': person.email, 'firstname': person.first_name, 'lastname': person.last_name,
         'auth': 'concampus', 'password': secrets.token_urlsafe(),
     }
-
-
-def entry(username):
-    """The address that signs `username` in to the demo's Moodle for the next minute (demo-moodle/concampus/login.php),
-    signed with the web service token, which both sides know."""
-    own, now = settings.MOODLE, int(clock.time())
-    signature = hmac.new(own['token'].encode(), f'{username.lower()}|{now}'.encode(), sha256).hexdigest()
-    return own['url'].rstrip('/') + '/auth/concampus/login.php?' + urlencode({'u': username.lower(), 't': now, 's': signature})
 
 
 def addresses(courses):

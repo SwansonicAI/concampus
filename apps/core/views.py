@@ -19,6 +19,7 @@ from django.utils import timezone
 from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.formats import date_format
 from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 
 from courses.models import Course, Participation
@@ -250,17 +251,24 @@ def gate(request):
     target = request.GET.get('next', '')
     target = target if url_has_allowed_host_and_scheme(target, {request.get_host()}) else reverse('login')
     if request.method == 'POST':
-        key = f'gate:{address(request)}'
-        if (tries := cache.get(key, 0)) >= GUESSES:
-            messages.error(request, 'Zu viele Versuche. Bitte in einer Viertelstunde noch einmal.')
-        elif constant_time_compare(request.POST.get('code', '').strip().lower(), settings.DEMO_CODE.lower()):
+        right = guessed(request.POST.get('code', ''), address(request))
+        if right:
             response = redirect(target)
             response.set_cookie('demo', ticket(), max_age=DEMO_DAYS * 86400, secure=not settings.DEBUG, httponly=True, samesite='Lax')
             return response
-        else:
-            cache.set(key, tries + 1, 15 * 60)
-            messages.error(request, 'Dieser Zugangscode stimmt nicht.')
+        messages.error(request, 'Dieser Zugangscode stimmt nicht.' if right is False else 'Zu viele Versuche. Bitte in einer Viertelstunde noch einmal.')
     return render(request, 'core/gate.html')
+
+
+def guessed(code, where):
+    """Whether `code` is the demo's access code, given from the address `where`; None while that address waits."""
+    key = f'gate:{where}'
+    if (tries := cache.get(key, 0)) >= GUESSES:
+        return None
+    if constant_time_compare(code.strip().lower(), settings.DEMO_CODE.lower()):
+        return True
+    cache.set(key, tries + 1, 15 * 60)
+    return False
 
 
 def stale(request, reason=''):
@@ -295,19 +303,24 @@ def demo_day(request):
     return redirect(back if url_has_allowed_host_and_scheme(back, {request.get_host()}) else 'home')
 
 
+@csrf_exempt  # asked by Moodle's server, not a browser
 @login_not_required
+@require_POST
 def demo_moodle(request):
-    """Only in the demo, past its access code: where the demo's Moodle sends whoever signs in (docs/moodle.md); one of its
-    people chosen opens Moodle as them, ConCampus's own sign-in left as it is."""
-    from courses.moodle import entry  # which imports this module
-
-    if not settings.MOODLE['url'] or not admitted(request):
+    """Only in the demo: its Moodle's sign-in page (demo-moodle/concampus/index.php) asks, with the web service token,
+    for a visitor there who gives the access code, or the ticket given for it before: the ticket, and the people to
+    choose from (docs/moodle.md). Wrong, 403; too many wrong from the visitor's address, 429."""
+    token = settings.MOODLE['token']
+    if not (settings.DEMO_CODE and token and constant_time_compare(request.headers.get('Authorization', ''), f'Bearer {token}')):
         raise Http404
-    if request.method == 'POST':
-        if request.POST.get('konto') not in {p.username for _, people in demo_people() for p, _ in people}:
-            raise Http404
-        return redirect(entry(request.POST['konto']))
-    return render(request, 'core/demo_moodle.html', {'demo': demo_people})
+    code = request.POST.get('code')
+    right = constant_time_compare(request.POST.get('ticket', ''), ticket()) or (code is not None and guessed(code, request.POST.get('address', '')))
+    if not right:
+        return HttpResponse(status=403 if right is False else 429)
+    return JsonResponse({'ticket': ticket(), 'people': [
+        {'label': label, 'people': [{'username': p.username.lower(), 'name': str(p), 'detail': str(detail or '')} for p, detail in people]}
+        for label, people in demo_people()
+    ]})
 
 
 def message(request, pk):

@@ -180,6 +180,16 @@ class LoginTest(Seeded):
             client.post('/demo/', {'konto': 'student'})
             self.assertEqual(client.get('/').context['user'].username, 'student')
 
+    def test_demo_moodle_asks_with_the_token_for_the_code_then_its_ticket(self):
+        with self.settings(DEMO_CODE='Notenpult', MOODLE={**settings.MOODLE, 'token': 'geheim'}):
+            moodle = Client(headers={'Authorization': 'Bearer geheim'})
+            self.assertEqual(Client().post('/demo/moodle/', {'code': 'Notenpult'}).status_code, 404)
+            self.assertEqual(moodle.post('/demo/moodle/', {'code': 'Pult', 'address': '192.0.2.1'}).status_code, 403)
+            self.assertEqual(moodle.post('/demo/moodle/', {'ticket': 'alt'}).status_code, 403)
+            ticket = moodle.post('/demo/moodle/', {'code': ' notenpult ', 'address': '192.0.2.1'}).json()['ticket']
+            people = moodle.post('/demo/moodle/', {'ticket': ticket}).json()['people']
+            self.assertIn('student', [p['username'] for group in people for p in group['people']])
+
 
 class CapabilityTest(Seeded):
     """Offices are named freely; what someone may do comes only from the capabilities their offices hold."""
