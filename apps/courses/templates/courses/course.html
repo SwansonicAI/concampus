@@ -260,7 +260,7 @@
     <thead><tr><th>Termin</th><th>Raum</th><th>Name</th><th>Hauptfach</th><th>Programm</th><th>Begleitung</th></tr></thead>
     <tbody>
       {% for p in playing %}
-      <tr><td class="nowrap" data-value="{{ p.slot|date:'c' }}">{{ p.slot|date:"D j.n., H:i"|default:"noch offen" }}{% if p.together %}<br><span class="badge wait">zeitgleich mit {{ p.together }}</span>{% endif %}</td><td>{{ p.room|default:"–" }}</td><td>{{ p.study.person.name }}</td><td>{{ p.study.subject }}</td><td><small>{{ p.note|programme|linebreaksbr }}</small></td>
+      <tr><td class="nowrap" data-value="{{ p.slot|date:'c' }}">{{ p.slot|date:"D j.n., H:i"|default:"noch offen" }}{% if p.together %}<br><span class="badge wait">zeitgleich mit {{ p.together }}</span>{% endif %}</td><td>{{ p.room|default:"–" }}</td><td>{{ p.study.person.name }}</td><td>{{ p.study.subject }}</td><td><small>{% for work in p.note|programme %}{{ work }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</small></td>
         <td><input type="hidden" name="teilnahme" value="{{ p.pk }}"><select name="begleitung-{{ p.pk }}" aria-label="Begleitung für {{ p.study.person.name }}"><option value="">noch offen</option>{% for t in players %}<option value="{{ t.pk }}"{% if t.pk == p.accompanist_id %} selected{% endif %}>{{ t.name }}</option>{% endfor %}</select></td></tr>
       {% empty %}<tr><td colspan="6" class="empty">Noch niemand.</td></tr>
       {% endfor %}

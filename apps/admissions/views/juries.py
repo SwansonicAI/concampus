@@ -250,7 +250,7 @@ def review(request, pk):
             following = next((p for p in rows[at + 1:] + rows[:at] if p.pk in todo - {current.pk}), None)
             return redirect(f'{here}?bewerbung={following.pk}' if following else course)
     return render(request, 'admissions/review.html', {
-        'trail': [(None, reverse('admissions:juries' if member else 'admissions:board'))], 'course': course,
+        'trail': [(None, reverse('admissions:juries' if member else 'admissions:board')), (course.title, course.get_absolute_url())], 'course': course,
         'p': current, 'error': error, 'programme': programme(current.note),
         'juror': juror,
         'mine': mine[current.pk],

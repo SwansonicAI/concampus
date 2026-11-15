@@ -906,6 +906,8 @@ if (drawer) {
     const from = drawer.classList.contains('open') && title(), before = page.href;
     body.innerHTML = html;
     page.href = response.url;
+    // a link in the text to the page underneath would only close the panel: one is there already, so it is plain text
+    body.querySelectorAll('a[href]:not(.btn, .more, [data-close])').forEach(a => new URL(a.getAttribute('href'), response.url).pathname === location.pathname && a.replaceWith(...a.childNodes));
     if (body.querySelector('[data-wide]')) {  // a results sheet needs every column
       drawer.classList.add('wide');
       wider.textContent = 'Schmaler';

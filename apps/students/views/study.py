@@ -119,7 +119,7 @@ def study(request, pk, page='students/study.html'):
     options = study.options() if study.status == Study.Status.ENROLLED else []
     lost = exhausted(study) if study.status == Study.Status.ENROLLED else []  # the Prüfungsanspruch: no Rückmeldung then
     return render(request, page, {
-        'study': study, 'today': today, 'trail': above(person, study)[:-1],
+        'study': study, 'today': today, 'trail': above(person, study)[:-1 if own or page == 'students/study.html' else None],  # the Studienverlauf under the Akte
         'office': office,
         'own': own,
         'personal': personal, 'identity': identity,

@@ -1,0 +1,1 @@
+{% if way %}<div class="way">{% for title, url in way %}<a href="{{ url }}" title="{{ title }}" style="--step: {{ forloop.counter0 }}"{% if forloop.last %} aria-current="page"{% endif %}>{{ title }}</a>{% endfor %}</div>{% endif %}

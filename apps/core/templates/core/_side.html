@@ -1,8 +1,12 @@
+{% url 'home' as home %}{% url 'directory' as directory %}
 <nav class="side no-print" aria-label="Bereiche">
-  <a href="{% url 'home' %}" class="area{% if here == 'home' or here == 'day' %} on{% endif %}">Start</a>
+  <a href="{{ home }}" class="area{% if top == home %} on{% endif %}">Start</a>
+  {% if top == home %}{% include 'core/_way.html' %}{% endif %}
   {% for app, title, pages in menu %}
   <a href="{% url app.url %}" class="area{% if app.label == area %} on{% endif %}">{{ title }}</a>
-  {% if pages|length > 1 %}<div class="pages">{% for name, url, under in pages %}<a href="{{ url }}"{% if here in under %} class="on" aria-current="page"{% endif %}>{{ name }}</a>{% endfor %}</div>{% endif %}
+  {% if pages|length > 1 %}<div class="pages">{% for name, url, under in pages %}<a href="{{ url }}"{% if url == top %} class="on"{% if not way %} aria-current="page"{% endif %}{% endif %}>{{ name }}</a>{% if url == top %}{% include 'core/_way.html' %}{% endif %}{% endfor %}</div>
+  {% elif app.label == area %}{% include 'core/_way.html' %}{% endif %}
   {% endfor %}
-  <a href="{% url 'directory' %}" class="area{% if here == 'directory' %} on{% endif %}">Personen und Ämter</a>
+  <a href="{{ directory }}" class="area{% if top == directory %} on{% endif %}">Personen und Ämter</a>
+  {% if top == directory %}{% include 'core/_way.html' %}{% endif %}
 </nav>

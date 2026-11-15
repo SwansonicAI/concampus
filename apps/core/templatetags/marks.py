@@ -16,10 +16,10 @@ def mark(value):
 
 @register.filter
 def programme(note):
-    """A programme as a sheet lists it, without the times in the video."""
+    """A programme as a sheet lists it: its works, without the times in the video."""
     from core.text import untimed
 
-    return untimed(note)
+    return [work for work in map(str.strip, untimed(note).splitlines()) if work]
 
 
 @register.filter

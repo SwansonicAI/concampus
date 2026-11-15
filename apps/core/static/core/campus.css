@@ -53,7 +53,7 @@ h1 { font-size: 30px; line-height: 1.2; }
 h2 { font-size: 21px; line-height: 1.25; border-top-width: 4px; margin-bottom: 18px; font-weight: 500; }
 h3 { margin: 0 0 8px; color: var(--accent); font-size: 17px; font-weight: 700; }
 .eyebrow { margin: 0 0 6px; color: var(--muted); font-size: 14px; }
-.trail { display: block; }  /* where a page sits: the pages above it, each a way back */
+.trail { display: none; }  /* where a page sits, the pages above it: the side menu shows them; a phone's strip cannot */
 .lead { margin: -12px 0 28px; color: var(--muted); font-size: 17px; }
 section { margin-top: 52px; }
 .head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
@@ -95,10 +95,14 @@ main.page { padding-top: 32px; padding-bottom: 96px; }
 .side a:hover { color: var(--accent); text-decoration: none; }
 .side .area { font-weight: 500; }
 .side .area.on { font-weight: 700; }
-.side .area.on:not(:has(+ .pages)), .side .pages .on { border-left-color: var(--accent); }
-.side .pages { display: grid; gap: 2px; margin-bottom: 10px; }
+.side .area.on:not(:has(+ .pages, + .way)), .side .pages .on:not(:has(+ .way)), .side .way [aria-current] { border-left-color: var(--accent); }
+.side .pages, .side .way { display: grid; gap: 2px; }
+.side .pages, .side .area + .way { margin-bottom: 10px; }
 .side .pages a { padding-left: 24px; color: var(--muted); font-size: 14px; }
-.side .pages .on { color: var(--ink); font-weight: 600; }
+.side .pages .on, .side .way [aria-current] { color: var(--ink); font-weight: 600; }
+/* the way down from a menu item to the page one is on, each step further in; a long title takes two lines at most */
+.side .way a { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; padding-left: calc(24px + var(--step) * 12px); color: var(--muted); font-size: 14px; line-height: 1.35; }
+.side .pages .way a { padding-left: calc(36px + var(--step) * 12px); }
 .foot { border-top: 1px solid var(--line); padding: 18px 0; color: var(--muted); font-size: 13px; }
 .foot .wrap { display: flex; flex-wrap: wrap; gap: 8px 28px; }
 .foot a { color: var(--muted); }
@@ -244,6 +248,9 @@ th[aria-sort="ascending"] button::after { transform: rotate(-90deg); }
 th[aria-sort="descending"] button::after { transform: rotate(90deg); }
 td { padding: 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
 td.mid { vertical-align: middle; }
+/* a programme on a sheet: the room the marks leave, a work a line, cut short; whole on hover and in the application */
+td.works { width: 100%; min-width: 16em; max-width: 0; }
+td.works small { display: block; overflow: hidden; line-height: 1.6; text-overflow: ellipsis; white-space: nowrap; }
 .num { text-align: right; }
 .nowrap { white-space: nowrap; }
 tr.wait td { color: var(--muted); }
@@ -662,6 +669,8 @@ a.block:hover { background: var(--accent-pale); text-decoration: none; }
   .side .pages { display: contents; }
   .side a, .side .pages a { padding: 8px 0; border-left: 0; border-bottom: 3px solid transparent; }
   .side .area.on:not(:has(+ .pages)), .side .pages .on { border-bottom-color: var(--accent); }
+  .side .way { display: none; }
+  .trail { display: block; }
   h1 { font-size: 26px; }
   section { margin-top: 40px; }
   .facts { grid-template-columns: 1fr; gap: 0 24px; }

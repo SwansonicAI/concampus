@@ -78,7 +78,7 @@
       {% for p in stages %}
       <tr>
         <td>{% if show_results %}<a href="{% url 'admissions:audition' p.course.pk %}">{{ p.course.title }}</a>{% else %}{{ p.course.title }}{% endif %}</td>
-        <td>{{ p.slot|date:"D j.n.Y, H:i"|default:"–" }}</td>
+        <td class="nowrap">{{ p.slot|date:"D j.n.Y, H:i"|default:"–" }}</td>
         <td><small>{{ p.note|linebreaksbr }}</small></td>
         {% if show_results %}
         <td class="num">{% if p.grade is not None and not p.course.video or p.passed is False %}{{ p.grade|mark }}{% endif %}</td>
