@@ -107,6 +107,7 @@ main.page { padding-top: 32px; padding-bottom: 96px; }
 .side .pages .way a { padding-left: calc(36px + var(--step) * 12px); }
 .foot { border-top: 1px solid var(--line); padding: 18px 0; color: var(--muted); font-size: 13px; }
 .foot .wrap { display: flex; flex-wrap: wrap; gap: 8px 28px; }
+.foot span { margin-right: auto; }
 .foot a { color: var(--muted); }
 .wordmark { display: flex; flex-direction: column; color: var(--ink); font-size: 24px; line-height: 1.2; }
 .wordmark span + span { color: var(--accent); font-variant: small-caps; letter-spacing: 0.03em; }
@@ -140,7 +141,7 @@ main.page { padding-top: 32px; padding-bottom: 96px; }
 .picker { position: relative; display: inline-flex; align-items: center; gap: 8px; }
 .picker input[type=file] { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; opacity: 0; }
 /* Arrows are drawn, not taken from the font, so they are as strong in every browser; they take the colour of their text */
-.arrow, .more::before, .todo .what::before, th[aria-sort] button::after, .menu summary::after, .trail a + a::before {
+.arrow, .more::before, .todo .what::before, th[aria-sort] button::after, .menu summary::after, .trail a + a::before, .drawer-bar i {
   content: "";
   display: inline-block;
   width: 1em;
@@ -750,7 +751,7 @@ a.block:hover { background: var(--accent-pale); text-decoration: none; }
   .weeklist .booking { display: grid; grid-template-columns: 92px 1fr; gap: 0 8px; padding: 8px 10px; font-size: 14px; white-space: normal; }
   .weeklist .booking small { grid-column: 2; color: var(--muted); }
   .drawer-bar { padding: 12px 16px; }
-  .drawer-bar .wider { display: none; }
+  .drawer .drawer-bar .wider { display: none; }  /* above the icons' display: flex, which comes later */
   .drawer-body { padding: 20px 16px 48px; }
 }
 
@@ -794,18 +795,25 @@ kbd { padding: 0 5px; border: 1px solid var(--line); border-radius: var(--radius
 .results .found a { padding: 10px 4px; border-bottom: 1px solid var(--line); }
 
 /* Side panel: details beside the page, which stays where it was */
-.drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 20; width: min(var(--width, 840px), 100vw); overflow-y: auto; scrollbar-gutter: stable; border-left: 6px solid var(--accent); background: #fff; transform: translateX(100%); visibility: hidden; transition: transform 0.16s ease, visibility 0.16s; }  /* the scrollbar's room kept: a long page and a short one lay out alike */
-.drawer.open { transform: none; visibility: visible; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 20; width: min(var(--width, 840px), 100vw); overflow-y: auto; scrollbar-gutter: stable; border-left: 6px solid var(--accent); background: #fff; transform: translateX(100%); visibility: hidden; transition: transform 0.16s ease, visibility 0.16s, box-shadow 0.16s; }  /* the scrollbar's room kept: a long page and a short one lay out alike */
+.drawer.open { transform: none; visibility: visible; box-shadow: -16px 0 48px rgb(0 0 0 / 0.22); }
 .drawer.wide { width: calc(100vw - 96px); }
 .drawer.edge { border-left-color: var(--accent-dark); cursor: ew-resize; }
-.drawer-bar { position: sticky; top: 0; z-index: 1; display: flex; justify-content: flex-end; gap: 24px; padding: 14px 32px; border-bottom: 1px solid var(--line); background: #fff; font-size: 14px; font-weight: 600; }
-.drawer-bar .page { margin-right: auto; }
+.drawer-bar { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 24px; padding: 14px 32px; border-bottom: 1px solid var(--line); background: #fff; font-size: 14px; font-weight: 600; }
+/* icons alone, the word in the tooltip; a little room around each for the click */
+.drawer-bar > :not(.back) { display: flex; margin: -4px; padding: 4px; font-size: 20px; }
+.drawer-bar > :not(.back):hover { color: var(--accent-dark); }
+.drawer-bar .page { margin-left: auto; }
+.drawer-bar .close i { --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m4 4 8 8m0-8-8 8'/%3E%3C/svg%3E"); }
+.drawer-bar .page i { --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M7 2.5H2.5v11h11V9M10 2.5h3.5V6M13.5 2.5 7.5 8.5'/%3E%3C/svg%3E"); }
+.drawer-bar .wider i { --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 8h13M4.5 5l-3 3 3 3m7-6 3 3-3 3'/%3E%3C/svg%3E"); }
+.drawer.wide .wider i { --arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='2.25' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 8h6M4.5 5.5 7 8l-2.5 2.5M15 8H9m2.5-2.5L9 8l2.5 2.5'/%3E%3C/svg%3E"); }
 .drawer-bar .back { max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .drawer-body { padding: 28px 32px 64px; container-type: inline-size; }
 @container (max-width: 900px) { .cols { grid-template-columns: 1fr; } .cols > .before { order: -1; } }
 @media print {
   body:has(.drawer.open) > :not(.drawer), .drawer-bar { display: none !important; }
-  .drawer.open { position: static; width: auto; overflow: visible; border: 0; }
+  .drawer.open { position: static; width: auto; overflow: visible; border: 0; box-shadow: none; }
   .drawer-body { padding: 0; }
 }
 

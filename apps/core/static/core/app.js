@@ -943,6 +943,7 @@ if (drawer) {
   const page = drawer.querySelector('.page');
   const wider = drawer.querySelector('.wider');
   const back = drawer.querySelector('.back');
+  const widen = on => wider.title = drawer.classList.toggle('wide', on) ? 'Schmaler' : 'Breiter';
   let stale = false;  // something was saved: the page underneath reloads once the panel closes
   let depth = 0;  // the steps taken within the panel to the page it shows
   const title = () => body.querySelector('h1')?.textContent.trim() || 'Zurück';
@@ -963,10 +964,7 @@ if (drawer) {
     page.href = response.url;
     // a link in the text to the page underneath would only close the panel: one is there already, so it is plain text
     body.querySelectorAll('a[href]:not(.btn, .more, [data-close])').forEach(a => new URL(a.getAttribute('href'), response.url).pathname === location.pathname && a.replaceWith(...a.childNodes));
-    if (body.querySelector('[data-wide]')) {  // a results sheet needs every column
-      drawer.classList.add('wide');
-      wider.textContent = 'Schmaler';
-    }
+    if (body.querySelector('[data-wide]')) widen(true);  // a results sheet needs every column
     if (restored) {  // back or forward to a step: as it was
       depth = restored.depth;
       drawer.classList.add('open');
@@ -995,16 +993,14 @@ if (drawer) {
   addEventListener('popstate', event => {
     if (event.state?.panel) return show(event.state.panel, {}, event.state);
     if (stale) return location.reload();
-    drawer.classList.remove('open', 'wide');
-    wider.textContent = 'Breiter';
+    drawer.classList.remove('open');
+    widen(false);
     body.innerHTML = '';
     opener?.focus();
     opener = null;
   });
   drawer.querySelector('.close').addEventListener('click', close);
-  wider.addEventListener('click', () => {
-    wider.textContent = drawer.classList.toggle('wide') ? 'Schmaler' : 'Breiter';
-  });
+  wider.addEventListener('click', () => widen());
 
   // Dragging the green edge sets the panel's width, which it keeps from then on.
   const edge = event => event.clientX - drawer.getBoundingClientRect().left < 12;
@@ -1016,8 +1012,7 @@ if (drawer) {
   });
   drawer.addEventListener('pointermove', event => {
     if (!drawer.hasPointerCapture(event.pointerId)) return drawer.classList.toggle('edge', edge(event));
-    drawer.classList.remove('wide');
-    wider.textContent = 'Breiter';
+    widen(false);
     drawer.style.setProperty('--width', `${Math.min(innerWidth - 48, Math.max(420, innerWidth - event.clientX))}px`);
   });
   drawer.addEventListener('pointerleave', () => drawer.classList.remove('edge'));
