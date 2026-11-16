@@ -10,6 +10,7 @@ urlpatterns = [
     path('zugang/', views.gate, name='gate'),
     path('barrierefreiheit/', views.accessibility, name='accessibility'),
     path('logo/', views.logo, name='logo'),
+    path('briefbogen/', views.sample, name='sample'),
     path('suche/', views.search, name='search'),
     path('datum/', views.when, name='when'),
     path('termine/', views.day, name='day'),

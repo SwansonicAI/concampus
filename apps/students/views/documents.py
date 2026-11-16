@@ -14,7 +14,7 @@ from django.utils.text import slugify
 from django.views.decorators.http import require_POST
 from lxml.etree import DocumentInvalid
 
-from core import texts
+from core import paper, texts
 from core.access import require
 from core.apps import plural
 from core.models import Term
@@ -44,9 +44,9 @@ def notices(request):
     sent = matching(sent, q, 'person__first_name', 'person__last_name', 'person__matriculation', starts=True)
     if 'drucken' in request.GET:
         shown = list(sent[:SHOWN])
-        return render(request, 'core/letter.html', {
+        return paper.answer(request, 'core/letter.html', {
             'letters': [d.message for d in shown if d.message], 'printing': [d.pk for d in shown if not (d.person.electronic or d.printed)],
-        })
+        }, f'Bescheide {timezone.localdate():%d.%m.%Y}')
     return render(request, 'students/notices.html', {
         'sent': sent[:SHOWN], 'count': sent.count(), 'kinds': kinds, 'kind': kind, 'q': q, 'deliveries': DELIVERY, 'delivery': delivery,
     })
@@ -81,10 +81,10 @@ def periods(request, pk):
     rows.sort(key=lambda row: row[0].start)
     if 'xml' in request.GET:
         return data(request, lambda: xhochschule.periods(study, rows, first_enrolment(person)), f'studienzeitbescheinigung-{person.matriculation}')
-    return render(request, 'students/periods.html', {
+    return paper.answer(request, 'students/periods.html', {
         'study': study, 'person': person, 'studies': studies, 'rows': rows, 'count': len({row[0] for row in rows}),
         'leave': len({term for term, _, registration, _ in rows if registration.leave}), 'today': today, 'sender': texts.block('absender_bescheinigungen'),
-    })
+    }, f'Studienzeitbescheinigung {person.name}')
 
 
 def exmatriculation(request, pk):
@@ -94,10 +94,10 @@ def exmatriculation(request, pk):
         raise PermissionDenied
     if 'xml' in request.GET:
         return data(request, lambda: xhochschule.exmatriculation(study, first_enrolment(study.person)), f'exmatrikulationsbescheinigung-{study.person.matriculation}')
-    return render(request, 'students/exmatriculation.html', {
+    return paper.answer(request, 'students/exmatriculation.html', {
         'study': study, 'today': timezone.localdate(), 'sender': texts.block('absender_bescheinigungen'),
         'reason': study.exit_reason == '1' or request.GET.get('grund'),  # often handed on: the ground only where asked for
-    })
+    }, f'Exmatrikulationsbescheinigung {study.person.name}')
 
 
 def certificate(request, pk):
@@ -116,10 +116,10 @@ def certificate(request, pk):
             request, lambda: xhochschule.enrolment(study, term, registration, fs, first, (code, f'{check}?code={code}'), 'bafoeg' in request.GET),
             f'immatrikulationsbescheinigung-{study.person.matriculation}-{slugify(term.name)}',
         )
-    return render(request, 'students/certificate.html', {
+    return paper.answer(request, 'students/certificate.html', {
         'study': study, 'term': term, 'registration': registration, 'today': timezone.localdate(), 'fs': fs, 'hs': study.university_semester + bool(ahead),
         'bafoeg': 'bafoeg' in request.GET, 'first': first, 'sender': texts.block('absender_bescheinigungen'), 'code': code, 'check': check,
-    })
+    }, f'Immatrikulationsbescheinigung {term} {study.person.name}')
 
 
 def first_enrolment(person):

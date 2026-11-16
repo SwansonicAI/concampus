@@ -9,6 +9,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
 
+from core import paper
 from core.access import CODENAMES, require
 from core.forms import ComposeForm
 from core.apps import plural
@@ -172,7 +173,7 @@ def letters(request):
     studies = request.user.within(Study.objects.filter(pk__in=ids(request.GET.getlist('study'))), 'manage_students').select_related('person')
     issued = Document.objects.filter(study__in=studies, message__isnull=False).select_related('message__person').order_by('created')
     latest = {d.study_id: d.message for d in issued}
-    return render(request, 'core/letter.html', {'letters': latest.values(), 'missing': [s.person.name for s in studies if s.pk not in latest]})
+    return paper.answer(request, 'core/letter.html', {'letters': latest.values(), 'missing': [s.person.name for s in studies if s.pk not in latest]}, 'Bescheide')
 
 
 @require('message_students')

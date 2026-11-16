@@ -16,7 +16,7 @@ from django.utils import timezone
 from django.utils.formats import date_format
 from django.views.decorators.http import require_POST
 
-from core import dates, texts
+from core import dates, paper, texts
 from core.shortcuts import Sheet
 from core.access import kept, require
 from core.apps import plural
@@ -333,10 +333,10 @@ def roster(request, pk):
     notice = 'aushang' in request.GET
     if notice and not course.released:
         raise Http404
-    return render(request, 'exams/roster.html', {
+    return paper.answer(request, 'exams/roster.html', {
         'trail': [('Prüfungen', reverse('exams:index')), (course.title, course.get_absolute_url())], 'course': course, 'staff': staff, 'rows': sorted(rows, key=lambda p: p.study.person.matriculation or '') if notice else rows,
         'notice': notice, 'bookings': course.bookings.select_related('room'), 'today': timezone.localdate(), 'sender': texts.block('absender_leistungen'),
-    })
+    }, f'{"Aushang" if notice else "Notenliste"} {course.title} {course.term}')
 
 
 def marks(request, pk):

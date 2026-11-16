@@ -4,12 +4,12 @@ from datetime import timedelta
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 
-from core import texts
+from core import paper, texts
 from core.models import Message, Office, Person
 from students.leaving import leaving
 from students.models import Study
@@ -35,14 +35,14 @@ def transcript(request, pk):
     found, office = achievements(study), request.user.may('decide_results', study)  # a Zeugnis comes from the office
     copy = not office and study.person == request.user and study.issued and found['finished']  # graduates print their own
     late = not office and found['finished'] and study.issued is None and request.user.may('correct_scores', study) and overdue(found)  # theirs to remind
-    return render(request, 'exams/transcript.html', found | {
+    return paper.answer(request, 'exams/transcript.html', found | {
         'trail': [(None, request.path)] if study.person == request.user else above(request.user, study),  # one's own: a page of Mein Studium
         'complete': found['finished'] and (office or copy), 'copy': copy, 'supplement': (office or copy) and study.program.level,
         'issue': office and found['finished'] and study.issued is None and study.status == Study.Status.ENROLLED,
         'still': [item for item in leaving(study) if not item[0].startswith('Zeugnis')] if office and found['finished'] and study.issued is None else [],
         'verbal': verbal(found['average']) if found['average'] else '', 'sender': texts.block('absender_leistungen'),
         'late': late, 'reminded': late and reminded(study), 'issuer': late and Office.holding('decide_results', program=study.program, linked=True),
-    })
+    }, f'{"Zeugnis" if found["finished"] and (office or copy) else "Leistungsübersicht"} {study.person.name}')
 
 
 @require_POST
@@ -83,10 +83,10 @@ def certificate(request, pk):
     office = request.user.may('decide_results', study)
     if not (office or study.person == request.user):
         raise PermissionDenied
-    return render(request, 'exams/certificate.html', {
+    return paper.answer(request, 'exams/certificate.html', {
         'study': study, 'completed': achievements(study)['completed'], 'copy': not office,
         'signature': texts.block('unterschrift_urkunden'), 'sender': texts.block('absender_leistungen'),
-    })
+    }, f'Urkunde {study.person.name}')
 
 
 def supplement(request, pk):
@@ -102,13 +102,13 @@ def supplement(request, pk):
     if not (office or found['finished']):
         raise Http404
     bands, reference = distribution(study.program)
-    return render(request, 'exams/supplement.html', found | {
+    return paper.answer(request, 'exams/supplement.html', found | {
         'copy': not office, 'de': de, 'lang': 'de' if de else 'en',
         'verbal': verbal(found['average'], english=not de) if found['average'] else '', 'grades': GRADES,
         'awarding': texts.block('ds_hochschule'), 'system': texts.block('ds_hochschulsystem_de' if de else 'ds_hochschulsystem'),
         'distribution': bands, 'reference': reference,
         'dated': found['completed'] if found['finished'] and found['completed'] else found['today'],  # the date of the Zeugnis
-    })
+    }, f'Diploma Supplement {study.person.name}')
 
 
 def distribution(program):

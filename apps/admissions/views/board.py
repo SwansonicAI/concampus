@@ -12,7 +12,7 @@ from django.utils.formats import date_format, number_format
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from core import texts
+from core import paper, texts
 from core.access import CODENAMES, require
 from core.apps import plural
 from core.history import tables
@@ -224,7 +224,7 @@ def blank(request, pk, kind):
         'name': person.legal_name, 'geburtsdatum': date_format(person.birth_date, 'j. F Y') if person.birth_date else '________',
         'studiengang': study.program.title, 'hauptfach': study.subject, 'hochschule': Institution.get().name,
     }))
-    return render(request, 'admissions/blank.html', {'kind': kind, 'body': body})
+    return paper.answer(request, 'admissions/blank.html', {'kind': kind, 'body': body}, f'{kind.name} {person.name}')
 
 
 def application(request, pk):

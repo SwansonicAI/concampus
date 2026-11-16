@@ -27,9 +27,9 @@ from curriculum.models import Module, Program, Subject
 from rooms.models import Booking, BookingCategory, Room
 from rooms.plans import agenda, moves
 from students.models import Document, Study
-from . import dates, texts
+from . import dates, paper, texts
 from . import access
-from .access import CODENAMES, areas
+from .access import CODENAMES, areas, require
 from .apps import feature, plural, tile_apps, tiles
 from .backends import address
 from .days import busy, strip
@@ -336,6 +336,20 @@ def message(request, pk):
     return response
 
 
+@require('manage_institution')
+def sample(request):
+    """A letter as the Hochschule's settings set it, to see before anyone receives one: the Briefbogen."""
+    person = Person(first_name='Erika', last_name='Mustermann', address='Musterstraße 1\n12345 Musterstadt')
+    body = (
+        'so erhalten Bewerbende und Studierende Briefe und Bescheide aus ConCampus: die Anschrift im Fenster eines '
+        'Umschlags DIN lang, rechts daneben das Amt, das Aktenzeichen und das Datum, unten die Hochschule mit ihrer '
+        'Bankverbindung.\n\nSchriftzug oder Logo, Akzentfarbe, Anschrift, E-Mail, Website und Bankverbindung stehen in '
+        'den Einstellungen der Hochschule; den Wortlaut jedes Briefs bestimmen die Texte.'
+    )
+    letter = Message(pk=1, person=person, subject='Briefbogen der Hochschule', body=body, sender=texts.block('absender_bescheide'), created=timezone.now())
+    return paper.respond(paper.letter(letter), 'Briefbogen')
+
+
 def letter(request, pk):
     """A message from the Postfach as a printable letter, for its recipient; a Bescheid in the student file also for the
     student office and the office deciding results (docs/privacy.md)."""
@@ -343,7 +357,9 @@ def letter(request, pk):
     filed = Document.objects.filter(message=letter).first()
     if not (letter.person == request.user or filed and any(request.user.may(c, filed) for c in ('manage_students', 'decide_results'))):
         raise PermissionDenied
-    return render(request, 'core/letter.html', {'letters': [letter]})
+    if 'pdf' in request.GET and filed and filed.file:  # a Bescheid as it was issued
+        return paper.respond(filed.file.read(), letter.subject)
+    return paper.answer(request, 'core/letter.html', {'letters': [letter]}, letter.subject)
 
 
 def history(request, table, row):

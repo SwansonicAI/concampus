@@ -4,13 +4,14 @@ from collections import defaultdict
 from datetime import timedelta
 from pathlib import Path
 
+from django.core.files.base import ContentFile
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.formats import number_format
 from django.urls import reverse
 from django.utils import timezone
 
-from core import destatis, texts
+from core import destatis, paper, texts
 from core.models import Institution, Keyed, Message, Person, Term, Tracked, once
 from core.text import matching
 from curriculum.models import Program, Subject, weighted
@@ -164,10 +165,13 @@ class Study(Tracked, models.Model):
         })
 
     def notify(self, key, link='', after=(), **values):
-        """Issue a Bescheid: it goes to the Postfach and stays in the student file as a printable letter."""
+        """Issue a Bescheid: it goes to the Postfach and stays in the student file as the PDF it was issued as."""
         subject, body = self.wording(key, *after, **values)
         message = Message.send(self.person, subject, body, link, sender=texts.block('absender_bescheide'))
-        Document.objects.create(person=self.person, study=self, kind=DocumentType.system('notice'), title=subject, message=message, template=key)
+        Document.objects.create(
+            person=self.person, study=self, kind=DocumentType.system('notice'), title=subject, message=message, template=key,
+            file=ContentFile(paper.letter(message), 'bescheid.pdf'),
+        )
 
     @property
     def fee_due(self):

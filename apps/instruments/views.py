@@ -7,7 +7,7 @@ from django.utils import timezone
 from django.utils.formats import date_format
 from django.views.decorators.http import require_POST
 
-from core import texts
+from core import paper, texts
 from core.access import require
 from core.dates import day as understood
 from core.models import Institute, Office, Term
@@ -139,7 +139,10 @@ def agreement(request, pk):
     loan = get_object_or_404(Loan.objects.select_related('instrument', 'person'), pk=pk)
     if not (loan.person == request.user or request.user.may('manage_instruments', loan)):
         raise PermissionDenied
-    return render(request, 'instruments/agreement.html', {'loan': loan, 'terms': texts.block('leihbedingungen'), 'sender': texts.block('absender_leihe')})
+    return paper.answer(
+        request, 'instruments/agreement.html', {'loan': loan, 'terms': texts.block('leihbedingungen'), 'sender': texts.block('absender_leihe')},
+        f'Leihvertrag {loan.instrument.name} {loan.person.name}',
+    )
 
 
 def mine(request):

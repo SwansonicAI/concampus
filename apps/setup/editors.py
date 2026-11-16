@@ -170,6 +170,14 @@ class DocumentTypeForm(forms.ModelForm):
         return kind
 
 
+class InstitutionForm(forms.ModelForm):
+    """The Hochschule's own data, its letters' Briefbogen among them, to look at as a PDF."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.lead = format_html('Briefe und Bescheide nehmen Schriftzug oder Logo, Farbe, Anschrift und Bankverbindung von hier. <a href="{}" target="_blank">Briefbogen ansehen (PDF)</a>', reverse('sample'))
+
+
 class OfficeForm(forms.ModelForm):
     capabilities = forms.MultipleChoiceField(label='Berechtigungen', choices=CAPABILITIES, widget=forms.CheckboxSelectMultiple, required=False)
 
@@ -475,7 +483,7 @@ def new_audition(request):
 
 EDITORS = {e.key: e for e in [
     Editor(
-        'hochschule', Institution, 'Hochschule', 'manage_institution', 'Verwaltung', single=True, deletable=False,
+        'hochschule', Institution, 'Hochschule', 'manage_institution', 'Verwaltung', single=True, deletable=False, form=InstitutionForm,
         sections=[
             ('Briefkopf und Website', [('name', 'short_name'), 'address', ('place', 'email', 'website'), ('imprint', 'privacy', 'accessibility')]),
             ('Erscheinungsbild', ['wordmark', ('logo', 'accent', 'radius')]),
