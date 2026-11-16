@@ -9,21 +9,22 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
 from core import texts
 from core.dates import MomentField
 from core.access import require
 from core.apps import plural
-from core.models import Institution
+from core.models import Entry, Institution
 from core.text import untimed
 from core.shortcuts import preview
 from courses import panel
 from courses.forms import SlotForm, substitutes
-from courses.models import Course, Participation
-from students.models import Document, Study
+from courses.models import Correction, Course, Participation, Score
+from students.models import Study
 from ..auditions import after, held, invite, next_stages, unmarked
-from ..papers import Condition, checklist, shown
+from ..papers import Condition, checklist, judged, shown
 from .board import DECISIONS, offer, vacancies
 
 
@@ -35,7 +36,7 @@ def juries(request):
         .annotate(date=Min('bookings__start'), size=Count('participations', distinct=True))
         .order_by('-term__start', F('deadline').asc(nulls_last=True), F('date').asc(nulls_last=True), 'title')
     )
-    due = {course.pk: n for course, n, _ in unmarked(request.user)}
+    due = {course.pk: n for course, n, _, _ in unmarked(request.user)}
     for c in auditions:
         c.mine = due.get(c.pk, 0)
     # what is the person's to mark now first, the one due first first; then what is still to come; what is closed last
@@ -57,7 +58,8 @@ def audition(request, pk):
     course = get_object_or_404(Course.objects.select_related('term', 'program', 'subject'), pk=pk, kind=Course.Kind.AUDITION)
     office, correct = person.may('run_auditions', course), person.may('correct_scores', course)
     member = course.staff.filter(pk=person.pk).exists()
-    if not (office or correct or member or course.participations.filter(recusals__substitute=person).exists()):
+    juror = member or course.participations.filter(recusals__substitute=person).exists()
+    if not (office or correct or juror):
         raise PermissionDenied('Eine Eignungsprüfung sehen ihre Kommission, das Amt, das sie durchführt, und der Prüfungsausschuss.')
 
     def sheet():  # a substitute sees only whom they mark
@@ -65,24 +67,36 @@ def audition(request, pk):
         return staff, rows if office or correct or member else panel.substituting(rows, person)
 
     staff, rows = sheet()
-    # the office that runs it marks nothing; a video round is marked while watching it, in the Sichtung; one in person once it has begun
+    # Who enters is the stage's own setting: each member their own, a video round while watching, in the Sichtung; or the
+    # chair, or the office from the Protokoll, for the whole commission; whatever it is, once the stage has begun. The
+    # Prüfungsausschuss corrects any of it.
     begun = course.participations.filter(slot__lte=timezone.now()).exists()
-    columns, refused = panel.scorers(staff, rows) if correct else [] if office and not member or course.video or not begun else [person], None
+    transcribing = course.entry == Entry.CHAIR and course.chair_id == person.pk or course.entry == Entry.OFFICE and office
+    if correct:
+        columns = panel.scorers(staff, rows)
+    elif not (course.video or begun):
+        columns = []
+    elif transcribing:
+        columns = panel.scorers(staff, rows)
+    else:
+        columns = [person] if juror and course.entry == Entry.MEMBERS and not course.video else []
+    drafting, refused = not (correct or transcribing), None  # a member's own marks stay drafts until handed in
     if request.method == 'POST':
         if course.released or not columns:
             raise PermissionDenied('Wertungen tragen die Kommission und, berichtigend, der Prüfungsausschuss ein.')
         try:
-            panel.save(request.POST, rows, columns, decide=correct, correct=correct)
+            panel.save(request.POST, rows, columns, decide=correct or transcribing, correct=correct, by=person if transcribing else None, draft=drafting)
         except panel.Refused as error:  # shown with what was typed, by its row
             refused, (staff, rows) = error, sheet()
             messages.error(request, 'Nichts gespeichert. Bitte die markierte Zeile berichtigen.')
         else:
-            messages.success(request, 'Wertungen gespeichert.')
+            messages.success(request, 'Als Entwurf gespeichert; es zählt, sobald Sie abgeben.' if drafting else 'Wertungen gespeichert.')
             return redirect(course)
     panel.blind(rows, person, office=office or correct)
     if refused:
         panel.retype(rows, request.POST, refused)
     invited = set(Participation.objects.filter(course__in=next_stages(course)).values_list('study', flat=True)) if office else set()
+    left, drafts = (0, 0) if office or correct else next(((n, d) for c, n, d, _ in unmarked(person) if c.pk == course.pk), (0, 0))
     rankable = not any(getattr(p, 'blind', False) for p in rows)  # a ranking would tell the others' marks
     if request.GET.get('sortierung') == 'punkte' and rankable:
         rows.sort(key=lambda p: p.grade if p.grade is not None else (p.mean or 0), reverse=True)
@@ -95,7 +109,11 @@ def audition(request, pk):
         'jury': not (office or correct),  # sees what marking needs, not how the office runs it
         'preview': not (office or correct or course.video or begun),
         'rankable': rankable and any(p.grade is not None or p.mean is not None for p in rows),
-        'left': 0 if office or correct else next((n for c, n, _ in unmarked(person) if c.pk == course.pk), 0),
+        'transcribing': transcribing,
+        'unmarked': left - drafts, 'drafts': drafts,  # one's own: not marked at all, marked as drafts not handed in
+        'sighting': 'Videos sichten' if course.video and course.participations.filter(study__documents__kind__condition=Condition.VIDEO).exists() else 'Mappen sichten',
+        'retractable': not course.released and any(p.handed and (p.missing or p.vacant or p.unseen) for p in rows),  # handed in, not yet seen by all
+        'corrections': Correction.objects.filter(participation__course=course, accepted=None).select_related('participation__study__person', 'examiner') if correct else [],
         'candidates': substitutes(course) if office and any(p.vacant for p in rows) else [],
         'history': bool(Course.seen_by(person, course.pk)),
         'slots': SlotForm(person=person, course=course) if office else None,
@@ -225,7 +243,8 @@ def move_up(request, pk):
 
 
 def review(request, pk):
-    """Sichtung: the video round one application at a time. Watch, score, on to the next without a score of one's own."""
+    """Sichtung: an online stage one application at a time, its video or its Mappe. Watch or read, mark, on to the next
+    without a mark of one's own; the marks stay drafts until handed in, all at once (hand_in)."""
     person = request.user
     course = get_object_or_404(Course.objects.select_related('term', 'subject', 'program'), pk=pk, kind=Course.Kind.AUDITION, video=True)
     member = course.staff.filter(pk=person.pk).exists()
@@ -235,42 +254,121 @@ def review(request, pk):
     _, everyone = panel.sheet(course)
     if juror and not member:  # a substitute watches only whom they mark
         everyone = panel.substituting(everyone, person)
-    filmed = set(Document.objects.filter(study__in=[p.study_id for p in everyone], kind__condition=Condition.VIDEO).values_list('study', flat=True))
-    rows = [p for p in everyone if p.study_id in filmed]  # nothing to watch yet: not in the jury's way
+    handed_in = set(judged(course.participations.all()).values_list('pk', flat=True))
+    rows = [p for p in everyone if p.pk in handed_in]  # nothing to judge yet: not in the jury's way
     if not rows:
         return redirect(course)
     panel.blind(rows, person)
+    marking = juror and course.entry == Entry.MEMBERS  # where the chair or the office enters, the Sichtung is for watching
     mine = {p.pk: dict((e.pk, v) for e, v in p.marks).get(person.pk) for p in rows}
     todo = {p.pk for p in rows if mine[p.pk] is None and person.pk not in p.recused}
+    drafts = sum(1 for p in rows if person.pk in p.drafted)
     trail = [(None, reverse('admissions:juries' if member else 'admissions:board')), (course.title, course.get_absolute_url())]
-    if juror and not todo and 'fertig' in request.GET:  # the last one marked: an end, and what is next, not the first video again
-        following = next(((c, n, url) for c, n, url in unmarked(person) if c.pk != course.pk), None)
-        return render(request, 'admissions/marked.html', {'trail': trail, 'course': course, 'count': len(rows), 'following': following})
+    if marking and not todo and not request.GET.get('bewerbung'):  # all marked: hand them in, then what is next
+        following = next(((c, n, url) for c, n, _, url in unmarked(person) if c.pk != course.pk), None)
+        return render(request, 'admissions/marked.html', {'trail': trail, 'course': course, 'count': len(rows), 'drafts': drafts, 'following': following})
     picked = request.GET.get('bewerbung', '')
     current = next((p for p in rows if str(p.pk) == picked), None) or next((p for p in rows if p.pk in todo), rows[0])
     at, error = rows.index(current), ''
     here = reverse('admissions:review', args=[course.pk])
     if request.method == 'POST':
-        if course.released or not juror:
+        if course.released or not marking:
             raise PermissionDenied
         try:
-            panel.save(request.POST, [current], [person], decide=False)
+            panel.save(request.POST, [current], [person], decide=False, draft=True)
         except panel.Refused as refused:  # shown by the field, with what was typed
             error, mine[current.pk] = str(refused), request.POST.get(f'score-{current.pk}-{person.pk}', '')
         else:
-            messages.success(request, f'Wertung für {current.study.person.first_name} {current.study.person.last_name} gespeichert.')
             following = next((p for p in rows[at + 1:] + rows[:at] if p.pk in todo - {current.pk}), None)
-            return redirect(f'{here}?bewerbung={following.pk}' if following else f'{here}?fertig')
+            return redirect(f'{here}?bewerbung={following.pk}' if following else here)
+    papers = shown(checklist(current.study))
     return render(request, 'admissions/review.html', {
         'trail': trail, 'course': course,
         'p': current, 'error': error, 'programme': programme(current.note),
-        'juror': juror,
+        'juror': juror, 'marking': marking, 'vote': [('1', 'Ja'), ('0', 'Nein')],
         'mine': mine[current.pk],
         'videos': current.study.documents.filter(kind__condition=Condition.VIDEO),
-        'papers': shown(checklist(current.study)),
+        'mappe': [d for d in papers if not d.kind.shared],  # what an online stage without a video judges
+        'papers': [d for d in papers if d.kind.shared],  # read beside it, such as the CV
         'position': everyone.index(current) + 1,  # numbered as on the list of all applications
-        'count': len(everyone),
+        'count': len(everyone), 'drafts': drafts,
+        'asked': Correction.objects.filter(participation=current, examiner=person, accepted=None).exists(),
         'scored': current.pk not in todo,  # the wished-for teacher only after one's own score, not to sway it
         'prev': rows[at - 1] if at else None,
         'next': rows[at + 1] if at + 1 < len(rows) else None,
     })
+
+
+def back(request, course):
+    """Where a form about the course returns to: the page it was sent from, else the course."""
+    url = request.POST.get('next', '')
+    return redirect(url if url_has_allowed_host_and_scheme(url, {request.get_host()}) else course.get_absolute_url())
+
+
+def marker(request, pk):
+    """The audition stage the person marks in, open; else refused."""
+    course = get_object_or_404(Course, pk=pk, kind=Course.Kind.AUDITION, released=None)
+    if not (course.staff.filter(pk=request.user.pk).exists() or course.participations.filter(recusals__substitute=request.user).exists()):
+        raise PermissionDenied
+    return course
+
+
+@require_POST
+def hand_in(request, pk):
+    """Hand in one's drafts on a stage, all at once: from then on they count; once all have, the others see them."""
+    course = marker(request, pk)
+    n = panel.hand_in(course, request.user)
+    messages.success(request, f'{plural(n, "Wertung", "Wertungen")} abgegeben.' if n else 'Keine Entwürfe abzugeben.')
+    return back(request, course)
+
+
+@require_POST
+def take_back(request, pk):
+    """Take one's marks back as drafts, where not everyone has handed in yet: nobody has seen them."""
+    course = marker(request, pk)
+    n = panel.take_back(course, request.user)
+    messages.success(request, f'{plural(n, "Wertung", "Wertungen")} wieder als Entwurf.' if n else 'Nichts zurückzunehmen: wo alle abgegeben haben, hilft nur eine Korrektur.')
+    return back(request, course)
+
+
+@require_POST
+def correction(request, pk):
+    """Ask the Prüfungsausschuss to change one's own mark, once the commission has seen it: a task for it until it decides."""
+    p = get_object_or_404(Participation.objects.select_related('course', 'study__person'), pk=pk, course__kind=Course.Kind.AUDITION, course__released=None)
+    get_object_or_404(Score, participation=p, examiner=request.user, draft=False, value__isnull=False)
+    row = next(r for r in panel.sheet(p.course)[1] if r.pk == p.pk)
+    if row.missing or row.vacant or row.unseen:
+        messages.error(request, 'Noch haben nicht alle abgegeben: „Abgabe zurücknehmen“, dann selbst ändern.')
+        return back(request, p.course)
+    reason = request.POST.get('reason', '').strip()[:200]
+    try:
+        value = panel.grade(request.POST.get('value', '').strip(), p.course)
+    except ArithmeticError:  # Refused too: not a mark of this stage
+        value = None
+    if value is None or not reason:
+        messages.error(request, 'Bitte die richtige Wertung und den Grund angeben.')
+        return back(request, p.course)
+    Correction.objects.create(participation=p, examiner=request.user, value=value, reason=reason)
+    messages.success(request, 'Korrektur beantragt. Der Prüfungsausschuss entscheidet; Sie erhalten eine Nachricht.')
+    return back(request, p.course)
+
+
+@require_POST
+def settle(request, pk):
+    """Take over a correction asked for, or turn it down; the juror hears either way, the mark's history keeps it."""
+    c = get_object_or_404(Correction.objects.select_related('participation__course', 'participation__study__person', 'examiner'), pk=pk, accepted=None)
+    course = c.participation.course
+    if not request.user.may('correct_scores', course):
+        raise PermissionDenied('Korrekturen entscheidet der Prüfungsausschuss.')
+    c.accepted, c.settled_by = request.POST.get('uebernehmen') == '1', request.user
+    if c.accepted:
+        row = next(r for r in panel.sheet(course)[1] if r.pk == c.participation_id)
+        typed = ('1' if c.value else '0') if course.votes else str(c.value)
+        panel.save({f'score-{row.pk}-{c.examiner_id}': typed}, [row], [c.examiner], decide=True, by=request.user)
+    c.save(update_fields=['accepted', 'settled_by'])
+    texts.send(
+        'korrektur', c.examiner, course.get_absolute_url(), pruefung=course.title, bewerbung=c.participation.study.person,
+        entscheidung='übernommen' if c.accepted else 'nicht übernommen',
+    )
+    messages.success(request, f'Korrektur {"übernommen" if c.accepted else "abgelehnt"}; {c.examiner} erhält eine Nachricht.')
+    return redirect(course)

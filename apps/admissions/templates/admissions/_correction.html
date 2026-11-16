@@ -1,0 +1,12 @@
+{% load marks %}<details>
+  <summary><small>Korrektur beantragen</small></summary>
+  <p class="muted" style="margin: 8px 0 0"><small>Alle haben abgegeben; ändern kann jetzt nur der Prüfungsausschuss. Er entscheidet, Sie erhalten eine Nachricht.</small></p>
+  <form method="post" action="{% url 'admissions:correction' p.pk %}" class="inline" style="margin-top: 12px">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+    {% if course.votes %}<select name="value" aria-label="Richtige Stimme"><option value="1">Ja</option><option value="0"{% if current|given:course == 'Ja' %} selected{% endif %}>Nein</option></select>{# the other vote than the one given #}
+    {% else %}<input class="cell" name="value" inputmode="decimal" required placeholder="Richtig" aria-label="Richtige Wertung">{% endif %}
+    <input name="reason" required maxlength="200" size="36" placeholder="Grund, z. B. vertippt" aria-label="Grund">
+    <button class="btn ghost small">Beantragen</button>
+  </form>
+</details>

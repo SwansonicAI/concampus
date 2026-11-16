@@ -125,6 +125,28 @@ class Rounding(models.TextChoices):  # what Prüfungsordnungen say about one dec
     CUT = 'cut', 'nach der ersten Nachkommastelle abschneiden'
 
 
+class Rating(models.TextChoices):  # how a commission comes to its result, as each Hochschule holds it
+    MEAN = 'mean', 'Punkte oder Noten je Mitglied, das Mittel entscheidet'
+    VOTES = 'votes', 'Ja oder Nein je Mitglied, die Mehrheit entscheidet'
+    JOINT = 'joint', 'Die Kommission entscheidet gemeinsam'
+
+
+class Entry(models.TextChoices):  # who enters a commission's marks
+    MEMBERS = 'members', 'jedes Mitglied selbst'
+    CHAIR = 'chair', 'der Vorsitz für die Kommission'
+    OFFICE = 'office', 'das Amt nach dem Protokoll'
+
+
+class Reveal(models.TextChoices):  # when a commission member sees the others' marks
+    ROW = 'row', 'je Bewerbung, sobald alle sie gewertet haben'
+    STAGE = 'stage', 'erst wenn alle die ganze Stufe gewertet haben'
+
+
+class Tie(models.TextChoices):  # a vote with as many yeses as noes
+    CHAIR = 'chair', 'der Vorsitz entscheidet'
+    FAIL = 'fail', 'nicht bestanden'
+
+
 class Institution(Tracked, models.Model):
     """The Hochschule itself: its name and address for letters, its look, and the rules it sets. One record."""
 
@@ -260,6 +282,17 @@ class Institution(Tracked, models.Model):
     audition_panel_main = models.PositiveSmallIntegerField('Kommission im Hauptfach mindestens', default=3, help_text='Die Videostufe eingeschlossen.')
     audition_panel = models.PositiveSmallIntegerField('Kommission in anderen Teilen mindestens', default=2)
     audition_rounding = models.CharField('Mittel der Kommission', max_length=8, choices=Rounding, default=Rounding.CUT)
+    audition_rating = models.CharField(
+        'Wertung der Kommission', max_length=8, choices=Rating, default=Rating.MEAN, help_text='So beginnt jede neue Stufe; jede kann es anders halten.',
+    )
+    audition_entry = models.CharField(
+        'Wer die Wertungen einträgt', max_length=8, choices=Entry, default=Entry.MEMBERS, help_text='So beginnt jede neue Stufe; jede kann es anders halten.',
+    )
+    audition_tie = models.CharField('Bei Stimmengleichheit', max_length=8, choices=Tie, default=Tie.CHAIR, help_text='Wo die Mehrheit entscheidet; ohne Vorsitz: nicht bestanden.')
+    audition_reveal = models.CharField(
+        'Wertungen der anderen sichtbar', max_length=8, choices=Reveal, default=Reveal.ROW,
+        help_text='So beginnt jede neue Stufe. Erst nach der ganzen Stufe: niemand richtet sich nach der Strenge der anderen, etwa in einer Videostufe.',
+    )
     leave_terms = models.PositiveSmallIntegerField('Urlaubssemester in der Regel höchstens', default=2, help_text='Weitere nur über das Amt.')
     first_term_leave = models.BooleanField(
         'Im ersten Fachsemester nur bei Erkrankung, Mutterschutz oder Elternzeit', default=True, help_text='Sonst nur über das Amt.',

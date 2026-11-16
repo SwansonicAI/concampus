@@ -492,6 +492,11 @@ svg.lock { width: 14px; height: 14px; margin-left: 6px; fill: none; stroke: var(
 .review .video { margin: 0; }
 .review .rate { gap: 6px 16px; }
 .review .rate small { flex-basis: 100%; }  /* the scale under the rating, not beside it */
+.rate .choice { position: relative; cursor: pointer; }  /* Ja or Nein: chosen, shown, not yet saved */
+.rate .choice input { position: absolute; opacity: 0; pointer-events: none; }
+.rate .choice:has(input:checked) { border-color: var(--accent); background: var(--accent-pale); color: var(--accent-dark); }
+.rate:has(.choice input:checked) .choice:not(:has(input:checked)):not(:hover) { opacity: 0.35; }  /* the other one steps back: which is chosen shows at a glance */
+.rate .choice:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
 .pager { align-items: center; gap: 8px; font-size: 14px; white-space: nowrap; }
 
 /* Admissions board */

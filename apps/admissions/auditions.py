@@ -7,23 +7,34 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
 
+from core.models import Entry
 from courses.models import Course, marked
+from .papers import judged
 
 
 def unmarked(person):
-    """The auditions where `person` has applicants to mark now, each with how many and where to start: [(course, n, url)],
-    the one due first first. A video round counts whoever handed in a video, one in person once it has begun; a
-    recusal is no one's to mark, a substitute marks only whom they stand in for."""
+    """The auditions where `person` has marks to give now, each with how many are not handed in, how many of those are
+    drafts, and where to start: [(course, n, drafts, url)], the one due first first. An online stage counts whoever
+    handed in something to judge, one in person once it has begun. Where each member marks: their own marks, none for
+    whom they stand back from, a substitute only for whom they stand in for; where the chair enters for the
+    commission: every result still open, for the chair."""
     found = []
     juries = Course.objects.filter(Q(staff=person) | Q(participations__recusals__substitute=person), kind=Course.Kind.AUDITION, released=None)
     for course in juries.exclude(participations=None).distinct():
-        missing = course.participations.exclude(scores__in=marked(person)).exclude(recusals__examiner=person)
-        if not course.staff.filter(pk=person.pk).exists():
-            missing = missing.filter(recusals__substitute=person)
-        if course.video:
-            missing = missing.filter(study__documents__kind__condition='video').distinct()
-        if (course.video or course.participations.filter(slot__lte=timezone.now()).exists()) and (n := missing.count()):
-            found.append((course, n, reverse('admissions:review', args=[course.pk]) if course.video else course.get_absolute_url()))
+        if not (course.video or course.participations.filter(slot__lte=timezone.now()).exists()):
+            continue
+        rows = judged(course.participations.all()) if course.video else course.participations.all()
+        if course.entry == Entry.CHAIR:
+            n, drafts = (rows.filter(passed=None).count() if course.chair_id == person.pk else 0), 0
+        elif course.entry == Entry.MEMBERS:
+            missing = rows.exclude(scores__in=marked(person)).exclude(recusals__examiner=person)
+            if not course.staff.filter(pk=person.pk).exists():
+                missing = missing.filter(recusals__substitute=person)
+            n, drafts = missing.count(), missing.filter(scores__examiner=person, scores__draft=True).count()
+        else:  # the office enters from the Protokoll
+            n = drafts = 0
+        if n:
+            found.append((course, n, drafts, reverse('admissions:review', args=[course.pk]) if course.video else course.get_absolute_url()))
     return sorted(found, key=lambda f: f[0].marks_by or f[0].deadline or date.max)
 
 

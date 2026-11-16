@@ -36,7 +36,7 @@ from core.text import handle, untimed
 from admissions.auditions import invite
 from admissions.views.board import DECISIONS, grounds
 from core import destatis, history, keys, texts
-from core.models import Change, Holiday, Institute, Institution, Key, Membership, Message, Office, Person, Term, Text
+from core.models import Change, Entry, Holiday, Institute, Institution, Key, Membership, Message, Office, Person, Rating, Reveal, Term, Text
 from courses import panel as sheets
 from courses.models import Appointment, Area, Assignment, Course, Ensemble, Format, Group, Obligation, Participation, Post, Rate, Recusal, Reduction, ReductionGround, Score, Signup
 from courses.panel import mean, rounding
@@ -48,7 +48,9 @@ from students.disposal import ended, reduce
 from students.models import Disposal, Document, DocumentType, Event, InsuranceReport, Study, StudyTerm
 from students.smv import book
 from mobility.models import Agreement, Component, Mobility, Partner
-from ..plans import EARLY, HF, JENA, PIANO, PROGRAMS, RESEARCH, SECTION, SPEECH, STRINGS, TEACHING, VOCAL, WINDS, WS
+from ..plans import (
+    COMPOSITION, COMPOSITION_MASTER, EARLY, HF, JENA, PIANO, PROGRAMS, RESEARCH, SECTION, SPEECH, STRINGS, TEACHING, THEORY_MASTER, VOCAL, WINDS, WS,
+)
 
 FEE = Decimal('341.30')  # Semesterbeitrag WiSe 2026/27: Studierendenwerk 95,00 + Deutschlandsemesterticket 226,80 + Studierendenrat 19,50
 FEES = {  # published Semesterbeiträge from WiSe 2023/24; earlier ones approximated, SoSe 2027 as WiSe 2026/27
@@ -969,6 +971,7 @@ class Command(BaseCommand):
             self.terms, self.structure, self.prerequisites, self.people, self.students, self.teaching, self.allocation, self.doubts, self.contracts,
             self.reductions, self.guests, self.loans, self.exams, self.assessors, self.admissions, self.abroad, self.professors, self.appointments,
             self.events, self.practice, self.letters, self.records, self.mailboxes, self.planning, self.prune, self.archive, self.insurance, self.mobility,
+            self.commissions,  # last, and with a generator of its own: the rest of the demo stays as it was
         ]
         later = [self.territory, self.changes]  # after the transaction
         self.done, self.total = 0, len(steps) + len(later)
@@ -2433,6 +2436,116 @@ class Command(BaseCommand):
         if not finished:  # the Bachelor's Bescheide after the Videostufe are out; the Master's are still to send
             failed = Study.objects.filter(start_term=term, participations__course__released__isnull=False, participations__passed=False).exclude(program__degree='M.Mus.')
             Study.objects.filter(pk__in=failed.values('pk')).update(status=Study.Status.REJECTED, since=date(2026, 10, 21))
+
+    # Commissions: Komposition and Musiktheorie, and the ways a commission rates besides the mean
+
+    def commissions(self):
+        """Komposition and the Master Musiktheorie, whose first stage is a Mappe the commission judges online; with them
+        the other ways a Hochschule may have a commission rate: Ja oder Nein by majority, marks the office transcribes
+        from the Protokoll, a joint decision the chair enters. A generator of its own leaves the rest of the demo as it
+        was; the procedures follow the HfM's outline, their details are placeholders."""
+        saved, self.rng = self.rng, random.Random('kommissionen')  # candidate() and person() draw from it
+        rng, term, asa = self.rng, self.next, self.staff['asa']
+        subjects = {
+            name: Subject.objects.create(name=name, institute=self.institutes[key], english=english)
+            for name, key, english in [('Komposition', 'NJ', 'Composition'), ('Elektroakustische Komposition', 'NJ', 'Electroacoustic Composition'), ('Musiktheorie', 'MW', 'Music Theory')]
+        }
+        programs = {}
+        for name, degree, version, semesters, names, plan in [
+            ('Komposition', 'B.Mus.', 2017, 8, ['Komposition', 'Elektroakustische Komposition'], COMPOSITION),
+            ('Komposition', 'M.Mus.', 2026, 4, ['Komposition', 'Elektroakustische Komposition'], COMPOSITION_MASTER),
+            ('Musiktheorie', 'M.Mus.', 2025, 4, ['Musiktheorie'], THEORY_MASTER),
+        ]:
+            program = Program.objects.create(
+                name=name, degree=degree, version=version, semesters=semesters, postgraduate=degree in POSTGRADUATE, honours=Decimal('1.0'), mean_rounding=Rounding.HALF_UP,
+                thesis_weeks=THESIS_WEEKS.get(degree), **dict(zip(['exam', 'kind', 'field', 'exam_office'], OFFICIAL[degree])),
+            )
+            program.subjects.set(subjects[s] for s in names)
+            self.build(program, plan)
+            programs[(degree, name)] = program
+        composers = [
+            self.person(self.login(first, last), first, last, title, institute=self.institutes['NJ'], employment=Person.Employment.PROFESSUR)
+            for title, first, last in [('Prof.', 'Jakob', 'Hagedorn'), ('Prof. Dr.', 'Miriam', 'Ostermann')]  # surnames nobody else has: classes go by them
+        ]
+        theorists = [self.teachers['brandauer'], self.teachers['roth']]
+        order = DocumentType.objects.count()
+        kinds = {}
+        for n, (key, name, subject_names, settings) in enumerate([
+            ('kompositionen', 'Kompositionen (Partituren)', ['Komposition', 'Elektroakustische Komposition'], {
+                'file_types': '.pdf', 'note': 'Zwei bis drei eigene Werke als Partitur, möglichst für verschiedene Besetzungen.'}),
+            ('aufnahmen', 'Aufnahmen eigener Werke', ['Komposition', 'Elektroakustische Komposition'], {
+                'file_types': '.mp3, .m4a, .wav, .flac, .mp4, .webm', 'max_mb': 500, 'required': False,
+                'note': 'Wenn vorhanden; bei elektroakustischen Werken die Zuspielung.'}),
+            ('arbeitsproben', 'Arbeitsproben (Stilkopien, Analysen)', ['Musiktheorie'], {'file_types': '.pdf', 'note': 'Zwei Stilkopien und eine Analyse.'}),
+        ]):
+            kinds[key] = DocumentType.objects.create(key=key, name=name, condition='subjects', jury=True, order=order + n, **settings)
+            kinds[key].subjects.set(subjects[s] for s in subject_names)
+        written = Course.objects.get(term=term, title='Eignungsprüfung Musiktheorie und Gehörbildung')
+
+        def stage(title, subject, jury, after=None, day=None, room=None, **fields):
+            course = Course.objects.create(term=term, kind=Course.Kind.AUDITION, title=title, subject=subjects[subject], **fields)
+            course.staff.set(jury)
+            if after:
+                course.after.set([after])
+            if day and not Booking(room=self.rooms[room], start=at(day, hour=9), end=at(day, hour=13)).clashes().exists():
+                Booking.objects.create(room=self.rooms[room], start=at(day, hour=9), end=at(day, hour=13), person=asa, course=course, category_id='eignungspruefung')
+            return course
+
+        online = {'video': True, 'deadline': APPLY_BY, 'marks_by': APPLY_BY + timedelta(days=14), 'capacity': 2, 'reveal': Reveal.STAGE}  # each reads every Mappe unswayed
+        composition = stage(  # Ja oder Nein: worth a hearing or not
+            'Mappe Komposition', 'Komposition', [*composers, theorists[0]], program=programs[('B.Mus.', 'Komposition')], rating=Rating.VOTES, chair=composers[0],
+            description='Zwei bis drei eigene Werke als Partitur, wenn vorhanden mit Aufnahme.', **online,
+        )
+        written.after.add(stage(  # the office transcribes the Protokoll
+            'Eignungsprüfung Hauptfach Komposition', 'Komposition', [*composers, theorists[0]], composition, date(2027, 1, 15), 'FH 108',
+            pass_mark=Decimal('16.1'), max_points=25, entry=Entry.OFFICE, description='Gespräch über die eingereichten Werke (30 Min.).',
+        ))
+        theory = stage(
+            'Arbeitsproben Musiktheorie (Master)', 'Musiktheorie', [*theorists, composers[1]], program=programs[('M.Mus.', 'Musiktheorie')],
+            pass_mark=Decimal('16.1'), max_points=25, description='Zwei Stilkopien und eine Analyse.', **online,
+        )
+        stage(  # one decision of the commission, entered by the chair
+            'Eignungsprüfung Hauptfach Musiktheorie (Master)', 'Musiktheorie', [*theorists, composers[1]], theory, date(2027, 1, 18), 'FH 022',
+            rating=Rating.JOINT, entry=Entry.CHAIR, chair=theorists[0], description='Klausur Tonsatz (180 Min.), Gehörbildung und Kolloquium (30 Min.).',
+        )
+        works = {
+            'Komposition': ['Streichquartett Nr. 1', 'Lieder nach Gedichten von Rilke für Sopran und Klavier', 'Bläserquintett „Spiegelungen“',
+                            'Orchesterstück „Nachtfahrt“', 'Klavierstück I', 'Trio für Klarinette, Violoncello und Klavier', 'Solo für Viola'],
+            'Musiktheorie': ['Stilkopie: Choralsatz im Stil J. S. Bachs', 'Stilkopie: Menuett im Stil Haydns', 'Stilkopie: Lied im Stil Schuberts',
+                             'Analyse: Brahms, Intermezzo op. 117 Nr. 1', 'Analyse: Webern, Variationen op. 27, 1. Satz'],
+        }
+        for course, subject, kind, n, master, behind in [
+            (composition, 'Komposition', 'kompositionen', 7, False, theorists[0]), (theory, 'Musiktheorie', 'arbeitsproben', 4, True, theorists[1]),
+        ]:
+            jury, rows = list(course.staff.all()), []
+            for _ in range(n):
+                person = self.candidate(2027, rng.randint(22, 27) if master else rng.randint(18, 22))
+                person.save()
+                since = APPLY_BY - timedelta(days=rng.randint(3, 30))
+                study = Study.objects.create(person=person, program=course.program, subject=subjects[subject], start_term=term, status=Study.Status.APPLIED, since=since)
+                chosen = rng.sample(works[subject], 3)
+                Document.objects.bulk_create([
+                    *[Document(person=person, study=study, kind_id=key, title=title, file=self.placeholder(), created=at(since, hour=11))
+                      for key, title in [('cv', 'Lebenslauf'), ('school', 'Zeugnis'), *[('degree', 'Bachelorzeugnis')] * master]],
+                    *[Document(person=person, study=study, kind=kinds[kind], title=f'{work}.pdf', file=self.placeholder(), created=at(since, hour=11)) for work in chosen],
+                    *[Document(person=person, study=study, kind=kinds['aufnahmen'], title=f'Aufnahme: {chosen[0]}', **self.video, created=at(since, hour=11))] * (kind == 'kompositionen' and rng.random() < 0.6),
+                ])
+                rows.append(Participation.objects.create(
+                    course=course, study=study, created=at(since, hour=12),
+                    note='\n'.join(f'{work} ({rng.randint(6, 18)} Min.)' if subject == 'Komposition' else work for work in chosen),
+                ))
+            # the first two everyone has handed in; for the rest one member is behind, some of theirs still drafts
+            scores = []
+            for i, p in enumerate(rows):
+                for e in jury:
+                    late = e == behind and i >= 2
+                    if late and i % 2:
+                        continue
+                    value = Decimal(int(rng.random() < 0.6)) if course.votes else Decimal(str(round(rng.uniform(13, 23), 1)))
+                    scores.append(Score(participation=p, examiner=e, value=value, draft=late))
+            Score.objects.bulk_create(scores)
+            sheets.save({}, sheets.sheet(course)[1], [], decide=False)  # results where all have handed in
+        self.rng = saved
 
     # Practice rooms and the Postfach
 

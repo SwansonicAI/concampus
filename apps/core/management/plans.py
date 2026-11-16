@@ -525,6 +525,33 @@ OPERA = [  # Zertifikatsstudiengang Thüringer Opernstudio (FSO 2025), with DNT 
       for n, r in [(1, 'I'), (2, 'II')]],
 ]
 
+# Komposition (B.Mus., M.Mus.) and the Master Musiktheorie: approximated, after the HfM's outline of the programmes; the
+# seed builds them in a step of their own (commissions), so the rest of the demo stays as it was.
+COMPOSITION = [
+    *[M(f'BM-KO-0{n}', f'Hauptfach Komposition {r}', 40,
+        C('Hauptfach Komposition', {s: 10 for s in semesters}, form='E 60', taught=HF), X('Kompositionsprojekt mit Kolloquium', semesters[-1]), weight=25)
+      for n, r, semesters in [(1, 'I', (1, 2, 3, 4)), (2, 'II', (5, 6, 7, 8))]],
+    M('BM-KO-03', 'Instrumentation und Elektronik', 16,
+      C('Instrumentation', {1: 4, 2: 4}, form='G 90'), C('Tonstudiotechnik & Akustik', {3: 4, 4: 4}, form='G 90'), X('Hausarbeit', 4), weight=10),
+    *theory(5),
+    M('BM-KO-BA', 'Bachelorprojekt', 20,
+      C('Bachelorprojekt', {8: 10}, form='E 60', taught=HF), X('Komposition mit Aufführung', 8, 90, final=True), X('Schriftlicher Teil (10–15 Seiten)', 8, 10),
+      weight=30, final=True),
+]
+COMPOSITION_MASTER = [
+    *[M(f'MM-KO-0{n}', f'Hauptfach Komposition {r}', 25, C('Hauptfach Komposition', {n: 25}, form='E 90', taught=HF)) for n, r in [(1, 'I'), (2, 'II'), (3, 'III')]],
+    M('MM-KO-MPRO', 'Masterprojekt', 45,
+      C('Masterprojekt', {4: 15}, form='E 90', taught=HF), X('Komposition mit Aufführung', 4, 85, final=True), X('Schriftlicher Teil (15–20 Seiten)', 4, 15),
+      weight=100, final=True, note='Die Note des Masterprojekts ist die Gesamtnote.'),
+]
+THEORY_MASTER = [
+    *[M(f'MM-MT-0{n}', f'Hauptfach Musiktheorie {r}', 25, C('Hauptfach Musiktheorie', {n: 20}, form='E 60', taught=HF), C('Kolloquium Musiktheorie', {n: 5}, form='S'))
+      for n, r in [(1, 'I'), (2, 'II'), (3, 'III')]],
+    M('MM-MT-MPRO', 'Masterarbeit und Kolloquium', 45,
+      C('Masterarbeit', {4: 15}, form='E 60', taught=HF), X('Masterarbeit', 4, 75, final=True), X('Kolloquium (45 Min.)', 4, 25, final=True),
+      weight=100, final=True, note='Die Note des Masterprojekts ist die Gesamtnote.'),
+]
+
 STRINGS = ['Violine', 'Viola', 'Violoncello', 'Kontrabass', 'Harfe']
 WINDS = ['Flöte', 'Oboe', 'Klarinette', 'Fagott', 'Horn', 'Trompete', 'Posaune', 'Tuba', 'Schlagwerk']
 TEACHING = ['Klavier', 'Gesang', 'Jazz-Gesang', 'Violine', 'Violoncello', 'Flöte', 'Trompete', 'Schlagwerk']  # künstlerisches Schwerpunktfach im Lehramt

@@ -15,6 +15,14 @@ def mark(value):
 
 
 @register.filter
+def given(value, course):
+    """A member's mark as the stage counts it: yes or no where they vote, else as `mark` writes it."""
+    if course.votes and value is not None and not isinstance(value, str):
+        return 'Ja' if value else 'Nein'
+    return mark(value)
+
+
+@register.filter
 def programme(note):
     """A programme as a sheet lists it: its works, without the times in the video."""
     from core.text import untimed

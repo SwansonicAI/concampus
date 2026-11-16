@@ -428,24 +428,41 @@ class AuditionForm(CourseForm):
     """One stage of an Eignungsprüfung. The first stage, with its programme, is what applicants apply for."""
 
     moves = True
-    deadline = DayField(label='Bewerbungsschluss', required=False, help_text='Bis dahin laden Bewerbende Video und Unterlagen hoch.')
+    deadline = DayField(label='Bewerbungsschluss', required=False, help_text='Bis dahin laden Bewerbende Video oder Mappe und Unterlagen hoch.')
 
     class Meta(CourseForm.Meta):
-        fields = ['title', 'term', 'program', 'subject', 'video', 'after', 'staff', 'deadline', 'marks_by', 'capacity', 'pass_mark', 'max_points', 'accompaniment', 'description']
+        fields = [
+            'title', 'term', 'program', 'subject', 'video', 'after', 'staff', 'rating', 'reveal', 'entry', 'chair', 'deadline', 'marks_by', 'capacity', 'pass_mark',
+            'max_points', 'accompaniment', 'description',
+        ]
         labels = {'staff': 'Kommission', 'capacity': 'Studienplätze'}
         help_texts = {
             'program': 'Nur bei der ersten Stufe: der Studiengang, für den man sich hier bewirbt.',
-            'video': 'Bewerbende reichen ein Video ein, die Kommission wertet online.',
+            'video': 'Bewerbende reichen ein Video oder eine Mappe ein, die Kommission wertet online.',
+            'rating': 'Bei Punkten oder Noten: Bestehensgrenze und Höchstpunktzahl unten; leer: Noten.',
+            'reveal': 'Wo jedes Mitglied selbst wertet.',
+            'chair': 'Gehört zur Kommission.',
         }
 
     layout = [
         (None, ['title', ('term', 'program', 'subject'), 'video', 'after']),
-        ('Kommission und Wertung', ['staff', ('deadline', 'marks_by'), ('capacity', 'pass_mark', 'max_points')]),
+        ('Kommission und Wertung', ['staff', ('rating', 'reveal'), ('entry', 'chair'), ('deadline', 'marks_by'), ('capacity', 'pass_mark', 'max_points')]),
         (None, ['accompaniment', 'description']),
     ]
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['chair'].queryset = Person.teachers()
+        if not self.instance.pk:  # a new stage starts as the Hochschule holds it
+            institution = Institution.get()
+            self.initial.setdefault('rating', institution.audition_rating)
+            self.initial.setdefault('entry', institution.audition_entry)
+            self.initial.setdefault('reveal', institution.audition_reveal)
+
     def clean(self):
         data = super().clean()
+        if data.get('chair') and data.get('staff') is not None and data['chair'] not in data['staff']:
+            self.add_error('chair', 'Der Vorsitz gehört zur Kommission.')
         if data.get('marks_by') and data.get('deadline') and data['marks_by'] <= data['deadline']:
             self.add_error('marks_by', 'Die Kommission wertet nach dem Bewerbungsschluss, sonst bleibt wer zuletzt einreicht ungewertet.')
         program, term = data.get('program'), data.get('term')

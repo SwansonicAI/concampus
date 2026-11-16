@@ -15,27 +15,50 @@
 {% if papers or p.study.teacher and scored %}<p class="lead">{% for d in papers %}<a href="{{ d.href }}" target="_blank" rel="noopener">{{ d.title }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}{% if papers and p.study.teacher and scored %} · {% endif %}{% if p.study.teacher and scored %}Wunschlehrer:in {{ p.study.teacher }}{% endif %}</p>{% endif %}
 
 <div class="review">
-  {% for d in videos %}{% include "admissions/_document.html" %}{% empty %}<p class="fail">Kein Video eingereicht.</p>{% endfor %}
-  {% if programme %}
+  {% for d in videos %}{% include "admissions/_document.html" %}{% empty %}
+  {# a Mappe: its recordings play here, its scores open beside it; the files are the works, no programme besides #}
+  {% for d in mappe %}{% if d.playable %}{% include "admissions/_document.html" %}{% endif %}{% endfor %}
+  <table>
+    {% for d in mappe %}{% if not d.playable %}<tr><td><a href="{{ d.href }}" target="_blank" rel="noopener">{{ d.title }}</a></td><td class="num muted nowrap"><small>{{ d.created|date:"j.n.Y" }}</small></td></tr>{% endif %}
+    {% empty %}<tr><td class="fail">Nichts eingereicht.</td></tr>{% endfor %}
+  </table>
+  {% endfor %}
+  {% if programme and videos %}
   <table class="programme">
     {% for seconds, at, work in programme %}<tr><td class="nowrap">{% if seconds is not None %}<button class="link" type="button" data-seek="{{ seconds }}" title="Im Video ab {{ at }}">{{ at }}</button>{% endif %}</td><td>{{ work }}</td></tr>{% endfor %}
   </table>
   {% endif %}
 
-  {% if juror and user.pk in p.recused %}
+  {% if marking and user.pk in p.recused %}
   <p class="panel">Sie haben Befangenheit angezeigt ({{ p.recused|of:user.pk }}) und werten diese Bewerbung nicht; an Ihrer Stelle wertet ein Ersatz, den das Amt bestellt.</p>
-  {% elif juror and not course.released and not p.locked %}
+  {% elif marking and not course.released and not p.locked and not p.handed %}
   {% if not scored %}{% include "admissions/_recuse.html" %}{% endif %}
-  {# in reach while the video plays: the rating stays at the foot of the window #}
+  {# in reach while watching: the rating stays at the foot of the window; a draft until handed in #}
   <form method="post" class="actions sticky rate">
     {% csrf_token %}
-    <label title="Bestanden ab {{ course.pass_mark }} Punkten im Mittel der Kommission, {% if institution.audition_rounding == 'cut' %}nach der ersten Nachkommastelle abgeschnitten{% else %}auf eine Nachkommastelle kaufmännisch gerundet{% endif %}. Die Wertungen der anderen sehen Sie, sobald alle gewertet haben; dann ist Ihre gesperrt.">Ihre Wertung <input class="cell{% if error %} bad{% endif %}" type="text" inputmode="decimal" name="score-{{ p.pk }}-{{ user.pk }}" value="{{ mine|mark }}" autofocus></label>
+    {% if course.votes %}{# choosing only marks the choice; saving and going on is a second, deliberate step #}
+    <span>Ihre Stimme</span>
+    {% for value, label in vote %}<label class="btn ghost choice"><input type="radio" name="score-{{ p.pk }}-{{ user.pk }}" value="{{ value }}" required{% if mine|given:course == label %} checked{% endif %}>{{ label }}</label>{% endfor %}
     <button class="btn">{% if scored %}Ändern{% else %}Speichern{% endif %} und weiter</button>
-    <small class="muted">von {{ course.max_points }}, bestanden ab {{ course.pass_mark }}</small>
+    <small class="muted" title="Die Wertungen der anderen sehen Sie, sobald alle {% if course.reveal == 'stage' %}die ganze Stufe gewertet{% else %}abgegeben{% endif %} haben.">Die Mehrheit entscheidet{% if institution.audition_tie == 'chair' %}, bei Gleichstand der Vorsitz{% endif %} · zählt, sobald Sie abgeben</small>
+    {% else %}
+    <label title="{% if course.points %}Bestanden ab {{ course.pass_mark }} Punkten{% else %}Bestanden bis 4,0{% endif %} im Mittel der Kommission, {% if institution.audition_rounding == 'cut' %}nach der ersten Nachkommastelle abgeschnitten{% else %}auf eine Nachkommastelle kaufmännisch gerundet{% endif %}. Die Wertungen der anderen sehen Sie, sobald alle {% if course.reveal == 'stage' %}die ganze Stufe gewertet{% else %}abgegeben{% endif %} haben.">Ihre Wertung
+      {% if course.points %}<input class="cell{% if error %} bad{% endif %}" type="text" inputmode="decimal" name="score-{{ p.pk }}-{{ user.pk }}" value="{{ mine|mark }}" autofocus>
+      {% else %}{% scale as steps %}<select class="cell{% if error %} bad{% endif %}" name="score-{{ p.pk }}-{{ user.pk }}" autofocus><option value="">–</option>{% for s in steps %}<option{% if mine|mark == s %} selected{% endif %}>{{ s }}</option>{% endfor %}</select>{% endif %}</label>
+    <button class="btn">{% if scored %}Ändern{% else %}Speichern{% endif %} und weiter</button>
+    <small class="muted">{% if course.points %}von {{ course.max_points }}, bestanden ab {{ course.pass_mark }}{% else %}Note, bestanden bis 4,0{% endif %} · zählt, sobald Sie abgeben</small>
+    {% endif %}
     {% if error %}<small class="fail">{{ error }}</small>{% endif %}
   </form>
   {% elif mine is not None %}
-  <p>Ihre Wertung <b>{{ mine|mark }}</b>{% if p.locked %} <span class="badge" title="Alle haben gewertet; ändern nur über den Prüfungsausschuss">gesperrt</span>{% endif %}</p>
+  <p>Ihre Wertung <b>{{ mine|given:course }}</b>
+    {% if p.locked %}<span class="badge" title="Alle haben abgegeben; ändern nur über den Prüfungsausschuss">gesperrt</span>
+    {% elif p.handed %}<span class="badge" title="Noch haben nicht alle abgegeben: zurückgenommen wird sie wieder ein Entwurf">abgegeben</span>{% endif %}
+  </p>
+  {% if marking and p.locked and p.handed and not course.released %}{% if asked %}<p class="muted"><small>Korrektur beantragt; der Prüfungsausschuss entscheidet.</small></p>{% else %}{% include "admissions/_correction.html" with current=mine %}{% endif %}{% endif %}
+  {% if marking and p.handed and not p.locked and not course.released %}
+  <form method="post" action="{% url 'admissions:take_back' course.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button class="link" title="Alle Ihre abgegebenen Wertungen, die noch nicht alle gesehen haben, werden wieder Entwürfe"><small>Abgabe zurücknehmen</small></button></form>
+  {% endif %}
   {% endif %}
 </div>
 </div>

@@ -1,12 +1,14 @@
 {% extends base %}
+{% load marks %}
 {% block title %}{{ course.title }}{% endblock %}
 {% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
 {% block content %}
 <div class="head">
   <h1>{{ course.title }}</h1>
   <div class="actions">
-    {% if left %}<small class="muted">{{ left }} offen{% if course.marks_by and course.marks_by >= today %} · bis {{ course.marks_by|date:"j.n." }}{% endif %}</small>{% endif %}
-    {% if course.video %}<a class="btn{% if jury and not left %} ghost{% endif %}" href="{% url 'admissions:review' course.pk %}" data-panel>Videos sichten</a>{% endif %}
+    {% if unmarked %}<small class="muted">{{ unmarked }} offen{% if course.marks_by and course.marks_by >= today %} · bis {{ course.marks_by|date:"j.n." }}{% endif %}</small>{% endif %}
+    {% if course.video %}<a class="btn{% if jury and not unmarked %} ghost{% endif %}" href="{% url 'admissions:review' course.pk %}" data-panel>{{ sighting }}</a>{% endif %}
+    {% if drafts %}<form method="post" action="{% url 'admissions:hand_in' course.pk %}">{% csrf_token %}<button class="btn{% if unmarked %} ghost{% endif %}" title="Bis dahin sind es Entwürfe, die nur Sie sehen und noch ändern">{{ drafts }} Wertung{{ drafts|pluralize:"en" }} abgeben</button></form>{% endif %}
     {% if not course.video and rankable %}<a class="btn ghost" href="{% if request.GET.sortierung %}?{% else %}?sortierung=punkte{% endif %}">{% if request.GET.sortierung %}Nach Termin{% else %}Rangliste{% endif %}</a>{% endif %}
     {% if office %}<a class="btn ghost" href="{% url 'setup:edit' 'eignungspruefungen' course.pk %}?next={{ request.path|urlencode }}" data-panel>Bearbeiten</a>{% endif %}
     {% if history %}<a class="btn ghost" href="{% url 'history' 'courses.course' course.pk %}" data-panel>Verlauf</a>{% endif %}
@@ -19,13 +21,13 @@
 <div{% if office %} class="cols"{% endif %}>
   <dl class="facts">
     <dt>Kommission</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}{% if short %}<br><small class="fail">{{ short }}</small>{% endif %}</dd>
-    <dt>Bewertung</dt><dd>{% if course.points %}0–{{ course.max_points }} Punkte je Mitglied, bestanden ab {{ course.pass_mark }}{% else %}bestanden / nicht bestanden{% endif %}</dd>
+    <dt>Bewertung</dt><dd>{% if course.votes %}Ja oder Nein je Mitglied, die Mehrheit entscheidet{% elif course.joint %}Die Kommission entscheidet gemeinsam{% elif course.points %}0–{{ course.max_points }} Punkte je Mitglied, bestanden ab {{ course.pass_mark }}{% else %}Noten je Mitglied, bestanden bis 4,0{% endif %}{% if course.entry != 'members' %}<br><small class="muted">trägt {% if course.entry == 'chair' %}{% if course.chair %}{{ course.chair }}{% else %}der Vorsitz{% endif %}{% else %}das Amt nach dem Protokoll{% endif %} ein</small>{% endif %}</dd>
     {% if not jury %}
     {% if course.program %}<dt>Bewerbung für</dt><dd>{{ course.program }}, Frist {{ course.deadline|date:"j. F Y" }}</dd>{% endif %}
     {% if course.capacity %}<dt>Studienplätze</dt><dd>{{ course.capacity }}</dd>{% endif %}
     {% endif %}
     {% if not course.video %}<dt>Räume</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, {{ b.room }}<br>{% empty %}noch kein Raum gebucht{% endfor %}</dd>
-    {% elif not jury %}<dt>Sichtung</dt><dd>online{% if course.deadline %}, Videos bis {{ course.deadline|date:"j. F Y" }}{% endif %}{% if course.marks_by %}; Wertungen bis {{ course.marks_by|date:"j. F Y" }}{% endif %}</dd>{% endif %}
+    {% elif not jury %}<dt>Sichtung</dt><dd>online{% if course.deadline %}, {% if sighting == 'Mappen sichten' %}Mappen{% else %}Videos{% endif %} bis {{ course.deadline|date:"j. F Y" }}{% endif %}{% if course.marks_by %}; Wertungen bis {{ course.marks_by|date:"j. F Y" }}{% endif %}</dd>{% endif %}
   </dl>
   {% if office %}
   <div>
@@ -64,7 +66,21 @@
 <section>
   <h2>Bewerbende</h2>
   {% if office and not correct and not columns %}<p class="lead">Die Wertungen trägt die Kommission ein; berichtigen kann sie nur der Prüfungsausschuss.</p>{% endif %}
+  {% if corrections %}
+  <div class="panel" style="margin-bottom: 24px">
+    <h3>Korrekturen beantragt</h3>
+    {% for c in corrections %}
+    <form method="post" action="{% url 'admissions:settle' c.pk %}" class="inline" style="margin-top: 8px">
+      {% csrf_token %}
+      <span><b>{{ c.participation.study.person.name }}</b> · {{ c.examiner.last_name }}: {{ c.value|given:course }} <small class="muted">„{{ c.reason }}“, {{ c.created|date:"j.n. H:i" }}</small></span>
+      <button class="btn small" name="uebernehmen" value="1">Übernehmen</button>
+      <button class="btn ghost small" name="uebernehmen" value="0">Ablehnen</button>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
   <div data-panel>{% include "courses/_sheet.html" with panel=True decide=correct review=course.video %}</div>
+  {% if retractable and jury %}<form method="post" action="{% url 'admissions:take_back' course.pk %}" style="margin-top: 16px">{% csrf_token %}<button class="link" title="Ihre abgegebenen Wertungen, die noch nicht alle gesehen haben, werden wieder Entwürfe"><small>Abgabe zurücknehmen</small></button></form>{% endif %}
   {% include "courses/_recuse.html" %}{# the jury stands back from one person on their card or in the Sichtung; the form stays for the office's substitutes #}
 </section>
 {% endblock %}

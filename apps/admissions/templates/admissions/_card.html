@@ -19,6 +19,8 @@
     <tbody>{% for work, minutes in p.works %}<tr><td>{{ work }}</td><td class="num nowrap muted">{% if minutes %}{{ minutes }} Min.{% endif %}</td></tr>{% empty %}<tr><td class="empty">Kein Programm angegeben.</td></tr>{% endfor %}</tbody>
     {% if p.minutes %}<tfoot><tr><td></td><td class="num nowrap"><b>{{ p.minutes }} Min.</b></td></tr></tfoot>{% endif %}
   </table>
+  {% if p.mine is not None %}<p style="margin-top: 16px">Ihre Wertung <b>{{ p.mine|given:p.course }}</b>{% if p.correctable %} <span class="badge" title="Alle haben abgegeben; ändern nur über den Prüfungsausschuss">gesperrt</span>{% endif %}</p>{% endif %}
+  {% if p.correctable %}{% if p.asked %}<p class="muted"><small>Korrektur beantragt; der Prüfungsausschuss entscheidet.</small></p>{% else %}{% include "admissions/_correction.html" with course=p.course current=p.mine %}{% endif %}{% endif %}
 </section>
 {% endif %}{% endfor %}
 {% for p in stages %}{% if p.recusable and not p.course.released %}

@@ -69,8 +69,15 @@ class AdmissionsConfig(Tile, AppConfig):
         if 'juror' in person.roles:
             from .auditions import unmarked
 
-            for course, missing, url in unmarked(person):
-                found.append(task(f'{course.title}: Ihre Wertung fehlt für {plural(missing, "Bewerbung", "Bewerbungen")}', url, course.marks_by or course.deadline))
+            for course, missing, drafts, url in unmarked(person):
+                what = f'{plural(drafts, "Wertung", "Wertungen")} abgeben' if drafts == missing else f'Ihre Wertung fehlt für {plural(missing - drafts, "Bewerbung", "Bewerbungen")}'
+                found.append(task(f'{course.title}: {what}', url, course.marks_by or course.deadline))
+        if 'correct_scores' in person.roles:
+            from courses.models import Correction
+
+            asked = person.within(Correction.objects.filter(accepted=None, participation__course__kind=Course.Kind.AUDITION), 'correct_scores')
+            for row in asked.values('participation__course', 'participation__course__title').annotate(n=Count('pk')):
+                found.append(task(f'{row["participation__course__title"]}: {plural(row["n"], "Korrektur", "Korrekturen")} beantragt', reverse('admissions:audition', args=[row['participation__course']])))
         if 'run_auditions' in person.roles:
             juries = person.within(Course.objects.filter(kind=Course.Kind.AUDITION, released=None).exclude(participations=None), 'run_auditions')
             if short := len(Course.short_panels(juries)):

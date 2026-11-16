@@ -7,7 +7,7 @@ from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Institution, Person, Term, Tracked
+from core.models import Entry, Institution, Person, Rating, Reveal, Term, Tracked
 from core.text import COLLATION
 from curriculum.models import Module, Program, Subject
 from students.models import Study, stored
@@ -128,7 +128,16 @@ class Course(Tracked, models.Model):
         help_text='Bei Eignungsprüfungen: die Lehrveranstaltung, in die eingetragen wird, wer eine Begleitung wünscht.',
     )
     released = models.DateTimeField('Ergebnisse freigegeben', null=True, blank=True)
-    video = models.BooleanField('Videostufe', default=False, help_text='Nur bei Eignungsprüfungen: Bewerbende reichen ein Video ein, die Kommission wertet online.')
+    video = models.BooleanField(
+        'Online-Stufe', default=False, help_text='Nur bei Eignungsprüfungen: Bewerbende reichen ein Video oder eine Mappe ein, die Kommission wertet online.',
+    )
+    rating = models.CharField('Wertung der Kommission', max_length=8, choices=Rating, default=Rating.MEAN, help_text='Nur bei Eignungsprüfungen.')
+    entry = models.CharField('Wer die Wertungen einträgt', max_length=8, choices=Entry, default=Entry.MEMBERS, help_text='Nur bei Eignungsprüfungen.')
+    reveal = models.CharField('Wertungen der anderen sichtbar', max_length=8, choices=Reveal, default=Reveal.ROW, help_text='Nur bei Eignungsprüfungen.')
+    chair = models.ForeignKey(
+        Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Vorsitz',
+        help_text='Nur bei Eignungsprüfungen: trägt ein, wo der Vorsitz für die Kommission einträgt; entscheidet bei Stimmengleichheit, wo die Hochschule es so hält.',
+    )
     after = models.ManyToManyField(
         'self', symmetrical=False, blank=True, related_name='following', verbose_name='Folgt auf',
         help_text='Nur bei Eignungsprüfungen: die Stufen davor; wer dort besteht, wird hierher eingeladen.',
@@ -325,6 +334,22 @@ class Course(Tracked, models.Model):
             raise ValidationError({'max_points': 'Bei einer Bestehensgrenze in Punkten bitte die Höchstpunktzahl angeben.'})
         if self.pass_mark is not None and self.pass_mark > self.max_points:
             raise ValidationError({'pass_mark': 'Die Bestehensgrenze liegt über der Höchstpunktzahl.'})
+        if self.rating != Rating.MEAN and self.pass_mark is not None:
+            raise ValidationError({'pass_mark': 'Wo mit Ja oder Nein entschieden wird, gibt es keine Bestehensgrenze; bitte leeren.'})
+        if self.rating == Rating.JOINT and self.entry == Entry.MEMBERS:
+            raise ValidationError({'entry': 'Eine gemeinsame Entscheidung trägt der Vorsitz oder das Amt ein.'})
+        if self.entry == Entry.CHAIR and not self.chair_id:
+            raise ValidationError({'chair': 'Wo der Vorsitz einträgt, bitte den Vorsitz angeben.'})
+
+    @property
+    def votes(self):
+        """Each member says yes or no, the majority decides: no grade, only passed or not."""
+        return self.rating == Rating.VOTES
+
+    @property
+    def joint(self):
+        """The commission decides together: one passed or not, entered by the chair or the office."""
+        return self.rating == Rating.JOINT
 
     def passes(self, grade):
         return grade >= self.pass_mark if self.points else grade <= 4
@@ -421,8 +446,8 @@ def owed_module(course, study):
 
 
 def marked(person):
-    """The marks `person` has given; a Gutachten still a draft is none."""
-    return Score.objects.filter(examiner=person, value__isnull=False)
+    """The marks `person` has given: handed in, not a draft; a Gutachten still a draft is none."""
+    return Score.objects.filter(examiner=person, value__isnull=False, draft=False)
 
 
 def attempts(person, module):
@@ -523,6 +548,7 @@ class Score(Judged, Tracked, models.Model):
         Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Übertragen von',
         help_text='Wer die Wertung aus dem Protokoll eingetragen hat; leer: die prüfende Person selbst.',
     )
+    draft = models.BooleanField('Entwurf', default=False, help_text='Noch nicht abgegeben: sieht nur, wer wertet; zählt erst abgegeben.')
 
     class Meta:
         verbose_name = 'Wertung'
@@ -555,6 +581,31 @@ class Recusal(Judged, Tracked, models.Model):
         verbose_name = 'Befangenheit'
         verbose_name_plural = 'Befangenheiten'
         constraints = [models.UniqueConstraint(fields=['participation', 'examiner'], name='unique_recusal')]
+
+    def __str__(self):
+        return f'{self.participation} · {self.examiner}'
+
+
+class Correction(Judged, Tracked, models.Model):
+    """A juror asking to change a mark of theirs once the commission has seen it: it stands on the start page of whoever
+    corrects results until they take it over or turn it down; the juror hears either way."""
+
+    owner = 'participation.study.person_id'
+    capabilities = ('correct_scores',)
+    scope = Score.scope
+
+    participation = models.ForeignKey(Participation, models.CASCADE, related_name='corrections', verbose_name='Teilnahme')
+    examiner = models.ForeignKey(Person, models.CASCADE, related_name='corrections', verbose_name='Prüfer:in')
+    value = models.DecimalField('Richtige Wertung', max_digits=4, decimal_places=2)
+    reason = models.CharField('Grund', max_length=200)
+    created = models.DateTimeField('Beantragt am', default=timezone.now)
+    accepted = models.BooleanField('Übernommen', null=True, blank=True, help_text='Leer: noch offen.')
+    settled_by = models.ForeignKey(Person, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Entschieden von')
+
+    class Meta:
+        ordering = ['created']
+        verbose_name = 'Korrektur einer Wertung'
+        verbose_name_plural = 'Korrekturen von Wertungen'
 
     def __str__(self):
         return f'{self.participation} · {self.examiner}'

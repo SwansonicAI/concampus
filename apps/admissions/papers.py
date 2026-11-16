@@ -48,10 +48,11 @@ def checklist(study, types=None):
         elif d.study_id and d.kind_id in shared:
             borrowed[d.kind_id].append(d)
     steps = getattr(study, 'stages', None)
-    video = any(p.course.video for p in steps) if steps is not None else Participation.objects.filter(study=study, course__video=True).exists()
+    online = any(p.course.video for p in steps) if steps is not None else Participation.objects.filter(study=study, course__video=True).exists()
+    mappe = any(t.condition == Condition.SUBJECTS and t.jury and study.subject_id in {s.pk for s in t.subjects.all()} for t in types)
     applies = {
         Condition.ALWAYS: True,
-        Condition.VIDEO: video,
+        Condition.VIDEO: online and not mappe,  # a Mappe asked for the Hauptfach, as in composition, stands in for the video
         Condition.DEGREE: study.program.postgraduate,
         Condition.MINOR: bool(person.birth_date) and (today - person.birth_date).days < 18 * 365.25,
         Condition.FOREIGN: person.needs_german,
@@ -65,6 +66,12 @@ def checklist(study, types=None):
         }
         for t in types if applies.get(t.condition) or t.condition == Condition.SUBJECTS and study.subject_id in {s.pk for s in t.subjects.all()}
     ]
+
+
+def judged(participations):
+    """Of an online stage's participations, those with something handed in for the commission to judge: a video, or a
+    Mappe; a CV, handed in once for every application, does not count."""
+    return participations.filter(study__documents__kind__jury=True, study__documents__kind__shared=False).distinct()
 
 
 def shown(items, playable=False):

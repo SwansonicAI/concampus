@@ -275,6 +275,11 @@ TEXTS = {
         'Für „{pruefung}“ fehlt noch Ihre Wertung ({anzahl}). Bitte tragen Sie sie ein, damit das Ergebnis freigegeben werden kann.',
         ('pruefung', 'anzahl'),
     ),
+    'korrektur': Spec(
+        NACHRICHT, 'Korrektur einer Wertung entschieden', 'Korrektur {entscheidung}: {pruefung}',
+        'Ihre beantragte Korrektur der Wertung für {bewerbung} in „{pruefung}“ hat der Prüfungsausschuss {entscheidung}.',
+        ('pruefung', 'bewerbung', 'entscheidung'),
+    ),
     'anerkennung': Spec(
         BESCHEID, 'Anerkennung von Leistungen', 'Bescheid: Anerkennung',
         'Auf Ihren Antrag werden Leistungen aus {herkunft} anerkannt für: {modul}. Sie stehen in Ihrer Leistungsübersicht.', STUDY + ('modul', 'herkunft'),

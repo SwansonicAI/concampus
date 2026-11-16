@@ -386,7 +386,7 @@ EDITORS = {e.key: e for e in [
             ('Briefkopf und Website', [('name', 'short_name'), 'address', ('place', 'email', 'website'), ('imprint', 'privacy', 'accessibility')]),
             ('Erscheinungsbild', ['wordmark', ('logo', 'accent', 'radius')]),
             ('Bewerbung und Immatrikulation', [('matriculation_start', 'student_mail', 'accept_days', 'pay_days'), 'signup', 'sender_number', 'insurers']),
-            ('Eignungsprüfungen', [('audition_panel_main', 'audition_panel', 'audition_rounding')]),
+            ('Eignungsprüfungen', [('audition_panel_main', 'audition_panel', 'audition_rounding'), ('audition_rating', 'audition_entry', 'audition_tie'), 'audition_reveal']),
             ('Aufbewahrung', [('retention_months', 'file_years'), ('core_years', 'staff_years')]),
             ('Rückmeldung und Beurlaubung', [('late_fee', 'leave_terms'), ('long_fee', 'long_fee_grace'), 'first_term_leave', 'part_time', 'loans_hold', 'payee', ('iban', 'bic')]),
             ('Prüfungen', [

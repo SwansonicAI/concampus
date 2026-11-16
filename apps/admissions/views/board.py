@@ -19,7 +19,8 @@ from core.models import Institution, Message, Term
 from core.shortcuts import ids
 from core.text import lengths, matching
 from core.templatetags.marks import mark
-from courses.models import Course, Recusal, Score
+from courses import panel
+from courses.models import Correction, Course, Recusal, Score
 from curriculum.models import Subject
 from students.models import DocumentType, Study, StudyTerm
 from ..papers import checklist, document_types, incomplete, papers, shown, stages
@@ -236,8 +237,13 @@ def application(request, pk):
     judged = [s for s in steps if s.judging]
     scored = set(Score.objects.filter(participation__in=judged, examiner=person).values_list('participation', flat=True))
     recused = dict(Recusal.objects.filter(participation__in=judged, examiner=person).values_list('participation', 'reason'))
-    for s in judged:  # standing back from this person: said here, where one sees them, before marking them
+    asked = set(Correction.objects.filter(participation__in=judged, examiner=person, accepted=None).values_list('participation', flat=True))
+    for s in judged:  # standing back from this person, or asking to correct one's mark: said here, where one sees them
         s.recused, s.recusable = recused.get(s.pk), s.pk not in scored and s.pk not in recused
+        row = next(r for r in panel.sheet(s.course)[1] if r.pk == s.pk)
+        panel.blind([row], person)
+        s.mine, s.asked = dict((e.pk, v) for e, v in row.marks).get(person.pk), s.pk in asked
+        s.correctable = row.locked and row.handed and not s.course.released
     return render(request, 'admissions/application.html', {
         # the jury's card under the stage it judges, the latest where it judges several, as one comes to it from its list
         'trail': [(None, reverse('admissions:board' if office else 'admissions:juries')), *[(s.course.title, s.course.get_absolute_url()) for s in judged[-1:]]],
