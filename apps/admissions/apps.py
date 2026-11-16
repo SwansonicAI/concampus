@@ -107,6 +107,8 @@ class AdmissionsConfig(Tile, AppConfig):
                     if missing and 'manage_terms' in person.roles:
                         url = f"{reverse('setup:new', args=['semester'])}?next={url}"
                     found.append(task(f'Eignungsprüfungen fürs nächste {row["term__name"].split()[0]} einrichten' + (': erst das Semester anlegen' if missing else ''), url, due))
+            for term in Term.objects.filter(courses__in=ran, start__gt=today, document_types=None).distinct():  # else its first application takes the last semester's
+                found.append(task(f'Unterlagen zum {term} festlegen', f"{reverse('admissions:documents')}?semester={term.pk}"))
         from .papers import checklist, document_types, incomplete, owed, stages
         from .views.board import vacancies, verdict
         from .views.common import accept_by, uploads_open

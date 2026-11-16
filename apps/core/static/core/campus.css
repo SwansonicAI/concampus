@@ -132,6 +132,7 @@ main.page { padding-top: 32px; padding-bottom: 96px; }
 .btn.ghost:hover { background: var(--soft); }
 .btn.danger { border-color: var(--red); background: #fff; color: var(--red); }
 .btn.small { padding: 4px 10px; font-size: 14px; }
+.btn.large { padding: 14px 28px; font-size: 18px; }
 .btn:disabled { opacity: 0.4; pointer-events: none; }
 .link { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; }
 .link:hover { text-decoration: underline; }
@@ -475,6 +476,8 @@ a.stat.due:hover { text-decoration: none; }
 .explainer .codes { display: grid; grid-template-columns: max-content 1fr; gap: 2px 14px; margin: 10px 0 0; }
 .explainer .codes dt { font-weight: 700; }
 .explainer .codes dd { margin: 0; color: var(--muted); }
+.explainer.shown { position: static; margin-top: 14px; --caret: 50%; }  /* always open, under what it explains */
+.start-here { display: flex; flex-direction: column; align-items: center; padding: 64px 0; }  /* an empty page's one thing to do */
 .choose h3 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 6px; }
 .choose h3 small { font-size: 13px; font-weight: 600; }
 .choose > p.muted { margin: 0 0 18px; }

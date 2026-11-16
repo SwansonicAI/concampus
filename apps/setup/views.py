@@ -274,6 +274,7 @@ def edit(request, key, pk=None):
         obj.order = (e.model.objects.aggregate(n=Max('order'))['n'] or 0) + 1
     form = modelform_factory(e.model, form=e.form, fields=e.fields, formfield_callback=formfield)(request.POST or None, request.FILES or None, instance=obj)
     form.by = request.user  # who gives a right, which a second person confirms
+    form.query = request.GET  # what the page was opened for, like the semester of an Unterlagenart
     if e.sections:
         form.layout = e.sections
     for name, choice in form.fields.items():  # what is no longer offered stays only where it is already chosen

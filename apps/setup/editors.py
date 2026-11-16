@@ -11,6 +11,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
+from django.utils.functional import cached_property
 from django.utils.html import format_html, format_html_join
 
 from core.access import CAPABILITIES, EVERYWHERE, SENSITIVE
@@ -131,18 +132,42 @@ class DocumentTypeForm(forms.ModelForm):
         self.fields['max_mb'].widget.attrs.update(min=1, max=most)
         self.fields['max_files'].widget.attrs.update(min=1, max=20)
         self.initial['max_mb'] = self.instance.max_mb or max(DocumentType.KINDS[k][2] for k in kinds)
-        if self.instance.pk:
-            self.lead = 'Änderungen gelten sofort, auch für laufende Bewerbungen.'
+
+    @cached_property
+    def term(self):
+        """The semester it is edited for (?semester=, form.query): what is saved holds there only."""
+        return Term.objects.filter(pk=getattr(self, 'query', {}).get('semester') or None).first()
+
+    @cached_property
+    def split(self):
+        """Whether other semesters ask for it too: they keep it as it was, a change is a version of its own."""
+        return bool(self.term and self.instance.pk and self.instance.terms.exclude(pk=self.term.pk).exists())
+
+    @property
+    def lead(self):
+        if not self.term:
+            return ''
+        n = Study.objects.filter(start_term=self.term, status__in=[Study.Status.APPLIED, Study.Status.ADMITTED]).count()
+        return f'Gilt für {self.term}' + (f', auch für die {n} laufenden Bewerbungen' if n else '') + '.' + (' Andere Semester behalten die bisherige Fassung.' if self.split else '')
 
     def clean(self):
         data = super().clean()
         if data.get('kinds') and data.get('max_mb') and data['max_mb'] > (most := max(DocumentType.KINDS[k][3] for k in data['kinds'])):
             self.add_error('max_mb', f'Für diese Dateiarten höchstens {most} MB.')
+        if self.term and DocumentType.objects.filter(terms=self.term, name=data.get('name')).exclude(pk=self.instance.pk).exists():
+            self.add_error('name', f'Im {self.term} gibt es „{data["name"]}“ schon.')
         return data
 
     def save(self, commit=True):
         self.instance.file_types = ', '.join(e for k in DocumentType.KINDS if k in self.cleaned_data['kinds'] for e in DocumentType.KINDS[k][1])
-        return super().save(commit)
+        if self.split and self.has_changed():
+            self.instance.terms.remove(self.term)
+            self.instance.follows_id, self.instance.pk, self.instance.key, self.instance._loaded = self.instance.key, None, '', None  # a new one, logged as made
+            self.instance._state.adding = True
+        kind = super().save(commit)
+        if self.term:
+            kind.terms.add(self.term)
+        return kind
 
 
 class OfficeForm(forms.ModelForm):
@@ -635,8 +660,8 @@ EDITORS = {e.key: e for e in [
             ('Wann', [('required', 'by_enrolment', 'shared')]),
             ('Wer es sieht', [('jury', 'health')]),
             ('Für Bewerbende', ['note', 'template']),
-            (None, ['retired']),
         ],
+        deletable=False,  # taken out of a semester on its list (admissions.views.rounds.drop_document)
         columns=[('Unterlagen', 'name'), ('Gilt für', 'audience'), ('Pflicht', 'required')],
         search=['name'], words='checkliste bewerbung video zeugnis nachweis hochladen',
         queryset=lambda: DocumentType.objects.exclude(key__in=DocumentType.SYSTEM),  # Bescheide and theses are filed by the system

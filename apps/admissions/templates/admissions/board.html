@@ -84,8 +84,9 @@
 
 {% else %}
 <h1>Bewerbungen</h1>
-{% if decidable or vacancies or accepted or incomplete %}
+{% if unpapered or decidable or vacancies or accepted or incomplete %}
 <div class="stats">
+  {% if unpapered %}<a class="stat due" href="{% url 'admissions:documents' %}?semester={{ term.pk }}"><b>0</b><span>Unterlagen festgelegt</span><span class="more">Festlegen</span></a>{% endif %}
   {% if decidable %}<a class="stat due" href="{% querystring ansicht='entscheiden' %}" data-panel><b>{{ decidable|length }}</b><span>{{ decidable|length|pluralize:"Bewerbung,Bewerbungen" }} zu entscheiden</span><span class="more">Entscheiden</span></a>{% endif %}
   {% if vacancies %}<a class="stat due" href="{% querystring ansicht='nachruecken' %}" data-panel><b>{{ vacancies|length }}</b><span>{{ vacancies|length|pluralize:"Studiengang,Studiengänge" }} mit freien Plätzen</span><span class="more">Nachrücken</span></a>{% endif %}
   {% if accepted %}<a class="stat due" href="{% querystring ansicht='immatrikulieren' %}" data-panel><b>{{ accepted|length }}</b><span>zu immatrikulieren</span><span class="more">Immatrikulieren</span></a>{% endif %}

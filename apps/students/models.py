@@ -11,7 +11,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from core import destatis, texts
-from core.models import Institution, Keyed, Message, Person, Term, Tracked, once, retired
+from core.models import Institution, Keyed, Message, Person, Term, Tracked, once
 from core.text import matching
 from curriculum.models import Program, Subject, weighted
 
@@ -397,7 +397,11 @@ class DocumentType(Tracked, Keyed):
     }
     capabilities = ('run_auditions',)
 
-    name = models.CharField('Name', max_length=80, unique=True)
+    name = models.CharField('Name', max_length=80)  # once in a semester (DocumentTypeForm)
+    terms = models.ManyToManyField(Term, blank=True, related_name='document_types', verbose_name='Semester')  # whose applicants are asked for it
+    follows = models.ForeignKey(  # changed for one semester, it continues what earlier ones keep: what was handed in under that counts for it
+        'self', models.SET_NULL, to_field='key', null=True, blank=True, editable=False, related_name='+', verbose_name='Folgt auf',
+    )
     condition = models.CharField('Gilt für', max_length=10, choices=Condition, default=Condition.ALWAYS)
     subjects = models.ManyToManyField(Subject, blank=True, related_name='+', verbose_name='Welche Hauptfächer')
     required = models.BooleanField('Pflicht', default=True, help_text='Ohne Haken freiwillig: die Bewerbung ist auch ohne vollständig.')
@@ -428,7 +432,6 @@ class DocumentType(Tracked, Keyed):
         'Höchstens Dateien', default=5, validators=[MinValueValidator(1), MaxValueValidator(20)], help_text='Je Bewerbung, wo nicht nur eine Datei gilt.',
     )
     order = models.PositiveSmallIntegerField('Reihenfolge', default=0)
-    retired = retired('Nicht mehr verlangen', 'Was schon hochgeladen ist, bleibt in der Bewerbung lesbar.')
 
     class Meta:
         ordering = ['by_enrolment', '-jury', '-required', 'name']  # as an applicant works through them: what the commission sees, what is required, what is not, what waits till the enrolment
@@ -441,11 +444,22 @@ class DocumentType(Tracked, Keyed):
     @property
     def audience(self):
         """Whom it is asked of, in a word for lists: the Hauptfächer by name where those are chosen."""
-        if self.retired:
-            return 'nicht mehr verlangt'
         if self.condition == self.Condition.SUBJECTS:
             return ', '.join(s.name for s in self.subjects.all()) or 'kein Hauptfach gewählt'
         return self.get_condition_display()
+
+    @classmethod
+    def last(cls, term):
+        """The last semester before `term` that asks for Unterlagen."""
+        return Term.objects.filter(start__lt=term.start, document_types__isnull=False).distinct().order_by('-start').first()
+
+    @classmethod
+    def carry(cls, term):
+        """Into a semester that asks for nothing yet, the Unterlagen of the last one before it; that one, or None."""
+        if term.document_types.exists() or not (last := cls.last(term)):
+            return None
+        term.document_types.add(*last.document_types.all())
+        return last
 
     @classmethod
     def system(cls, key):

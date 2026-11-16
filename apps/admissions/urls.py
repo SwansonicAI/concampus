@@ -1,6 +1,5 @@
 from django.urls import path
 
-from setup.views import listing
 from .views import applicant, board, juries, rounds
 
 app_name = 'admissions'
@@ -12,7 +11,9 @@ urlpatterns = [
     path('eignungspruefungen/<int:pk>/stufe/', rounds.add_step, name='add_step'),
     path('eignungspruefungen/<int:pk>/stufe/<int:stage>/entfernen/', rounds.drop_step, name='drop_step'),
     path('eignungspruefungen/uebernehmen/', rounds.carry, name='carry'),
-    path('unterlagenarten/', listing, {'key': 'unterlagen', 'own': True}, name='documents'),
+    path('unterlagenarten/', rounds.documents, name='documents'),
+    path('unterlagenarten/uebernehmen/', rounds.carry_documents, name='carry_documents'),
+    path('unterlagenarten/<int:pk>/entfernen/', rounds.drop_document, name='drop_document'),
     path('kommissionen/', juries.juries, name='juries'),
     path('konto/', applicant.signup, name='signup'),
     path('bewerben/', applicant.apply, name='apply'),

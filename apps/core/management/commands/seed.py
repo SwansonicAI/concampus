@@ -969,7 +969,7 @@ class Command(BaseCommand):
         steps = [
             self.terms, self.structure, self.prerequisites, self.people, self.students, self.teaching, self.allocation, self.doubts, self.contracts,
             self.reductions, self.guests, self.loans, self.exams, self.assessors, self.admissions, self.abroad, self.professors, self.appointments,
-            self.events, self.practice, self.letters, self.records, self.mailboxes, self.planning, self.prune, self.archive, self.insurance, self.mobility,
+            self.events, self.practice, self.letters, self.records, self.mailboxes, self.planning, self.prune, self.archive, self.insurance, self.asked, self.mobility,
             self.commissions,  # last, and with a generator of its own: the rest of the demo stays as it was
         ]
         later = [self.territory, self.changes]  # after the transaction
@@ -2038,6 +2038,12 @@ class Command(BaseCommand):
             book(r, person)
             InsuranceReport.objects.filter(pk=r.pk).update(done=r.created)
             InsuranceReport.objects.filter(cancels=None, person=person, state=State.OPEN).update(created=r.created)
+
+    def asked(self):
+        """Every Unterlagenart asked in each semester with applications or Eignungsprüfungen."""
+        terms = Term.objects.filter(models.Q(intake__status__in=Study.APPLICATION) | models.Q(courses__kind=Course.Kind.AUDITION)).distinct()
+        for kind in DocumentType.objects.exclude(key__in=DocumentType.SYSTEM):
+            kind.terms.set(terms)
 
     def mobility(self):
         """The International Office, Erasmus+ partners with their agreements, one not yet signed by the partner, and stays

@@ -73,6 +73,7 @@ def apply(request):
     if form.is_valid():
         data, audition = form.cleaned_data, form.cleaned_data['audition']
         with transaction.atomic():
+            DocumentType.carry(audition.term)  # the first application finds the semester's Unterlagen, if nobody took them over
             study, created = Study.objects.get_or_create(
                 person=person, program=audition.program, subject=audition.subject, start_term=audition.term,
                 defaults={'teacher': data['teacher']},
@@ -197,7 +198,7 @@ def upload(request, pk):
     if not (office or study.person == request.user):
         raise PermissionDenied
     back = redirect('admissions:mine' if study.person == request.user else study.get_absolute_url())
-    kind = DocumentType.objects.exclude(condition=Condition.NEVER).filter(key=request.POST.get('kind'), retired=False).first()
+    kind = DocumentType.objects.exclude(condition=Condition.NEVER).filter(key=request.POST.get('kind'), terms=study.start_term_id).first()
     file = request.FILES.get('file')
     if not (office or uploads_open(study) or any(item['kind'] == kind for item in owed(checklist(study)))):
         messages.error(request, 'Die Frist für Unterlagen ist abgelaufen.')

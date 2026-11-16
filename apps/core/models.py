@@ -37,9 +37,9 @@ def once(key, fetch):
     return found[key]
 
 
-def retired(label='Nicht mehr anbieten', help_text='Bleibt an allem, was es schon hat; für Neues steht es nicht mehr zur Wahl.'):
+def retired():
     """„Nicht mehr anbieten“: a choice kept on what has it already, offered for nothing new (setup.views.offered)."""
-    return models.BooleanField(label, default=False, help_text=help_text)
+    return models.BooleanField('Nicht mehr anbieten', default=False, help_text='Bleibt an allem, was es schon hat; für Neues steht es nicht mehr zur Wahl.')
 
 
 class Tracked:

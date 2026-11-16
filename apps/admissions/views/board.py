@@ -204,6 +204,7 @@ def board(request):
         'mixed': len(counts) > 1,  # more than one Stand among them: worth telling apart
         'listing': listing if request.GET.get('alle') else listing[:ROWS], 'more': len(listing) - ROWS if not request.GET.get('alle') and len(listing) > ROWS else 0,
         'incomplete': sum(1 for s in studies if s.incomplete) if open_intake else 0,
+        'unpapered': 'run_auditions' in request.user.roles and term.start > timezone.localdate() and not term.document_types.exists(),  # no Unterlagen yet
         'vacancies': [v for v in vacancies(term, request.user) if only in (None, v[0].subject_id)],
         'decidable': decidable, 'verbs': VERBS,
         'accepted': accepted, 'ready': ready,

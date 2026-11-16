@@ -18,7 +18,7 @@ from core.text import collated, fold, words
 from courses.models import Course, Participation
 from courses.views.rollover import copy_auditions
 from rooms.models import Poll
-from students.models import Document, Study
+from students.models import Document, DocumentType, Study
 from ..auditions import booked, chains, days, need
 
 URGENT = {'no': 3, 'open': 2, 'wait': 1}  # how urgent a step is, by what its badge says
@@ -156,6 +156,41 @@ def drop_step(request, pk, stage):
         found.after.remove(*own)
         messages.success(request, f'{found.stage} gehört nicht mehr zu {own[0].subject or own[0].title}.')
     return redirect('admissions:intake', pk)
+
+
+@require('run_auditions')
+def documents(request):
+    """The Unterlagen a semester asks its applicants for, a row each; a semester without any offers those of the last
+    one before it, and takes them over by itself with its first application (applicant.apply)."""
+    today = timezone.localdate()
+    terms = Term.objects.filter(Q(document_types__isnull=False) | Q(start__gt=today)).distinct().order_by('-start')
+    picked = request.GET.get('semester', '')
+    term = (picked.isdigit() and terms.filter(pk=picked).first()) or terms.filter(start__gt=today).last() or terms.first()
+    kinds = DocumentType.objects.filter(terms=term).prefetch_related('subjects') if term else []
+    return render(request, 'admissions/documents.html', {
+        'terms': terms, 'term': term, 'kinds': kinds, 'last': term and not kinds and DocumentType.last(term),
+    })
+
+
+@require('run_auditions')
+@require_POST
+def carry_documents(request):
+    term = get_object_or_404(Term, pk=request.POST.get('semester'))
+    if last := DocumentType.carry(term):
+        messages.success(request, f'Unterlagen aus dem {last} übernommen. Was diesmal anders ist, hier ändern.')
+    return redirect(f"{reverse('admissions:documents')}?semester={term.pk}")
+
+
+@require('run_auditions')
+@require_POST
+def drop_document(request, pk):
+    """An Unterlagenart no longer asked in a semester; gone altogether once no semester asks for it and nothing was handed in under it."""
+    kind, term = get_object_or_404(DocumentType.objects.exclude(key__in=DocumentType.SYSTEM), pk=pk), get_object_or_404(Term, pk=request.POST.get('semester'))
+    kind.terms.remove(term)
+    if not kind.terms.exists() and not kind.documents.exists():
+        kind.delete()
+    messages.success(request, f'„{kind}“ im {term} nicht mehr verlangt.')
+    return redirect(f"{reverse('admissions:documents')}?semester={term.pk}")
 
 
 @require('run_auditions')

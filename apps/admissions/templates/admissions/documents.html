@@ -1,0 +1,36 @@
+{% extends base %}
+{% block title %}Unterlagenarten{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Unterlagenarten</h1>
+  {% if term and not last %}<div class="actions"><a class="btn" href="{% url 'setup:new' 'unterlagen' %}?semester={{ term.pk }}&next={{ request.get_full_path|urlencode }}" data-panel>Neu anlegen</a></div>{% endif %}
+</div>
+<form class="toolbar">
+  <div class="inline"><label>Studienbeginn<select name="semester" data-submit>{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label></div>
+</form>
+{% if last %}
+<div class="start-here">
+  <form method="post" action="{% url 'admissions:carry_documents' %}">{% csrf_token %}<input type="hidden" name="semester" value="{{ term.pk }}"><button class="btn large">Unterlagen aus dem {{ last }} übernehmen</button></form>
+  <div class="explainer shown">
+    <p>Jedes Semester hat eigene Unterlagen. Übernehmen, dann ändern, was diesmal anders ist.</p>
+    <p>Ohne Übernahme gelten ab der ersten Bewerbung die aus dem {{ last }}.</p>
+  </div>
+</div>
+{% else %}
+<table data-panel>
+  <thead><tr><th>Unterlagen</th><th>Gilt für</th><th>Pflicht</th><th></th></tr></thead>
+  <tbody>
+    {% for k in kinds %}
+    <tr>
+      <td><a href="{% url 'setup:edit' 'unterlagen' k.pk %}?semester={{ term.pk }}&next={{ request.get_full_path|urlencode }}">{{ k.name }}</a></td>
+      <td>{{ k.audience }}</td>
+      <td>{% if k.required %}ja{% endif %}</td>
+      <td><form method="post" action="{% url 'admissions:drop_document' k.pk %}">{% csrf_token %}<input type="hidden" name="semester" value="{{ term.pk }}"><button class="link" data-confirm="Im {{ term }} nicht mehr verlangen?"><small>entfernen</small></button></form></td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="4" class="empty">Noch keine Unterlagen{% if term %} zum {{ term }}{% endif %}.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+{% endblock %}

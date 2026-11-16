@@ -236,6 +236,7 @@ class ChecklistTest(Seeded):
         cello = Study.objects.filter(status='applied', subject__name='Violoncello').select_related('person', 'program', 'subject').first()
         kind = DocumentType.objects.create(name='Probespielliste', condition='subjects', required=True)
         kind.subjects.set([violin.subject])
+        kind.terms.set([violin.start_term_id, cello.start_term_id])
         self.assertIn('Probespielliste', incomplete(violin))
         self.assertNotIn('Probespielliste', [i['label'] for i in checklist(cello)])
         DocumentType.objects.filter(key='language').update(condition='always', required=True)
