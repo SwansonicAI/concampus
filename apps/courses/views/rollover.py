@@ -300,42 +300,33 @@ def appoint_again(request):
     return redirect('setup:list', 'pruefende')
 
 
-@require('run_auditions')
-@require_POST
-def auditions_again(request):
-    """Each intake into the same semester a year on, for a semester to come that has no Eignungsprüfung yet: every stage
-    the office keeps, with its jury, its Fristen a year on by whole weeks, the stages linked as before and to the new
-    semester's Korrepetition. Rooms and times are planned anew."""
-    made = []
-    with transaction.atomic():
-        for target in Term.objects.filter(start__gt=timezone.localdate()).exclude(courses__kind=Course.Kind.AUDITION).order_by('start'):
-            source = Term.objects.filter(start__range=(target.start - timedelta(days=400), target.start - timedelta(days=330)), courses__kind=Course.Kind.AUDITION).distinct().first()
-            if source:
-                made.append((source, target, copy_auditions(request.user, source, target)))
-    if not made:
-        messages.error(request, 'Kein Semester ohne Eignungsprüfungen, das ein Jahr nach einem mit Eignungsprüfungen beginnt: bitte erst das Semester anlegen.')
-    for source, target, n in made:
-        messages.success(request, f'{plural(n, "Eignungsprüfung", "Eignungsprüfungen")} aus {source} nach {target} übernommen.')
-    return redirect('setup:list', 'eignungspruefungen')
-
-
-def copy_auditions(person, source, target):
-    """The auditions of `source` the person keeps, copied into `target`; returns how many."""
-    shift = timedelta(weeks=round((target.start - source.start).days / 7))
+def copy_auditions(stages, target):
+    """Stages of an Eignungsprüfung copied into `target`, each with its jury, how it is rated, its Fristen as many whole
+    weeks on as the semesters lie apart, its Studiengang in the PO-Version then in force and that semester's
+    Korrepetition; linked as before, to the copies or to the stages of the same name there already, as a part several
+    Hauptfächer take. Rooms and times are planned anew. How many."""
+    old = list(Course.objects.filter(pk__in=[c.pk for c in stages]).select_related('accompaniment', 'term').prefetch_related('staff', 'after', 'following'))
+    if not old:
+        return 0
+    shift = timedelta(weeks=round((target.start - old[0].term.start).days / 7))
     versions = {(p.degree, p.name): p for p in Program.current(target)}  # each Studiengang in the PO-Version that applies then
-    old = list(person.within(Course.objects.filter(term=source, kind=Course.Kind.AUDITION), 'run_auditions').select_related('accompaniment').prefetch_related('staff', 'after'))
+    there = {c.title: c for c in Course.objects.filter(term=target, kind=Course.Kind.AUDITION)}
     new = {}
     for c in old:
         new[c.pk] = Course.objects.create(
             term=target, kind=c.kind, title=c.title, area=c.area, format=c.format, subject=c.subject, oral=c.oral, hours=c.hours,
             program=c.program and versions.get((c.program.degree, c.program.name), c.program),
             capacity=c.capacity, allocation=c.allocation, pass_mark=c.pass_mark, max_points=c.max_points, video=c.video, description=c.description,
+            rating=c.rating, entry=c.entry, chair=c.chair, reveal=c.reveal,
             rhythm=c.rhythm, origin=c, opens=c.opens and c.opens + shift, deadline=c.deadline and c.deadline + shift, marks_by=c.marks_by and c.marks_by + shift,
             accompaniment=c.accompaniment and Course.objects.filter(term=target, kind=c.accompaniment.kind, title=c.accompaniment.title).first(),
         )
         new[c.pk].staff.set(c.staff.all())
     for c in old:
-        new[c.pk].after.set(new[a.pk] for a in c.after.all() if a.pk in new)
+        new[c.pk].after.set(filter(None, (new.get(a.pk) or there.get(a.title) for a in c.after.all())))
+        for f in c.following.all():  # a shared part there already now follows the copy too
+            if f.pk not in new and f.title in there:
+                there[f.title].after.add(new[c.pk])
     return len(new)
 
 

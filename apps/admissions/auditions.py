@@ -1,5 +1,6 @@
 """An applicant's appointments in the Eignungsprüfung: when and where, what follows, and the invitation; a juror's marks
 still to give."""
+from collections import defaultdict
 from datetime import date, timedelta
 
 from django.db.models import Q
@@ -8,6 +9,7 @@ from django.utils import timezone
 from django.utils.formats import date_format
 
 from core.models import Entry
+from core.text import collated
 from courses.models import Course, marked
 from .papers import judged
 
@@ -36,6 +38,52 @@ def unmarked(person):
         if n:
             found.append((course, n, drafts, reverse('admissions:review', args=[course.pk]) if course.video else course.get_absolute_url()))
     return sorted(found, key=lambda f: f[0].marks_by or f[0].deadline or date.max)
+
+
+def chains(courses):
+    """A semester's stages as each Hauptfach's Eignungsprüfung: [(its own stages in order, from the one applied for;
+    the stages it shares with others after them, as a written part everyone sits)], those shared ones last."""
+    by_pk, before, following = {c.pk: c for c in courses}, defaultdict(set), defaultdict(set)
+    for c, b in Course.after.through.objects.filter(from_course__in=by_pk, to_course__in=by_pk).values_list('from_course', 'to_course'):
+        before[c].add(b)
+        following[b].add(c)
+    for c in courses:
+        c.next_pks, c.prev_pks = following[c.pk], before[c.pk]
+    seen = set()
+
+    def walk(c):  # a stage, then those that follow it alone
+        seen.add(c.pk)
+        found = [c]
+        for pk in sorted(following[c.pk], key=lambda pk: collated(by_pk[pk].title)):
+            if len(before[pk]) == 1 and pk not in seen:
+                found += walk(by_pk[pk])
+        return found
+
+    own = [walk(c) for c in courses if not before[c.pk]]
+    shared = [c for c in courses if c.pk not in seen]
+    return [(stages, [s for s in shared if before[s.pk] & {c.pk for c in stages}]) for stages in own], shared
+
+
+def origin(course):
+    """The stage applied for that a stage's own chain starts with; None for a stage several Hauptfächer share."""
+    c, seen = course, set()
+    while not c.program_id:
+        before = list(c.after.all()[:2])
+        if len(before) != 1 or c.pk in seen:
+            return None
+        seen.add(c.pk)
+        c = before[0]
+    return c
+
+
+def days(first, last):
+    """The days a stage is held on, from its first booking's to its last's: '15.1.', '13.–14.1.', '29.1.–2.2.'."""
+    if not first:
+        return ''
+    a, b = timezone.localtime(first).date(), timezone.localtime(last).date()
+    if a == b:
+        return f'{a.day}.{a.month}.'
+    return f'{a.day}.–{b.day}.{b.month}.' if a.month == b.month else f'{a.day}.{a.month}.–{b.day}.{b.month}.'
 
 
 def next_stages(course):

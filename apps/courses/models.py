@@ -1,3 +1,4 @@
+import re
 from datetime import timedelta
 from operator import attrgetter
 
@@ -322,12 +323,20 @@ class Course(Tracked, models.Model):
 
     @property
     def stage(self):
-        """Short name of an audition stage: Video, Hauptfach, or the shared part's own name."""
-        if self.video:
-            return 'Video'
+        """Short name of an audition stage, its title without the Hauptfach and the degree: Videostufe, Mappe, Hauptfach,
+        or the name of a part several Hauptfächer take, as Klavier."""
+        name = re.sub(r'\s*\(.*?\)', '', self.title.removeprefix('Eignungsprüfung '))  # „(Master)“
         if self.subject_id:
-            return 'Hauptfach'
-        return self.title.removeprefix('Eignungsprüfung ').split(' und ')[0]
+            name = name.replace(self.subject.name, '')
+        return ' '.join(name.split()) or self.title
+
+    def delete(self, *args, **kwargs):
+        """A stage of an Eignungsprüfung taken out: what followed it follows what it followed, so that Klavier after a
+        Hauptfach's last stage still follows the Hauptfach."""
+        if self.kind == self.Kind.AUDITION:
+            for later in self.following.all():
+                later.after.add(*self.after.all())
+        return super().delete(*args, **kwargs)
 
     def clean(self):
         if self.pass_mark is not None and self.max_points is None:

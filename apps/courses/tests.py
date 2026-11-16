@@ -388,9 +388,12 @@ class IntakeTest(Seeded):
         version = Program.objects.get(degree=intake.program.degree, name=intake.program.name, starts=coming)
         self.assertEqual(version.modules.count(), intake.program.modules.count())
         self.assertEqual(Program.current(winter)[0].starts, None)  # who starts before then starts in the old one
-        self.login('asa').post('/lehre/eignungspruefungen/uebernehmen/')
+        Course.objects.filter(pk=intake.pk).update(rating='votes', entry='chair', reveal='stage', chair=intake.staff.first())
+        intake.refresh_from_db()
+        self.login('asa').post('/aufnahme/eignungspruefungen/uebernehmen/', {'aus': winter.pk, 'nach': coming.pk, 'stufe': [intake.pk]})
         copy = Course.objects.get(term=coming, title=intake.title)
         self.assertEqual((copy.program, set(copy.staff.all()), copy.origin), (version, set(intake.staff.all()), intake))
+        self.assertEqual((copy.rating, copy.entry, copy.reveal, copy.chair), (intake.rating, intake.entry, intake.reveal, intake.chair))  # how it is rated, too
         self.assertEqual({c.title for c in copy.following.all()}, {c.title for c in intake.following.all()})
         if intake.deadline:
             self.assertEqual((copy.deadline - intake.deadline).days % 7, 0)  # on the same weekday

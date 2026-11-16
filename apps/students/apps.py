@@ -155,9 +155,9 @@ class StudentsConfig(Tile, AppConfig):
             if n := reports.filter(state=State.FAILED).count():
                 found.append(task(f'{plural(n, "Meldung", "Meldungen")} an die Krankenkassen abgewiesen', f"{reverse('students:insurers')}?stand={State.FAILED}"))
         if 'dispose_files' in person.roles:
-            from .disposal import due
+            from .disposal import due as disposable  # not `due`: that is the Rückmeldefrist below
 
-            if n := due().count():
+            if n := disposable().count():
                 found.append(task(f'Aussonderung: {plural(n, "Akte", "Akten")} Ehemaliger dem Archiv anbieten', reverse('students:disposal')))
         if 'assess_files' in person.roles and (n := Disposal.objects.filter(assessed=None).count()):
             found.append(task(f'Aussonderung: {plural(n, "angebotene Akte", "angebotene Akten")} bewerten', reverse('students:disposal')))

@@ -17,10 +17,11 @@ function init(root) {
   root.querySelectorAll('select[data-town]').forEach(placed);
   root.querySelectorAll('form:has([name=worst])').forEach(converted);
   root.querySelectorAll('select[data-describes]').forEach(describe);
+  root.querySelectorAll('input[data-titled]').forEach(titled);
   root.querySelectorAll('[data-day], [data-moment], [data-past]').forEach(dated);
   root.querySelectorAll('form:has([data-for])').forEach(conditional);
   root.querySelectorAll('.lines').forEach(lineChart);
-  root.querySelectorAll('table:not(.hours)').forEach(sortable);
+  root.querySelectorAll('table:not(.hours, [data-fixed])').forEach(sortable);  // data-fixed: rows in an order that means something
   root.querySelectorAll('table').forEach(scrolling);
   root.querySelectorAll('input[type=file]').forEach(picker);
 }
@@ -60,7 +61,7 @@ function sortable(table) {
     });
     table.tBodies[0].append(...rows);
     heads.forEach((th, i) => i === col ? th.setAttribute('aria-sort', down ? 'descending' : 'ascending') : th.removeAttribute('aria-sort'));
-    if (saved) sessionStorage.setItem(saved, `${col} ${down}`);
+    if (saved) sessionStorage.setItem(saved, `${down} ${heads[col].textContent.trim()}`);  // by its heading: columns come and go
   };
   heads.forEach((th, col) => {
     if (!th.textContent.trim()) return;  // e.g. the box that ticks all
@@ -76,8 +77,9 @@ function sortable(table) {
       document.querySelector(`main th[data-sort="${th.dataset.sort}"] button`)?.focus();
     });
   });
-  const [col, down] = (!server && saved && sessionStorage.getItem(saved)?.split(' ')) || [];
-  if (heads[col]) order(Number(col), down === 'true');
+  const [down, ...heading] = (!server && saved && sessionStorage.getItem(saved)?.split(' ')) || [];
+  const col = heads.findIndex(th => th.textContent.trim() === heading.join(' '));
+  if (col >= 0) order(col, down === 'true');
 }
 
 // Line charts are drawn here from their data, at the size they are shown: the legend turns lines on and off and the
@@ -473,6 +475,19 @@ function describe(select) {
   show();
 }
 
+// A new Eignungsprüfung's title (data-titled) follows from what it is, its Hauptfach, online or not, Master or not,
+// until one types one's own: „Videostufe Tuba“, „Eignungsprüfung Hauptfach Viola (Master)“.
+function titled(input) {
+  const {subject, video, program} = input.form.elements;
+  let own = Boolean(input.value);
+  input.addEventListener('input', () => { own = Boolean(input.value); });
+  input.form.addEventListener('change', ({target}) => {
+    if (own || ![subject, video, program].includes(target) || !subject.value) return;
+    const master = /^M\./.test(program?.selectedOptions[0]?.textContent ?? '') ? ' (Master)' : '';
+    input.value = `${video.checked ? 'Videostufe' : 'Eignungsprüfung Hauptfach'} ${subject.selectedOptions[0].textContent.trim()}${master}`;
+  });
+}
+
 // Anerkennung: the grade the modified Bavarian formula makes of a foreign one, shown while it is typed, cut to one
 // decimal as the server does.
 function converted(form) {
@@ -630,7 +645,7 @@ document.addEventListener('change', ({target}) => {
 // beside it (data-dismiss); forms that say they are busy (data-busy="Wird geöffnet …").
 document.addEventListener('change', ({target}) => {
   if (target.matches('[data-submit]') || target.form?.matches('[data-submit]')) target.form.requestSubmit();
-  if (target.dataset.tick) (target.closest('table') || target.form).querySelectorAll(`[name="${target.dataset.tick}"]`).forEach(box => { box.checked = target.checked; });
+  if (target.dataset.tick) (target.closest('table') || target.form).querySelectorAll(`[name="${target.dataset.tick}"]:not(:disabled)`).forEach(box => { box.checked = target.checked; });
 });
 document.addEventListener('click', ({target}) => {
   if (target.closest('[data-print]')) print();
@@ -904,7 +919,8 @@ if (drawer) {
     if (response.status === 204) {
       stale = true;
       const next = new URL(response.headers.get('X-Location'), location.href);
-      return next.pathname === new URL(page.href).pathname ? show(next) : history.back();
+      if (next.pathname === new URL(page.href).pathname) return show(next);
+      return history.go(next.pathname === location.pathname ? -(depth + 1) : -1);  // to the page underneath, all steps closed; else the step before
     }
     const html = response.headers.get('Content-Type')?.startsWith('text/html') && await response.text();
     if (!html || /^\s*<!doctype/i.test(html)) return location.assign(response.url);  // files, and pages of their own

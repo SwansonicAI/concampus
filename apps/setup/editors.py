@@ -64,7 +64,7 @@ class Editor:
 
     @property
     def creatable(self):
-        return self.adding and bool(self.section or self.new) and not (self.single and self.model.objects.exists())
+        return self.adding and bool(self.section or self.home or self.new) and not (self.single and self.model.objects.exists())
 
     def start(self, request):
         return self.new(request) if self.new else self.model()
@@ -112,7 +112,7 @@ class OfficeForm(forms.ModelForm):
             self.initial['capabilities'] = list(self.instance.permissions.values_list('codename', flat=True))
             members = ', '.join(str(p) for p in self.instance.user_set.order_by('last_name'))
             waiting = '; '.join(', '.join(g.labels) for g in self.instance.grants.all())
-            self.note = format_html(
+            self.lead = format_html(
                 'Mitglieder: {}. Wer dazugehört, wird bei der Person unter <a href="{}">Konten</a> eingetragen.{}', members or 'noch niemand',
                 reverse('setup:list', args=['konten']), f' Wartet auf Bestätigung: {waiting}.' if waiting else '',
             )
@@ -170,7 +170,7 @@ class AccountForm(forms.ModelForm):
         if 'groups' in self.fields:
             self.fields['groups'].queryset = Office.objects.all()
         if self.instance.pk and (waiting := Membership.objects.filter(person=self.instance, confirmed_by=None).select_related('office')):
-            self.note = 'Wartet auf Bestätigung: ' + ', '.join(f'{m.office}' + (f' bis {m.until:%d.%m.%Y}' if m.until else '') for m in waiting) + '.'
+            self.lead = 'Wartet auf Bestätigung: ' + ', '.join(f'{m.office}' + (f' bis {m.until:%d.%m.%Y}' if m.until else '') for m in waiting) + '.'
         self.depends = depending(self.instance) if self.instance.pk else ''
         if self.depends:
             self.fields['anyway'] = forms.BooleanField(
@@ -353,7 +353,7 @@ class HolidayForm(forms.ModelForm):
         days = [self.instance.first + timedelta(days=n) for n in range(((self.instance.last or self.instance.first) - self.instance.first).days + 1)]
         teaching = Booking.objects.filter(start__date__in=days, end__gt=timezone.now(), category__blocks=True, course__kind__in=[Course.Kind.COURSE, Course.Kind.LESSON])
         if counts := [(d, n) for d in days if (n := teaching.filter(start__date=d).count())]:
-            self.note = format_html(
+            self.lead = format_html(
                 'Noch gebucht: {}', format_html_join(', ', '<a href="{}?tag={}&amp;lehre=1">{} Termine am {}</a>', (
                     (reverse('rooms:day_off'), f'{d:%Y-%m-%d}', n, date_format(d, 'j.n.')) for d, n in counts
                 )),
@@ -377,6 +377,16 @@ def new_term(request):
 def new_module(request):
     program = get_object_or_404(Program, pk=request.GET.get('studiengang'))
     return Module(program=program, parent=program.modules.filter(pk=request.GET.get('unter') or None).first())
+
+
+def new_audition(request):
+    """A stage in the semester picked (?semester=), or the one after a stage (?nach=), which the form fills from it."""
+    nach, semester = request.GET.get('nach', ''), request.GET.get('semester', '')
+    before = nach.isdigit() and request.user.within(Course.objects.filter(kind=Course.Kind.AUDITION), 'run_auditions').filter(pk=nach).select_related('term').first()
+    term = before.term if before else semester.isdigit() and Term.objects.filter(pk=semester).first() or Term.upcoming() or Term.current()
+    course = Course(kind=Course.Kind.AUDITION, term=term)
+    course.follows = before or None
+    return course
 
 
 EDITORS = {e.key: e for e in [
@@ -530,11 +540,8 @@ EDITORS = {e.key: e for e in [
     ),
     Editor('studien', Study, 'Studium', 'manage_students', form=StudyForm, deletable=False),
     Editor(
-        'eignungspruefungen', Course, 'Eignungsprüfungen', 'run_auditions', 'Bewerbungen', form=AuditionForm,
-        columns=[('Prüfung', 'title'), ('Semester', 'term'), ('Studiengang', 'program'), ('Bewerbungsschluss', 'deadline'), ('Plätze', 'capacity')],
-        search=['title', 'subject__name'], words='aufnahmeprüfung videostufe kommission bewerbungsfrist',
-        queryset=lambda: Course.objects.filter(kind=Course.Kind.AUDITION).select_related('term', 'program').order_by('-term__start', 'title'),
-        new=lambda request: Course(kind=Course.Kind.AUDITION, term=Term.upcoming() or Term.current()), carry='courses:auditions_again',
+        'eignungspruefungen', Course, 'Eignungsprüfungen', 'run_auditions', form=AuditionForm, home='admissions:auditions',  # listed there, by semester and chain
+        queryset=lambda: Course.objects.filter(kind=Course.Kind.AUDITION), new=new_audition,
     ),
     Editor(
         'raeume', Room, 'Räume', 'manage_rooms', 'Räume',
@@ -565,7 +572,7 @@ EDITORS = {e.key: e for e in [
         search=['partner__name'], words='erasmus iia inter-institutional agreement plätze ausland', queryset=lambda: Agreement.objects.select_related('partner'),
     ),
     Editor(
-        'unterlagen', DocumentType, 'Unterlagenarten', 'run_auditions', 'Bewerbungen',
+        'unterlagen', DocumentType, 'Unterlagenarten', 'run_auditions', home='admissions:documents',
         sections=[(None, [
             ('name', 'condition'), ('required', 'single', 'shared'), ('jury', 'health', 'by_enrolment'), 'note', 'template', ('file_types', 'max_mb', 'max_files'), ('amount', 'order'), 'subjects',
         ])],

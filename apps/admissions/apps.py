@@ -1,7 +1,9 @@
 from collections import Counter
+from datetime import timedelta
 
 from django.apps import AppConfig
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Count, Min, Prefetch, Q
+from django.db.models.functions import Coalesce
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
@@ -40,6 +42,8 @@ class AdmissionsConfig(Tile, AppConfig):
     def pages(self, person):
         roles = person.roles
         found = [page('Bewerbungen', 'admissions:board', 'application', 'decide')] if 'view_applications' in roles else []
+        if 'run_auditions' in roles:  # the round: its stages, and what applicants hand in
+            found += [page('Eignungsprüfungen', 'admissions:auditions', 'intake', 'add_step', 'carry'), page('Unterlagenarten', 'admissions:documents')]
         found += [page('Meine Kommissionen', 'admissions:juries', 'audition', 'review', 'plan')] if 'teacher' in roles else []
         if 'applicant' in roles or not roles:
             found += [page('Meine Bewerbung', 'admissions:mine'), page('Neue Bewerbung', 'admissions:apply')]
@@ -49,6 +53,11 @@ class AdmissionsConfig(Tile, AppConfig):
         roles, found = person.roles, []
         if 'view_applications' in roles:
             found.append(feature('Bewerbungen', reverse('admissions:board'), 'eignungsprüfung aufnahmeprüfung zulassung bewerber entscheiden nachrücken warteliste'))
+        if 'run_auditions' in roles:
+            found += [
+                feature('Eignungsprüfungen', reverse('admissions:auditions'), 'einrichten aufnahmeprüfung stufen videostufe mappe kommission termine vorjahr übernehmen'),
+                feature('Unterlagenarten', reverse('admissions:documents'), 'checkliste bewerbung video mappe zeugnis nachweis hochladen'),
+            ]
         if 'juror' in roles:
             found.append(feature('Meine Kommissionen', reverse('admissions:juries'), 'eignungsprüfung aufnahmeprüfung jury bewerten'))
         if 'applicant' in roles or not roles:
@@ -86,6 +95,18 @@ class AdmissionsConfig(Tile, AppConfig):
             courses = person.within(Course.objects.filter(vacant, kind=Course.Kind.AUDITION, released=None), 'run_auditions')
             for course in courses.annotate(n=Count('participations__recusals', filter=vacant, distinct=True)):
                 found.append(task(f'{course.title}: Ersatz bestellen für {plural(course.n, "Befangenheit", "Befangenheiten")}', course.get_absolute_url()))
+            # next year's round, set up from eight weeks before applications opened this year until it is
+            ran, today = person.within(Course.objects.filter(kind=Course.Kind.AUDITION), 'run_auditions'), timezone.localdate()
+            held = set(ran.values_list('term__start', flat=True))
+            for row in ran.filter(term__start__gt=today - timedelta(days=365)).order_by().values('term__name', 'term__start').annotate(first=Min(Coalesce('opens', 'deadline'))):
+                due = row['first'] and row['first'] + timedelta(days=365)
+                if due and due - timedelta(weeks=8) <= today and not any(330 <= (s - row['term__start']).days <= 400 for s in held):
+                    start = row['term__start']  # the semester a year on must be there first, to take last year's over into
+                    missing = not Term.objects.filter(start__range=(start + timedelta(days=330), start + timedelta(days=400))).exists()
+                    url = reverse('admissions:auditions')
+                    if missing and 'manage_terms' in person.roles:
+                        url = f"{reverse('setup:new', args=['semester'])}?next={url}"
+                    found.append(task(f'Eignungsprüfungen fürs nächste {row["term__name"].split()[0]} einrichten' + (': erst das Semester anlegen' if missing else ''), url, due))
         from .papers import checklist, document_types, incomplete, owed, stages
         from .views.board import vacancies, verdict
         from .views.common import accept_by, uploads_open

@@ -1,0 +1,28 @@
+{% extends base %}
+{% block title %}{{ first.subject|default:first.title }} {{ first.program.degree }}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>{{ first.subject|default:first.title }}</h1>
+  <div class="actions"><a class="btn ghost" href="{% url 'admissions:carry' %}?aus={{ first.term_id }}&nur={{ first.pk }}">In anderes Semester übernehmen</a></div>
+</div>
+<p class="lead">{{ first.program.title }} · Studienbeginn {{ first.term }}</p>
+<dl class="facts">
+  <dt>Bewerbung</dt><dd>{% if first.opens %}{{ first.opens|date:"j.n." }}–{% else %}bis {% endif %}{{ first.deadline|date:"j.n.Y"|default:"–" }}</dd>
+  <dt>Studienplätze</dt><dd>{{ first.capacity|default:"–" }}</dd>
+  <dt>Bewerbende</dt><dd>{{ first.size }}</dd>
+</dl>
+
+<section>
+  <div class="head">
+    <h2>Stufen</h2>
+    <a class="btn ghost small" href="{% url 'admissions:add_step' first.pk %}" data-panel>Stufe hinzufügen</a>
+  </div>
+  <table class="round" data-fixed>
+    <thead><tr><th class="num">#</th><th>Stufe</th><th>Termin</th><th>Kommission</th><th class="num">Bewerbende</th><th>Als Nächstes</th><th></th></tr></thead>
+    <tbody>
+      {% for s in own %}{% include "admissions/_step.html" with n=forloop.counter %}{% endfor %}
+      {% for s in shared %}{% include "admissions/_step.html" with n=own|length|add:forloop.counter common=True %}{% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

@@ -21,7 +21,6 @@ urlpatterns = [
     path('lehrauftrag/<int:pk>/annehmen/', assignments.accept, name='accept'),
     path('lehrauftrag/<int:pk>/bestaetigen/', assignments.affirm, name='affirm'),    path('semesterwechsel/', rollover.rollover, name='rollover'),
     path('pruefende/uebernehmen/', rollover.appoint_again, name='appoint_again'),
-    path('eignungspruefungen/uebernehmen/', rollover.auditions_again, name='auditions_again'),
     path('neu/', catalogue.edit, name='new'),
     path('<int:pk>/', catalogue.course, name='course'),
     path('<int:pk>/bearbeiten/', catalogue.edit, name='edit'),

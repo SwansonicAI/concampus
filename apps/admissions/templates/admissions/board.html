@@ -2,10 +2,7 @@
 {% block title %}Bewerbungen{% endblock %}
 {% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
 {% block content %}
-<div class="head">
-  <h1>Bewerbungen</h1>
-  {% if 'run_auditions' in user.roles %}<div class="actions"><a class="btn ghost" href="{% url 'setup:list' 'eignungspruefungen' %}">Eignungsprüfungen einrichten</a></div>{% endif %}
-</div>
+<h1>Bewerbungen</h1>
 <form class="toolbar">
   <div class="inline">
     <label>Studienbeginn<select name="semester" data-submit>{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
@@ -89,28 +86,6 @@
   <form id="erinnern" method="post" action="{% url 'admissions:remind' %}">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"></form>
 </section>
 {% endif %}
-
-<section>
-  <h2>Eignungsprüfungen</h2>
-  <details class="tail"{% if running %} open{% endif %}>
-    <summary><small>{{ auditions|length }} Prüfungen{% if not running %}, alle abgeschlossen{% endif %}</small></summary>
-    <table>
-      <thead><tr><th>Datum</th><th>Prüfung</th><th>Bewerbungsfrist</th><th class="num">Bewerbende</th><th>Stand</th></tr></thead>
-      <tbody>
-        {% for c in auditions %}
-        <tr>
-          <td data-value="{{ c.date|date:'c' }}">{% if c.date %}{{ c.date|date:"D j.n.Y" }}{% elif c.program %}online{% else %}–{% endif %}</td>
-          <td><a href="{% url 'admissions:audition' c.pk %}"><b>{{ c.title }}</b></a>{% if c.program %}<br><small class="muted">Bewerbung für {{ c.program.title }}</small>{% endif %}</td>
-          <td>{{ c.deadline|date:"j.n.Y"|default:"" }}</td>
-          <td class="num">{{ c.size }}</td>
-          <td>{% if c.released %}<span class="badge green">abgeschlossen</span>{% else %}<span class="badge open">offen</span>{% endif %}</td>
-        </tr>
-        {% empty %}<tr><td colspan="5" class="empty">Keine Eignungsprüfungen.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </details>
-</section>
 
 <section>
   <div class="head">

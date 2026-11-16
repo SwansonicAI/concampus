@@ -21,7 +21,10 @@
 <div{% if office %} class="cols"{% endif %}>
   <dl class="facts">
     <dt>Kommission</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}{% if short %}<br><small class="fail">{{ short }}</small>{% endif %}</dd>
-    <dt>Bewertung</dt><dd>{% if course.votes %}Ja oder Nein je Mitglied, die Mehrheit entscheidet{% elif course.joint %}Die Kommission entscheidet gemeinsam{% elif course.points %}0–{{ course.max_points }} Punkte je Mitglied, bestanden ab {{ course.pass_mark }}{% else %}Noten je Mitglied, bestanden bis 4,0{% endif %}{% if course.entry != 'members' %}<br><small class="muted">trägt {% if course.entry == 'chair' %}{% if course.chair %}{{ course.chair }}{% else %}der Vorsitz{% endif %}{% else %}das Amt nach dem Protokoll{% endif %} ein</small>{% endif %}</dd>
+    <dt>Bewertung</dt><dd>{% if course.votes %}Ja oder Nein je Mitglied, die Mehrheit entscheidet{% elif course.joint %}Die Kommission entscheidet gemeinsam{% elif course.points %}0–{{ course.max_points }} Punkte je Mitglied, bestanden ab {{ course.pass_mark }}{% else %}Noten je Mitglied, bestanden bis 4,0{% endif %}{% if course.entry != 'members' or course.chair or course.reveal == 'stage' and course.entry == 'members' %}<br><small class="muted">
+      {% if course.entry != 'members' %}trägt {% if course.entry == 'chair' %}{% if course.chair %}{{ course.chair }}{% else %}der Vorsitz{% endif %}{% else %}das Amt nach dem Protokoll{% endif %} ein{% endif %}
+      {% if course.chair and course.entry != 'chair' %}{% if course.entry != 'members' %} · {% endif %}Vorsitz {{ course.chair }}{% endif %}
+      {% if course.reveal == 'stage' and course.entry == 'members' %}{% if course.chair %} · {% endif %}die anderen Wertungen erst nach der ganzen Stufe{% endif %}</small>{% endif %}</dd>
     {% if not jury %}
     {% if course.program %}<dt>Bewerbung für</dt><dd>{{ course.program }}, Frist {{ course.deadline|date:"j. F Y" }}</dd>{% endif %}
     {% if course.capacity %}<dt>Studienplätze</dt><dd>{{ course.capacity }}</dd>{% endif %}
@@ -65,7 +68,7 @@
 
 <section>
   <h2>Bewerbende</h2>
-  {% if office and not correct and not columns %}<p class="lead">Die Wertungen trägt die Kommission ein; berichtigen kann sie nur der Prüfungsausschuss.</p>{% endif %}
+  {% if office and not correct and not columns and course.entry == 'members' %}<p class="lead">Die Wertungen trägt die Kommission ein; berichtigen kann sie nur der Prüfungsausschuss.</p>{% endif %}
   {% if corrections %}
   <div class="panel" style="margin-bottom: 24px">
     <h3>Korrekturen beantragt</h3>

@@ -103,7 +103,7 @@ main.page { padding-top: 32px; padding-bottom: 96px; }
 .side .pages a { padding-left: 24px; color: var(--muted); font-size: 14px; }
 .side .pages .on, .side .way [aria-current] { color: var(--ink); font-weight: 600; }
 /* the way down from a menu item to the page one is on, each step further in; a long title takes two lines at most */
-.side .way a { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; padding-left: calc(24px + var(--step) * 12px); color: var(--muted); font-size: 14px; line-height: 1.35; }
+.side .way a { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; padding-block: 0; border-block: 6px solid transparent; padding-left: calc(24px + var(--step) * 12px); color: var(--muted); font-size: 14px; line-height: 1.35; }  /* the space in borders, outside the clip, or a third line shows in it */
 .side .pages .way a { padding-left: calc(36px + var(--step) * 12px); }
 .foot { border-top: 1px solid var(--line); padding: 18px 0; color: var(--muted); font-size: 13px; }
 .foot .wrap { display: flex; flex-wrap: wrap; gap: 8px 28px; }
@@ -236,6 +236,10 @@ select.cell { padding: 4px 28px 4px 6px; background-position: right 6px center; 
 .badge.applied, .badge.open { background: #e3eefb; color: var(--blue); }
 .badge.waitlisted, .badge.wait { background: #fbefd9; color: var(--amber); }
 .badge.rejected, .badge.no, .badge.hold { background: #fbe3e4; color: var(--red); }
+a.badge:hover { text-decoration: none; }
+.round td { vertical-align: middle; }
+.round td:last-child .actions { flex-wrap: nowrap; justify-content: flex-end; }
+.round td:first-child:not(.num) { width: 16rem; }  /* the name no wider than it needs; the space left goes between the columns */
 .empty { color: var(--muted); font-style: italic; }
 .fail { color: var(--red); font-weight: 700; }
 .caution { color: var(--amber); font-weight: 600; }  /* a warning that leaves the choice: a clash now and then, a course outside the plan */

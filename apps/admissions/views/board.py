@@ -3,7 +3,7 @@ from collections import Counter, defaultdict
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
-from django.db.models import Avg, Count, Exists, F, Min, OuterRef, Prefetch, Q
+from django.db.models import Avg, Exists, F, Min, OuterRef, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -135,9 +135,12 @@ def grounds(study):
     if failed is None:
         return 'Die Voraussetzungen für eine Zulassung liegen nicht vor.'
     course = failed.course
-    part = {'Video': 'die Videostufe', 'Hauptfach': 'die Prüfung im Hauptfach'}.get(course.stage, f'den Prüfungsteil „{course.stage}“')
+    part = 'die Prüfung im Hauptfach' if course.stage == 'Hauptfach' else f'den Prüfungsteil „{course.title if course.video else course.stage}“'
+    votes = failed.scores.filter(draft=False).exclude(value=None) if course.votes else None
     result = (
-        'nicht angetreten' if failed.grade is None
+        f'{votes.filter(value=0).count()} von {votes.count()} Stimmen der Kommission dagegen' if course.votes
+        else 'Entscheidung der Kommission' if course.joint
+        else 'nicht angetreten' if failed.grade is None
         else f'{mark(failed.grade)} von {course.max_points} Punkten, bestanden ab {mark(course.pass_mark)}' if course.points
         else f'Note {mark(failed.grade)}'
     )
@@ -162,14 +165,9 @@ def board(request):
     for study in studies:
         study.incomplete = incomplete(study, types) if study.status == Study.Status.APPLIED else []
         study.lapsed = lapsed(study, days)
-    auditions = (
-        request.user.within(Course.objects.filter(term=term, kind=Course.Kind.AUDITION), 'view_applications', 'run_auditions').select_related('program', 'subject')
-        .annotate(date=Min('bookings__start'), size=Count('participations', distinct=True))
-        .filter(Q(size__gt=0) | Q(program__isnull=False))
-        .order_by(F('deadline').asc(nulls_last=True), F('date').asc(nulls_last=True), 'title')
-    )
-    if subject.isdigit():  # its own auditions and those everyone takes
-        auditions = auditions.filter(Q(subject=subject) | Q(subject__isnull=True))
+    open_intake = request.user.within(Course.objects.filter(term=term, kind=Course.Kind.AUDITION), 'view_applications', 'run_auditions').filter(
+        program__isnull=False, deadline__gte=timezone.localdate(), released=None,
+    ).exists()  # while applications come in, the incomplete ones can be reminded
     decidable = recommendations(term, request.user) if 'decide_applications' in request.user.roles else []
     for s in decidable:
         s.verb = VERBS.get(s.advice)
@@ -188,7 +186,6 @@ def board(request):
             for n, s in enumerate(found):
                 s.place = 1 if n == 0 or (s.program_id, s.subject_id) != (found[n - 1].program_id, found[n - 1].subject_id) else found[n - 1].place + 1
         columns.append((Study.Status(status), found if status == shown else found[:CARDS], len(found)))
-    today = timezone.localdate()
     return render(request, 'admissions/board.html', {
         'term': term,
         'terms': terms,
@@ -196,9 +193,7 @@ def board(request):
         'q': q,
         'subjects': Subject.objects.filter(pk__in=request.user.within(Study.objects.filter(start_term=term, status__in=BOARD), 'view_applications').values('subject')),
         'columns': columns,
-        'incomplete': sum(1 for s in studies if s.incomplete) if any(c.program_id and c.deadline and c.deadline >= today and not c.released for c in auditions) else 0,
-        'auditions': auditions,
-        'running': any(not c.released for c in auditions),
+        'incomplete': sum(1 for s in studies if s.incomplete) if open_intake else 0,
         'vacancies': vacancies(term, request.user),
         'decidable': decidable, 'verbs': VERBS,
         'accepted': accepted, 'ready': ready,

@@ -208,9 +208,10 @@ def index(request):
     return render(request, 'setup/index.html', {'sections': sections})
 
 
-def listing(request, key):
+def listing(request, key, own=False):
+    """An editor's list: under Einstellungen, or `own`, as a page of the area it belongs to (Editor.home)."""
     e = editor(request, key)
-    if not e.section:
+    if not (e.section or own):
         raise Http404
     q = request.GET.get('q', '').strip()
     objects = e.objects(request.user)
@@ -247,6 +248,7 @@ def edit(request, key, pk=None):
         return redirect(back(request, e))
     return render(request, 'setup/form.html', {
         'editor': e, 'form': form, 'object': obj, 'back': back(request, e),
+        'trail': [(None, reverse(e.home))] if e.home and not e.section else None,  # in the menu where its list is
         'history': pk and bool(e.model.seen_by(request.user, pk)), 'table': e.model._meta.label_lower,
     })
 

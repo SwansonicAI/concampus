@@ -1,0 +1,35 @@
+{% extends base %}
+{% block title %}Eignungsprüfungen{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Eignungsprüfungen</h1>
+  <div class="actions">
+    <a class="btn ghost" href="{% url 'admissions:carry' %}{% if term %}?{% if coming %}nach{% else %}aus{% endif %}={{ term.pk }}{% endif %}">Übernehmen</a>
+    {% if term %}<a class="btn" href="{% url 'setup:new' 'eignungspruefungen' %}?semester={{ term.pk }}&next={{ request.get_full_path|urlencode }}" data-panel>Neu anlegen</a>{% endif %}
+  </div>
+</div>
+<form class="toolbar">
+  <div class="inline">
+    <label>Studienbeginn<select name="semester" data-submit>{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Hauptfach oder Stufe"></label>
+    <label>Stand<select name="stand" data-submit><option value="">Alle</option><option value="offen"{% if state == 'offen' %} selected{% endif %}>Zu tun</option><option value="fertig"{% if state == 'fertig' %} selected{% endif %}>Abgeschlossen</option></select></label>
+  </div>
+</form>
+<table class="round">
+  <thead><tr><th>Hauptfach</th><th>Jetzt</th><th>Termine</th><th class="num">Bewerbende</th><th class="num">Plätze</th><th>Als Nächstes</th></tr></thead>
+  <tbody>
+    {% for l in lanes %}
+    <tr>
+      <td data-value="{{ l.name }}"><a href="{% if l.shared %}{% url 'admissions:audition' l.first.pk %}{% else %}{% url 'admissions:intake' l.first.pk %}{% endif %}"><b>{{ l.name }}</b></a> <span class="muted nowrap"{% if l.program %} title="{{ l.program.title }}"{% endif %}>{% if l.shared %}gemeinsam{% else %}{{ l.program.degree|default:"" }}{% endif %}</span></td>
+      <td data-value="{{ l.at }}">{% if l.shared %}{% elif l.now %}{{ l.now.stage }}{% if l.count > 1 %} <span class="muted">{{ l.at }}/{{ l.count }}</span>{% endif %}{% else %}<span class="muted">abgeschlossen</span>{% endif %}</td>
+      <td class="nowrap">{{ l.days }}</td>
+      <td class="num">{{ l.size }}</td>
+      <td class="num">{{ l.capacity|default_if_none:"" }}</td>
+      <td data-value="{{ l.urgency }}">{% if l.step %}<a class="badge {{ l.step.0 }}" href="{% url 'admissions:audition' l.due.pk %}">{{ l.step.1 }}</a>{% endif %}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="6" class="empty">{% if q or state %}Nichts gefunden.{% else %}Noch keine Eignungsprüfungen zum {{ term|default:"kommenden Semester" }}.{% endif %}</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

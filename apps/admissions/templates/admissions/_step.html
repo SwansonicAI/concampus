@@ -1,0 +1,10 @@
+<tr>
+  <td class="num muted">{{ n }}</td>
+  <td><a href="{% url 'admissions:audition' s.pk %}"><b>{{ s.stage }}</b></a>{% if common %} <span class="muted nowrap" title="Auch für andere Hauptfächer">gemeinsam</span>{% endif %}</td>
+  <td class="nowrap">{% if s.video %}online{% if s.deadline %} <span class="muted">bis {{ s.deadline|date:"j.n." }}</span>{% endif %}{% else %}{{ s.days|default:"–" }}{% endif %}</td>
+  <td class="nowrap"><small>{% for p in s.staff.all %}{{ p.last_name }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="fail">niemand</span>{% endfor %}</small></td>
+  <td class="num">{{ s.size }}</td>
+  <td>{% if s.step %}<span class="badge {{ s.step.0 }}">{{ s.step.1 }}</span>{% endif %}</td>
+  <td><div class="actions"><a href="{% url 'setup:edit' 'eignungspruefungen' s.pk %}?next={{ request.path|urlencode }}" data-panel>Bearbeiten</a>{% if common %}
+    <form method="post" action="{% url 'admissions:drop_step' first.pk s.pk %}">{% csrf_token %}<button class="link" data-confirm="Für {{ first.subject|default:first.title }} entfernen?" title="Die Stufe bleibt für die anderen Hauptfächer">Entfernen</button></form>{% endif %}</div></td>
+</tr>

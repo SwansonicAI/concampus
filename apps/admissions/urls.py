@@ -1,11 +1,18 @@
 from django.urls import path
 
-from .views import applicant, board, juries
+from setup.views import listing
+from .views import applicant, board, juries, rounds
 
 app_name = 'admissions'
 urlpatterns = [
     path('', board.index, name='index'),
     path('bewerbungen/', board.board, name='board'),
+    path('eignungspruefungen/', rounds.index, name='auditions'),
+    path('eignungspruefungen/<int:pk>/', rounds.intake, name='intake'),
+    path('eignungspruefungen/<int:pk>/stufe/', rounds.add_step, name='add_step'),
+    path('eignungspruefungen/<int:pk>/stufe/<int:stage>/entfernen/', rounds.drop_step, name='drop_step'),
+    path('eignungspruefungen/uebernehmen/', rounds.carry, name='carry'),
+    path('unterlagenarten/', listing, {'key': 'unterlagen', 'own': True}, name='documents'),
     path('kommissionen/', juries.juries, name='juries'),
     path('konto/', applicant.signup, name='signup'),
     path('bewerben/', applicant.apply, name='apply'),

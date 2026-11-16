@@ -23,7 +23,7 @@ from courses import panel
 from courses.forms import SlotForm, substitutes
 from courses.models import Correction, Course, Participation, Score
 from students.models import Study
-from ..auditions import after, held, invite, next_stages, unmarked
+from ..auditions import after, held, invite, next_stages, origin, unmarked
 from ..papers import Condition, checklist, judged, shown
 from .board import DECISIONS, offer, vacancies
 
@@ -42,6 +42,19 @@ def juries(request):
     # what is the person's to mark now first, the one due first first; then what is still to come; what is closed last
     auditions = sorted(auditions, key=lambda c: (not c.mine, bool(c.released), c.mine and c.marks_by or date.max))
     return render(request, 'admissions/juries.html', {'auditions': auditions})
+
+
+def above(person, course, member):
+    """The way down to a stage in the menu: under one's own commissions; for the office that runs it, under the
+    semester's Eignungsprüfungen and the Hauptfach's it belongs to; else under Bewerbungen."""
+    if member:
+        return [(None, reverse('admissions:juries'))]
+    if not person.may('run_auditions', course):
+        return [(None, reverse('admissions:board'))]
+    way = [(None, f"{reverse('admissions:auditions')}?semester={course.term_id}")]
+    if first := origin(course):
+        way.append((f'{first.subject or first.title} {first.program.degree}', reverse('admissions:intake', args=[first.pk])))
+    return way
 
 
 def programme(note):
@@ -101,7 +114,7 @@ def audition(request, pk):
     if request.GET.get('sortierung') == 'punkte' and rankable:
         rows.sort(key=lambda p: p.grade if p.grade is not None else (p.mean or 0), reverse=True)
     return render(request, 'admissions/audition.html', {
-        'trail': [(None, reverse('admissions:juries' if member else 'admissions:board'))], 'course': course,
+        'trail': above(person, course, member), 'course': course,
         'staff': staff,
         'rows': rows, 'timed': any(p.slot for p in rows), 'noted': any(p.note for p in rows),
         'columns': [e.pk for e in columns],
@@ -263,7 +276,7 @@ def review(request, pk):
     mine = {p.pk: dict((e.pk, v) for e, v in p.marks).get(person.pk) for p in rows}
     todo = {p.pk for p in rows if mine[p.pk] is None and person.pk not in p.recused}
     drafts = sum(1 for p in rows if person.pk in p.drafted)
-    trail = [(None, reverse('admissions:juries' if member else 'admissions:board')), (course.title, course.get_absolute_url())]
+    trail = [*above(person, course, member), (course.title, course.get_absolute_url())]
     if marking and not todo and not request.GET.get('bewerbung'):  # all marked: hand them in, then what is next
         following = next(((c, n, url) for c, n, _, url in unmarked(person) if c.pk != course.pk), None)
         return render(request, 'admissions/marked.html', {'trail': trail, 'course': course, 'count': len(rows), 'drafts': drafts, 'following': following})

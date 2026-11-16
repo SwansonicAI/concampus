@@ -161,7 +161,8 @@ class ApplicationForm(forms.Form):
         studies = person.studies.all()  # who applied before: their instrument first, then its Institut's, at their level
         applied = studies.filter(program=OuterRef('program'), subject=OuterRef('subject'), start_term=OuterRef('term'))
         level = Q(program__postgraduate__in=studies.values('program__postgraduate'))
-        running = Course.objects.filter(kind=Course.Kind.AUDITION, program__isnull=False, deadline__gte=timezone.localdate())
+        today = timezone.localdate()
+        running = Course.objects.filter(Q(opens=None) | Q(opens__lte=today), kind=Course.Kind.AUDITION, program__isnull=False, deadline__gte=today)
         auditions = self.fields['audition'].queryset = (
             running.exclude(Exists(applied))
             .select_related('program', 'subject__institute', 'term')

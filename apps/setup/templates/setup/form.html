@@ -1,9 +1,9 @@
 {% extends base %}
-{% block title %}{% if object.pk %}{{ object }}{% else %}{{ editor.title }}{% endif %}{% endblock %}
+{% block title %}{% if object.pk %}{{ object }}{% else %}Neu anlegen{% endif %}{% endblock %}
 {% block content %}
 <p class="eyebrow">{% if editor.section %}<a href="{% url 'setup:list' editor.key %}">{{ editor.title }}</a>{% elif editor.home %}<a href="{% url editor.home %}">{{ editor.title }}</a>{% else %}{{ editor.title }}{% endif %}</p>
 <h1>{% if object.pk %}{{ object }}{% else %}Neu anlegen{% endif %}</h1>
-{% if form.note %}<p class="lead">{{ form.note }}</p>{% endif %}
+{% if form.lead %}<p class="lead">{{ form.lead }}</p>{% endif %}{# not form.note: a field of that name would show here #}
 <form method="post" class="form"{% if form.is_multipart %} enctype="multipart/form-data"{% endif %}>
   {% csrf_token %}
   {{ form }}

@@ -428,31 +428,62 @@ class AuditionForm(CourseForm):
     """One stage of an Eignungsprüfung. The first stage, with its programme, is what applicants apply for."""
 
     moves = True
+    opens = DayField(label='Bewerbung ab', required=False, help_text='Nur bei der ersten Stufe; leer: sofort.')
     deadline = DayField(label='Bewerbungsschluss', required=False, help_text='Bis dahin laden Bewerbende Video oder Mappe und Unterlagen hoch.')
 
     class Meta(CourseForm.Meta):
         fields = [
-            'title', 'term', 'program', 'subject', 'video', 'after', 'staff', 'rating', 'reveal', 'entry', 'chair', 'deadline', 'marks_by', 'capacity', 'pass_mark',
+            'title', 'term', 'program', 'subject', 'video', 'after', 'staff', 'rating', 'reveal', 'entry', 'chair', 'opens', 'deadline', 'marks_by', 'capacity', 'pass_mark',
             'max_points', 'accompaniment', 'description',
         ]
-        labels = {'staff': 'Kommission', 'capacity': 'Studienplätze'}
+        labels = {'staff': 'Kommission', 'capacity': 'Studienplätze', 'after': 'Gehört zu'}  # shown only for a stage several Hauptfächer share
         help_texts = {
             'program': 'Nur bei der ersten Stufe: der Studiengang, für den man sich hier bewirbt.',
             'video': 'Bewerbende reichen ein Video oder eine Mappe ein, die Kommission wertet online.',
-            'rating': 'Bei Punkten oder Noten: Bestehensgrenze und Höchstpunktzahl unten; leer: Noten.',
+            'rating': '',
             'reveal': 'Wo jedes Mitglied selbst wertet.',
+            'entry': '',
             'chair': 'Gehört zur Kommission.',
+            'after': 'Wer eine dieser Stufen besteht, wird hierher eingeladen.',
+            'marks_by': 'Bis wann die Kommission online wertet, nach dem Bewerbungsschluss.',
+            'accompaniment': 'Die Lehrveranstaltung, in die eingetragen wird, wer eine Begleitung wünscht.',
         }
 
-    layout = [
-        (None, ['title', ('term', 'program', 'subject'), 'video', 'after']),
-        ('Kommission und Wertung', ['staff', ('rating', 'reveal'), ('entry', 'chair'), ('deadline', 'marks_by'), ('capacity', 'pass_mark', 'max_points')]),
+    layout = [  # what the stage is, then its name, which follows from it
+        (None, [('term', 'program', 'subject'), 'video', 'title', 'after']),
+        ('Kommission und Wertung', ['staff', ('rating', 'reveal'), ('entry', 'chair'), ('opens', 'deadline', 'marks_by'), ('capacity', 'pass_mark', 'max_points')]),
         (None, ['accompaniment', 'description']),
     ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['chair'].queryset = Person.teachers()
+        for name, rule in [  # only what the choices above make matter
+            ('pass_mark', 'rating:mean'), ('max_points', 'rating:mean'), ('reveal', 'entry:members'), ('marks_by', 'video:on'), ('accompaniment', 'video:'),
+        ]:
+            self.fields[name].widget.attrs['data-for'] = rule
+        self.fields['subject'].empty_label = 'Keines (gemeinsam)'  # a stage several Hauptfächer sit, as Klavier
+        before = getattr(self.instance, 'follows', None)
+        if self.instance.pk and not self.instance.subject_id:  # which Hauptfächer sit a shared stage, on its own form; a Hauptfach's own stages are ordered on its page
+            self.fields['after'].queryset = Course.objects.filter(kind=Course.Kind.AUDITION, term=self.instance.term_id).exclude(pk=self.instance.pk).order_by('title')
+            self.fields['after'].label_from_instance = lambda c: c.title
+        else:
+            self.fields.pop('after')
+        if not (self.instance.pk or before):  # a new Eignungsprüfung: its name follows from what it is (app.js titled)
+            self.fields['title'].widget.attrs['data-titled'] = ''
+        if before or self.instance.pk and self.instance.after.exists():  # semester and what is applied for are the first stage's; later, uploads only online
+            for name in ('term', 'program', 'opens', 'capacity'):
+                self.fields.pop(name, None)
+            self.fields['deadline'].widget.attrs['data-for'] = 'video:on'
+        else:
+            for name in ('opens', 'capacity'):  # only where a Studiengang is applied for
+                self.fields[name].widget.attrs['data-for'] = 'program:' + ','.join(str(pk) for pk in self.fields['program'].queryset.values_list('pk', flat=True))
+        if before:  # the stage after another: its Hauptfach to start from
+            self.initial.update(subject=before.subject_id)
+            if before.subject_id and before.video:  # after the video or the Mappe, the audition in the Hauptfach, as a rule by the same jury
+                self.initial.update(title=f'Eignungsprüfung Hauptfach {before.subject}', staff=list(before.staff.values_list('pk', flat=True)))
+        elif self.instance.pk and not self.instance.subject_id and (n := self.instance.after.count()) > 1:
+            self.lead = f'Gilt für {n} Hauptfächer: Änderungen gelten für alle.'
         if not self.instance.pk:  # a new stage starts as the Hochschule holds it
             institution = Institution.get()
             self.initial.setdefault('rating', institution.audition_rating)
@@ -466,9 +497,30 @@ class AuditionForm(CourseForm):
         if data.get('marks_by') and data.get('deadline') and data['marks_by'] <= data['deadline']:
             self.add_error('marks_by', 'Die Kommission wertet nach dem Bewerbungsschluss, sonst bleibt wer zuletzt einreicht ungewertet.')
         program, term = data.get('program'), data.get('term')
+        if term and any(c.term_id != term.pk for c in data.get('after') or ()):
+            self.add_error('after', f'Die Stufen davor gehören zum selben Semester, dem {term}.')
         if program and program.starts and term and term.start < program.starts.start:
             self.add_error('program', f'Diese PO-Version gilt erst ab dem {program.starts}; wer im {term} beginnt, beginnt in der vorigen.')
         return data
+
+    def save(self, commit=True):
+        """A new stage after another takes over the stages several Hauptfächer share that followed that one, as Klavier
+        after the Hauptfach; a new Eignungsprüfung starts with those the others of its Studiengang take."""
+        new, course = not self.instance.pk, super().save(commit)
+        if not (commit and new):
+            return course
+        shared = Course.objects.filter(kind=Course.Kind.AUDITION, term=course.term_id, subject=None).exclude(pk=course.pk)
+        if before := getattr(self.instance, 'follows', None):
+            course.after.add(before)
+            for stage in shared.filter(after=before):
+                stage.after.remove(before)
+                stage.after.add(course)
+        elif course.program_id:
+            from admissions.auditions import chains  # admissions builds on courses, not the other way round
+            sat = {c.pk for own, common in chains(list(Course.objects.filter(kind=Course.Kind.AUDITION, term=course.term_id)))[0] if own[0].program_id == course.program_id for c in common}
+            for stage in shared.filter(pk__in=sat):
+                stage.after.add(course)
+        return course
 
 
 class EnsembleForm(forms.Form):

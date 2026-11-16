@@ -14,7 +14,7 @@ class Graded(forms.ModelForm):
         self.enrolled, self.graduated = program.affected() if program.pk else (0, 0)
         if not (self.instance.pk and (self.enrolled or self.graduated)):
             return
-        self.note = (
+        self.lead = (
             f'In Gebrauch: {self.enrolled} Studierende, {self.graduated} Absolvent:innen. Was auf Noten wirkt, ist markiert und '
             'braucht einen Grund; ein neuer Studienplan ist eine neue PO-Version („Als neue PO-Version kopieren“ beim Studiengang).'
         )

@@ -1,7 +1,7 @@
 {% extends base %}
 {% block title %}{{ editor.title }}{% endblock %}
 {% block content %}
-<p class="eyebrow"><a href="{% url 'setup:index' %}">Einstellungen</a></p>
+{% if editor.section %}<p class="eyebrow"><a href="{% url 'setup:index' %}">Einstellungen</a></p>{% endif %}
 <div class="head">
   <h1>{{ editor.title }}</h1>
   <div class="actions">

@@ -1,0 +1,34 @@
+{% extends base %}
+{% block title %}Übernehmen{% endblock %}
+{% block content %}
+<h1>Eignungsprüfungen übernehmen</h1>
+{% if target %}
+<form class="toolbar">
+  <div class="inline">
+    <label>Aus<select name="aus" data-submit>{% for t in sources %}<option value="{{ t.pk }}"{% if t == source %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+    <label>Nach<select name="nach" data-submit>{% for t in targets %}<option value="{{ t.pk }}"{% if t == target %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+  </div>
+</form>
+<form method="post">
+  {% csrf_token %}<input type="hidden" name="aus" value="{{ source.pk }}"><input type="hidden" name="nach" value="{{ target.pk }}">
+  <table data-fixed>
+    <thead><tr><th class="mid"><input type="checkbox" data-tick="stufe" aria-label="Alle ankreuzen"></th><th>Hauptfach</th><th>Stufen</th></tr></thead>
+    <tbody>
+      {% for own, shared, there in rows %}
+      {% with first=own.0 %}
+      <tr>
+        <td class="mid"><input type="checkbox" name="stufe" value="{{ first.pk }}" aria-label="{{ first.subject|default:first.title }}"{% if there %} disabled{% elif not only or first.pk|stringformat:'s' == only %} checked{% endif %}></td>
+        <td class="mid"><b{% if there %} class="muted"{% endif %}>{{ first.subject|default:first.title }}</b> <span class="muted">{{ first.program.degree }}{% if there %} · schon da{% endif %}</span></td>
+        <td class="mid{% if there %} muted{% endif %}">{% for s in own %}{{ s.stage }}{% if not forloop.last %} → {% endif %}{% endfor %}{% for s in shared %} <span class="muted">· {{ s.stage }}</span>{% endfor %}</td>
+      </tr>
+      {% endwith %}
+      {% empty %}<tr><td colspan="3" class="empty">Keine Eignungsprüfungen im {{ source }}.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% if rows %}<div class="actions" style="margin-top: 16px"><button class="btn">Übernehmen</button><small class="muted">Mit Kommission und Bewertung; die Fristen {{ weeks }} Wochen später. Termine und Räume neu planen.</small></div>{% endif %}
+</form>
+{% else %}
+<p class="empty">Kein kommendes Semester, in das sich übernehmen ließe.{% if 'manage_terms' in user.roles %} <a href="{% url 'setup:new' 'semester' %}?next={{ request.path|urlencode }}">Semester anlegen</a>{% endif %}</p>
+{% endif %}
+{% endblock %}

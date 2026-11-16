@@ -19,7 +19,7 @@
     {% if user.is_authenticated %}
     <div class="me">
       <button type="button" class="search" title="Strg+K oder /">Suchen …<kbd>Strg K</kbd></button>
-      {% if demo_day %}<span class="badge wait" title="Demo: ConCampus zeigt diesen Tag; zurück im Menü">{{ today|date:"D j.n.Y" }}</span>{% endif %}
+      {% if demo_day %}<span class="badge wait" title="ConCampus tut, als wäre heute dieser Tag; zurück zu heute im Menü">Demo-Tag {{ today|date:"j.n.Y" }}</span>{% endif %}
       <a href="{% url 'inbox' %}">Postfach{% if unread %}<span class="count">{{ unread }}</span>{% endif %}</a>
       <details class="menu">
         <summary>{{ user.first_name|default:user.username }}</summary>

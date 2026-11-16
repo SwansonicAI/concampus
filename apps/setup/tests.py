@@ -3,6 +3,7 @@ import re
 from django.core import mail
 from django.db.models import Count
 from django.test import Client
+from django.urls import reverse
 
 from core.models import AccessRequest, Change, Grant, Membership, Office, Person, Term
 from core.testing import Seeded, flashes
@@ -27,7 +28,10 @@ class EditorTest(Seeded):
             'institute': ({'name': 'Instrumentenbau'}, {'name': 'Instrumentenbau und Akustik'}),
             'studiengaenge': ({'degree': 'M.Mus.', 'name': 'Alte Musik', 'version': '2027', 'semesters': '4', 'attempts': '3', 'rounding': 'half_up', 'mean_rounding': 'cut', 'kind': '7', 'weekly': 'minuten'}, {'semesters': '5'}),
             'hauptfaecher': ({'name': 'Laute'}, {'name': 'Laute und Theorbe'}),
-            'eignungspruefungen': ({'title': 'Videostufe Laute', 'term': Term.upcoming().pk, 'video': 'on', 'deadline': '01.12.2026', 'pass_mark': '16.1', 'max_points': '25'}, {'capacity': '2'}),
+            'eignungspruefungen': (
+                {'title': 'Videostufe Laute', 'term': Term.upcoming().pk, 'video': 'on', 'deadline': '01.12.2026', 'pass_mark': '16.1', 'max_points': '25',
+                 'rating': 'mean', 'entry': 'members', 'reveal': 'row'}, {'capacity': '2'},
+            ),
             'raeume': ({'name': 'FH 999', 'building': 'Fürstenhaus', 'function': 'uebung', 'capacity': '2'}, {'capacity': '3'}),
             'unterlagen': ({'name': 'Repertoireliste', 'condition': 'always', 'required': 'on', 'max_files': '5', 'order': '9'}, {'note': 'Werke mit Satzangaben.'}),
             'raumfunktionen': ({'name': 'Tonstudio', 'order': '9'}, {'central': 'on'}),
@@ -48,7 +52,7 @@ class EditorTest(Seeded):
         for key, (data, change) in self.samples().items():
             e = EDITORS[key]
             with self.subTest(key=key):
-                self.assertEqual(admin.get(f'/einstellungen/{key}/').status_code, 200)
+                self.assertEqual(admin.get(f'/einstellungen/{key}/' if e.section else reverse(e.home)).status_code, 200)  # its list, here or where it belongs
                 r = admin.post(f'/einstellungen/{key}/neu/', data, headers=PANEL)
                 self.assertEqual(r.status_code, 204, r.context and r.context['form'].errors)
                 obj = e.model.objects.order_by('-pk').first()

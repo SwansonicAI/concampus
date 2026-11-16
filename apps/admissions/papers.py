@@ -15,7 +15,7 @@ Condition = DocumentType.Condition
 def stages():
     """Audition participations in stage order: video round, Hauptfach, shared parts."""
     return (
-        Participation.objects.filter(course__kind=Course.Kind.AUDITION).select_related('course')
+        Participation.objects.filter(course__kind=Course.Kind.AUDITION).select_related('course__subject')  # its name, for Course.stage
         .order_by(F('course__deadline').asc(nulls_last=True), F('course__subject').asc(nulls_last=True), 'course__title')
     )
 

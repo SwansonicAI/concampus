@@ -1,0 +1,27 @@
+{% extends base %}
+{% block title %}Stufe hinzufügen{% endblock %}
+{% block content %}
+{% with name=first.subject|default:first.title %}
+<h1>Stufe hinzufügen</h1>
+<p class="lead">{{ name }} {{ first.program.degree }} · {{ first.term }}</p>
+{% if others %}
+<section>
+  <h2>Gemeinsam mit anderen Hauptfächern</h2>
+  <table data-fixed>
+    <tbody>
+      {% for c in others %}
+      <tr>
+        <td class="mid"><b>{{ c.stage }}</b><br><small class="muted">{{ c.days|default:"Termin offen" }} · {% for p in c.staff.all %}{{ p.last_name }}{% if not forloop.last %}, {% endif %}{% empty %}ohne Kommission{% endfor %} · {{ c.prev_pks|length }} Hauptfächer</small></td>
+        <td class="mid num"><form method="post">{% csrf_token %}<button class="btn small" name="stufe" value="{{ c.pk }}">Hinzufügen</button></form></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+<section>
+  <h2>Nur für {{ name }}</h2>
+  <p><a class="btn ghost" href="{% url 'setup:new' 'eignungspruefungen' %}?nach={{ last.pk }}&next={% url 'admissions:intake' first.pk %}">Neue Stufe anlegen</a></p>
+</section>
+{% endwith %}
+{% endblock %}
