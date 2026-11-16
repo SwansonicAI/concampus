@@ -495,6 +495,11 @@ document.addEventListener('click', event => {
   video.play();
 });
 
+// In the Sichtung, Enter in the mark does not save it and go on: as with a vote, only the button does.
+document.addEventListener('keydown', event => {
+  if (event.key === 'Enter' && event.target.matches('.review .rate input')) event.preventDefault();
+});
+
 // The group form: the time typed in shows as a dashed block in the week above, where it falls among the others.
 function preview(week) {
   const form = document.querySelector('form#neu:has(#id_weekday)');
