@@ -67,18 +67,10 @@ class AdmissionsConfig(Tile, AppConfig):
 
         found = []
         if 'juror' in person.roles:
-            open_ = Course.objects.filter(Q(staff=person) | Q(participations__recusals__substitute=person), kind=Course.Kind.AUDITION, released=None)
-            for course in open_.exclude(participations=None).distinct():
-                missing = course.participations.exclude(scores__examiner=person).exclude(recusals__examiner=person)
-                if not course.staff.filter(pk=person.pk).exists():  # a substitute marks whom they stand in for
-                    missing = missing.filter(recusals__substitute=person)
-                if course.video:  # only what has a video to watch
-                    missing = missing.filter(study__documents__kind__condition='video').distinct()
-                missing = missing.count()
-                started = course.video or course.participations.filter(slot__lte=timezone.now()).exists()
-                if missing and started:
-                    url = reverse('admissions:review', args=[course.pk]) if course.video else course.get_absolute_url()
-                    found.append(task(f'{course.title}: Ihre Wertung fehlt für {plural(missing, "Bewerbung", "Bewerbungen")}', url, course.marks_by or course.deadline))
+            from .auditions import unmarked
+
+            for course, missing, url in unmarked(person):
+                found.append(task(f'{course.title}: Ihre Wertung fehlt für {plural(missing, "Bewerbung", "Bewerbungen")}', url, course.marks_by or course.deadline))
         if 'run_auditions' in person.roles:
             juries = person.within(Course.objects.filter(kind=Course.Kind.AUDITION, released=None).exclude(participations=None), 'run_auditions')
             if short := len(Course.short_panels(juries)):

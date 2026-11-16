@@ -1,0 +1,15 @@
+{% extends base %}
+{% block title %}Sichtung {{ course.title }}{% endblock %}
+{% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>Alle gewertet</h1>
+<p class="lead">{{ course.title }} · {{ count }} Bewerbungen</p>
+{% if following %}{% with c=following.0 %}
+<div class="actions">
+  <a class="btn" href="{{ following.2 }}" target="_top">Weiter: {{ c.title }}{% if c.term_id != course.term_id %} · {{ c.term }}{% endif %}</a>
+  <small class="muted">{{ following.1 }} offen{% if c.marks_by and c.marks_by >= today %} · bis {{ c.marks_by|date:"j.n." }}{% endif %}</small>
+</div>
+{% endwith %}{% else %}
+<div class="actions"><a class="btn ghost" href="{{ course.get_absolute_url }}">Zur Liste</a></div>
+{% endif %}
+{% endblock %}

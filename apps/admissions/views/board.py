@@ -17,12 +17,12 @@ from core.apps import plural
 from core.history import tables
 from core.models import Institution, Message, Term
 from core.shortcuts import ids
-from core.text import matching
+from core.text import lengths, matching
 from core.templatetags.marks import mark
-from courses.models import Course
+from courses.models import Course, Recusal, Score
 from curriculum.models import Subject
 from students.models import DocumentType, Study, StudyTerm
-from ..papers import checklist, document_types, incomplete, papers, stages
+from ..papers import checklist, document_types, incomplete, papers, shown, stages
 from .common import accept_by, lapsed, uploads_open
 
 CARDS = 40  # per column of the board before „alle anzeigen“
@@ -228,8 +228,20 @@ def application(request, pk):
     accepted = study.terms.filter(term=study.start_term).first()
     personal = office or study.person == person  # the jury judges the performance: no contact or personal data
     items = checklist(study)
+    card = juror and not personal  # the jury's card: what it plays and for how long, its papers, the stages it has been through
+    judging = set(Course.objects.filter(pk__in=[s.course_id for s in steps], staff=person).values_list('pk', flat=True)) if card else ()
+    for s in steps:
+        s.judging, s.works = s.course_id in judging, lengths(s.note)
+        s.minutes = all(m for _, m in s.works) and sum(m for _, m in s.works)
+    judged = [s for s in steps if s.judging]
+    scored = set(Score.objects.filter(participation__in=judged, examiner=person).values_list('participation', flat=True))
+    recused = dict(Recusal.objects.filter(participation__in=judged, examiner=person).values_list('participation', 'reason'))
+    for s in judged:  # standing back from this person: said here, where one sees them, before marking them
+        s.recused, s.recusable = recused.get(s.pk), s.pk not in scored and s.pk not in recused
     return render(request, 'admissions/application.html', {
-        'trail': [(None, reverse('admissions:board' if office else 'admissions:juries'))], 'study': study,
+        # the jury's card under the stage it judges, the latest where it judges several, as one comes to it from its list
+        'trail': [(None, reverse('admissions:board' if office else 'admissions:juries')), *[(s.course.title, s.course.get_absolute_url()) for s in judged[-1:]]],
+        'study': study,
         'personal': personal,
         'stages': steps,
         'recommendation': verdict(steps),
@@ -237,6 +249,9 @@ def application(request, pk):
         'remind': office and (accepted and missing or study.status == Study.Status.APPLIED and uploads_open(study) and incomplete(study)),
         'show_results': office or juror,
         'checklist': items if personal else [item for item in items if item['kind'].jury],
+        'card': card, 'several': len(judging) > 1,
+        'wish': all(s.pk in scored for s in steps if s.judging),  # the wished-for teacher only after one's own score, as in the Sichtung
+        'papers': shown(items) if card else [], 'videos': shown(items, playable=True) if card else [],
         'documents': study.documents.exclude(message=None) if study.person == person or any(person.may(c, study) for c in ('manage_students', 'decide_results')) else [],  # as core.views.letter opens them
         'decide': person.may('decide_applications', study) and study.status in UNDECIDED and not accepted,
         'enrol': person.may('manage_students', study),

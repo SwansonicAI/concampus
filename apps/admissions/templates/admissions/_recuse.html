@@ -1,0 +1,10 @@
+<details>
+  <summary><small>Befangenheit anzeigen{% if several %}: {{ course.title }}{% endif %}</small></summary>
+  <p class="muted" style="margin: 8px 0 0"><small>Wer jemanden privat unterrichtet hat oder mit ihm verwandt ist, wertet diese Person nicht; das Amt bestellt einen Ersatz.</small></p>
+  <form method="post" action="{% url 'courses:recuse' course.pk %}" class="inline" style="margin-top: 12px">
+    {% csrf_token %}
+    <input type="hidden" name="participation" value="{{ p.pk }}"><input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <input name="reason" required maxlength="200" size="36" placeholder="Grund, z. B. Privatunterricht bis 2025" aria-label="Grund">
+    <button class="btn ghost small" data-confirm="Anzeigen? Sie werten diese Person dann nicht.">Anzeigen</button>
+  </form>
+</details>

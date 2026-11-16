@@ -82,10 +82,11 @@ periods and rules: `docs/rules.md`; the legal requirements: `docs/legal.md`.
   ConCampus's own files, none written in a page, so text that ever slipped through unescaped would run nothing
   (`SECURE_CSP`); styles in pages stay allowed, as the plans place their entries by them. Lists exported to Excel never
   carry a formula (`core.shortcuts.Sheet`).
-- Files: by type and size per kind of document (`DocumentType.file_types`, `max_mb`, 20 MB by default). Every file a
-  person handed in, the Protokoll of an exam and the logo are served sandboxed (`Content-Security-Policy: sandbox`), as
-  the type checked at upload, never as one guessed from a name; only PDFs and photos open in the browser, anything else
-  downloads. **Open**: no scan for malware.
+- Files: by type and size per kind of document (`DocumentType.file_types`, `max_mb`, 20 MB by default), and by
+  content: a file has to begin as its type does, so an .exe renamed .pdf is refused (`students.models.genuine`; a type
+  without a known signature passes, as it only ever downloads). Every file a person handed in, the Protokoll of an exam
+  and the logo are served sandboxed (`Content-Security-Policy: sandbox`), as the type checked at upload, never as one
+  guessed from a name; only PDFs and photos open in the browser, anything else downloads. **Open**: no scan for malware.
 
 ### Transfer (Weitergabekontrolle)
 

@@ -429,7 +429,37 @@ class DocumentType(Tracked, Keyed):
             return f'{self} bitte als {self.file_types or "PDF oder Bild"} hochladen.'
         if file.size > self.size * 2 ** 20:
             return f'Die Datei ist größer als {self.limit}. Bitte verkleinern und erneut hochladen.'
+        if not genuine(file):
+            return f'Die Datei ist ihrem Inhalt nach kein {Path(file.name).suffix[1:].upper()}. Bitte die Datei selbst hochladen, nicht umbenannt.'
         return ''
+
+
+ISO_BOXES = (b'ftyp', b'moov', b'mdat', b'wide', b'free', b'skip')  # how MP4, QuickTime and HEIC files begin, at their fifth byte
+SIGNATURES = {  # what a file of each type begins with
+    '.pdf': lambda h: b'%PDF-' in h,  # the header may sit anywhere in the first kilobyte
+    '.jpg': lambda h: h.startswith(b'\xff\xd8\xff'), '.jpeg': lambda h: h.startswith(b'\xff\xd8\xff'),
+    '.png': lambda h: h.startswith(b'\x89PNG\r\n\x1a\n'),
+    '.gif': lambda h: h[:6] in (b'GIF87a', b'GIF89a'),
+    '.webp': lambda h: h[:4] == b'RIFF' and h[8:12] == b'WEBP',
+    **dict.fromkeys(('.heic', '.mp4', '.m4v', '.mov', '.qt', '.m4a'), lambda h: h[4:8] in ISO_BOXES),
+    '.webm': lambda h: h.startswith(b'\x1aE\xdf\xa3'),
+    **dict.fromkeys(('.ogg', '.ogv', '.oga', '.opus'), lambda h: h.startswith(b'OggS')),
+    '.mp3': lambda h: h.startswith(b'ID3') or len(h) > 1 and h[0] == 0xFF and h[1] & 0xE0 == 0xE0,
+    '.wav': lambda h: h[:4] == b'RIFF' and h[8:12] == b'WAVE',
+    '.flac': lambda h: h.startswith(b'fLaC'),
+}
+
+
+def genuine(file):
+    """Whether a file is what its name says, by its first bytes: an .exe renamed .pdf is not. A type without a known
+    signature passes; it only ever downloads, sandboxed (docs/measures.md)."""
+    test = SIGNATURES.get(Path(file.name).suffix.lower())
+    if test is None:
+        return True
+    file.seek(0)
+    head = file.read(1024)
+    file.seek(0)
+    return test(head)
 
 
 def stored(document, filename):

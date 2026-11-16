@@ -67,6 +67,12 @@ def checklist(study, types=None):
     ]
 
 
+def shown(items, playable=False):
+    """Of a checklist, what the jury sees: the papers it reads beside the playing, such as a CV; with `playable`, the
+    videos it watches."""
+    return [d for item in items if item['kind'].jury for d in item['documents'] if d.playable == playable]
+
+
 def incomplete(study, types=None):
     return [item['label'] for item in checklist(study, types) if item['required'] and not item['documents']]
 

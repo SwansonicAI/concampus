@@ -1,11 +1,30 @@
-"""An applicant's appointments in the Eignungsprüfung: when and where, what follows, and the invitation."""
-from datetime import timedelta
+"""An applicant's appointments in the Eignungsprüfung: when and where, what follows, and the invitation; a juror's marks
+still to give."""
+from datetime import date, timedelta
 
+from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
 
-from courses.models import Course
+from courses.models import Course, marked
+
+
+def unmarked(person):
+    """The auditions where `person` has applicants to mark now, each with how many and where to start: [(course, n, url)],
+    the one due first first. A video round counts whoever handed in a video, one in person once it has begun; a
+    recusal is no one's to mark, a substitute marks only whom they stand in for."""
+    found = []
+    juries = Course.objects.filter(Q(staff=person) | Q(participations__recusals__substitute=person), kind=Course.Kind.AUDITION, released=None)
+    for course in juries.exclude(participations=None).distinct():
+        missing = course.participations.exclude(scores__in=marked(person)).exclude(recusals__examiner=person)
+        if not course.staff.filter(pk=person.pk).exists():
+            missing = missing.filter(recusals__substitute=person)
+        if course.video:
+            missing = missing.filter(study__documents__kind__condition='video').distinct()
+        if (course.video or course.participations.filter(slot__lte=timezone.now()).exists()) and (n := missing.count()):
+            found.append((course, n, reverse('admissions:review', args=[course.pk]) if course.video else course.get_absolute_url()))
+    return sorted(found, key=lambda f: f[0].marks_by or f[0].deadline or date.max)
 
 
 def next_stages(course):

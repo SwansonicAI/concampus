@@ -1,6 +1,6 @@
 """The Eignungsprüfung as its juries run it: appointments, stages, results, Nachrücken."""
 import re
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
@@ -20,10 +20,10 @@ from core.text import untimed
 from core.shortcuts import preview
 from courses import panel
 from courses.forms import SlotForm, substitutes
-from courses.models import Course, Participation, marked
+from courses.models import Course, Participation
 from students.models import Document, Study
-from ..auditions import after, held, invite, next_stages
-from ..papers import Condition
+from ..auditions import after, held, invite, next_stages, unmarked
+from ..papers import Condition, checklist, shown
 from .board import DECISIONS, offer, vacancies
 
 
@@ -35,8 +35,11 @@ def juries(request):
         .annotate(date=Min('bookings__start'), size=Count('participations', distinct=True))
         .order_by('-term__start', F('deadline').asc(nulls_last=True), F('date').asc(nulls_last=True), 'title')
     )
-    for c in auditions:  # what is still the person's own to mark, recusals left out
-        c.mine = c.participations.exclude(scores__in=marked(request.user)).exclude(recusals__examiner=request.user).count() if not c.released else 0
+    due = {course.pk: n for course, n, _ in unmarked(request.user)}
+    for c in auditions:
+        c.mine = due.get(c.pk, 0)
+    # what is the person's to mark now first, the one due first first; then what is still to come; what is closed last
+    auditions = sorted(auditions, key=lambda c: (not c.mine, bool(c.released), c.mine and c.marks_by or date.max))
     return render(request, 'admissions/juries.html', {'auditions': auditions})
 
 
@@ -62,7 +65,9 @@ def audition(request, pk):
         return staff, rows if office or correct or member else panel.substituting(rows, person)
 
     staff, rows = sheet()
-    columns, refused = panel.scorers(staff, rows) if correct else [] if office and not member else [person], None  # the office that runs it marks nothing
+    # the office that runs it marks nothing; a video round is marked while watching it, in the Sichtung; one in person once it has begun
+    begun = course.participations.filter(slot__lte=timezone.now()).exists()
+    columns, refused = panel.scorers(staff, rows) if correct else [] if office and not member or course.video or not begun else [person], None
     if request.method == 'POST':
         if course.released or not columns:
             raise PermissionDenied('Wertungen tragen die Kommission und, berichtigend, der Prüfungsausschuss ein.')
@@ -78,7 +83,8 @@ def audition(request, pk):
     if refused:
         panel.retype(rows, request.POST, refused)
     invited = set(Participation.objects.filter(course__in=next_stages(course)).values_list('study', flat=True)) if office else set()
-    if request.GET.get('sortierung') == 'punkte' and not any(getattr(p, 'blind', False) for p in rows):  # a ranking would tell the others' marks
+    rankable = not any(getattr(p, 'blind', False) for p in rows)  # a ranking would tell the others' marks
+    if request.GET.get('sortierung') == 'punkte' and rankable:
         rows.sort(key=lambda p: p.grade if p.grade is not None else (p.mean or 0), reverse=True)
     return render(request, 'admissions/audition.html', {
         'trail': [(None, reverse('admissions:juries' if member else 'admissions:board'))], 'course': course,
@@ -86,7 +92,10 @@ def audition(request, pk):
         'rows': rows, 'timed': any(p.slot for p in rows), 'noted': any(p.note for p in rows),
         'columns': [e.pk for e in columns],
         'office': office, 'correct': correct, 'rule': panel.rule(rows), 'composer': office, 'short': course.panel().shortfall,
-        'recusable': [] if course.released else panel.recusable(rows, person),
+        'jury': not (office or correct),  # sees what marking needs, not how the office runs it
+        'preview': not (office or correct or course.video or begun),
+        'rankable': rankable and any(p.grade is not None or p.mean is not None for p in rows),
+        'left': 0 if office or correct else next((n for c, n, _ in unmarked(person) if c.pk == course.pk), 0),
         'candidates': substitutes(course) if office and any(p.vacant for p in rows) else [],
         'history': bool(Course.seen_by(person, course.pk)),
         'slots': SlotForm(person=person, course=course) if office else None,
@@ -233,7 +242,10 @@ def review(request, pk):
     panel.blind(rows, person)
     mine = {p.pk: dict((e.pk, v) for e, v in p.marks).get(person.pk) for p in rows}
     todo = {p.pk for p in rows if mine[p.pk] is None and person.pk not in p.recused}
-    done = len(rows) - len(todo) - sum(1 for p in rows if person.pk in p.recused)  # saved, not what a refused form typed
+    trail = [(None, reverse('admissions:juries' if member else 'admissions:board')), (course.title, course.get_absolute_url())]
+    if juror and not todo and 'fertig' in request.GET:  # the last one marked: an end, and what is next, not the first video again
+        following = next(((c, n, url) for c, n, url in unmarked(person) if c.pk != course.pk), None)
+        return render(request, 'admissions/marked.html', {'trail': trail, 'course': course, 'count': len(rows), 'following': following})
     picked = request.GET.get('bewerbung', '')
     current = next((p for p in rows if str(p.pk) == picked), None) or next((p for p in rows if p.pk in todo), rows[0])
     at, error = rows.index(current), ''
@@ -248,16 +260,17 @@ def review(request, pk):
         else:
             messages.success(request, f'Wertung für {current.study.person.first_name} {current.study.person.last_name} gespeichert.')
             following = next((p for p in rows[at + 1:] + rows[:at] if p.pk in todo - {current.pk}), None)
-            return redirect(f'{here}?bewerbung={following.pk}' if following else course)
+            return redirect(f'{here}?bewerbung={following.pk}' if following else f'{here}?fertig')
     return render(request, 'admissions/review.html', {
-        'trail': [(None, reverse('admissions:juries' if member else 'admissions:board')), (course.title, course.get_absolute_url())], 'course': course,
+        'trail': trail, 'course': course,
         'p': current, 'error': error, 'programme': programme(current.note),
         'juror': juror,
         'mine': mine[current.pk],
         'videos': current.study.documents.filter(kind__condition=Condition.VIDEO),
+        'papers': shown(checklist(current.study)),
         'position': everyone.index(current) + 1,  # numbered as on the list of all applications
         'count': len(everyone),
-        'done': done, 'scored': current.pk not in todo,  # the wished-for teacher only after one's own score, not to sway it
+        'scored': current.pk not in todo,  # the wished-for teacher only after one's own score, not to sway it
         'prev': rows[at - 1] if at else None,
         'next': rows[at + 1] if at + 1 < len(rows) else None,
     })

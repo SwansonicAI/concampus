@@ -34,6 +34,8 @@ a:hover { text-decoration: underline; }
 .skip { position: absolute; left: -9999px; }
 .skip:focus { left: 16px; top: 8px; z-index: 20; padding: 8px 12px; background: #fff; }
 p { margin: 0 0 1em; }
+summary { cursor: pointer; }  /* what folds open says it can be clicked */
+:where(main, .drawer) summary:hover { color: var(--accent); }
 small { font-size: 13px; }
 .muted { color: var(--muted); }
 .code { color: var(--muted); font-size: 12px; font-weight: 600; }  /* a module's code before its title */
@@ -249,7 +251,7 @@ th[aria-sort="descending"] button::after { transform: rotate(90deg); }
 td { padding: 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
 td.mid { vertical-align: middle; }
 /* a programme on a sheet: the room the marks leave, a work a line, cut short; whole on hover and in the application */
-td.works { width: 100%; min-width: 16em; max-width: 0; }
+td.works { width: 100%; min-width: 10em; max-width: 0; }
 td.works small { display: block; overflow: hidden; line-height: 1.6; text-overflow: ellipsis; white-space: nowrap; }
 .num { text-align: right; }
 .nowrap { white-space: nowrap; }
@@ -483,7 +485,14 @@ svg.lock { width: 14px; height: 14px; margin-left: 6px; fill: none; stroke: var(
 .video { margin: 0 0 16px; }
 .video video { display: block; width: 100%; max-height: 64vh; background: #000; }
 .video figcaption { margin-top: 6px; font-size: 14px; }
-.review { display: grid; grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr); gap: 32px; align-items: start; }
+/* Sichtung: one column at any width, in the order of the work: the video, its programme to jump through it, the rating */
+.watch { max-width: min(800px, calc(56vh * 16 / 9)); }  /* the video big enough to judge, not the whole panel; all lines up under it */
+.review { display: grid; gap: 24px; }
+.programme td:first-child { width: 1%; }  /* the times as narrow as they are, the works beside them */
+.review .video { margin: 0; }
+.review .rate { gap: 6px 16px; }
+.review .rate small { flex-basis: 100%; }  /* the scale under the rating, not beside it */
+.pager { align-items: center; gap: 8px; font-size: 14px; white-space: nowrap; }
 
 /* Admissions board */
 .board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px; align-items: start; }
@@ -651,7 +660,7 @@ a.block:hover { background: var(--accent-pale); text-decoration: none; }
 
 @media (max-width: 1100px) {
   .launch, .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .cols, .cols.calendar, .review { grid-template-columns: 1fr; }
+  .cols, .cols.calendar { grid-template-columns: 1fr; }
   .cols > .before { order: -1; }
   .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
@@ -739,7 +748,7 @@ kbd { padding: 0 5px; border: 1px solid var(--line); border-radius: var(--radius
 .results .found a { padding: 10px 4px; border-bottom: 1px solid var(--line); }
 
 /* Side panel: details beside the page, which stays where it was */
-.drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 20; width: min(var(--width, 840px), 100vw); overflow-y: auto; border-left: 6px solid var(--accent); background: #fff; transform: translateX(100%); visibility: hidden; transition: transform 0.16s ease, visibility 0.16s; }
+.drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 20; width: min(var(--width, 840px), 100vw); overflow-y: auto; scrollbar-gutter: stable; border-left: 6px solid var(--accent); background: #fff; transform: translateX(100%); visibility: hidden; transition: transform 0.16s ease, visibility 0.16s; }  /* the scrollbar's room kept: a long page and a short one lay out alike */
 .drawer.open { transform: none; visibility: visible; }
 .drawer.wide { width: calc(100vw - 96px); }
 .drawer.edge { border-left-color: var(--accent-dark); cursor: ew-resize; }
@@ -747,7 +756,7 @@ kbd { padding: 0 5px; border: 1px solid var(--line); border-radius: var(--radius
 .drawer-bar .page { margin-right: auto; }
 .drawer-bar .back { max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .drawer-body { padding: 28px 32px 64px; container-type: inline-size; }
-@container (max-width: 900px) { .cols, .review { grid-template-columns: 1fr; } .cols > .before { order: -1; } }
+@container (max-width: 900px) { .cols { grid-template-columns: 1fr; } .cols > .before { order: -1; } }
 @media print {
   body:has(.drawer.open) > :not(.drawer), .drawer-bar { display: none !important; }
   .drawer.open { position: static; width: auto; overflow: visible; border: 0; }

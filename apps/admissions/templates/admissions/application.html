@@ -1,8 +1,9 @@
 {% extends base %}
 {% load marks %}
-{% block title %}Bewerbung {{ study.person.name }}{% endblock %}
+{% block title %}{% if not card %}Bewerbung {% endif %}{{ study.person.name }}{% endblock %}
 {% block subnav %}{% include "admissions/_nav.html" %}{% endblock %}
 {% block content %}
+{% if card %}{% include "admissions/_card.html" %}{% else %}
 <div class="head">
   <h1>{{ study.person.first_name }} {{ study.person.last_name }}</h1>
   <div class="actions">
@@ -90,4 +91,5 @@
     </tbody>
   </table>
 </section>
+{% endif %}
 {% endblock %}

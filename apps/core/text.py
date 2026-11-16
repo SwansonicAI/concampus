@@ -157,6 +157,12 @@ def untimed(note):
     return re.sub(r'^\d{1,2}:[0-5]\d\s+', '', note, flags=re.M)
 
 
+def lengths(note):
+    """A programme's works and the minutes each takes, where it says: '… Elegia in Re (6 Min.)' as ('… Elegia in Re', 6)."""
+    found = [re.fullmatch(r'(.+?)(?:\s*\((\d+) Min\.\))?', work.strip()).groups() for work in untimed(note).splitlines() if work.strip()]
+    return [(work, int(minutes) if minutes else None) for work, minutes in found]
+
+
 def wanted(query, names=''):
     """The words of a search for rows, as compared. Words that name what the rows are (`names`, e.g. 'raum'), or mean
     the same, pick no row: 'Räume' and 'rooms' list them all, 'Raum Orgel' the organ rooms."""

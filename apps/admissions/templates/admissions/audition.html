@@ -5,8 +5,9 @@
 <div class="head">
   <h1>{{ course.title }}</h1>
   <div class="actions">
-    {% if course.video %}<a class="btn" href="{% url 'admissions:review' course.pk %}" data-panel>Videos sichten</a>{% endif %}
-    {% if not course.video %}<a class="btn ghost" href="{% if request.GET.sortierung %}?{% else %}?sortierung=punkte{% endif %}">{% if request.GET.sortierung %}Nach Termin{% else %}Rangliste{% endif %}</a>{% endif %}
+    {% if left %}<small class="muted">{{ left }} offen{% if course.marks_by and course.marks_by >= today %} · bis {{ course.marks_by|date:"j.n." }}{% endif %}</small>{% endif %}
+    {% if course.video %}<a class="btn{% if jury and not left %} ghost{% endif %}" href="{% url 'admissions:review' course.pk %}" data-panel>Videos sichten</a>{% endif %}
+    {% if not course.video and rankable %}<a class="btn ghost" href="{% if request.GET.sortierung %}?{% else %}?sortierung=punkte{% endif %}">{% if request.GET.sortierung %}Nach Termin{% else %}Rangliste{% endif %}</a>{% endif %}
     {% if office %}<a class="btn ghost" href="{% url 'setup:edit' 'eignungspruefungen' course.pk %}?next={{ request.path|urlencode }}" data-panel>Bearbeiten</a>{% endif %}
     {% if history %}<a class="btn ghost" href="{% url 'history' 'courses.course' course.pk %}" data-panel>Verlauf</a>{% endif %}
     {% if office and not course.released or correct and course.released %}<form method="post" action="{% url 'admissions:close' course.pk %}">{% csrf_token %}<button class="btn{% if course.released %} ghost{% endif %}"{% if missing and not course.released %} title="Noch {{ missing }} ohne Ergebnis" disabled{% endif %}>{% if course.released %}Wieder öffnen{% else %}Abschließen{% endif %}</button></form>{% endif %}
@@ -14,13 +15,17 @@
 </div>
 <p class="lead">Studienbeginn {{ course.term }}{% if course.subject %} · {{ course.subject }}{% endif %}{% if course.released %} · <span class="badge green">abgeschlossen, gesperrt</span>{% endif %}</p>
 
-<div class="cols">
+{# the jury: who marks with them, how, and where; the office also what the stage is for #}
+<div{% if office %} class="cols"{% endif %}>
   <dl class="facts">
     <dt>Kommission</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}{% if short %}<br><small class="fail">{{ short }}</small>{% endif %}</dd>
     <dt>Bewertung</dt><dd>{% if course.points %}0–{{ course.max_points }} Punkte je Mitglied, bestanden ab {{ course.pass_mark }}{% else %}bestanden / nicht bestanden{% endif %}</dd>
+    {% if not jury %}
     {% if course.program %}<dt>Bewerbung für</dt><dd>{{ course.program }}, Frist {{ course.deadline|date:"j. F Y" }}</dd>{% endif %}
     {% if course.capacity %}<dt>Studienplätze</dt><dd>{{ course.capacity }}</dd>{% endif %}
-    <dt>{% if course.video %}Sichtung{% else %}Räume{% endif %}</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, {{ b.room }}<br>{% empty %}{% if course.video %}online{% if course.deadline %}, Videos bis {{ course.deadline|date:"j. F Y" }}{% endif %}{% if course.marks_by %}; Wertungen bis {{ course.marks_by|date:"j. F Y" }}{% endif %}{% else %}noch kein Raum gebucht{% endif %}{% endfor %}</dd>
+    {% endif %}
+    {% if not course.video %}<dt>Räume</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, {{ b.room }}<br>{% empty %}noch kein Raum gebucht{% endfor %}</dd>
+    {% elif not jury %}<dt>Sichtung</dt><dd>online{% if course.deadline %}, Videos bis {{ course.deadline|date:"j. F Y" }}{% endif %}{% if course.marks_by %}; Wertungen bis {{ course.marks_by|date:"j. F Y" }}{% endif %}</dd>{% endif %}
   </dl>
   {% if office %}
   <div>
@@ -59,8 +64,7 @@
 <section>
   <h2>Bewerbende</h2>
   {% if office and not correct and not columns %}<p class="lead">Die Wertungen trägt die Kommission ein; berichtigen kann sie nur der Prüfungsausschuss.</p>{% endif %}
-  {% if not office and not correct %}<p class="lead">Sie tragen nur Ihre eigene Wertung ein. {% if course.video %}Wer zur nächsten Stufe eingeladen wird, folgt aus dem Mittel der Kommission.{% else %}Über die Zulassung wird nach der Sitzung entschieden.{% endif %}</p>{% endif %}
   <div data-panel>{% include "courses/_sheet.html" with panel=True decide=correct review=course.video %}</div>
-  {% include "courses/_recuse.html" %}
+  {% include "courses/_recuse.html" %}{# the jury stands back from one person on their card or in the Sichtung; the form stays for the office's substitutes #}
 </section>
 {% endblock %}

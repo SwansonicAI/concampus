@@ -1,0 +1,27 @@
+{% load marks %}{# the jury's card: the playing first, then what they play and for how long, their papers, the stages they have been through #}
+<div class="watch">
+<h1>{{ study.person.first_name }} {{ study.person.last_name }}</h1>
+<p class="lead">{{ study.subject }} · {{ study.program.degree }}</p>
+{% for d in videos %}{% include "admissions/_document.html" %}{% endfor %}
+{% for p in stages %}{% if p.judging and p.course.video and p.recusable and not p.course.released %}
+<p><a class="btn" href="{% url 'admissions:review' p.course.pk %}?bewerbung={{ p.pk }}">In der Sichtung werten</a></p>
+{% endif %}{% endfor %}
+<dl class="facts">
+  {% if wish %}<dt>Wunschlehrer:in</dt><dd>{{ study.teacher|default:"–" }}</dd>{% endif %}
+  {% for p in stages %}{% if p.recused %}<dt>Befangenheit</dt><dd>angezeigt: {{ p.recused }}{% if several %} <small class="muted">{{ p.course.title }}</small>{% endif %}</dd>{% endif %}{% endfor %}
+  <dt>Unterlagen</dt><dd>{% for d in papers %}<a href="{{ d.href }}" target="_blank" rel="noopener">{{ d.title }}</a>{% if not forloop.last %} · {% endif %}{% empty %}–{% endfor %}</dd>
+  {% for p in stages %}{% if not p.judging %}<dt>{{ p.course.title }}</dt><dd>{% if p.passed %}<span class="badge yes">bestanden</span>{% elif p.passed is False %}<span class="badge no">nicht bestanden</span>{% else %}<span class="muted">offen</span>{% endif %}{% if p.grade is not None and not p.course.video or p.passed is False %} {{ p.grade|mark }}{% endif %}</dd>{% endif %}{% endfor %}
+</dl>
+{% for p in stages %}{% if p.judging %}
+<section>
+  <h2>{% if several %}{{ p.course.title }}{% else %}Programm{% endif %}</h2>
+  <table>
+    <tbody>{% for work, minutes in p.works %}<tr><td>{{ work }}</td><td class="num nowrap muted">{% if minutes %}{{ minutes }} Min.{% endif %}</td></tr>{% empty %}<tr><td class="empty">Kein Programm angegeben.</td></tr>{% endfor %}</tbody>
+    {% if p.minutes %}<tfoot><tr><td></td><td class="num nowrap"><b>{{ p.minutes }} Min.</b></td></tr></tfoot>{% endif %}
+  </table>
+</section>
+{% endif %}{% endfor %}
+{% for p in stages %}{% if p.recusable and not p.course.released %}
+<div style="margin-top: 32px">{% include "admissions/_recuse.html" with course=p.course %}</div>
+{% endif %}{% endfor %}
+</div>
