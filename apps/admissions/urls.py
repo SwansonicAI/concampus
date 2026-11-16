@@ -22,6 +22,7 @@ urlpatterns = [
     path('meine/<int:pk>/angaben/', applicant.details, name='details'),
     path('meine/<int:pk>/zurueckziehen/', applicant.retract, name='retract'),
     path('bewerbung/<int:pk>/', board.application, name='application'),
+    path('bewerbung/<int:pk>/gebuehr/', board.fee, name='fee'),
     path('bewerbung/<int:pk>/entscheidung/', board.decide, name='decide'),
     path('bewerbungen/entscheiden/', board.decide_many, name='decide_many'),
     path('bewerbungen/erinnern/', board.remind, name='remind'),

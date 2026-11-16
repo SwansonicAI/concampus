@@ -13,11 +13,13 @@
 <form class="toolbar">
   <div class="inline"><label>Suche<input type="search" name="q" value="{{ q }}"></label></div>
 </form>
-<table data-panel>
-  <thead><tr>{% for heading, _ in editor.columns %}<th>{{ heading }}</th>{% endfor %}</tr></thead>
+<table data-panel{% if editor.ordered %} data-fixed{% endif %}>
+  <thead><tr>{% for heading, _ in editor.columns %}<th>{{ heading }}</th>{% endfor %}{% if editor.ordered and not q %}<th class="num" title="So in den Listen und für Bewerbende">Reihenfolge</th>{% endif %}</tr></thead>
   <tbody>
     {% for obj, cells in rows %}
-    <tr>{% for value in cells %}<td>{% if forloop.first %}<a href="{% url 'setup:edit' editor.key obj.pk %}">{{ value }}</a>{% else %}{{ value|default_if_none:"–" }}{% endif %}</td>{% endfor %}</tr>
+    <tr>{% for value in cells %}<td>{% if forloop.first %}<a href="{% url 'setup:edit' editor.key obj.pk %}">{{ value }}</a>{% else %}{{ value|default_if_none:"–" }}{% endif %}</td>{% endfor %}
+      {% if editor.ordered and not q %}<td><form method="post" action="{% url 'setup:move' editor.key obj.pk %}" class="moves">{% csrf_token %}<button class="link" name="step" value="-1" title="Nach oben" aria-label="{{ obj }} nach oben"{% if forloop.first %} disabled{% endif %}><i class="arrow up"></i></button><button class="link" name="step" value="1" title="Nach unten" aria-label="{{ obj }} nach unten"{% if forloop.last %} disabled{% endif %}><i class="arrow down"></i></button></form></td>{% endif %}
+    </tr>
     {% empty %}
     <tr><td colspan="{{ editor.columns|length }}" class="empty">Nichts gefunden.</td></tr>
     {% endfor %}

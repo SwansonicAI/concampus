@@ -34,9 +34,10 @@ def bookable(person):
 
 def categories(person):
     """What a person books: everything with the right to book any room, else what teachers or students book."""
+    offered = BookingCategory.objects.filter(retired=False)
     if 'book_any_room' in person.roles:
-        return BookingCategory.objects.all()
-    return BookingCategory.objects.filter(**{'teachers' if 'teacher' in person.roles else 'students': True})
+        return offered
+    return offered.filter(**{'teachers' if 'teacher' in person.roles else 'students': True})
 
 
 def horizon(person):
@@ -300,7 +301,7 @@ class BookingForm(forms.ModelForm):
 class ServiceForm(forms.Form):
     """A service an event needs, booked with it in its room: tuning, technical support, transport, caretaking."""
 
-    category = forms.ModelChoiceField(label='Dienst', queryset=BookingCategory.objects.filter(tone=BookingCategory.Tone.SERVICE), empty_label=None)
+    category = forms.ModelChoiceField(label='Dienst', queryset=BookingCategory.objects.filter(tone=BookingCategory.Tone.SERVICE, retired=False), empty_label=None)
     begin = ClockField(label='Von')
     until = ClockField(label='Bis', example='15:45')
 
@@ -384,7 +385,7 @@ class PollForm(forms.ModelForm):
     def __init__(self, *args, person, course=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.person, self.course = person, course
-        self.fields['category'].queryset = BookingCategory.objects.exclude(tone__in=[BookingCategory.Tone.SERVICE, BookingCategory.Tone.BLOCKED, BookingCategory.Tone.CANCELLED])
+        self.fields['category'].queryset = BookingCategory.objects.filter(retired=False).exclude(tone__in=[BookingCategory.Tone.SERVICE, BookingCategory.Tone.BLOCKED, BookingCategory.Tone.CANCELLED])
         self.fields['room'].queryset = bookable(person)
         self.fields['room'].empty_label = 'Noch keiner'
         self.fields['people'].choices = asked(person, course)

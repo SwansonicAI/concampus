@@ -152,6 +152,10 @@ main.page { padding-top: 32px; padding-bottom: 96px; }
   mask: var(--arrow) center / contain no-repeat;
 }
 .arrow.left { transform: scaleX(-1); }
+.arrow.up { transform: rotate(-90deg); }
+.arrow.down { transform: rotate(90deg); }
+.moves { display: flex; gap: 10px; justify-content: flex-end; }  /* a row one place up or down, in a list kept in order */
+.moves button:disabled { visibility: hidden; }
 .btn .arrow { height: 1lh; }  /* an arrow alone in a button keeps the height of one with text */
 .more::before { margin-right: 0.35em; }
 .menu summary::after { margin-left: 6px; background: #cfcfcf; -webkit-mask-image: var(--chevron); mask-image: var(--chevron); }
@@ -326,6 +330,10 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .month .past b { color: var(--muted); font-weight: 400; }
 .calendar { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); align-items: start; gap: 24px 32px; }  /* days to tick, a Terminumfrage's */
 .form div.choices[id^="id_"]:has(input[type=checkbox]) { display: flex; flex-wrap: wrap; gap: 8px 24px; max-height: none; padding: 0; border: 0; }  /* a few to tick, side by side */
+.form div.kinds[id^="id_"]:has(input[type=checkbox]) { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px 24px; }  /* kinds of file: a name, its endings beneath */
+.form div.kinds[id^="id_"] label:has(input[type=checkbox]) { align-items: start; }
+.form .kinds label input { margin: 2px 0 0; }  /* level with the name, not with its endings */
+.form .kinds label small { display: block; margin-top: 2px; font-size: 12px; line-height: 1.4; }
 .calendar .day { position: relative; justify-content: center; height: 30px; border-radius: var(--radius); font-weight: 400; cursor: pointer; }
 .calendar .day input { position: absolute; opacity: 0; pointer-events: none; }
 .calendar .day.off b { color: var(--muted); }
@@ -534,6 +542,16 @@ svg.lock { width: 14px; height: 14px; margin-left: 6px; fill: none; stroke: var(
 .checklist .handed { margin-top: 8px; }
 .checklist .handed form { display: inline; }
 .checklist .video { max-width: 640px; }
+.checklist.short > li { align-items: center; padding: 8px 4px; }  /* a step a line, what to do about it at its end */
+.checklist.short .check { margin-top: 0; }
+.checklist.short > li:has(details[open]) { align-items: start; }
+.checklist.short > li:has(details[open]) .check { margin-top: 5px; }
+.checklist.short .item, .checklist.short summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.checklist.short .item > :nth-child(2), .checklist.short summary .more { margin-left: auto; }
+.checklist.short summary { list-style: none; cursor: pointer; }
+.checklist.short summary .more { color: var(--accent); }
+.checklist.short summary::-webkit-details-marker { display: none; }
+.checklist.short form { display: inline; }
 .video { margin: 0 0 16px; }
 .video video { display: block; width: 100%; max-height: 64vh; background: #000; }
 .video figcaption { margin-top: 6px; font-size: 14px; }

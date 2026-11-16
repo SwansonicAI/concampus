@@ -20,4 +20,5 @@ urlpatterns = [
     path('<str:key>/neu/', views.edit, name='new'),
     path('<str:key>/<int:pk>/', views.edit, name='edit'),
     path('<str:key>/<int:pk>/loeschen/', views.delete, name='delete'),
+    path('<str:key>/<int:pk>/verschieben/', views.move, name='move'),
 ]

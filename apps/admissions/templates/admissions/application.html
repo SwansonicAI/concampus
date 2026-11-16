@@ -43,21 +43,28 @@
     <p class="muted" style="margin-top: 12px"><small>Der Bescheid geht sofort ins Postfach der Person.</small></p>
     {% endif %}
     {% if enrol and study.status == 'admitted' %}
-    <h3 style="margin-top: 24px">Immatrikulation</h3>
-    {% if missing %}
-    <p>Es fehlt noch:</p>
-    <ul>{% for reason in missing %}<li class="fail">{{ reason }}</li>{% endfor %}</ul>
-    <div class="actions">
-      {% if remind %}<form method="post" action="{% url 'admissions:remind' %}">{% csrf_token %}<input type="hidden" name="study" value="{{ study.pk }}"><input type="hidden" name="next" value="{{ request.path }}"><button class="btn ghost small">Erinnern</button></form>{% endif %}
-      {% if 'Semesterbeitrag noch nicht eingegangen' in missing %}<details><summary>Semesterbeitrag verbuchen</summary><form method="post" action="{% url 'students:fee_paid' study.pk %}" class="inline" style="margin-top: 8px">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><label>Eingegangen am<input name="paid" data-day autocomplete="off" size="11" required value="{{ today|date:'d.m.Y' }}"></label><label>Betrag<input name="amount" size="8" required value="{{ study.start_term.fee }}"></label><label>Beleg oder Verwendungszweck<input name="reference" required></label><button class="btn ghost small">Verbuchen</button></form></details>{% endif %}
-      {% if not study.person.insurance_confirmed and 'manage_students' in user.reach and user.reach.manage_students is None %}<a class="btn ghost small" href="{% url 'students:insurers' %}#ohne-zuordnung">Meldungen ohne Zuordnung</a>{% endif %}
-      {% if not study.person.entrance %}<a class="btn ghost small" href="{% url 'setup:edit' 'personen' study.person.pk %}?next={{ request.path|urlencode }}" data-panel>Hochschulzugang erfassen</a>
-      {% elif study.person.abroad and not study.person.entrance_checked %}<form method="post" action="{% url 'students:checked' study.pk %}">{% csrf_token %}<button class="btn ghost small">Hochschulzugang geprüft</button></form>{% endif %}
+    <h3{% if decide %} style="margin-top: 24px"{% endif %}>Immatrikulation</h3>
+    <ul class="checklist short">
+      {% for key, label, done, why in enrolment %}
+      <li><span class="check{% if done %} done{% endif %}" role="img" aria-label="{% if done %}erledigt{% else %}offen{% endif %}"></span>
+        {% if key == 'fee' and not done %}<details><summary>{{ label }} <span class="muted">{{ study.start_term.fee }} €</span><span class="more">Verbuchen</span></summary>
+          <form method="post" action="{% url 'students:fee_paid' study.pk %}" class="inline" style="margin-top: 8px">{% csrf_token %}<input type="hidden" name="next" value="{{ request.path }}"><label>Eingegangen am<input name="paid" data-day autocomplete="off" size="11" required value="{{ today|date:'d.m.Y' }}"></label><label>Betrag<input name="amount" size="8" required value="{{ study.start_term.fee }}"></label><label>Beleg oder Verwendungszweck<input name="reference" required></label><button class="btn ghost small">Verbuchen</button></form></details>
+        {% else %}<div class="item"><span{% if done %} class="muted"{% else %} title="{{ why }}"{% endif %}>{{ label }}</span>
+          {% if not done %}{% if key == 'entrance' and not study.person.entrance %}<a class="more" href="{% url 'setup:edit' 'personen' study.person.pk %}?next={{ request.path|urlencode }}" data-panel>Erfassen</a>
+          {% elif key == 'entrance' %}<form method="post" action="{% url 'students:checked' study.pk %}">{% csrf_token %}<button class="link more">Geprüft</button></form>
+          {% elif key == 'insurance' and 'manage_students' in user.reach and user.reach.manage_students is None %}<a class="more" href="{% url 'students:insurers' %}#ohne-zuordnung">Meldungen ohne Zuordnung</a>
+          {% elif key == 'document' or key == 'accepted' %}<small class="muted">von der Person</small>{% endif %}{% endif %}</div>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="actions" style="margin-top: 16px">
+      {% if missing %}
+      <button class="btn" disabled title="Erst wenn alles abgehakt ist">Immatrikulieren</button>
+      {% if remind %}<form method="post" action="{% url 'admissions:remind' %}">{% csrf_token %}<input type="hidden" name="study" value="{{ study.pk }}"><input type="hidden" name="next" value="{{ request.path }}"><button class="btn ghost" title="Eine Nachricht an die Person, was noch fehlt">An das Fehlende erinnern</button></form>{% endif %}
+      {% else %}
+      <form method="post" action="{% url 'students:enrol' study.pk %}">{% csrf_token %}<button class="btn">Immatrikulieren</button></form><small class="muted">Vergibt die Matrikelnummer und versendet den Immatrikulationsbescheid; erst die Vorschau.</small>
+      {% endif %}
     </div>
-    {% else %}
-    <form method="post" action="{% url 'students:enrol' study.pk %}">{% csrf_token %}<button class="btn">Immatrikulieren</button> <small class="muted">Erst die Vorschau, dann versenden.</small></form>
-    <p class="muted"><small>Vergibt die Matrikelnummer, verbucht den Semesterbeitrag und versendet den Immatrikulationsbescheid.</small></p>
-    {% endif %}
     {% endif %}
   </div>
   {% endif %}
@@ -68,7 +75,7 @@
     <h2>Video und Unterlagen</h2>
     {% if remind and study.status == 'applied' %}<form method="post" action="{% url 'admissions:remind' %}" class="actions">{% csrf_token %}<input type="hidden" name="study" value="{{ study.pk }}"><input type="hidden" name="next" value="{{ request.path }}"><button class="btn ghost small">Fehlende Unterlagen nachfordern</button></form>{% endif %}
   </div>
-  {% include "admissions/_checklist.html" with upload=False %}
+  {% include "admissions/_checklist.html" with upload=False booking=enrol %}
 </section>
 
 <section>

@@ -154,7 +154,7 @@ class VideoTest(Seeded):
 
     def test_upload_limits_come_from_the_type(self):
         DocumentType.objects.filter(key='cv').update(file_types='.pdf', single=True)
-        self.assertIn('Lebenslauf bitte als .pdf hochladen.', flashes(self.applicant.post(self.url, upload('cv.docx', 'cv'), follow=True)))
+        self.assertIn('Lebenslauf bitte als PDF hochladen (.pdf).', flashes(self.applicant.post(self.url, upload('cv.docx', 'cv'), follow=True)))
         self.applicant.post(self.url, upload('cv.pdf', 'cv'))
         self.applicant.post(self.url, upload('cv2.pdf', 'cv'))
         self.assertEqual(list(self.study.documents.filter(kind='cv').values_list('title', flat=True)), ['cv2.pdf'])
@@ -178,7 +178,6 @@ class VideoTest(Seeded):
             cv = Document.objects.create(person=cello.person, study=cello, kind_id='cv', title='lebenslauf.pdf', file=SimpleUploadedFile('lebenslauf.pdf', b'%PDF-1.4'))
         items = {i['label']: i['documents'] for i in checklist(self.study)}
         self.assertIn(cv, items['Lebenslauf'])
-        self.assertFalse(items['Einzahlungsbeleg Eignungsprüfungsgebühr'])  # paid for each application
         juror = Client()
         juror.force_login(Course.objects.get(video=True, participations__study=self.study).staff.first())
         self.assertEqual(juror.get(cv.href).status_code, 200)

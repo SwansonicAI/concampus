@@ -7,10 +7,11 @@ from django import forms
 from django.conf import settings
 from django.db.models import F, Max, Min, Q
 from django.utils import timezone
-from django.utils.formats import date_format
+from django.utils.formats import date_format, number_format
 from django.utils.html import format_html
 
 from core.dates import ClockField, DayField, MomentField, working
+from core.forms import offered
 from core.models import Institution, Person, Term
 from core.shortcuts import ids
 from curriculum.models import Module, Program
@@ -305,6 +306,9 @@ class CourseForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         for name in () if planning else self.planned:
             self.fields.pop(name, None)
+        for name in ('area', 'format'):  # no longer offered, but kept where chosen
+            if name in self.fields:
+                offered(self.fields[name], getattr(self.instance, f'{name}_id'))
         if over:  # the semester is over: a correction, kept with its reason in the Verlauf
             self.fields['correction'] = forms.CharField(label='Grund der Korrektur', max_length=200, help_text='Das Semester ist vorbei; der Verlauf hält den Grund fest.')
         if 'kind' in self.fields:  # the Lehrform says how it is taught; this, how it is organised
@@ -464,8 +468,8 @@ class AuditionForm(CourseForm):
 
     class Meta(CourseForm.Meta):
         fields = [
-            'title', 'term', 'program', 'subject', 'video', 'after', 'staff', 'rating', 'reveal', 'entry', 'chair', 'opens', 'deadline', 'marks_by', 'capacity', 'pass_mark',
-            'max_points', 'accompaniment', 'description',
+            'title', 'term', 'program', 'subject', 'video', 'after', 'staff', 'rating', 'reveal', 'entry', 'chair', 'opens', 'deadline', 'marks_by', 'capacity', 'fee',
+            'pass_mark', 'max_points', 'accompaniment', 'description',
         ]
         labels = {'staff': 'Kommission', 'capacity': 'Studienplätze', 'after': 'Gehört zu'}  # shown only for a stage several Hauptfächer share
         help_texts = {
@@ -482,7 +486,7 @@ class AuditionForm(CourseForm):
 
     layout = [  # what the stage is, then its name, which follows from it
         (None, [('term', 'program', 'subject'), 'video', 'title', 'after']),
-        ('Kommission und Wertung', ['staff', ('rating', 'reveal'), ('entry', 'chair'), ('opens', 'deadline', 'marks_by'), ('capacity', 'pass_mark', 'max_points')]),
+        ('Kommission und Wertung', ['staff', ('rating', 'reveal'), ('entry', 'chair'), ('opens', 'deadline', 'marks_by'), ('capacity', 'fee'), ('pass_mark', 'max_points')]),
         (None, ['accompaniment', 'description']),
     ]
 
@@ -503,11 +507,12 @@ class AuditionForm(CourseForm):
         if not (self.instance.pk or before):  # a new Eignungsprüfung: its name follows from what it is (app.js titled)
             self.fields['title'].widget.attrs['data-titled'] = ''
         if before or self.instance.pk and self.instance.after.exists():  # semester and what is applied for are the first stage's; later, uploads only online
-            for name in ('term', 'program', 'opens', 'capacity'):
+            for name in ('term', 'program', 'opens', 'capacity', 'fee'):
                 self.fields.pop(name, None)
             self.fields['deadline'].widget.attrs['data-for'] = 'video:on'
         else:
-            for name in ('opens', 'capacity'):  # only where a Studiengang is applied for
+            self.fields['fee'].help_text = f'Leer: wie in den Hochschuldaten, {number_format(Institution.get().audition_fee, 2)} €; 0: keine.'
+            for name in ('opens', 'capacity', 'fee'):  # only where a Studiengang is applied for
                 self.fields[name].widget.attrs['data-for'] = 'program:' + ','.join(str(pk) for pk in self.fields['program'].queryset.values_list('pk', flat=True))
         if before:  # the stage after another: its Hauptfach to start from
             self.initial.update(subject=before.subject_id)

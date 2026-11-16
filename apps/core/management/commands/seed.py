@@ -454,14 +454,13 @@ PLACEHOLDER = (  # a one-page PDF saying what it is
 )
 VIDEO_NOTE = (
     'Eine Datei, ungeschnitten, 10–15 Minuten, beginnend mit einer kurzen Vorstellung; die Kamera 3–5 m entfernt, '
-    'eine professionelle Aufnahme ist nicht nötig. Nicht älter als ein Jahr. Höchstens 1,5 GB als .mp4, .mov, .webm, .m4v, .ogg, .ogv oder .qt.'
+    'eine professionelle Aufnahme ist nicht nötig. Nicht älter als ein Jahr. Höchstens 1,5 GB als .mp4, .mov, .m4v, .webm oder .ogv.'
 )
 DOCUMENTS = [  # key, name, condition, settings: what a complete application holds, as the HfM lists it; the jury sees video and CV
-    ('video', 'Video', 'video', {'note': VIDEO_NOTE, 'file_types': '.mp4, .mov, .webm, .m4v, .ogg, .ogv, .qt', 'max_mb': 1536, 'single': True, 'jury': True}),
+    ('video', 'Video', 'video', {'note': VIDEO_NOTE, 'file_types': '.mp4, .mov, .m4v, .webm, .ogv', 'max_mb': 1536, 'single': True, 'jury': True}),
     ('cv', 'Lebenslauf', 'always', {'shared': True, 'jury': True}),
     ('school', 'Abitur- oder letztes Schulzeugnis', 'always', {'shared': True}),
     ('degree', 'Bachelor- oder Masterzeugnis, Transcript', 'degree', {'shared': True}),
-    ('fee', 'Einzahlungsbeleg Eignungsprüfungsgebühr', 'always', {'amount': Decimal('50')}),
     ('consent', 'Einwilligung der Erziehungsberechtigten', 'minor', {'note': 'Sie sind noch nicht volljährig.', 'shared': True, 'template': (
         'Wir sind die Erziehungsberechtigten von {name}, geboren am {geburtsdatum}. Wir sind damit einverstanden, dass sich unser Kind an der '
         '{hochschule} für {studiengang}, Hauptfach {hauptfach}, bewirbt, an der Eignungsprüfung teilnimmt und im Fall der Zulassung das '
@@ -491,8 +490,8 @@ TEXTS = {  # where the HfM words things its own way (core.texts has the defaults
     ),
     'bewerbung_hinweise': (
         'Pro Studiengang und Hauptfach ist eine Bewerbung möglich. Nach dem Absenden laden Sie unter „Meine Bewerbung“ Ihr Video und Ihre '
-        'Unterlagen hoch: Lebenslauf, Schulzeugnis, Einzahlungsbeleg der Prüfungsgebühr (50 €, die Bankverbindung steht dort), für einen '
-        'Master auch Ihr Bachelorzeugnis. Was Sie für eine Bewerbung hochgeladen haben, gilt auch für die nächste. '
+        'Unterlagen hoch: Lebenslauf, Schulzeugnis, für einen Master auch Ihr Bachelorzeugnis; dort steht auch, wie Sie die Prüfungsgebühr '
+        'überweisen. Was Sie für eine Bewerbung hochgeladen haben, gilt auch für die nächste. '
         'Bis zur Frist können Sie alles ändern.\n\n'
         'Wo eine Videostufe vorgesehen ist, ist sie die erste Prüfungsstufe: ein ungeschnittenes Video von 10–15 Minuten in einer Datei, '
         'beginnend mit einer kurzen Vorstellung, nicht älter als ein Jahr, höchstens 1,5 GB. Eine professionelle Aufnahme ist nicht nötig. '
@@ -1048,6 +1047,7 @@ class Command(BaseCommand):
             insurers='\n'.join(INSURERS), university='2850', region='16055', report_id='28500000',
             iban='DE02120300000000202051', bic='BYLADEM1001',  # a published sample account, not the Hochschule's
             credit_hours=30,  # RPSO 2026 § 5 Abs. 3
+            audition_fee=Decimal('50'),
         )
         Text.objects.bulk_create(Text(key=key, subject=texts.TEXTS[key].subject, body=body) for key, body in TEXTS.items())
         RoomFunction.objects.bulk_create(RoomFunction(key=key, name=name, central=central, order=n) for n, (key, name, central) in enumerate(FUNCTIONS))
@@ -2377,8 +2377,8 @@ class Command(BaseCommand):
                 talent = rng.uniform(21.5 if master else 19.5, 23.5)
             note = self.repertoire(subject, video=bool(video))
             handed = ['cv', 'school'] + ['degree'] * master
-            if finished or study.since.day < 15 or study.person == applicant:  # the latest applicants still owe the fee receipt
-                handed.append('fee')
+            if finished or study.since.day < 15 or study.person == applicant:  # the latest applicants still owe the fee
+                Study.objects.filter(pk=study.pk).update(fee_paid=study.since + timedelta(days=2), fee_amount=Decimal('50'), fee_reference=f'Eignungsprüfung {study.pk}')
             if study.person.nationality != '000' and rng.random() < 0.5:
                 handed.append('language')
             if video:

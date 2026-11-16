@@ -22,8 +22,9 @@
 </form>
 {% endif %}
 {% if object.pk and editor.deletable %}
-<form method="post" action="{% url 'setup:delete' editor.key object.pk %}?next={{ back|urlencode }}" style="margin-top: 32px">
+{% if used %}<p class="muted" style="margin-top: 32px"><small>Lässt sich nicht löschen: daran hängen {{ used }}.{% if 'retired' in form.fields %} Stattdessen „Nicht mehr anbieten“ ankreuzen.{% endif %}</small></p>
+{% else %}<form method="post" action="{% url 'setup:delete' editor.key object.pk %}?next={{ back|urlencode }}" style="margin-top: 32px">
   {% csrf_token %}<button class="btn danger small" data-confirm="Wirklich löschen? Im Verlauf wiederherstellbar.">Löschen</button>
-</form>
+</form>{% endif %}
 {% endif %}
 {% endblock %}

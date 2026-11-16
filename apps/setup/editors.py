@@ -49,6 +49,7 @@ class Editor:
     carry: str = ''  # URL name of a step that takes the last period's entries over, offered above the list
     carried: str = 'Aus dem Vorjahr übernehmen'  # its button
     home: str = ''  # URL name of the page listing it elsewhere, where a list without a section leads back to
+    ordered: bool = False  # its records stand in an order someone decides (an `order` field): moved up and down in the list
 
     def __post_init__(self):
         if self.sections:
@@ -87,6 +88,59 @@ def formfield(model_field, **kwargs):
     if isinstance(model_field, models.DecimalField):
         kwargs['localize'] = True
     return model_field.formfield(**kwargs)
+
+
+class Kinds(forms.CheckboxSelectMultiple):
+    """The kinds of file to tick, each by its name with its endings beneath, and the MB it suggests and the most it
+    allows (app.js sized)."""
+
+    option_template_name = 'setup/_kind.html'
+
+    def create_option(self, name, value, *args, **kwargs):
+        option = super().create_option(name, value, *args, **kwargs)
+        _, endings, suggest, most = DocumentType.KINDS[value]
+        option['attrs'].update({'data-suggest': suggest, 'data-most': most})
+        option['endings'] = ' '.join(endings)
+        return option
+
+
+class DocumentTypeForm(forms.ModelForm):
+    """A kind of document: whom it is asked of, the Hauptfächer only where it is asked by them; what may be uploaded, of
+    the kinds ConCampus knows by their first bytes, and how big, up to what those kinds allow."""
+
+    kinds = forms.MultipleChoiceField(
+        label='Dateiarten', widget=Kinds(attrs={'class': 'choices kinds'}), error_messages={'required': 'Bitte mindestens eine Dateiart ankreuzen.'},
+        choices=[(key, label) for key, (label, _, _, _) in DocumentType.KINDS.items()],
+    )
+
+    class Meta:
+        model = DocumentType
+        fields = []
+        labels = {'max_mb': 'Höchstens je Datei (MB)'}
+        widgets = {
+            'subjects': forms.CheckboxSelectMultiple(attrs={'data-for': f'condition:{DocumentType.Condition.SUBJECTS}'}),
+            'max_files': forms.NumberInput(attrs={'data-for': 'single:'}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        kinds = self.instance.kinds if self.instance.pk else ['pdf', 'bild']
+        self.initial.setdefault('kinds', kinds)
+        most = max(DocumentType.KINDS[k][3] for k in kinds)
+        self.fields['max_mb'].required, self.fields['max_mb'].help_text = True, f'Bis {most} MB.'
+        self.fields['max_mb'].widget.attrs.update(min=1, max=most)
+        self.fields['max_files'].widget.attrs.update(min=1, max=20)
+        self.initial['max_mb'] = self.instance.max_mb or max(DocumentType.KINDS[k][2] for k in kinds)
+
+    def clean(self):
+        data = super().clean()
+        if data.get('kinds') and data.get('max_mb') and data['max_mb'] > (most := max(DocumentType.KINDS[k][3] for k in data['kinds'])):
+            self.add_error('max_mb', f'Für diese Dateiarten höchstens {most} MB.')
+        return data
+
+    def save(self, commit=True):
+        self.instance.file_types = ', '.join(e for k in DocumentType.KINDS if k in self.cleaned_data['kinds'] for e in DocumentType.KINDS[k][1])
+        return super().save(commit)
 
 
 class OfficeForm(forms.ModelForm):
@@ -396,7 +450,7 @@ EDITORS = {e.key: e for e in [
             ('Briefkopf und Website', [('name', 'short_name'), 'address', ('place', 'email', 'website'), ('imprint', 'privacy', 'accessibility')]),
             ('Erscheinungsbild', ['wordmark', ('logo', 'accent', 'radius')]),
             ('Bewerbung und Immatrikulation', [('matriculation_start', 'student_mail', 'accept_days', 'pay_days'), 'signup', 'sender_number', 'insurers']),
-            ('Eignungsprüfungen', [('audition_panel_main', 'audition_panel', 'audition_rounding'), ('audition_rating', 'audition_entry', 'audition_tie'), 'audition_reveal']),
+            ('Eignungsprüfungen', [('audition_panel_main', 'audition_panel', 'audition_rounding'), ('audition_rating', 'audition_entry', 'audition_tie'), ('audition_reveal', 'audition_fee')]),
             ('Aufbewahrung', [('retention_months', 'file_years'), ('core_years', 'staff_years')]),
             ('Rückmeldung und Beurlaubung', [('late_fee', 'leave_terms'), ('long_fee', 'long_fee_grace'), 'first_term_leave', 'part_time', 'loans_hold', 'payee', ('iban', 'bic')]),
             ('Prüfungen', [
@@ -527,12 +581,12 @@ EDITORS = {e.key: e for e in [
         words='deputat lvs lehrverpflichtungsverordnung freisemester forschungssemester dekanat funktion',
     ),
     Editor(
-        'fachgebiete', Area, 'Fachgebiete', 'manage_courses', 'Studium und Lehre', sections=[(None, [('name', 'order')])],
-        columns=[('Fachgebiet', 'name'), ('Reihenfolge', 'order')], search=['name'], words='vorlesungsverzeichnis bereiche gliederung',
+        'fachgebiete', Area, 'Fachgebiete', 'manage_courses', 'Studium und Lehre', sections=[(None, ['name', 'retired'])], ordered=True,  # the chapters of the Vorlesungsverzeichnis
+        columns=[('Fachgebiet', 'name'), ('Nicht mehr angeboten', 'retired')], search=['name'], words='vorlesungsverzeichnis bereiche gliederung',
     ),
     Editor(
-        'lehrformen', Format, 'Lehrformen', 'manage_courses', 'Studium und Lehre', sections=[(None, [('name', 'short', 'order'), ('per_head', 'dated')])],
-        columns=[('Lehrform', 'name'), ('Kürzel', 'short')], search=['name', 'short'], words='vorlesung seminar übung einzelunterricht veranstaltungsart',
+        'lehrformen', Format, 'Lehrformen', 'manage_courses', 'Studium und Lehre', sections=[(None, [('name', 'short'), ('per_head', 'dated'), 'retired'])],
+        columns=[('Lehrform', 'name'), ('Kürzel', 'short'), ('Nicht mehr angeboten', 'retired')], search=['name', 'short'], words='vorlesung seminar übung einzelunterricht veranstaltungsart',
     ),
     Editor(
         'hauptfaecher', Subject, 'Hauptfächer', 'edit_curriculum', 'Studium und Lehre', sections=[(None, [('name', 'english'), ('institute', 'field')])],
@@ -572,11 +626,16 @@ EDITORS = {e.key: e for e in [
         search=['partner__name'], words='erasmus iia inter-institutional agreement plätze ausland', queryset=lambda: Agreement.objects.select_related('partner'),
     ),
     Editor(
-        'unterlagen', DocumentType, 'Unterlagenarten', 'run_auditions', home='admissions:documents',
-        sections=[(None, [
-            ('name', 'condition'), ('required', 'single', 'shared'), ('jury', 'health', 'by_enrolment'), 'note', 'template', ('file_types', 'max_mb', 'max_files'), ('amount', 'order'), 'subjects',
-        ])],
-        columns=[('Unterlagen', 'name'), ('In der Checkliste', 'condition'), ('Pflicht', 'required')],
+        'unterlagen', DocumentType, 'Unterlagenarten', 'run_auditions', home='admissions:documents', form=DocumentTypeForm,
+        sections=[
+            (None, ['name', 'condition', 'subjects']),
+            ('Hochladen', ['kinds', ('max_mb', 'single', 'max_files')]),
+            ('Wann', [('required', 'by_enrolment', 'shared')]),
+            ('Wer es sieht', [('jury', 'health')]),
+            ('Für Bewerbende', ['note', 'template']),
+            (None, ['retired']),
+        ],
+        columns=[('Unterlagen', 'name'), ('Gilt für', 'audience'), ('Pflicht', 'required')],
         search=['name'], words='checkliste bewerbung video zeugnis nachweis hochladen',
         queryset=lambda: DocumentType.objects.exclude(key__in=DocumentType.SYSTEM),  # Bescheide and theses are filed by the system
     ),
@@ -585,13 +644,13 @@ EDITORS = {e.key: e for e in [
         columns=[('Gebäude', 'name'), ('Anschrift', 'address')], search=['name', 'address'], words='adresse anschrift lageplan standort',
     ),
     Editor(
-        'raumfunktionen', RoomFunction, 'Raumfunktionen', 'manage_rooms', 'Räume', sections=[(None, [('name', 'order'), 'central'])],
-        columns=[('Funktion', 'name'), ('Zentral vergeben', 'central')], search=['name'],
+        'raumfunktionen', RoomFunction, 'Raumfunktionen', 'manage_rooms', 'Räume', sections=[(None, ['name', 'central', 'retired'])],
+        columns=[('Funktion', 'name'), ('Zentral vergeben', 'central'), ('Nicht mehr angeboten', 'retired')], search=['name'],
     ),
     Editor(
         'kategorien', BookingCategory, 'Buchungskategorien', 'manage_rooms', 'Räume',
-        sections=[(None, [('name', 'tone', 'order'), ('students', 'teachers', 'quota'), ('public', 'blocks'), ('ahead_hours', 'participants')])],
-        columns=[('Kategorie', 'name'), ('Farbe', 'tone'), ('Studierende', 'students'), ('Lehrende', 'teachers'), ('Öffentlich', 'public')],
+        sections=[(None, [('name', 'tone'), ('students', 'teachers', 'quota'), ('public', 'blocks'), ('ahead_hours', 'participants'), 'retired'])],
+        columns=[('Kategorie', 'name'), ('Farbe', 'tone'), ('Studierende', 'students'), ('Lehrende', 'teachers'), ('Öffentlich', 'public'), ('Nicht mehr angeboten', 'retired')],
         search=['name'], words='buchungsregeln farben kontingent veranstaltungen',
     ),
 ]}

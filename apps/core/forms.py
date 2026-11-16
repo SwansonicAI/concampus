@@ -41,6 +41,12 @@ def frequent(field, choices, n=8):
     return [('Häufig', [(value, flat[value]) for value in common if value in flat]), *(c for c in choices if c[0])]
 
 
+def offered(field, current=None):
+    """A choice field without what is no longer offered (core.models.retired), but with the choice already made."""
+    current = [c.pk if hasattr(c, 'pk') else c for c in current] if isinstance(current, (list, tuple, set)) else [getattr(current, 'pk', current)]
+    field.queryset = field.queryset.filter(models.Q(retired=False) | models.Q(**{f'{field.to_field_name or "pk"}__in': [c for c in current if c is not None]}))
+
+
 def again(request, to, name):
     """Back to the page holding the form `name` when it was refused, with what was typed kept for sent(): kept in the
     session, not the address, since a note may say why someone was ill."""

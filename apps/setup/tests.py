@@ -33,7 +33,7 @@ class EditorTest(Seeded):
                  'rating': 'mean', 'entry': 'members', 'reveal': 'row'}, {'capacity': '2'},
             ),
             'raeume': ({'name': 'FH 999', 'building': 'Fürstenhaus', 'function': 'uebung', 'capacity': '2'}, {'capacity': '3'}),
-            'unterlagen': ({'name': 'Repertoireliste', 'condition': 'always', 'required': 'on', 'max_files': '5', 'order': '9'}, {'note': 'Werke mit Satzangaben.'}),
+            'unterlagen': ({'name': 'Repertoireliste', 'condition': 'always', 'required': 'on', 'max_files': '5', 'kinds': ['pdf'], 'max_mb': '20'}, {'note': 'Werke mit Satzangaben.'}),
             'raumfunktionen': ({'name': 'Tonstudio', 'order': '9'}, {'central': 'on'}),
             'kategorien': ({'name': 'Generalprobe', 'tone': 'teach', 'teachers': 'on', 'participants': '0', 'blocks': 'on', 'order': '9'}, {'public': 'on'}),
         }
@@ -70,7 +70,7 @@ class EditorTest(Seeded):
     def test_records_in_use_stay(self):
         violin = Subject.objects.get(name='Violine')
         r = self.login('admin').post(f'/einstellungen/hauptfaecher/{violin.pk}/loeschen/', follow=True)
-        self.assertIn('wird noch verwendet', flashes(r)[0])
+        self.assertIn('bleibt: daran hängen', flashes(r)[0])
         self.assertTrue(Subject.objects.filter(pk=violin.pk).exists())
 
     def test_people_are_not_deleted_here(self):

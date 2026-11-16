@@ -8,7 +8,7 @@ from django.db.models import Avg, Exists, F, Min, OuterRef, Prefetch, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
-from django.utils.formats import date_format
+from django.utils.formats import date_format, number_format
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
@@ -24,6 +24,7 @@ from courses import panel
 from courses.models import Correction, Course, Recusal, Score
 from curriculum.models import Subject
 from students.models import DocumentType, Study, StudyTerm
+from students.views.reregistration import PaymentForm
 from ..papers import checklist, document_types, incomplete, papers, shown, stages
 from .common import accept_by, lapsed, uploads_open
 
@@ -229,7 +230,8 @@ def application(request, pk):
     if not (office or juror or study.person == person):
         raise PermissionDenied
     steps = study.stages = list(stages().filter(study=study))
-    missing = study.missing() if study.status == Study.Status.ADMITTED else []
+    enrolment = study.enrolment() if study.status == Study.Status.ADMITTED else []
+    missing = [why for _, _, done, why in enrolment if not done]
     accepted = study.terms.filter(term=study.start_term).first()
     personal = office or study.person == person  # the jury judges the performance: no contact or personal data
     items = checklist(study)
@@ -268,7 +270,7 @@ def application(request, pk):
         'history': bool(tables(person.roles)),
         'accepted': accepted,
         'decisions': VERBS.items(),
-        'missing': missing,
+        'missing': missing, 'enrolment': enrolment,
     })
 
 
@@ -328,6 +330,32 @@ def decide_many(request):
         skipped and f'{plural(skipped, "Bewerbung wartet", "Bewerbungen warten")} noch auf die Ergebnisse der anderen im selben Hauptfach.',
     ])))
     return redirect(f"{reverse('admissions:board')}?semester={term.pk}&ansicht=entscheiden")
+
+
+@require('manage_students')
+@require_POST
+def fee(request, pk):
+    """The fee for the Eignungsprüfung booked as arrived, with its day, amount and Beleg; or waived, with the reason."""
+    study = get_object_or_404(request.user.within(Study.objects.select_related('person'), 'manage_students'), pk=pk, fee_paid=None)
+    form, owed = PaymentForm(request.POST), study.audition_fee
+    reason = request.POST.get('reference', '').strip()
+    if request.POST.get('erlassen'):
+        if reason:
+            study.fee_paid, study.fee_amount, study.fee_reference = timezone.localdate(), 0, reason[:140]
+            study.save(update_fields=['fee_paid', 'fee_amount', 'fee_reference'])
+            messages.success(request, f'Gebühr erlassen: {reason}.')
+        else:
+            messages.error(request, 'Zum Erlassen bitte den Grund angeben.')
+    elif not form.is_valid():
+        messages.error(request, ' '.join(f'{form.fields[name].label}: {" ".join(errors)}' for name, errors in form.errors.items()))
+    elif form.cleaned_data['amount'] < owed:
+        messages.error(request, f'Zu wenig: die Gebühr beträgt {number_format(owed, 2)} €.')
+    else:
+        data = form.cleaned_data
+        study.fee_paid, study.fee_amount, study.fee_reference = data['paid'], data['amount'], data['reference']
+        study.save(update_fields=['fee_paid', 'fee_amount', 'fee_reference'])
+        messages.success(request, f'Gebühr verbucht: {number_format(data["amount"], 2)} € am {date_format(data["paid"], "j.n.Y")}.')
+    return redirect('admissions:application', study.pk)
 
 
 @require('view_applications')

@@ -22,7 +22,7 @@ def stages():
 
 def document_types():
     """The kinds of documents an application can ask for, each with its Hauptfächer; fetch once for many studies."""
-    return once('document_types', lambda: list(DocumentType.objects.exclude(condition=Condition.NEVER).prefetch_related('subjects')))
+    return once('document_types', lambda: list(DocumentType.objects.exclude(condition=Condition.NEVER).exclude(retired=True).prefetch_related('subjects')))
 
 
 def papers(studies):
@@ -81,7 +81,8 @@ def shown(items, playable=False):
 
 
 def incomplete(study, types=None):
-    return [item['label'] for item in checklist(study, types) if item['required'] and not item['documents']]
+    """What an application still lacks: the papers it must hand in, and the fee where one is owed."""
+    return ['Gebühr für die Eignungsprüfung'] * study.fee_owed + [item['label'] for item in checklist(study, types) if item['required'] and not item['documents']]
 
 
 def owed(items):

@@ -316,7 +316,7 @@ def copy_auditions(stages, target):
         new[c.pk] = Course.objects.create(
             term=target, kind=c.kind, title=c.title, area=c.area, format=c.format, subject=c.subject, oral=c.oral, hours=c.hours,
             program=c.program and versions.get((c.program.degree, c.program.name), c.program),
-            capacity=c.capacity, allocation=c.allocation, pass_mark=c.pass_mark, max_points=c.max_points, video=c.video, description=c.description,
+            capacity=c.capacity, fee=c.fee, allocation=c.allocation, pass_mark=c.pass_mark, max_points=c.max_points, video=c.video, description=c.description,
             rating=c.rating, entry=c.entry, chair=c.chair, reveal=c.reveal,
             rhythm=c.rhythm, origin=c, opens=c.opens and c.opens + shift, deadline=c.deadline and c.deadline + shift, marks_by=c.marks_by and c.marks_by + shift,
             accompaniment=c.accompaniment and Course.objects.filter(term=target, kind=c.accompaniment.kind, title=c.accompaniment.title).first(),

@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.models import Permission
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import PermissionDenied
-from django.db.models import F, ProtectedError, RestrictedError
+from django.db.models import F, Max, ProtectedError, RestrictedError
 from django.forms import modelform_factory
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -16,6 +16,7 @@ from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_en
 from django.views.decorators.http import require_POST
 
 from core.access import CAPABILITIES, CODENAMES, EVERYWHERE, LOCK, SENSITIVE, SHORT, Refused, areas, kept, require
+from core.forms import offered
 from core.history import because
 from core.keys import Edition, Key, review
 from core import transfer
@@ -222,6 +223,42 @@ def listing(request, key, own=False):
     })
 
 
+def uses(obj):
+    """What still hangs on a record, in words: its own `used()` where it has one, else every record that points at it;
+    empty when it may go. Nothing that depends on it is cleared or deleted with it."""
+    if hasattr(obj, 'used'):
+        return obj.used()
+    found = []
+    for rel in obj._meta.related_objects:
+        if rel.one_to_many or rel.one_to_one:
+            n = rel.related_model._base_manager.filter(**{rel.field.name: obj}).count()
+            meta = rel.related_model._meta
+            if n:
+                found.append(f'{n} {meta.verbose_name if n == 1 else meta.verbose_name_plural}')
+    return ', '.join(found)
+
+
+@require_POST
+def move(request, key, pk):
+    """A record of a list kept in order one place up or down, the list numbered anew from 1."""
+    e = editor(request, key)
+    if not e.ordered:
+        raise Http404
+    rows = list(e.objects(request.user))
+    at = next((n for n, obj in enumerate(rows) if obj.pk == pk), None)
+    if at is None:
+        raise Http404
+    to = at + (-1 if request.POST.get('step') == '-1' else 1)
+    if 0 <= to < len(rows):
+        rows.insert(to, rows.pop(at))
+        for n, obj in enumerate(rows, 1):
+            if obj.order != n:
+                obj.order = n
+                obj.save(update_fields=['order'])
+    came = request.META.get('HTTP_REFERER', '')  # the list it was moved in: under Einstellungen, or the area's own page
+    return redirect(came if url_has_allowed_host_and_scheme(came, {request.get_host()}) else reverse(e.home) if e.home else reverse('setup:list', args=[key]))
+
+
 def save(form, person, capability):
     """kept(), with the reason a form asks for a change kept in the Verlauf."""
     with because(form.cleaned_data.get('reason', '')):
@@ -233,10 +270,15 @@ def edit(request, key, pk=None):
     if not (pk or e.creatable):
         raise Http404
     obj = get_object_or_404(e.objects(request.user), pk=pk) if pk else e.start(request)
+    if not pk and e.ordered:  # a new one goes to the end
+        obj.order = (e.model.objects.aggregate(n=Max('order'))['n'] or 0) + 1
     form = modelform_factory(e.model, form=e.form, fields=e.fields, formfield_callback=formfield)(request.POST or None, request.FILES or None, instance=obj)
     form.by = request.user  # who gives a right, which a second person confirms
     if e.sections:
         form.layout = e.sections
+    for name, choice in form.fields.items():  # what is no longer offered stays only where it is already chosen
+        if hasattr(choice, 'queryset') and any(f.name == 'retired' for f in choice.queryset.model._meta.fields):
+            offered(choice, form.initial.get(name))
     field = form.fields.get('institute') or form.fields.get('institutes')
     if field and (ours := request.user.ours(e.capability)):  # an office for some Institute: only those, its own preset
         field.queryset = field.queryset.filter(pk__in=ours)
@@ -250,6 +292,7 @@ def edit(request, key, pk=None):
         'editor': e, 'form': form, 'object': obj, 'back': back(request, e),
         'trail': [(None, reverse(e.home))] if e.home and not e.section else None,  # in the menu where its list is
         'history': pk and bool(e.model.seen_by(request.user, pk)), 'table': e.model._meta.label_lower,
+        'used': uses(obj) if pk and e.deletable else '',
     })
 
 
@@ -387,8 +430,8 @@ def delete(request, key, pk):
     if not e.deletable:
         raise Http404
     obj = get_object_or_404(e.objects(request.user), pk=pk)
-    if why := getattr(obj, 'used', lambda: '')():
-        messages.error(request, f'„{obj}“ bleibt: daran hängen {why}.')
+    if why := uses(obj):
+        messages.error(request, f'„{obj}“ bleibt: daran hängen {why}.' + (' Stattdessen „Nicht mehr anbieten“ ankreuzen.' if hasattr(obj, 'retired') else ''))
         return redirect(back(request, e))
     try:
         obj.delete()

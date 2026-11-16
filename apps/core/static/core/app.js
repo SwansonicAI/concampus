@@ -26,6 +26,7 @@ function init(root) {
   root.querySelectorAll('input[type=file]').forEach(picker);
   root.querySelectorAll('[data-cycle]').forEach(cycle);
   root.querySelectorAll('.calendar').forEach(calendar);
+  root.querySelectorAll('form:has([data-suggest])').forEach(sized);
 }
 
 // One's own field in a Terminumfrage: each click the next answer, ✓, ~, ✗, then none again. Saved with the form.
@@ -282,6 +283,24 @@ function filterable(list) {
     list.addEventListener('change', () => { input.value = ''; narrow(); input.focus(); });
     narrow();
   }
+}
+
+// The kinds of file a document takes set its size: the largest suggested of those ticked, until one types one's own,
+// and never more than the most they allow.
+function sized(form) {
+  const boxes = [...form.querySelectorAll('[data-suggest]')], mb = form.elements.max_mb;
+  if (!mb) return;
+  const largest = key => Math.max(0, ...boxes.filter(box => box.checked).map(box => +box.dataset[key]));
+  let own = mb.value && +mb.value !== largest('suggest');  // a size set by hand stays
+  mb.addEventListener('input', () => { own = true; });
+  const told = mb.closest('div').querySelector('.helptext');
+  form.addEventListener('change', ({target}) => {
+    if (!target.dataset.suggest) return;
+    mb.max = largest('most') || mb.max;
+    if (told) told.textContent = `Bis ${mb.max} MB.`;
+    if (!own && largest('suggest')) mb.value = largest('suggest');
+    if (+mb.value > +mb.max) mb.value = mb.max;  // one's own size, cut down to what the kinds now allow
+  });
 }
 
 // Days ticked on a calendar: how many, beneath it.

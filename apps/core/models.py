@@ -37,6 +37,11 @@ def once(key, fetch):
     return found[key]
 
 
+def retired():
+    """„Nicht mehr anbieten“: a choice kept on what has it already, offered for nothing new (setup.views.offered)."""
+    return models.BooleanField('Nicht mehr anbieten', default=False, help_text='Bleibt an allem, was es schon hat; für Neues steht es nicht mehr zur Wahl.')
+
+
 class Tracked:
     """Mixin for models whose every change is kept as a Change (see core.history)."""
 
@@ -296,6 +301,10 @@ class Institution(Tracked, models.Model):
     audition_reveal = models.CharField(
         'Wertungen der anderen sichtbar', max_length=8, choices=Reveal, default=Reveal.ROW,
         help_text='So beginnt jede neue Stufe. Erst nach der ganzen Stufe: niemand richtet sich nach der Strenge der anderen, etwa in einer Videostufe.',
+    )
+    audition_fee = models.DecimalField(
+        'Gebühr je Bewerbung (€)', max_digits=7, decimal_places=2, default=0, validators=[MinValueValidator(0)],
+        help_text='Nach der Gebührenordnung; 0: keine. Eine Eignungsprüfung kann eine eigene festlegen.',
     )
     leave_terms = models.PositiveSmallIntegerField('Urlaubssemester in der Regel höchstens', default=2, help_text='Weitere nur über das Amt.')
     first_term_leave = models.BooleanField(

@@ -8,7 +8,7 @@ from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Entry, Institution, Person, Rating, Reveal, Term, Tracked
+from core.models import Entry, Institution, Person, Rating, Reveal, Term, Tracked, retired
 from core.text import COLLATION
 from curriculum.models import Module, Program, Subject
 from students.models import Study, stored
@@ -21,6 +21,7 @@ class Area(Tracked, models.Model):
 
     name = models.CharField('Name', max_length=80, unique=True)
     order = models.PositiveSmallIntegerField('Reihenfolge', default=0)
+    retired = retired()
 
     class Meta:
         ordering = ['order', 'name']
@@ -41,9 +42,10 @@ class Format(Tracked, models.Model):
     per_head = models.BooleanField('Zählt je Teilnahme', default=False, help_text='Im Deputat zählen die Stunden für jede Teilnahme, wie im Einzelunterricht.')
     dated = models.BooleanField('Mit Terminen im Raum', default=True, help_text='Ohne Haken, etwa bei Projekten und Praktika, fragt ConCampus die Lehrenden nicht nach Terminen.')
     order = models.PositiveSmallIntegerField('Reihenfolge', default=0)
+    retired = retired()
 
     class Meta:
-        ordering = ['order', 'name']
+        ordering = ['name']
         verbose_name = 'Lehrform'
         verbose_name_plural = 'Lehrformen'
 
@@ -114,6 +116,10 @@ class Course(Tracked, models.Model):
     allocation = models.CharField('Platzvergabe', max_length=8, choices=Allocation, default=Allocation.ORDER)
     opens = models.DateField('Anmeldung ab', null=True, blank=True, help_text='Erster Tag der Anmeldung; leer: sofort.')
     deadline = models.DateField('Anmeldeschluss', null=True, blank=True, help_text='Letzter Tag der Anmeldung; abmelden geht bis zum Ende der Vorlesungszeit.')
+    fee = models.DecimalField(
+        'Gebühr (€)', max_digits=7, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)],
+        help_text='Für die Bewerbung um diese Eignungsprüfung; leer: wie in den Hochschuldaten, 0: keine.',
+    )
     grouping = models.CharField(
         'Gruppen', max_length=10, choices=Grouping, default=Grouping.CHOICE,
         help_text='Nur bei Gruppen. Bleiben sie zusammen, übernimmt der Semesterwechsel die Gruppen der Lehrveranstaltung, die laut Studienplan davor liegt, '

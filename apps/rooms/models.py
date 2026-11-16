@@ -6,7 +6,7 @@ from django.db import models
 from django.urls import reverse
 from django.utils import timezone
 
-from core.models import Institute, Keyed, Person, Tracked
+from core.models import Institute, Keyed, Person, Tracked, retired
 from courses.models import Course
 
 
@@ -30,9 +30,10 @@ class RoomFunction(Tracked, Keyed):
         help_text='Nur bucht, wer alle Räume buchen darf, z. B. Veranstaltungs- und Sitzungsräume. Sonst buchen Lehrende und Studierende die Räume ihres Instituts.',
     )
     order = models.PositiveSmallIntegerField('Reihenfolge', default=0)
+    retired = retired()
 
     class Meta:
-        ordering = ['order', 'name']
+        ordering = ['name']
         verbose_name = 'Raumfunktion'
         verbose_name_plural = 'Raumfunktionen'
 
@@ -129,9 +130,10 @@ class BookingCategory(Tracked, Keyed):
     public = models.BooleanField('Öffentlich', default=False, help_text='Steht unter Veranstaltungen; alle sehen die Einzelheiten.')
     blocks = models.BooleanField('Belegt den Raum', default=True, help_text='Ohne Haken, wie bei „Abgesagt“: der Raum bleibt frei, der Termin fällt aus den Kalendern.')
     order = models.PositiveSmallIntegerField('Reihenfolge', default=0)
+    retired = retired()
 
     class Meta:
-        ordering = ['order', 'name']
+        ordering = ['name']
         verbose_name = 'Buchungskategorie'
         verbose_name_plural = 'Buchungskategorien'
 

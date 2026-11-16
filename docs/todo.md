@@ -23,3 +23,14 @@ applicant asking about a Termin, a teacher moving a lesson all go to e-mail and 
 - Where: a reply under a message, and „Schreiben“ on a person, a commission or a Lehrveranstaltung; one thread per
   matter, linked to it (the step, the Termin, the course), mailed as now.
 - Open: who may write to whom (applicants only to the office?); whether replies by e-mail come back in.
+
+## Paying the audition fee online
+
+The fee for an Eignungsprüfung is paid by transfer, with a reference to quote, and booked by the office by hand
+(„Verbuchen oder erlassen“ on the application). Paying online would book itself. Hochschulen differ in how: German
+public bodies often use ePayBL, others PayPal or Stripe; so a connection one chooses in the Hochschule's settings, not
+one built in.
+
+- Where: the fee line of the applicant's checklist (`admissions/_checklist.html`), booked as the office books it now
+  (`admissions.views.board.fee`); the same for the Semesterbeitrag.
+- Also: a limit on the size of a whole upload at the web server (Caddy), beyond the per-file sizes of each Unterlagenart.

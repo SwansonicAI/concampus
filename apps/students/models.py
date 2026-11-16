@@ -4,14 +4,14 @@ from collections import defaultdict
 from datetime import timedelta
 from pathlib import Path
 
-from django.core.validators import MinValueValidator
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils.formats import number_format
 from django.urls import reverse
 from django.utils import timezone
 
 from core import destatis, texts
-from core.models import Institution, Keyed, Message, Person, Term, Tracked, once
+from core.models import Institution, Keyed, Message, Person, Term, Tracked, once, retired
 from core.text import matching
 from curriculum.models import Program, Subject, weighted
 
@@ -74,6 +74,9 @@ class Study(Tracked, models.Model):
         verbose_name='Hauptfachlehrer:in', help_text='Bis zur Zulassung der Wunsch aus der Bewerbung.',
     )
     prior_terms = models.PositiveSmallIntegerField('Angerechnete Semester', default=0)
+    fee_paid = models.DateField('Gebühr eingegangen am', null=True, blank=True, help_text='Die Gebühr für die Eignungsprüfung.')
+    fee_amount = models.DecimalField('Gebühr bezahlt (€)', max_digits=7, decimal_places=2, null=True, blank=True, help_text='0: erlassen.')
+    fee_reference = models.CharField('Beleg oder Grund', max_length=140, blank=True, help_text='Verwendungszweck der Zahlung, oder warum die Gebühr erlassen ist.')
     home_university = models.CharField('Heimathochschule', max_length=120, blank=True, help_text='Nur Zweithörer:innen: wo sie immatrikuliert sind.')
     home_matriculation = models.CharField('Matrikelnummer dort', max_length=20, blank=True)
     exit_reason = models.CharField('Grund der Exmatrikulation', max_length=1, choices=EXITS, blank=True)
@@ -180,22 +183,51 @@ class Study(Tracked, models.Model):
         missing = self.missing()
         return [m for m in missing if not m.startswith(self.WAITING)], [m for m in missing if m.startswith(self.WAITING)]
 
+    @property
+    def audition_fee(self):
+        """The fee for the Eignungsprüfung applied for: its own, else the Hochschule's; 0: none."""
+        from courses.models import Course  # which imports from here
+
+        own = once(('fee', self.start_term_id, self.program_id, self.subject_id), lambda: Course.objects.filter(
+            kind=Course.Kind.AUDITION, term=self.start_term_id, program=self.program_id, subject=self.subject_id,
+        ).values_list('fee', flat=True).first())
+        return Institution.get().audition_fee if own is None else own
+
+    @property
+    def fee_owed(self):
+        """Whether the fee for the Eignungsprüfung is still to pay."""
+        return self.fee_paid is None and self.audition_fee > 0
+
+    @property
+    def transfer_reference(self):
+        """What the applicant writes on the transfer of the fee, for the office to find it in the bank statement."""
+        return f'Eignungsprüfung {self.pk}, {self.person.name}'
+
     def missing(self):
         """What still blocks the enrolment of an admitted applicant."""
-        reasons = self.person.missing()
-        registration = next((t for t in self.terms.all() if t.term_id == self.start_term_id), None)
-        if not registration:
-            reasons.insert(0, 'Studienplatz noch nicht angenommen')
-        elif not registration.paid:
-            reasons.insert(0, 'Semesterbeitrag noch nicht eingegangen')
-        if not self.person.entrance:
-            reasons.append('Hochschulzugangsberechtigung nicht erfasst')
-        elif self.person.abroad and not self.person.entrance_checked:
-            reasons.append('Hochschulzugangsberechtigung aus dem Ausland nicht geprüft')
+        return [why for _, _, done, why in self.enrolment() if not done]
+
+    def enrolment(self):
+        """The enrolment of an admitted applicant as a checklist: (key, label, done, what is missing). The place taken up,
+        then the Semesterbeitrag; what the person holds back (person.missing), the health insurer's confirmation among it;
+        the Hochschulzugangsberechtigung, recorded and, from abroad, checked; the papers asked for by the enrolment."""
         from admissions.papers import checklist  # which imports from here
 
-        reasons += [f'{item["label"]} fehlt' for item in checklist(self) if item['kind'].by_enrolment and not item['documents']]
-        return reasons
+        person = self.person
+        registration = next((t for t in self.terms.all() if t.term_id == self.start_term_id), None)
+        insurer = 'Versicherungsmeldung der Krankenkasse fehlt'
+        items = [('accepted', 'Studienplatz angenommen', bool(registration), 'Studienplatz noch nicht angenommen')]
+        if registration:
+            items.append(('fee', 'Semesterbeitrag', bool(registration.paid), 'Semesterbeitrag noch nicht eingegangen'))
+        if person.insurance_confirmed:
+            items.append(('insurance', 'Versicherungsmeldung der Krankenkasse', True, insurer))
+        items += [('insurance', 'Versicherungsmeldung der Krankenkasse', False, why) if why == insurer else ('hold', why, False, why) for why in person.missing()]
+        items.append((
+            'entrance', 'Hochschulzugang' + (' (Ausland)' if person.abroad else ''),
+            bool(person.entrance) and not (person.abroad and not person.entrance_checked),
+            'Hochschulzugangsberechtigung nicht erfasst' if not person.entrance else 'Hochschulzugangsberechtigung aus dem Ausland nicht geprüft',
+        ))
+        return items + [('document', item['label'], bool(item['documents']), f'{item["label"]} fehlt') for item in checklist(self) if item['kind'].by_enrolment]
 
     @property
     def semester(self):
@@ -340,15 +372,22 @@ class DocumentType(Tracked, Keyed):
     """A kind of document: what applicants hand in, and the Bescheide the Hochschule issues. When the application
     checklist asks for it and what an upload may be are its settings."""
 
-    class Condition(models.TextChoices):
-        ALWAYS = 'always', 'immer'
-        VIDEO = 'video', 'wenn es eine Videostufe gibt (für die Kommission)'
-        DEGREE = 'degree', 'wenn der Studiengang einen Abschluss voraussetzt'
-        MINOR = 'minor', 'bei Minderjährigen'
-        SUBJECTS = 'subjects', 'bei den gewählten Hauptfächern'
-        FOREIGN = 'foreign', 'bei einer Hochschulzugangsberechtigung aus dem nicht deutschsprachigen Ausland'
-        APS = 'aps', 'bei einer Hochschulzugangsberechtigung aus China, Indien oder Vietnam'
-        NEVER = 'never', 'nicht in der Checkliste'
+    class Condition(models.TextChoices):  # whom it is asked of
+        ALWAYS = 'always', 'alle Bewerbungen'
+        VIDEO = 'video', 'Bewerbungen mit Online-Stufe'
+        DEGREE = 'degree', 'Studiengänge, die einen Abschluss voraussetzen'
+        MINOR = 'minor', 'Minderjährige'
+        SUBJECTS = 'subjects', 'bestimmte Hauptfächer'
+        FOREIGN = 'foreign', 'Hochschulzugang aus dem nicht deutschsprachigen Ausland'
+        APS = 'aps', 'Hochschulzugang aus China, Indien oder Vietnam'
+        NEVER = 'never', 'niemanden (nicht in der Checkliste)'
+
+    KINDS = {  # what may be uploaded: its endings, each known by its first bytes (SIGNATURES); the MB suggested and the most per file
+        'pdf': ('PDF', ('.pdf',), 20, 50),
+        'bild': ('Foto oder Scan', ('.jpg', '.jpeg', '.png', '.heic', '.webp'), 20, 50),
+        'audio': ('Audio', ('.mp3', '.m4a', '.wav', '.flac', '.ogg'), 500, 1024),
+        'video': ('Video', ('.mp4', '.mov', '.m4v', '.webm', '.ogv'), 2048, 4096),
+    }
 
     SYSTEM = {  # what the code files itself
         'notice': {'name': 'Bescheid', 'condition': Condition.NEVER},
@@ -359,14 +398,14 @@ class DocumentType(Tracked, Keyed):
     capabilities = ('run_auditions',)
 
     name = models.CharField('Name', max_length=80, unique=True)
-    condition = models.CharField('In der Checkliste', max_length=10, choices=Condition, default=Condition.ALWAYS)
-    subjects = models.ManyToManyField(Subject, blank=True, related_name='+', verbose_name='Hauptfächer', help_text='Nur für „bei den gewählten Hauptfächern“.')
+    condition = models.CharField('Gilt für', max_length=10, choices=Condition, default=Condition.ALWAYS)
+    subjects = models.ManyToManyField(Subject, blank=True, related_name='+', verbose_name='Welche Hauptfächer')
     required = models.BooleanField('Pflicht', default=True, help_text='Ohne Haken freiwillig: die Bewerbung ist auch ohne vollständig.')
     by_enrolment = models.BooleanField(
         'Bis zur Immatrikulation', default=False, help_text='Reicht, wenn es vor der Immatrikulation vorliegt, nicht schon mit der Bewerbung; etwa ein Sprachnachweis.',
     )
     shared = models.BooleanField(
-        'Für alle Bewerbungen', default=False, help_text='Einmal hochgeladen, gilt es für jede Bewerbung der Person, etwa Lebenslauf oder Zeugnisse.',
+        'Einmal für alle Bewerbungen der Person', default=False, help_text='Wer sich mehrfach bewirbt, lädt es nur einmal hoch, etwa Lebenslauf oder Zeugnisse.',
     )
     jury = models.BooleanField(
         'Für die Kommission', default=False, help_text='Die Prüfungskommission sieht es, etwa Video oder Lebenslauf; alles andere nur die Verwaltung.',
@@ -376,27 +415,37 @@ class DocumentType(Tracked, Keyed):
         help_text='Art. 9 DSGVO, etwa ein phoniatrisches Gutachten: öffnen nur die Person und wer über die Bewerbung entscheidet; gelöscht, sobald entschieden ist.',
     )
     note = models.TextField('Hinweis für Bewerbende', blank=True)
-    amount = models.DecimalField(
-        'Zu überweisen', max_digits=7, decimal_places=2, null=True, blank=True, validators=[MinValueValidator(0)],
-        help_text='Für einen Zahlungsbeleg, etwa die Prüfungsgebühr: Bewerbende sehen Betrag und Bankverbindung der Hochschule.',
-    )
-    file_types = models.CharField('Dateitypen', max_length=120, blank=True, help_text='Endungen, z. B. „.pdf, .jpg“; leer: PDF und Bilder.')
+    file_types = models.CharField('Dateiarten', max_length=120, blank=True, help_text='Ihre Endungen, aus KINDS; leer: PDF und Bilder.')
     template = models.TextField(
         'Vordruck', blank=True,
         help_text='Zum Ausdrucken und Unterschreiben, etwa die Einwilligung der Eltern. Platzhalter: {name}, {geburtsdatum}, {studiengang}, {hauptfach}, {hochschule}.',
     )
-    max_mb = models.PositiveIntegerField('Höchstens (MB)', null=True, blank=True, help_text='Je Datei; leer: 20 MB.')
+    max_mb = models.PositiveIntegerField(
+        'Höchstens (MB)', null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(4096)], help_text='Je Datei; leer: 20 MB.',
+    )
     single = models.BooleanField('Nur eine Datei', default=False, help_text='Eine neue ersetzt die alte.')
-    max_files = models.PositiveSmallIntegerField('Höchstens Dateien', default=5, help_text='Je Bewerbung, wo nicht nur eine Datei gilt.')
+    max_files = models.PositiveSmallIntegerField(
+        'Höchstens Dateien', default=5, validators=[MinValueValidator(1), MaxValueValidator(20)], help_text='Je Bewerbung, wo nicht nur eine Datei gilt.',
+    )
     order = models.PositiveSmallIntegerField('Reihenfolge', default=0)
+    retired = retired()
 
     class Meta:
-        ordering = ['order', 'name']
+        ordering = ['by_enrolment', '-jury', '-required', 'name']  # as an applicant works through them: what the commission sees, what is required, what is not, what waits till the enrolment
         verbose_name = 'Unterlagenart'
         verbose_name_plural = 'Unterlagenarten'
 
     def __str__(self):
         return self.name
+
+    @property
+    def audience(self):
+        """Whom it is asked of, in a word for lists: the Hauptfächer by name where those are chosen."""
+        if self.retired:
+            return 'nicht mehr angeboten'
+        if self.condition == self.Condition.SUBJECTS:
+            return ', '.join(s.name for s in self.subjects.all()) or 'kein Hauptfach gewählt'
+        return self.get_condition_display()
 
     @classmethod
     def system(cls, key):
@@ -410,9 +459,19 @@ class DocumentType(Tracked, Keyed):
         return tuple(e.strip().lower() for e in (self.file_types or self.DEFAULT_TYPES).replace(';', ',').split(',') if e.strip())
 
     @property
+    def kinds(self):
+        """The KINDS whose endings it takes."""
+        return [key for key, (_, endings, _, _) in self.KINDS.items() if set(endings) & set(self.extensions)]
+
+    @property
+    def described(self):
+        """Its kinds in words: „PDF oder Foto oder Scan“."""
+        return ' oder '.join(self.KINDS[k][0] for k in self.kinds) or 'PDF oder Foto'
+
+    @property
     def accepted(self):
         """What an upload may be, in words."""
-        return f'{self.file_types or "PDF oder Foto"}, ' + ('eine Datei' if self.single else f'bis zu {self.max_files} Dateien') + f' je höchstens {self.limit}'
+        return f'{self.described}, ' + ('eine Datei' if self.single else f'bis zu {self.max_files} Dateien') + f' je höchstens {self.limit}'
 
     @property
     def size(self):
@@ -426,7 +485,7 @@ class DocumentType(Tracked, Keyed):
     def refuses(self, file):
         """Why a file cannot be handed in as this kind, or ''."""
         if not file.name.lower().endswith(self.extensions):
-            return f'{self} bitte als {self.file_types or "PDF oder Bild"} hochladen.'
+            return f'{self} bitte als {self.described} hochladen ({", ".join(self.extensions)}).'
         if file.size > self.size * 2 ** 20:
             return f'Die Datei ist größer als {self.limit}. Bitte verkleinern und erneut hochladen.'
         if not genuine(file):

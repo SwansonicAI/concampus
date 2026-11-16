@@ -197,7 +197,7 @@ def upload(request, pk):
     if not (office or study.person == request.user):
         raise PermissionDenied
     back = redirect('admissions:mine' if study.person == request.user else study.get_absolute_url())
-    kind = DocumentType.objects.exclude(condition=Condition.NEVER).filter(key=request.POST.get('kind')).first()
+    kind = DocumentType.objects.exclude(condition=Condition.NEVER).filter(key=request.POST.get('kind'), retired=False).first()
     file = request.FILES.get('file')
     if not (office or uploads_open(study) or any(item['kind'] == kind for item in owed(checklist(study)))):
         messages.error(request, 'Die Frist für Unterlagen ist abgelaufen.')
