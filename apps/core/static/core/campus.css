@@ -174,7 +174,7 @@ input[type=checkbox], input[type=radio] { width: 18px; height: 18px; accent-colo
 .toolbar input[type=search], .head input[type=search] { width: 280px; }
 select:not([multiple], [size]) { appearance: none; padding-right: 34px; background: #fff var(--chevron) no-repeat right 10px center / 14px; }  /* the house chevron, not each system's arrow */
 @media (forced-colors: active) { select:not([multiple], [size]) { appearance: auto; background-image: none; } }
-.choices { position: relative; }  /* boxes to tick in a list that folds open, closed like a select */
+details.choices { position: relative; display: block; }  /* boxes to tick in a list that folds open, closed like a select; no grid, whose gap would set it apart */
 .choices summary { max-width: 260px; min-width: 160px; overflow: hidden; padding: 8px 34px 8px 10px; border: 1px solid #8a8a8a; border-radius: var(--radius); background: #fff var(--chevron) no-repeat right 10px center / 14px; color: var(--ink); list-style: none; text-overflow: ellipsis; white-space: nowrap; }
 .choices summary::-webkit-details-marker { display: none; }
 .choices[open] > div { position: absolute; top: 100%; left: 0; z-index: 10; min-width: 100%; max-height: 300px; overflow-y: auto; margin: 4px 0; scrollbar-width: thin; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; box-shadow: 0 8px 24px rgb(0 0 0 / 0.12); }
