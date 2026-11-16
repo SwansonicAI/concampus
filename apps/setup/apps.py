@@ -57,7 +57,7 @@ class SetupConfig(Tile, AppConfig):
 
             if n := AccessRequest.objects.exclude(person=person).count():
                 found.append(task(f'{plural(n, "Antrag", "Anträge")} auf Berechtigungen entscheiden', reverse('setup:approvals')))
-            if n := Grant.objects.exclude(by=person).count() + Membership.objects.filter(confirmed_by=None).exclude(by=person).exclude(person=person).count():
+            if n := Grant.objects.exclude(by=person).exclude(office__in=person.groups.all()).count() +Membership.objects.filter(confirmed_by=None).exclude(by=person).exclude(person=person).count():
                 found.append(task(f'{plural(n, "Änderung", "Änderungen")} der Berechtigungen bestätigen', reverse('setup:approvals')))
         if 'manage_institution' in person.roles:
             from core.models import Feedback

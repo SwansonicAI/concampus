@@ -62,12 +62,13 @@ def ranked(studies):
 
 
 def verdict(steps):
-    """What the audition stages say once closed: rejected once one is failed, passed once all are and the Hauptfach is
-    among them, None while results are missing."""
+    """What the audition stages say once closed: rejected once one is failed, passed once all are, the Hauptfach among
+    them and every stage that follows one passed (stages()); None while results or stages are missing."""
     results = [p.passed if p.course.released else None for p in steps]
     if False in results:
         return Study.Status.REJECTED
-    if steps and all(results) and any(p.course.stage == 'Hauptfach' for p in steps):
+    ahead = {c.pk for p in steps for c in p.course.following.all()} - {p.course_id for p in steps}  # passed on to, not yet invited
+    if steps and all(results) and not ahead and any(p.course.stage == 'Hauptfach' for p in steps):
         return Study.Status.ADMITTED
     return None
 

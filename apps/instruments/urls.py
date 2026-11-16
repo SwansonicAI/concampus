@@ -11,5 +11,6 @@ urlpatterns = [
     path('leihe/<int:pk>/rueckgabe/', views.give_back, name='give_back'),
     path('leihe/<int:pk>/verlaengern/', views.extend, name='extend'),
     path('leihe/<int:pk>/erinnern/', views.remind, name='remind'),
+    path('leihe/<int:pk>/zurueckfordern/', views.reclaim, name='reclaim'),
     path('leihe/<int:pk>/leihvertrag/', views.agreement, name='agreement'),
 ]

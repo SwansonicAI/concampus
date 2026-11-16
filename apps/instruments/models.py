@@ -1,4 +1,7 @@
+from datetime import timedelta
+
 from django.db import models
+from django.db.models import Exists, OuterRef
 from django.utils import timezone
 
 from core.models import Institute, Person, Tracked
@@ -57,3 +60,16 @@ class Loan(Tracked, models.Model):
     @property
     def overdue(self):
         return self.returned is None and self.due < timezone.localdate()
+
+
+NOTICE = timedelta(days=14)  # the borrower's to-do comes this long before the day; asked back, it is the time they have
+
+
+def reclaimable(loans):
+    """Of these loans, those to ask back before their day: out to someone done studying, the Zeugnis issued or no
+    longer enrolled, and due later than NOTICE from now."""
+    from students.models import Study
+
+    studies = Study.objects.filter(person=OuterRef('person'))
+    done = Exists(studies.filter(status=Study.Status.ENROLLED, issued__isnull=False)) | ~Exists(studies.filter(status=Study.Status.ENROLLED)) & Exists(studies.filter(status__in=Study.FORMER))
+    return loans.filter(done, returned=None, due__gt=timezone.localdate() + NOTICE)

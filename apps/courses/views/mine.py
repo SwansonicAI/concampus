@@ -36,9 +36,10 @@ def to_take(study, term):
     tree, _ = study.progress()
     options = study.program.choices()
     areas, hidden = {o.choice.pk for o in options}, {o.pk for o in options} - {study.focus_id}
-    taken = {*study.participations.filter(course__term=term).values_list('module', flat=True), *study.signups.filter(course__term=term).values_list('module', flat=True)}
+    joined = [*study.participations.filter(course__term=term).values_list('module', 'course'), *study.signups.filter(course__term=term).values_list('module', 'course')]
+    taken, attended = {m for m, _ in joined}, {c for _, c in joined}  # a course counting for two modules is taken for one: not offered again for the other
     links = list(Course.modules.through.objects.filter(module__program=study.program_id, course__term=term).values_list('module', 'course'))
-    offered = {c.pk: c for c in term.courses.filter(pk__in={c for _, c in links}, kind=Course.Kind.COURSE, cancelled=None).exclude(allocation=Course.Allocation.STAFF).annotate(
+    offered = {c.pk: c for c in term.courses.filter(pk__in={c for _, c in links} - attended, kind=Course.Kind.COURSE, cancelled=None).exclude(allocation=Course.Allocation.STAFF).annotate(
         size=Count('participations__study', distinct=True),
     )}
     courses = defaultdict(list)

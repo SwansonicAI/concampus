@@ -140,11 +140,12 @@ class ExamsConfig(Tile, AppConfig):
             for exam in vacant.distinct():
                 found.append(task(f'{exam.title}: Ersatz für eine befangene Person bestellen', exam.get_absolute_url()))
         if 'teacher' in person.roles:
-            standing_in = Participation.objects.filter(recusals__substitute=person, course__released=None).exclude(scores__in=marked(person)).exclude(course__kind=Course.Kind.AUDITION)
+            pending = Q(passed=None) & ~Q(remark=Participation.Remark.EXCUSED)  # as panel.due: no mark for who has a result or withdrew for good reason
+            standing_in = Participation.objects.filter(pending,recusals__substitute=person, course__released=None).exclude(scores__in=marked(person)).exclude(course__kind=Course.Kind.AUDITION)
             for row in standing_in.values('course', 'course__title').annotate(n=Count('pk')):
                 found.append(task(f'{row["course__title"]}: Ihre Wertung als Ersatz fehlt für {plural(row["n"], "Teilnahme", "Teilnahmen")}', reverse('exams:exam', args=[row['course']])))
             for exam in exams.filter(staff=person, held__lte=now):
-                missing = exam.participations.exclude(scores__in=marked(person)).exclude(recusals__examiner=person).count()
+                missing = exam.participations.filter(pending).exclude(scores__in=marked(person)).exclude(recusals__examiner=person).count()
                 if missing:
                     found.append(task(f'{exam.title}: Ihre Wertung fehlt für {plural(missing, "Teilnahme", "Teilnahmen")}', exam.get_absolute_url(), graded_by(exam)))
             handed = Q(participations__study__documents__kind='abschlussarbeit', participations__study__documents__created__gte=F('participations__created'))
@@ -168,6 +169,6 @@ class ExamsConfig(Tile, AppConfig):
                 when = f' ab {date_format(opens, "j.n.")}' if opens else ''
                 found.append(task(f'Prüfungsanmeldung{when}: {plural(len(exams), "Prüfung", "Prüfungen")}', reverse('exams:index'), due))
             for p in Participation.objects.filter(study__person=person, course__kind=Course.Kind.THESIS, course__released=None).select_related('course', 'study'):
-                if not handed_in(p):
+                if p.course.is_open and not handed_in(p):  # past the deadline the upload is closed: the Prüfungsamt's to-do
                     found.append(task(f'Abschlussarbeit abgeben: {p.course.title}', reverse('exams:index'), p.course.deadline))
         return found

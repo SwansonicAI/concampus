@@ -1,12 +1,12 @@
-from collections import Counter
 from datetime import timedelta
 
 from django.apps import AppConfig
-from django.db.models import Count, Min, Prefetch, Q
+from django.db.models import Count, Min, Q
 from django.db.models.functions import Coalesce
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
+from django.utils.http import urlencode
 
 from core.apps import Tile, feature, page, plural, task
 
@@ -98,30 +98,26 @@ class AdmissionsConfig(Tile, AppConfig):
             # next year's round, set up from eight weeks before applications opened this year until it is
             ran, today = person.within(Course.objects.filter(kind=Course.Kind.AUDITION), 'run_auditions'), timezone.localdate()
             held = set(ran.values_list('term__start', flat=True))
-            for row in ran.filter(term__start__gt=today - timedelta(days=365)).order_by().values('term__name', 'term__start').annotate(first=Min(Coalesce('opens', 'deadline'))):
+            for row in ran.filter(term__start__gt=today - timedelta(days=365)).order_by().values('term', 'term__name', 'term__start').annotate(first=Min(Coalesce('opens', 'deadline'))):
                 due = row['first'] and row['first'] + timedelta(days=365)
                 if due and due - timedelta(weeks=8) <= today and not any(330 <= (s - row['term__start']).days <= 400 for s in held):
                     start = row['term__start']  # the semester a year on must be there first, to take last year's over into
                     missing = not Term.objects.filter(start__range=(start + timedelta(days=330), start + timedelta(days=400))).exists()
-                    url = reverse('admissions:auditions')
+                    url = f"{reverse('admissions:carry')}?aus={row['term']}"  # into the semester a year on, not the nearest
                     if missing and 'manage_terms' in person.roles:
-                        url = f"{reverse('setup:new', args=['semester'])}?next={url}"
+                        url = f"{reverse('setup:new', args=['semester'])}?{urlencode({'next': url})}"
                     found.append(task(f'Eignungsprüfungen fürs nächste {row["term__name"].split()[0]} einrichten' + (': erst das Semester anlegen' if missing else ''), url, due))
             for term in Term.objects.filter(courses__in=ran, start__gt=today, document_types=None).distinct():  # else its first application takes the last semester's
                 found.append(task(f'Unterlagen zum {term} festlegen', f"{reverse('admissions:documents')}?semester={term.pk}"))
-        from .papers import checklist, document_types, incomplete, owed, stages
-        from .views.board import vacancies, verdict
+        from .papers import checklist, document_types, incomplete, owed
+        from .views.board import recommendations, vacancies
         from .views.common import accept_by, uploads_open
 
-        if 'decide_applications' in person.roles:
-            ready = Counter(
-                s.start_term for s in person.within(Study.objects.filter(status=Study.Status.APPLIED), 'decide_applications')
-                .select_related('start_term').prefetch_related(Prefetch('participations', stages(), to_attr='stages')) if verdict(s.stages)
-            )
-            for term, n in sorted(ready.items(), key=lambda item: item[0].start):
-                found.append(task(f'{plural(n, "Bewerbung", "Bewerbungen")} zum {term} entscheiden', f"{reverse('admissions:board')}?semester={term.pk}&ansicht=entscheiden"))
-
-        if 'decide_applications' in person.roles:
+        if 'decide_applications' in person.roles:  # as the page counts them: with advice, not waiting on others in the intake
+            applied = person.within(Study.objects.filter(status=Study.Status.APPLIED), 'decide_applications').values('start_term')
+            for term in Term.objects.filter(pk__in=applied).order_by('start'):
+                if n := sum(1 for s in recommendations(term, person) if s.advice):
+                    found.append(task(f'{plural(n, "Bewerbung", "Bewerbungen")} zum {term} entscheiden', f"{reverse('admissions:board')}?semester={term.pk}&ansicht=entscheiden"))
             for term in filter(None, [Term.current(), Term.upcoming()]):
                 if moves := vacancies(term, person):
                     found.append(task(f'Nachrücken zum {term}: {plural(len(moves), "Studiengang", "Studiengänge")}', f"{reverse('admissions:board')}?semester={term.pk}&ansicht=nachruecken"))

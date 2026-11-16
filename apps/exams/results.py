@@ -2,7 +2,7 @@
 from collections import defaultdict
 from datetime import timedelta
 
-from django.db.models import Max, OuterRef, Subquery, Sum
+from django.db.models import Count, F, Max, OuterRef, Subquery, Sum
 from django.utils import timezone
 
 from core import texts
@@ -10,6 +10,16 @@ from core.dates import months_before, working
 from courses.models import Course, Participation
 from curriculum.models import Module, coverage
 from curriculum.plans import plan
+
+
+def lost(studies):
+    """The pks of these studies whose Prüfungsanspruch is lost, as exhausted() finds, for many at once."""
+    fails = (
+        Participation.objects.filter(passed=False, course__released__isnull=False, study__in=studies)
+        .values('study', 'module', 'study__program__attempts').annotate(n=Count('pk')).filter(n__gte=F('study__program__attempts'))
+    )
+    passed = set(Participation.objects.filter(passed=True, study__in={f['study'] for f in fails}).values_list('study', 'module'))
+    return {f['study'] for f in fails if (f['study'], f['module']) not in passed}
 
 
 def exhausted(study):

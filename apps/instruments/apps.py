@@ -1,5 +1,3 @@
-from datetime import timedelta
-
 from django.apps import AppConfig
 from django.urls import reverse
 from django.utils import timezone
@@ -38,21 +36,15 @@ class InstrumentsConfig(Tile, AppConfig):
         return found
 
     def tasks(self, person):
-        from .models import Loan
+        from .models import NOTICE, Loan, reclaimable
 
         today, found = timezone.localdate(), []
         if 'manage_instruments' in person.roles:
             late = person.within(Loan.objects.filter(returned=None, due__lt=today), 'manage_instruments').count()
             if late:
                 found.append(task(f'{plural(late, "Leihinstrument", "Leihinstrumente")} überfällig', f"{reverse('instruments:index')}?stand=ueberfaellig"))
-            from django.db.models import Exists, OuterRef
-
-            from students.models import Study
-
-            studies = Study.objects.filter(person=OuterRef('person'))  # done studying: the Zeugnis out, or no longer enrolled
-            done = Exists(studies.filter(status=Study.Status.ENROLLED, issued__isnull=False)) | ~Exists(studies.filter(status=Study.Status.ENROLLED)) & Exists(studies.filter(status__in=Study.FORMER))
-            for loan in person.within(Loan.objects.filter(done, returned=None), 'manage_instruments').select_related('person', 'instrument'):
+            for loan in reclaimable(person.within(Loan.objects.all(), 'manage_instruments')).select_related('person', 'instrument'):  # asked back, it is the borrower's to-do
                 found.append(task(f'Zurückfordern: {loan.instrument.name} von {loan.person}, das Studium ist abgeschlossen', reverse('instruments:instrument', args=[loan.instrument_id])))
-        for loan in person.loans.filter(returned=None, due__lte=today + timedelta(days=14)).select_related('instrument'):
+        for loan in person.loans.filter(returned=None, due__lte=today + NOTICE).select_related('instrument'):
             found.append(task(f'{loan.instrument.name} zurückgeben', reverse('instruments:mine'), loan.due))
         return found

@@ -2,7 +2,7 @@ from collections import Counter, defaultdict
 from datetime import timedelta
 
 from django.apps import AppConfig
-from django.db.models import Count, F, Q
+from django.db.models import F, Q
 
 from django.urls import reverse
 from django.utils.formats import date_format, number_format
@@ -126,16 +126,9 @@ class StudentsConfig(Tile, AppConfig):
                     found.append(task(f'{plural(len(ready), "angenommenen Studienplatz", "angenommene Studienplätze")} zum {start} immatrikulieren', url, start.start))
                 if waiting:  # not overdue: it is up to others
                     found.append(task(f'Immatrikulation zum {start}: ' + ', '.join(f'{n} {"wartet" if n == 1 else "warten"} auf {what}' for what, n in waiting.items()), url))
-            from courses.models import Participation
+            from exams.results import exhausted, lost
 
-            fails = (  # a module failed as often as the Prüfungsordnung allows
-                Participation.objects.filter(passed=False, course__released__isnull=False, study__in=person.within(enrolled, 'manage_students'))
-                .values('study', 'module', 'study__program__attempts').annotate(n=Count('pk')).filter(n__gte=F('study__program__attempts'))
-            )
-            passed = set(Participation.objects.filter(passed=True, study__in={f['study'] for f in fails}).values_list('study', 'module'))
-            from exams.results import exhausted
-
-            for study in Study.objects.filter(pk__in={f['study'] for f in fails if (f['study'], f['module']) not in passed}).select_related('person', 'program'):
+            for study in Study.objects.filter(pk__in=lost(person.within(enrolled, 'manage_students'))).select_related('person', 'program'):
                 final = max(m.appeal for m in exhausted(study)) + timedelta(days=1)  # once the Widerspruchsfrist is over
                 found.append(task(f'Exmatrikulieren{"" if final <= today else " ab " + date_format(final, "j.n.")}: {study.person}, Prüfung endgültig nicht bestanden', study.get_absolute_url(), final))
         if 'view_students' in person.roles and (not person.everywhere('view_students') or 'decide_results' in person.roles):  # an Institut's office, and the office deciding results: who should have chosen
@@ -164,14 +157,20 @@ class StudentsConfig(Tile, AppConfig):
         if 'manage_students' in person.roles:  # the Zeugnis issued: the study ends
             for study in person.within(enrolled.filter(issued__isnull=False), 'manage_students').select_related('person', 'program'):
                 found.append(task(f'Exmatrikulieren nach Abschluss: {study.person}, {study.program.title}', study.get_absolute_url(), study.issued))
-        if 'manage_reregistration' in person.roles:
-            unpaid = enrolled.exclude(person__in=paid).values('person').distinct().count()
-            if unpaid and term and term.reregistration_open:
-                found.append(task(f'Rückmeldung {term}: {plural(unpaid, "Zahlung", "Zahlungen")} ausstehend', reverse('students:reregistration'), due))
+        if 'manage_reregistration' in person.roles and term and term.reregistration_open:  # not who leaves on other ground: a Zeugnis, a lost claim
+            from exams.results import lost
+
+            owing = enrolled.exclude(person__in=paid).filter(issued=None)
+            if unpaid := owing.exclude(pk__in=lost(owing)).values('person').distinct().count():
+                url = f"{reverse('students:reregistration')}?stand=offen"
+                if today > term.closes:
+                    found.append(task(f'Rückmeldung {term}: {plural(unpaid, "Person", "Personen")} ohne Rückmeldung exmatrikulieren', url, term.closes))
+                else:
+                    found.append(task(f'Rückmeldung {term}: {plural(unpaid, "Zahlung", "Zahlungen")} ausstehend', url, due))
         for own in enrolled.filter(person=person, focus=None).select_related('program'):  # in the semester before it begins
             if (options := own.options()) and own.semester >= (first := min(o.first or 99 for o in options)) - 1:
                 found.append(task(f'{options[0].choice.title} wählen', reverse('students:progress', args=[own.pk]), Study.choose_by(own.semester, first)))
-        study = enrolled.filter(person=person).first()
+        study = enrolled.filter(person=person, issued=None).first()  # a Zeugnis issued: the study ends, nothing to pay
         from exams.results import exhausted
 
         if study and term and term.reregistration_open and not paid.filter(study__person=person).exists() and not exhausted(study):  # no Rückmeldung once the claim is lost

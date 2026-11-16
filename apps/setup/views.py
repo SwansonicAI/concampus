@@ -64,7 +64,7 @@ def approvals(request):
         a.short, a.label = SHORT.get(a.capability, a.capability), labels.get(a.capability, '')
         a.offices = sorted(holding(a.capability), key=lambda o: (a.person.institute_id not in {i.pk for i in o.institutes.all()}, collated(o.name)))
     return render(request, 'setup/approvals.html', {
-        'asks': asks, 'grants': Grant.objects.select_related('office', 'by'), 'members': Membership.objects.filter(confirmed_by=None).select_related('person', 'office', 'by'),
+        'asks': asks, 'grants': Grant.objects.select_related('office', 'by'), 'own': set(request.user.groups.values_list('pk', flat=True)), 'members': Membership.objects.filter(confirmed_by=None).select_related('person', 'office', 'by'),
     })
 
 

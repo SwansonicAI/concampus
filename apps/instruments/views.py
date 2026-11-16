@@ -13,7 +13,7 @@ from core.dates import day as understood
 from core.models import Institute, Office, Term
 from core.text import matching
 from .forms import LendForm
-from .models import Instrument, Loan
+from .models import NOTICE, Instrument, Loan, reclaimable
 
 STATES = [('frei', 'frei'), ('verliehen', 'verliehen'), ('ueberfaellig', 'überfällig'), ('gesperrt', 'nicht verleihbar')]
 
@@ -56,6 +56,7 @@ def instrument(request, pk):
     term = Term.current()  # lent for the semester, as a rule
     return render(request, 'instruments/instrument.html', {
         'trail': [(None, reverse('instruments:index'))], 'instrument': instrument, 'state': state(instrument), 'loans': instrument.loans.select_related('person'),
+        'reclaim': reclaimable(instrument.loans.all()).exists(),
         'lending': LendForm(initial={'due': term and term.end, 'condition': instrument.note[:200]}) if state(instrument) == 'frei' else None,
     })
 
@@ -118,6 +119,18 @@ def remind(request, pk):
         loan.reminded = timezone.localdate()
         loan.save(update_fields=['reminded'])
         messages.success(request, f'{loan.person} erinnert.')
+    return redirect('instruments:instrument', pk=loan.instrument_id)
+
+
+@require('manage_instruments')
+@require_POST
+def reclaim(request, pk):
+    """Ask an instrument back from someone done studying: due in NOTICE, the borrower told."""
+    loan = get_object_or_404(reclaimable(request.user.within(Loan.objects.all(), 'manage_instruments')).select_related('instrument', 'person'), pk=pk)
+    loan.due, loan.reminded = timezone.localdate() + NOTICE, timezone.localdate()
+    loan.save(update_fields=['due', 'reminded'])
+    texts.send('leihe_zurueckgefordert', loan.person, reverse('instruments:mine'), instrument=loan.instrument.name, frist=f'{loan.due:%d.%m.%Y}')
+    messages.success(request, f'{loan.instrument.name} von {loan.person} bis {date_format(loan.due, "j.n.Y")} zurückgefordert.')
     return redirect('instruments:instrument', pk=loan.instrument_id)
 
 

@@ -13,10 +13,10 @@ Condition = DocumentType.Condition
 
 
 def stages():
-    """Audition participations in stage order: video round, Hauptfach, shared parts."""
+    """Audition participations in stage order: video round, Hauptfach, shared parts; each course with what follows it."""
     return (
         Participation.objects.filter(course__kind=Course.Kind.AUDITION).select_related('course__subject')  # its name, for Course.stage
-        .order_by(F('course__deadline').asc(nulls_last=True), F('course__subject').asc(nulls_last=True), 'course__title')
+        .prefetch_related(Prefetch('course__following', Course.objects.filter(kind=Course.Kind.AUDITION))).order_by(F('course__deadline').asc(nulls_last=True), F('course__subject').asc(nulls_last=True), 'course__title')
     )
 
 

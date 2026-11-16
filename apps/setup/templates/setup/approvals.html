@@ -22,7 +22,7 @@
     <tr>
       <td><b>{{ g.office }}</b>: neue Berechtigungen<br><small class="muted">{{ g.labels|join:"; " }}</small></td>
       <td><small>{{ g.by|default:"–" }}<br><span class="muted">{{ g.created|date:"j.n.Y, H:i" }}</span></small></td>
-      <td class="num">{% if g.by != user %}<form method="post" class="actions">{% csrf_token %}<input type="hidden" name="art" value="recht"><input type="hidden" name="id" value="{{ g.pk }}"><button class="btn small" name="decision" value="yes">Bestätigen</button><button class="btn ghost small" name="decision" value="no">Ablehnen</button></form>{% else %}<small class="muted">wartet auf eine zweite Person</small>{% endif %}</td>
+      <td class="num">{% if g.by != user and g.office_id not in own %}<form method="post" class="actions">{% csrf_token %}<input type="hidden" name="art" value="recht"><input type="hidden" name="id" value="{{ g.pk }}"><button class="btn small" name="decision" value="yes">Bestätigen</button><button class="btn ghost small" name="decision" value="no">Ablehnen</button></form>{% else %}<small class="muted">wartet auf eine zweite Person</small>{% endif %}</td>
     </tr>
     {% endfor %}
     {% for m in members %}

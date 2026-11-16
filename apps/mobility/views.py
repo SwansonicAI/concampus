@@ -12,6 +12,7 @@ from core.apps import plural
 from core.models import Term
 from core.text import matching
 from courses.models import Participation
+from students.models import Study
 from .forms import LineForm, MobilityForm, academic
 from .models import Component, Mobility, Partner, year
 
@@ -136,5 +137,5 @@ def unrecognised(person):
         return []
     passed = Participation.objects.filter(study=OuterRef('mobility__study'), module=OuterRef('module'), passed=True)
     lines = Component.objects.filter(table=Component.Table.HOME).filter(~Exists(passed))
-    found = Mobility.objects.filter(status=Mobility.Status.DONE, pk__in=lines.values('mobility')).select_related('study__person', 'partner')
+    found = Mobility.objects.filter(status=Mobility.Status.DONE, study__status=Study.Status.ENROLLED, pk__in=lines.values('mobility')).select_related('study__person', 'partner')  # recognition is for who still studies
     return [m for m in found if person.may('recognise', m.study)]

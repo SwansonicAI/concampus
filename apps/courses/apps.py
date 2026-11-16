@@ -1,7 +1,7 @@
 from collections import Counter
 
 from django.apps import AppConfig
-from django.db.models import Count, F, Q
+from django.db.models import Count, Exists, F, OuterRef, Q
 from django.utils.formats import number_format
 
 from django.urls import reverse
@@ -147,7 +147,7 @@ class CoursesConfig(Tile, AppConfig):
                         found.append(task(f'Studienfachberatung: {s.person} ({options[0].choice.title})', url, due))
                     elif due < today:  # advised: the choice is the student's, who has the to-do
                         found.append(task(f'{options[0].choice.title}: empfohlen {s.advised.title}, wartet auf {s.person}', url))
-            for course in person.teaching.filter(term=term, kind=TEACHING[0], bookings=None, cancelled=None).exclude(format__dated=False):
+            for course in person.teaching.filter(term=term, kind=TEACHING[0], bookings=None, cancelled=None).exclude(Q(format__dated=False) | Q(format__per_head=True)):  # one-to-one: no time for all at once
                 found.append(task(f'Termine planen: {course.title}', course.get_absolute_url()))
             for planned in Term.objects.filter(planning=True, replies_by__isnull=False):  # the next semester: one's courses to confirm
                 if n := person.teaching.filter(term=planned, kind__in=TEACHING, confirmed=None, cancelled=None, origin__isnull=False).count():
@@ -194,8 +194,11 @@ class CoursesConfig(Tile, AppConfig):
             from .views.rollover import missing
 
             upcoming = Term.upcoming()
-            if upcoming and (count := person.within(missing(upcoming), 'roll_over').exclude(rhythm=Course.Rhythm.ONCE).count()):
-                found.append(task(f'Semesterwechsel: {plural(count, "Lehrveranstaltung", "Lehrveranstaltungen")} für {upcoming} übernehmen', reverse('courses:rollover'), upcoming.ready_by or upcoming.start))
+            if upcoming:  # not a course whose teachers all leave before it: the page leaves it unticked
+                staff = Course.staff.through.objects.filter(course=OuterRef('pk'))
+                staying = Exists(staff.filter(Q(person__contract_end=None) | Q(person__contract_end__gte=upcoming.start))) | ~Exists(staff)
+                if count := person.within(missing(upcoming), 'roll_over').exclude(rhythm=Course.Rhythm.ONCE).filter(staying).count():
+                    found.append(task(f'Semesterwechsel: {plural(count, "Lehrveranstaltung", "Lehrveranstaltungen")} für {upcoming} übernehmen', reverse('courses:rollover'), upcoming.ready_by or upcoming.start))
         if 'plan_teaching' in person.roles:  # what an Institut made: its SWS count in the Deputat, its modules let students find it
             for t in Term.objects.filter(end__gte=timezone.localdate()).order_by('start'):
                 bare = t.courses.filter(Q(hours=None) | Q(modules=None), kind=Course.Kind.COURSE, cancelled=None)
