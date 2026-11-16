@@ -20,7 +20,8 @@ PANEL = {'X-Panel': '1'}
 
 
 def upload(name, kind='video'):
-    return {'kind': kind, 'file': SimpleUploadedFile(name, b'\x00\x00\x00\x18ftypmp42', content_type='video/mp4')}
+    """A file that begins as its ending says: a PDF, else an MP4."""
+    return {'kind': kind, 'file': SimpleUploadedFile(name, b'%PDF-1.4' if name.endswith('.pdf') else b'\x00\x00\x00\x18ftypmp42')}
 
 
 class DecisionTest(Seeded):
@@ -133,18 +134,18 @@ class VideoTest(Seeded):
 
     def test_checklist(self):
         section = next(s for s in self.applicant.get('/aufnahme/meine/').context['studies'] if s.pk == self.study.pk)
-        self.assertEqual([i['label'] for i in section.checklist][:3], ['Video', 'Lebenslauf', 'Abitur- oder letztes Schulzeugnis'])
+        self.assertEqual([i['label'] for i in section.checklist][:3], ['Lebenslauf', 'Video', 'Abitur- oder letztes Schulzeugnis'])  # what the commission sees first, then by name
         no_video = Study.objects.filter(participations__course__program__isnull=False, participations__course__video=False, status='applied').first()
         self.assertNotIn('Video', [i['label'] for i in checklist(no_video)])
 
     def test_upload_replace_discard(self):
         r = self.applicant.post(self.url, upload('take.mp4'), headers=PANEL)
         self.assertEqual(r.headers['X-Location'], '/aufnahme/meine/')
-        self.assertIn('Video bitte als .mp4', flashes(self.applicant.post(self.url, upload('cv.pdf'), follow=True))[-1])
+        self.assertIn('Video bitte als Video hochladen', flashes(self.applicant.post(self.url, upload('cv.pdf'), follow=True))[-1])
         self.assertIn('Bitte eine Datei wählen.', flashes(self.applicant.post(self.url, {'kind': 'video', 'url': 'https://youtu.be/x'}, follow=True))[-1])
-        self.applicant.post(self.url, upload('take2.webm'))
+        self.applicant.post(self.url, upload('take2.mov'))
         video = Document.objects.get(study=self.study, kind='video')
-        self.assertEqual(video.title, 'take2.webm')
+        self.assertEqual(video.title, 'take2.mov')
         self.assertTrue(video.playable)
         self.assertIn('<video controls', self.applicant.get('/aufnahme/meine/').text)
         part = self.applicant.get(video.href, headers={'Range': 'bytes=4-7'})  # a jury seeks: only those bytes
@@ -242,7 +243,7 @@ class ChecklistTest(Seeded):
         DocumentType.objects.filter(key='language').update(condition='always', required=True)
         self.assertIn('Sprachnachweis Deutsch', incomplete(cello))
         DocumentType.objects.filter(key='cv').update(condition='never')
-        self.assertNotIn('Lebenslauf', [i['label'] for i in checklist(cello)])
+        self.assertNotIn('Lebenslauf', [i['label'] for i in checklist(cello) if not i.get('old')])  # one handed in stays, to read
 
 
 class DocumentAccessTest(Seeded):
