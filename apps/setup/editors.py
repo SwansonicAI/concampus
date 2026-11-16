@@ -1,7 +1,7 @@
 """Every list staff keep up themselves, described once: which model, which fields, who may edit it."""
 import re
 from dataclasses import dataclass, field
-from datetime import timedelta
+from datetime import date, timedelta
 from typing import Callable
 
 from django import forms
@@ -50,6 +50,7 @@ class Editor:
     carried: str = 'Aus dem Vorjahr übernehmen'  # its button
     home: str = ''  # URL name of the page listing it elsewhere, where a list without a section leads back to
     ordered: bool = False  # its records stand in an order someone decides (an `order` field): moved up and down in the list
+    period: bool = False  # its records hold from one Studienbeginn to another (`since`, `until`): the list shows those of one
 
     def __post_init__(self):
         if self.sections:
@@ -136,6 +137,14 @@ class DocumentTypeForm(forms.ModelForm):
         data = super().clean()
         if data.get('kinds') and data.get('max_mb') and data['max_mb'] > (most := max(DocumentType.KINDS[k][3] for k in data['kinds'])):
             self.add_error('max_mb', f'Für diese Dateiarten höchstens {most} MB.')
+        since, until = data.get('since'), data.get('until')
+        if since and until and until.start < since.start:
+            self.add_error('until', 'Liegt vor „Ab“.')
+        first, last = since.start if since else date.min, until.start if until else date.max
+        for other in DocumentType.objects.filter(name=data.get('name')).exclude(pk=self.instance.pk).select_related('since', 'until'):
+            if (other.since.start if other.since else date.min) <= last and first <= (other.until.start if other.until else date.max):
+                self.add_error('name', f'„{other.name}“ gilt zur selben Zeit schon ({other.period or "immer"}). Erst dort „Bis“ setzen.')
+                break
         return data
 
     def save(self, commit=True):
@@ -628,14 +637,13 @@ EDITORS = {e.key: e for e in [
     Editor(
         'unterlagen', DocumentType, 'Unterlagenarten', 'run_auditions', home='admissions:documents', form=DocumentTypeForm,
         sections=[
-            (None, ['name', 'condition', 'subjects']),
+            (None, ['name', 'condition', 'subjects', ('since', 'until')]),
             ('Hochladen', ['kinds', ('max_mb', 'single', 'max_files')]),
             ('Wann', [('required', 'by_enrolment', 'shared')]),
             ('Wer es sieht', [('jury', 'health')]),
             ('Für Bewerbende', ['note', 'template']),
-            (None, ['retired']),
         ],
-        columns=[('Unterlagen', 'name'), ('Gilt für', 'audience'), ('Pflicht', 'required')],
+        columns=[('Unterlagen', 'name'), ('Gilt für', 'audience'), ('Zeitraum', 'period'), ('Pflicht', 'required')], period=True,
         search=['name'], words='checkliste bewerbung video zeugnis nachweis hochladen',
         queryset=lambda: DocumentType.objects.exclude(key__in=DocumentType.SYSTEM),  # Bescheide and theses are filed by the system
     ),

@@ -79,7 +79,7 @@ def recommendations(term, person):
     days = Institution.get().accept_days
     studies = ranked(
         person.within(Study.objects.filter(start_term=term, status__in=[Study.Status.APPLIED, Study.Status.ADMITTED, Study.Status.ENROLLED]), 'decide_applications')
-        .select_related('person', 'program', 'subject').prefetch_related(Prefetch('participations', stages(), to_attr='stages'))
+        .select_related('person', 'program', 'subject', 'start_term').prefetch_related(Prefetch('participations', stages(), to_attr='stages'))
     )
     places = {(c.program_id, c.subject_id): c.capacity for c in Course.objects.filter(term=term, kind=Course.Kind.AUDITION, program__isnull=False)}
     taken, passed, pending, found = Counter(), defaultdict(list), set(), []
@@ -155,7 +155,7 @@ def board(request):
     picked = request.GET.get('semester', '')
     term = (picked.isdigit() and terms.filter(pk=picked).first()) or terms.filter(start__gt=timezone.localdate()).first() or terms.last()
     studies = ranked(
-        request.user.within(Study.objects.filter(start_term=term, status__in=BOARD), 'view_applications').select_related('person', 'program', 'subject')
+        request.user.within(Study.objects.filter(start_term=term, status__in=BOARD), 'view_applications').select_related('person', 'program', 'subject', 'start_term')
         .annotate(slot=Min('participations__slot', filter=Q(participations__slot__gte=timezone.now(), participations__course__kind=Course.Kind.AUDITION)))
         .prefetch_related(Prefetch('participations', stages(), to_attr='stages'), 'person__documents', 'person__studies')
     )
@@ -212,7 +212,7 @@ def board(request):
 
 def blank(request, pk, kind):
     """A form to print and sign for an application, like the parents' consent, its blanks filled in where known."""
-    study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject'), pk=pk, person=request.user)
+    study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject', 'start_term'), pk=pk, person=request.user)
     kind = get_object_or_404(DocumentType.objects.exclude(template=''), key=kind)
     person = study.person
     body = kind.template.format_map(defaultdict(str, {

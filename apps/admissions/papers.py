@@ -22,31 +22,40 @@ def stages():
 
 def document_types():
     """The kinds of documents an application can ask for, each with its Hauptfächer; fetch once for many studies."""
-    return once('document_types', lambda: list(DocumentType.objects.exclude(condition=Condition.NEVER).exclude(retired=True).prefetch_related('subjects')))
+    return once('document_types', lambda: list(DocumentType.objects.exclude(condition=Condition.NEVER).select_related('since', 'until').prefetch_related('subjects')))
+
+
+def kinds():
+    """Every document type by its key, for what was handed in under one no longer asked."""
+    return once('document_kinds', lambda: {t.key: t for t in DocumentType.objects.all()})
 
 
 def papers(studies):
     """The studies with what Study.missing() and checklist() read, fetched at once for many: loans still out, documents,
     the person's other studies, the registrations, the audition stages."""
-    return studies.select_related('person', 'program').prefetch_related(
+    return studies.select_related('person', 'program', 'start_term').prefetch_related(
         Prefetch('person__loans', Loan.objects.filter(returned=None).select_related('instrument')), 'person__documents', 'person__studies', 'terms',
         Prefetch('participations', stages(), to_attr='stages'),
     )
 
 
 def checklist(study, types=None):
-    """What a complete application holds, as the document types say: [{kind, label, note, required, documents}]. What
-    holds for all of a person's applications, like a CV, counts once handed in with any of them. Reads
+    """What a complete application holds, as the document types that applied to its Studienbeginn say: [{kind, label,
+    note, required, documents}]; after them, what was handed in under a type no longer asked (`old`), still to read;
+    under an earlier type of the same name, it counts for the one asked now.
+    What holds for all of a person's applications, like a CV, counts once handed in with any of them. Reads
     `study.person.documents.all()` and `study.person.studies.all()`; prefetch them for many studies."""
     person, handed, borrowed, today = study.person, defaultdict(list), defaultdict(list), timezone.localdate()
     same = {s.pk for s in person.studies.all() if s.subject_id == study.subject_id and s.pk != study.pk}  # the same Hauptfach elsewhere
-    types = document_types() if types is None else types
+    types, every = [t for t in (document_types() if types is None else types) if t.applies(study.start_term)], kinds()
     shared = {t.key for t in types if t.shared}
+    successor = {k.key: t.key for t in types for k in every.values() if k.name == t.name}  # an earlier type of the same name counts for it
     for d in person.documents.all():
+        key = successor.get(d.kind_id, d.kind_id)
         if d.study_id == study.pk:
-            handed[d.kind_id].append(d)
-        elif d.study_id and d.kind_id in shared:
-            borrowed[d.kind_id].append(d)
+            handed[key].append(d)
+        elif d.study_id and key in shared:
+            borrowed[key].append(d)
     steps = getattr(study, 'stages', None)
     online = any(p.course.video for p in steps) if steps is not None else Participation.objects.filter(study=study, course__video=True).exists()
     mappe = any(t.condition == Condition.SUBJECTS and t.jury and study.subject_id in {s.pk for s in t.subjects.all()} for t in types)
@@ -58,13 +67,18 @@ def checklist(study, types=None):
         Condition.FOREIGN: person.needs_german,
         Condition.APS: person.needs_aps,
     }
-    return [
+    items = [
         {
             'kind': t, 'label': t.name, 'note': t.note, 'required': t.required, 'documents': handed[t.key] or borrowed[t.key],
             'enrolment': t.by_enrolment,  # due by the Immatrikulation, not with the application
             'reusable': [d for d in person.documents.all() if d.kind_id == t.key and d.study_id in same] if t.condition == Condition.VIDEO and not handed[t.key] else [],
         }
         for t in types if applies.get(t.condition) or t.condition == Condition.SUBJECTS and study.subject_id in {s.pk for s in t.subjects.all()}
+    ]
+    asked = {item['kind'].key for item in items}
+    return items + [  # handed in, but no longer asked: kept to read, never to hand in again
+        {'kind': every[key], 'label': every[key].name, 'note': '', 'required': False, 'documents': documents, 'enrolment': False, 'reusable': [], 'old': True}
+        for key, documents in handed.items() if key not in asked and key in every and key not in DocumentType.SYSTEM
     ]
 
 

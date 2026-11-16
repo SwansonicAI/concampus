@@ -5,7 +5,7 @@ from django.contrib import messages
 from django.contrib.auth.models import Permission
 from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import PermissionDenied
-from django.db.models import F, Max, ProtectedError, RestrictedError
+from django.db.models import F, Max, ProtectedError, Q, RestrictedError
 from django.forms import modelform_factory
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -217,9 +217,16 @@ def listing(request, key, own=False):
     q = request.GET.get('q', '').strip()
     objects = e.objects(request.user)
     objects = matching(objects, q, *e.search) if q else objects
+    terms, term = [], None
+    if e.period:  # what holds for one Studienbeginn: the next to begin unless another is asked, or all
+        terms = list(Term.objects.order_by('-start'))
+        picked = request.GET.get('semester')
+        term = next((t for t in terms if str(t.pk) == picked), None) if picked is not None else next((t for t in reversed(terms) if t.start > timezone.localdate()), terms[0] if terms else None)
+        if term:
+            objects = objects.filter(Q(since=None) | Q(since__start__lte=term.start), Q(until=None) | Q(until__start__gte=term.start))
     return render(request, 'setup/list.html', {
         'editor': e, 'q': q, 'rows': [(obj, [cell(obj, name) for _, name in e.columns]) for obj in objects[:SHOWN]],
-        'count': objects.count(), 'history': e.model.visible_to(request.user.roles),
+        'count': objects.count(), 'history': e.model.visible_to(request.user.roles), 'terms': terms, 'term': term,
     })
 
 
