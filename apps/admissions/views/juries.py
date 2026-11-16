@@ -365,7 +365,7 @@ def move_up(request, pk):
     """Nachrücken: offers not accepted in time lapse, and the free places go to the best on the Nachrückliste."""
     intake = get_object_or_404(request.user.within(Course.objects.all(), 'decide_applications'), pk=pk, kind=Course.Kind.AUDITION, program__isnull=False)
     gone, waiting = next(((l, w) for c, l, w in vacancies(intake.term, request.user) if c == intake), ([], []))
-    back, today = f"{reverse('admissions:board')}?semester={intake.term_id}", timezone.localdate()
+    back, today = f"{reverse('admissions:board')}?semester={intake.term_id}&ansicht=nachruecken", timezone.localdate()
     until = date_format(today + timedelta(days=Institution.get().accept_days), 'j.n.Y')
     if waiting and not request.POST.get('bestaetigt'):
         notes = [f'Das {intake.term} hat am {date_format(intake.term.start, "j.n.Y")} begonnen: wer jetzt nachrückt, beginnt verspätet.'] * (intake.term.start <= today)

@@ -1,5 +1,6 @@
 """The office's side: the board of applications, deciding them and their Bescheide."""
 from collections import Counter, defaultdict
+from itertools import groupby
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
@@ -17,7 +18,7 @@ from core.apps import plural
 from core.history import tables
 from core.models import Institution, Message, Term
 from core.shortcuts import ids
-from core.text import lengths, matching
+from core.text import collated, lengths, matching
 from core.templatetags.marks import mark
 from courses import panel
 from courses.models import Correction, Course, Recusal, Score
@@ -26,7 +27,7 @@ from students.models import DocumentType, Study, StudyTerm
 from ..papers import checklist, document_types, incomplete, papers, shown, stages
 from .common import accept_by, lapsed, uploads_open
 
-CARDS = 40  # per column of the board before „alle anzeigen“
+ROWS = 100  # of the list of applications before „alle anzeigen“
 BOARD = [Study.Status.APPLIED, Study.Status.ADMITTED, Study.Status.WAITLISTED, Study.Status.REJECTED, Study.Status.ENROLLED]
 DECISIONS = {Study.Status.ADMITTED: 'zulassung', Study.Status.WAITLISTED: 'nachrueckliste', Study.Status.REJECTED: 'ablehnung'}  # their Bescheide
 UNDECIDED = [Study.Status.APPLIED, Study.Status.WAITLISTED, Study.Status.ADMITTED]  # an offer not taken up can still change
@@ -158,8 +159,9 @@ def board(request):
         .prefetch_related(Prefetch('participations', stages(), to_attr='stages'), 'person__documents', 'person__studies')
     )
     subject, q = request.GET.get('fach', ''), request.GET.get('q', '').strip()
-    if subject.isdigit():
-        studies = studies.filter(subject=subject)
+    only = int(subject) if subject.isdigit() else None  # the Hauptfach filters every part of the page
+    if only:
+        studies = studies.filter(subject=only)
     studies = matching(studies, q, 'person__first_name', 'person__last_name', 'person__birth_name', 'person__email')
     types, days = document_types(), Institution.get().accept_days
     for study in studies:
@@ -168,33 +170,40 @@ def board(request):
     open_intake = request.user.within(Course.objects.filter(term=term, kind=Course.Kind.AUDITION), 'view_applications', 'run_auditions').filter(
         program__isnull=False, deadline__gte=timezone.localdate(), released=None,
     ).exists()  # while applications come in, the incomplete ones can be reminded
-    decidable = recommendations(term, request.user) if 'decide_applications' in request.user.roles else []
+    decidable = [s for s in recommendations(term, request.user) if only in (None, s.subject_id)] if 'decide_applications' in request.user.roles else []
     for s in decidable:
         s.verb = VERBS.get(s.advice)
-    accepted = (  # places taken up, waiting for the Immatrikulation
-        papers(request.user.within(Study.objects.filter(start_term=term, status=Study.Status.ADMITTED, terms__term=F('start_term')), 'manage_students'))
-        .select_related('subject').order_by('person__last_name')
-    )
+    accepted = [  # places taken up, waiting for the Immatrikulation
+        s for s in papers(request.user.within(Study.objects.filter(start_term=term, status=Study.Status.ADMITTED, terms__term=F('start_term')), 'manage_students'))
+        .select_related('subject').order_by('person__last_name') if only in (None, s.subject_id)
+    ]
     for s in accepted:
         s.waiting = s.missing()
     ready = any(not s.waiting for s in accepted)
-    shown, columns = request.GET.get('alle', ''), []
-    for status in BOARD:  # long columns end in a link, so the page stays readable
-        found = [s for s in studies if s.status == status]
-        if status == Study.Status.WAITLISTED:  # a list per Studiengang and Hauptfach, each in the order of its ranking
-            found.sort(key=lambda s: (str(s.program), str(s.subject)))
-            for n, s in enumerate(found):
-                s.place = 1 if n == 0 or (s.program_id, s.subject_id) != (found[n - 1].program_id, found[n - 1].subject_id) else found[n - 1].place + 1
-        columns.append((Study.Status(status), found if status == shown else found[:CARDS], len(found)))
+    waiting = sorted((s for s in studies if s.status == Study.Status.WAITLISTED), key=lambda s: (str(s.program), str(s.subject)))
+    for n, s in enumerate(waiting):  # the Nachrückliste per Studiengang and Hauptfach, each in the order of its ranking
+        s.place = 1 if n == 0 or (s.program_id, s.subject_id) != (waiting[n - 1].program_id, waiting[n - 1].subject_id) else waiting[n - 1].place + 1
+    state = request.GET.get('stand', '')
+    counts = Counter(s.status for s in studies)
+    listing = [s for s in studies if s.status == state] if state in BOARD else list(studies)
+    overview = []  # every Hauptfach at a glance, until one is chosen or a name sought
+    if not (only or q or state):
+        for subject, own in groupby(sorted(studies, key=lambda s: collated(str(s.subject))), key=lambda s: s.subject):
+            mine = Counter(s.status for s in own)
+            overview.append((subject, [(status, mine[status]) for status in BOARD], sum(mine.values())))
+    view = request.GET.get('ansicht', '')  # the page shows the Stand; what is to decide, to move up, to enrol or one list opens beside it
     return render(request, 'admissions/board.html', {
-        'term': term,
+        'term': term, 'view': view if view in ('entscheiden', 'nachruecken', 'immatrikulieren', 'liste') else '',
+        'chosen': Subject.objects.filter(pk=only).first() if only else None,
         'terms': terms,
         'subject': subject,
         'q': q,
         'subjects': Subject.objects.filter(pk__in=request.user.within(Study.objects.filter(start_term=term, status__in=BOARD), 'view_applications').values('subject')),
-        'columns': columns,
+        'states': [(Study.Status(status), counts[status]) for status in BOARD], 'state': state, 'total': len(studies), 'overview': overview,
+        'mixed': len(counts) > 1,  # more than one Stand among them: worth telling apart
+        'listing': listing if request.GET.get('alle') else listing[:ROWS], 'more': len(listing) - ROWS if not request.GET.get('alle') and len(listing) > ROWS else 0,
         'incomplete': sum(1 for s in studies if s.incomplete) if open_intake else 0,
-        'vacancies': vacancies(term, request.user),
+        'vacancies': [v for v in vacancies(term, request.user) if only in (None, v[0].subject_id)],
         'decidable': decidable, 'verbs': VERBS,
         'accepted': accepted, 'ready': ready,
     })
@@ -318,7 +327,7 @@ def decide_many(request):
         f'Bescheide versandt: {", ".join(counts)}.' if counts else 'Nichts entschieden.',
         skipped and f'{plural(skipped, "Bewerbung wartet", "Bewerbungen warten")} noch auf die Ergebnisse der anderen im selben Hauptfach.',
     ])))
-    return redirect(f"{reverse('admissions:board')}?semester={term.pk}#entscheiden")
+    return redirect(f"{reverse('admissions:board')}?semester={term.pk}&ansicht=entscheiden")
 
 
 @require('view_applications')

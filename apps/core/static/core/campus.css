@@ -268,7 +268,7 @@ td.works small { display: block; overflow: hidden; line-height: 1.6; text-overfl
 tr.wait td { color: var(--muted); }
 tr.total td { border-bottom: 0; border-top: 2px solid var(--ink); font-weight: 700; }
 .scroll { overflow-x: auto; }
-main[aria-busy] :is(table, .todo, .tickets, .results) { opacity: 0.45; cursor: progress; }
+main[aria-busy] :is(table, .todo, .results) { opacity: 0.45; cursor: progress; }
 main[aria-busy] .results .empty { visibility: hidden; }
 
 /* Start page: tasks first, then a compact launcher */
@@ -344,6 +344,11 @@ dialog.demo::backdrop { background: rgba(0, 0, 0, 0.45); }
 .stat { border-top: 2px solid var(--ink); padding-top: 10px; }
 .stat b { display: block; font-size: 30px; font-weight: 300; font-variant-numeric: tabular-nums; }
 .stat span { color: var(--muted); font-size: 14px; }
+.stat.due { display: block; border-top-color: var(--accent); color: var(--ink); }  /* work waiting: the number, what it is, what to do */
+.stat.due b { color: var(--accent-dark); font-weight: 400; }
+.stat.due span { display: block; }
+.stat.due .more { margin-top: 6px; padding: 0; color: var(--accent); }
+a.stat.due:hover { text-decoration: none; }
 .bar { height: 8px; margin-top: 10px; overflow: hidden; background: var(--soft); }
 .bar i { display: block; height: 100%; background: var(--accent); }
 /* A Terminumfrage: the times as columns under their day, a row a person, each answer a coloured field */
@@ -547,13 +552,10 @@ svg.lock { width: 14px; height: 14px; margin-left: 6px; fill: none; stroke: var(
 .pager { align-items: center; gap: 8px; font-size: 14px; white-space: nowrap; }
 
 /* Admissions board */
-.board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 20px; align-items: start; }
-.board h3 { display: flex; justify-content: space-between; padding-bottom: 8px; border-bottom: 2px solid var(--ink); color: var(--ink); font-size: 15px; text-transform: uppercase; letter-spacing: 0.03em; }
-.tickets { display: grid; gap: 10px; }
-.ticket { display: block; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--ink); font-size: 15px; }
-.ticket:hover { border-color: var(--accent); text-decoration: none; }
-.ticket b { display: block; }
-.ticket small { display: block; }
+.applications td { padding-top: 8px; padding-bottom: 8px; vertical-align: middle; }  /* one line a person, however many */
+.applications .chips { margin: 0; }
+.applications td:first-child { white-space: nowrap; }
+.applications .chip { white-space: nowrap; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
 .chip { padding: 0 6px; border: 1px solid var(--line); border-radius: var(--radius); color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .chip.yes { border-color: var(--accent); color: var(--accent); }
@@ -714,11 +716,10 @@ a.block:hover { background: var(--accent-pale); text-decoration: none; }
   .launch, .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .cols, .cols.calendar { grid-template-columns: 1fr; }
   .cols > .before { order: -1; }
-  .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 700px) {
   .wrap { padding: 0 16px; }
-  .launch, .stats, .board { grid-template-columns: 1fr; }
+  .launch, .stats { grid-template-columns: 1fr; }
   .appbar-row { flex-wrap: wrap; gap: 12px; padding-top: 12px; }
   .me { width: 100%; margin-left: 0; }
   .search { flex: 1 1 auto; }

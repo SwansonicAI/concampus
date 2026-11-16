@@ -121,7 +121,7 @@ class StudentsConfig(Tile, AppConfig):
                 else:
                     ready.append(s)
             for start, (ready, waiting) in terms.items():
-                url = f"{reverse('admissions:board')}?semester={start.pk}#immatrikulieren"
+                url = f"{reverse('admissions:board')}?semester={start.pk}&ansicht=immatrikulieren"
                 if ready:
                     found.append(task(f'{plural(len(ready), "angenommenen Studienplatz", "angenommene Studienplätze")} zum {start} immatrikulieren', url, start.start))
                 if waiting:  # not overdue: it is up to others

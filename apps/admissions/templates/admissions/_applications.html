@@ -1,0 +1,18 @@
+<table class="applications">
+  <thead><tr><th>Name</th>{% if not subject %}<th>Hauptfach</th>{% endif %}{% if not state and mixed %}<th>Stand</th>{% endif %}<th>Prüfungsstufen</th><th></th></tr></thead>
+  <tbody>
+    {% for s in listing %}
+    <tr>
+      <td><a href="{% url 'admissions:application' s.pk %}"{% if not view %} data-panel{% endif %}>{{ s.person.name }}</a>{% if subject %} <span class="muted">{{ s.program.degree }}</span>{% endif %}</td>
+      {% if not subject %}<td>{{ s.subject }} <span class="muted">{{ s.program.degree }}</span></td>{% endif %}
+      {% if not state and mixed %}<td><span class="badge {{ s.status }}">{{ s.get_status_display }}</span></td>{% endif %}
+      <td><span class="chips">{% include "admissions/_stages.html" %}</span></td>
+      <td>{% if s.place %}Platz {{ s.place }}{% elif s.slot %}<span class="muted">Termin {{ s.slot|date:"j.n. H:i" }}</span>{% endif %}
+        {% if s.accepted and s.status == 'admitted' %}<span class="muted">angenommen</span>{% elif s.lapsed %}<span class="fail">Frist verstrichen</span>{% endif %}
+        {% if s.incomplete %}<span class="chip no" title="Fehlt: {{ s.incomplete|join:', ' }}">unvollständig</span>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="empty">Keine Bewerbungen.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% if more %}<p><a class="more" href="{% querystring alle=1 %}">Alle {{ listing|length|add:more }} anzeigen</a></p>{% endif %}

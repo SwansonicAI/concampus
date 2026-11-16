@@ -117,12 +117,12 @@ class AdmissionsConfig(Tile, AppConfig):
                 .select_related('start_term').prefetch_related(Prefetch('participations', stages(), to_attr='stages')) if verdict(s.stages)
             )
             for term, n in sorted(ready.items(), key=lambda item: item[0].start):
-                found.append(task(f'{plural(n, "Bewerbung", "Bewerbungen")} zum {term} entscheiden', f"{reverse('admissions:board')}?semester={term.pk}#entscheiden"))
+                found.append(task(f'{plural(n, "Bewerbung", "Bewerbungen")} zum {term} entscheiden', f"{reverse('admissions:board')}?semester={term.pk}&ansicht=entscheiden"))
 
         if 'decide_applications' in person.roles:
             for term in filter(None, [Term.current(), Term.upcoming()]):
                 if moves := vacancies(term, person):
-                    found.append(task(f'Nachrücken zum {term}: {plural(len(moves), "Studiengang", "Studiengänge")}', f"{reverse('admissions:board')}?semester={term.pk}"))
+                    found.append(task(f'Nachrücken zum {term}: {plural(len(moves), "Studiengang", "Studiengänge")}', f"{reverse('admissions:board')}?semester={term.pk}&ansicht=nachruecken"))
         types = document_types()
         for study in person.studies.filter(status=Study.Status.APPLIED).select_related('person', 'program', 'subject').prefetch_related('person__documents'):
             if uploads_open(study):

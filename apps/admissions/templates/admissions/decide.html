@@ -17,6 +17,6 @@
   <input type="hidden" name="semester" value="{{ term.pk }}"><input type="hidden" name="status" value="{{ chosen }}"><input type="hidden" name="bestaetigt" value="1">
   {% for pk in ticked %}<input type="hidden" name="study" value="{{ pk }}">{% endfor %}
   {% if groups %}<button class="btn">Bescheide versenden</button>{% endif %}
-  <a class="btn ghost" href="{% url 'admissions:board' %}?semester={{ term.pk }}#entscheiden">Zurück</a>
+  <a class="btn ghost" href="{% url 'admissions:board' %}?semester={{ term.pk }}&ansicht=entscheiden">Zurück</a>
 </form>
 {% endblock %}
