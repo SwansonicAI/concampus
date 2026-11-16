@@ -1,0 +1,13 @@
+{% load static %}<!doctype html>
+{# A preview in its page's frame (views.text_preview, views.preview): a text as the Postfach shows it, or why there is none #}
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="{% static 'core/campus.css' %}">
+{% if institution.look %}<style>:root { {% for name, value in institution.look.items %}--{{ name }}: {{ value }}; {% endfor %}}</style>{% endif %}
+</head>
+<body class="framed">
+{% if errors %}<p class="flash error">Keine Vorschau: {{ errors|join:" " }}</p>
+{% else %}{% if subject %}<h1>{{ subject }}</h1>{% endif %}<div class="document">{{ body|linebreaks }}</div>{% endif %}
+</body>
+</html>

@@ -167,7 +167,7 @@ class Study(Tracked, models.Model):
     def notify(self, key, link='', after=(), **values):
         """Issue a Bescheid: it goes to the Postfach and stays in the student file as the PDF it was issued as."""
         subject, body = self.wording(key, *after, **values)
-        message = Message.send(self.person, subject, body, link, sender=texts.block('absender_bescheide'))
+        message = Message.send(self.person, subject, body, link, sender=texts.block('absender_bescheide'), template=key)
         Document.objects.create(
             person=self.person, study=self, kind=DocumentType.system('notice'), title=subject, message=message, template=key,
             file=ContentFile(paper.letter(message), 'bescheid.pdf'),
@@ -560,7 +560,7 @@ class Document(Tracked, models.Model):
     file = models.FileField('Datei', upload_to=stored, blank=True)
     url = models.URLField('Link', max_length=2000, blank=True)  # shared video links run long
     message = models.ForeignKey(Message, models.CASCADE, null=True, blank=True, related_name='+', verbose_name='Bescheid')
-    template = models.CharField('Vorlage', max_length=40, blank=True, help_text='Bei einem Bescheid: der Text, aus dem er entstand (Einstellungen › Texte).')
+    template = models.CharField('Vorlage', max_length=40, blank=True, help_text='Bei einem Bescheid: der Text, aus dem er entstand (Dokumente › Bescheide).')
     printed = models.DateTimeField('Gedruckt am', null=True, blank=True, help_text='Bei einem Bescheid per Post.')
     declared = models.DateTimeField('Selbstständigkeitserklärung', null=True, blank=True, help_text='Bei einer Abschlussarbeit: wann sie mit ihr abgegeben wurde.')
     consent = models.ForeignKey(

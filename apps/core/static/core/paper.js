@@ -1,4 +1,4 @@
-// The Briefbogen editor (setup/paper.html): an A4 page in mm from the top left, as core/paper.py sets it, its elements
+// The Briefbogen editor (documents/paper.html): an A4 page in mm from the top left, as core/paper.py sets it, its elements
 // placed by hand, under rulers; or the PDF it makes (Vorschau). Drag an element to move it, a corner to size it; it
 // snaps to half millimetres and to the page's middle and the edges of the others (Alt: freely), its place and size
 // showing as it goes. Arrow keys nudge (Shift: 5 mm), Delete removes, Ctrl+D doubles, Ctrl+Z and Ctrl+Y undo and
@@ -28,6 +28,7 @@
   const GRIPS = ['nw', 'ne', 'sw', 'se'].map(c => `<i class="paper-grip" data-corner="${c}"></i>`).join('');
 
   let design = data.design, name = data.name, variant = 'first', picked = null, k = 1;
+  let content = {title: '', html: ''};  // the document shown in the text area: its title, the rest as HTML
   let zoom = localStorage.getItem('paper-zoom') || 'width';
   let undos = [], redos = [], was = JSON.stringify([design, name]), typed = null, note = null;  // note: {text, error} over the panel
 
@@ -254,7 +255,6 @@
     const pdf = variant === 'pdf';
     board.hidden = pdf;
     frame.hidden = !pdf;
-    sample.hidden = !pdf;
     root.querySelector('.paper-zoom').hidden = pdf;
     root.querySelectorAll('[data-add]').forEach(b => { b.disabled = pdf || (b.dataset.add === 'address' || b.dataset.add === 'info') && design.elements.some(el => el.type === b.dataset.add); });
     if (pdf) return;
@@ -295,10 +295,11 @@
       inner = `<div><b>${example(v.dokument_amt, 'Das Amt, das den Brief schickt')}</b></div><dl><dt>Aktenzeichen</dt><dd>${example(v.dokument_aktenzeichen, 'Das Aktenzeichen eines Bescheids')}</dd>` +
         `<dt>Datum</dt><dd>${example(v.dokument_datum, 'Der Tag, an dem er ausgestellt ist')}</dd></dl>`;
       css += `;font-family:${family(st.font)};font-size:${px(el.size)}px`;
-    } else if (el.type === 'body') {
-      const title = variant === 'first' ? `${st.bar ? `<i class="paper-bar" style="background:${data.accent}"></i>` : ''}<div class="paper-title" style="font-family:${family(st.heading)};font-size:${px(st.title)}px">Titel des Dokuments</div>` : '';
-      const words = 'Hier steht der Text des Dokuments, in seiner Schrift und Größe. Er fließt in diesen Bereich und auf die Folgeseiten, so lang er ist.';
-      inner = `<span class="paper-label">Textbereich</span><div class="paper-flow${st.middle ? ' middle' : ''}${st.align === 'center' ? ' centred' : ''}" style="text-align:${st.align};font-family:${family(st.font)};font-size:${px(st.size)}px">${title}<p>${words}</p><p>${words}</p></div>`;
+    } else if (el.type === 'body') {  // the document chosen to show (content), greyed: on the following pages from where the first one's area ends
+      const first = design.elements.find(e => e.type === 'body' && e.pages !== 'later');
+      const title = `${st.bar ? `<i class="paper-bar" style="background:${data.accent}"></i>` : ''}<div class="paper-title" style="font-family:${family(st.heading)};font-size:${px(st.title)}px">${esc(content.title)}</div>`;
+      const rest = variant === 'later' && first ? ` style="margin-top:-${first.h * S}px"` : '';
+      inner = `<span class="paper-label">Textbereich</span><div class="paper-flow${st.middle && variant === 'first' ? ' middle' : ''}${st.align === 'center' ? ' centred' : ''}" style="text-align:${st.align};font-family:${family(st.font)};font-size:${px(st.size)}px;--pt:${px(1)}px"><div${rest}>${title}${content.html}</div></div>`;
     }
     const kind = `paper-el paper-${el.type}${el.type === 'box' && !el.fill ? ' frame' : ''}${el.id === picked ? ' on' : ''}${el.locked ? ' locked' : ''}`;
     return `<div class="${kind}" data-id="${esc(el.id)}" data-name="${named(el)}" style="${css}">${inner}${el.id === picked && !el.locked ? GRIPS : ''}</div>`;
@@ -498,7 +499,7 @@
     inspect();
   }
 
-  // ---- uploads (setup.papers.artworks): a picture, or the files of a font family, all at once
+  // ---- uploads (documents.views.artworks): a picture, or the files of a font family, all at once
   async function upload(kind, files, extra = {}) {
     const form = new FormData();
     form.append('art', kind);
@@ -734,7 +735,7 @@
       `<button type="button" class="paper-lock${el.locked ? ' on' : ''}" data-lock="${esc(el.id)}" title="${el.locked ? 'Festgehalten: lösen' : 'Festhalten: nicht verschieben, Klicks gehen hindurch'}" aria-pressed="${!!el.locked}">${LOCK}</button></li>`).join('');
     const used = data.used.length ? `${esc(data.used[0])}${data.used.length > 1 ? ` und ${data.used.length - 1} weitere` : ''}` : 'kein Dokument';
     return `<h3>Briefbogen</h3>` + field('Name', `<input data-key="name" value="${esc(name)}" maxlength="80">`) +
-      `<p class="paper-used"><small title="${esc(data.used.join(', '))}">Gilt für ${used}</small><a href="${esc(data.assign)}">Zuordnen</a></p>` +
+      `<p class="paper-used"><small title="${esc(data.used.join(', '))}">Gilt für ${used}</small></p>` +
       section('Text des Dokuments', `<div class="row">${field('Schrift', fontPick('style.font', st.font))}${field('Überschriften', fontPick('style.heading', st.heading))}</div>` +
         `<div class="row">${field('Größe (pt)', number('style.size', st.size, 0.5, 7, 16), true)}${field('Titel (pt)', number('style.title', st.title, 1, 10, 48), true)}</div>` +
         `<div class="paper-checks">${check('style.bar', 'Balken über dem Titel', st.bar)}${check('style.center', 'Zentriert', st.align === 'center')}` +
@@ -821,7 +822,15 @@
     draw();
     inspect();
   });
-  sample.addEventListener('change', preview);
+  sample.addEventListener('change', () => { load(); if (variant === 'pdf') preview(); });
+  async function load() {  // the document chosen to show, into the text area (views.paper_content)
+    const response = await fetch(`${data.content}?dokument=${encodeURIComponent(sample.value)}`);
+    if (!response.ok) return;
+    content = await response.json();
+    Object.assign(data.values, content.values);  // the page's own values, its title and office, as this document has them
+    if (variant !== 'pdf') draw();
+  }
+  load();
 
   saveForm.addEventListener('submit', () => {
     saveForm.elements.design.value = JSON.stringify(design);

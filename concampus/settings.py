@@ -85,6 +85,7 @@ INSTALLED_APPS = [
     'instruments',
     'mobility',
     'analytics',
+    'documents',
     'setup',
     'django.contrib.admin',  # last: its registration templates must not stand in for ConCampus's own
 ]

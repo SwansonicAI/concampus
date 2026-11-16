@@ -175,7 +175,7 @@ class InstitutionForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.lead = format_html('Schriftzug, Logo, Farbe, Anschrift und Bankverbindung füllen die <a href="{}">Briefbögen</a>.', reverse('setup:papers'))
+        self.lead = format_html('Schriftzug, Logo, Farbe, Anschrift und Bankverbindung füllen die <a href="{}">Briefbögen</a>.', reverse('documents:papers'))
 
 
 class OfficeForm(forms.ModelForm):

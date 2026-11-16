@@ -27,6 +27,41 @@ function init(root) {
   root.querySelectorAll('[data-cycle]').forEach(cycle);
   root.querySelectorAll('.calendar').forEach(calendar);
   root.querySelectorAll('form:has([data-suggest])').forEach(sized);
+  root.querySelectorAll('form[data-preview]').forEach(worded);
+}
+
+// A document being worded shows beside it as it is printed or arrives, a moment after typing stops
+// (documents.views.document_preview): its form (data-preview) sends what is typed and the Briefbogen chosen to the frame by
+// a form of its own, so it stays unsaved. A placeholder clicked goes where the cursor was in its own text, subject or body;
+// „Gestalten“ follows the Briefbogen chosen.
+function worded(form) {
+  const preview = document.getElementById(form.dataset.preview), link = form.querySelector('[data-paper-link]');
+  let field = form.querySelector('textarea'), pause;
+  const show = () => {
+    preview.querySelectorAll('[data-copy]').forEach(input => input.remove());
+    for (const [name, value] of new FormData(form)) {
+      if (name === 'csrfmiddlewaretoken') continue;
+      const input = Object.assign(document.createElement('input'), {type: 'hidden', name, value});
+      input.dataset.copy = '';
+      preview.append(input);
+    }
+    preview.submit();
+  };
+  form.addEventListener('focusin', ({target}) => { if (target.matches('input[name$=subject], textarea')) field = target; });
+  form.addEventListener('input', ({target}) => {
+    if (link && target.name === 'briefbogen') link.href = link.dataset.paperLink.replace('KEY', target.value);
+    clearTimeout(pause);
+    pause = setTimeout(show, 500);
+  });
+  form.addEventListener('click', ({target}) => {
+    const chip = target.closest('[data-insert]'), own = chip?.closest('.worded');
+    if (!chip) return;
+    const into = own && !own.contains(field) ? own.querySelector('textarea') : field;
+    into.setRangeText(chip.dataset.insert, into.selectionStart, into.selectionEnd, 'end');
+    into.focus();
+    into.dispatchEvent(new Event('input', {bubbles: true}));
+  });
+  if (form.querySelector('.errorlist')) show();  // a save refused: the frame says why, not what was saved
 }
 
 // One's own field in a Terminumfrage: each click the next answer, ✓, ~, ✗, then none again. Saved with the form.

@@ -51,7 +51,9 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
     ]),
     ('Verwaltung', [
         ('manage_terms', 'Semester anlegen und pflegen'),
-        ('manage_institution', 'Hochschuldaten, Institute und Texte pflegen'),
+        ('manage_institution', 'Hochschuldaten, Institute und Gebühren pflegen'),
+        ('word_texts', 'Texte formulieren: Bescheide mit Rechtsbehelfsbelehrung, Nachrichten und die Bausteine der Dokumente'),
+        ('design_papers', 'Briefbögen gestalten, mit Schriften und Bildern, und festlegen, welches Dokument auf welchem steht'),
         ('manage_accounts', 'Ämter, Berechtigungen und Konten verwalten'),
         ('view_statistics', 'Auswertungen aller Bereiche einsehen (Zahlen; Namen nur mit der Berechtigung des Bereichs)'),
         ('report_statistics', 'Amtliche Statistik der Studierenden und Prüfungen prüfen und liefern'),
@@ -61,7 +63,7 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
     ]),
 ]
 CODENAMES = [codename for _, group in CAPABILITIES for codename, _ in group]
-EVERYWHERE = {'manage_reregistration', 'manage_terms', 'manage_institution', 'manage_accounts', 'view_statistics', 'report_statistics', 'dispose_files', 'assess_files', 'manage_mobility'}  # never limited to Institute
+EVERYWHERE = {'manage_reregistration', 'manage_terms', 'manage_institution', 'word_texts', 'design_papers', 'manage_accounts', 'view_statistics', 'report_statistics', 'dispose_files', 'assess_files', 'manage_mobility'}  # never limited to Institute
 SENSITIVE = {  # given to an office, or an office holding one joined, only once a second person confirms it: whoever gives Berechtigungen could give themselves all, the rest opens health data, grades and certificates, or whole personal records
     'manage_accounts', 'manage_students', 'decide_results', 'correct_scores', 'grant_compensation',
 }
@@ -77,7 +79,7 @@ SHORT = {  # each right in a few words under its area, to take in at a glance; C
     'book_any_room': 'Alle Räume buchen', 'view_bookings': 'Alle Buchungen sehen', 'manage_bookings': 'Buchungen anderer ändern',
     'manage_rooms': 'Räume pflegen', 'manage_instruments': 'Leihinstrumente',
     'manage_mobility': 'Partner und Auslandsaufenthalte',
-    'manage_terms': 'Semester pflegen', 'manage_institution': 'Hochschuldaten und Texte', 'manage_accounts': 'Ämter, Berechtigungen und Konten',
+    'manage_terms': 'Semester pflegen', 'manage_institution': 'Hochschuldaten pflegen', 'word_texts': 'Texte formulieren', 'design_papers': 'Briefbögen gestalten', 'manage_accounts': 'Ämter, Berechtigungen und Konten',
     'view_statistics': 'Auswertungen', 'report_statistics': 'Amtliche Statistik',
     'assess_files': 'Akten bewerten',
 }

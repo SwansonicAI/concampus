@@ -20,10 +20,16 @@ class Spec:
     body: str
     placeholders: tuple = ()
     appeal: bool | None = None  # the Rechtsbehelfsbelehrung follows; None: where it is a Bescheid
+    on: tuple = ()  # a Baustein: the documents it stands on (core.paper.DOCUMENTS)
 
     @property
     def allowed(self):
         return ALWAYS + self.placeholders
+
+    @property
+    def papers(self):
+        """The documents it stands on: a Bescheid, a letter."""
+        return ('brief',) if self.group == BESCHEID else self.on
 
     @property
     def appealable(self):
@@ -380,34 +386,34 @@ TEXTS = {
     'rechtsbehelf': Spec(
         BAUSTEIN, 'Rechtsbehelfsbelehrung', '',
         'Rechtsbehelfsbelehrung: Gegen diesen Bescheid kann innerhalb eines Monats nach seiner Bekanntgabe Widerspruch erhoben werden. '
-        'Der Widerspruch ist schriftlich oder zur Niederschrift bei der {hochschule}, {anschrift}, einzulegen.',
+        'Der Widerspruch ist schriftlich oder zur Niederschrift bei der {hochschule}, {anschrift}, einzulegen.', on=('brief',),
     ),
     'ablehnung_begruendung': Spec(
         BAUSTEIN, 'Begründung einer Ablehnung', '',
-        'Sie haben {pruefungsteil} der Eignungsprüfung nicht bestanden ({ergebnis}). Damit ist Ihre Eignung nicht festgestellt.', ('pruefungsteil', 'ergebnis'),
+        'Sie haben {pruefungsteil} der Eignungsprüfung nicht bestanden ({ergebnis}). Damit ist Ihre Eignung nicht festgestellt.', ('pruefungsteil', 'ergebnis'), on=('brief',),
     ),
     'erstattung': Spec(
         BAUSTEIN, 'Erstattung des Semesterbeitrags', '',
         'Den Semesterbeitrag für das {rueckmeldesemester} erstattet auf Antrag das Studierendenwerk, sofern Sie das '
-        'Deutschlandsemesterticket nicht abgerufen haben.', ('rueckmeldesemester',),
+        'Deutschlandsemesterticket nicht abgerufen haben.', ('rueckmeldesemester',), on=('brief',),
     ),
     'auslaenderbehoerde': Spec(
         BAUSTEIN, 'Hinweis zur Ausländerbehörde', '',
-        'Bitte teilen Sie der Ausländerbehörde innerhalb von zwei Wochen mit, dass Ihr Studium hier beendet ist (§ 82 Abs. 6 Aufenthaltsgesetz).',
+        'Bitte teilen Sie der Ausländerbehörde innerhalb von zwei Wochen mit, dass Ihr Studium hier beendet ist (§ 82 Abs. 6 Aufenthaltsgesetz).', on=('brief',),
     ),
-    'absender_bescheide': Spec(BAUSTEIN, 'Absender der Bescheide', '', '{hochschule}'),
-    'absender_bescheinigungen': Spec(BAUSTEIN, 'Absender der Immatrikulationsbescheinigung', '', '{hochschule}'),
-    'absender_leistungen': Spec(BAUSTEIN, 'Absender der Leistungsübersichten und Zeugnisse', '', '{hochschule}'),
-    'unterschrift_zeugnisse': Spec(BAUSTEIN, 'Unterschriften auf Zeugnissen', '', 'Vorsitz Prüfungsausschuss'),  # one per line
+    'absender_bescheide': Spec(BAUSTEIN, 'Absender der Bescheide', '', '{hochschule}', on=('brief',)),
+    'absender_bescheinigungen': Spec(BAUSTEIN, 'Absender der Bescheinigungen', '', '{hochschule}', on=('immatrikulation', 'studienzeiten', 'exmatrikulation')),
+    'absender_leistungen': Spec(BAUSTEIN, 'Absender der Leistungsübersichten und Zeugnisse', '', '{hochschule}', on=('leistungen', 'notenliste')),
+    'unterschrift_zeugnisse': Spec(BAUSTEIN, 'Unterschriften auf Zeugnissen', '', 'Vorsitz Prüfungsausschuss', on=('leistungen', 'supplement')),  # one per line
     'leihbedingungen': Spec(
         BAUSTEIN, 'Bedingungen für Leihinstrumente', '',
         'Das Instrument bleibt Eigentum der Hochschule und dient dem Studium. Es ist pfleglich zu behandeln, nicht weiterzugeben und bis zum '
         'vereinbarten Tag mit dem Zubehör zurückzugeben. Schäden und Verlust sind sofort zu melden; für Schäden, die über die übliche Abnutzung '
-        'hinausgehen, haftet, wer es ausgeliehen hat. Solange es überfällig ist, ist keine Rückmeldung möglich.',
+        'hinausgehen, haftet, wer es ausgeliehen hat. Solange es überfällig ist, ist keine Rückmeldung möglich.', on=('leihvertrag',),
     ),
-    'absender_leihe': Spec(BAUSTEIN, 'Absender der Leihverträge', '', '{hochschule}'),
-    'unterschrift_urkunden': Spec(BAUSTEIN, 'Unterschriften auf Urkunden', '', 'Präsidentin oder Präsident\nVorsitz Prüfungsausschuss'),
-    'ds_hochschule': Spec(BAUSTEIN, 'Diploma Supplement: Hochschule und Status', '', '{hochschule}\nUniversity of Music, state institution'),
+    'absender_leihe': Spec(BAUSTEIN, 'Absender der Leihverträge', '', '{hochschule}', on=('leihvertrag',)),
+    'unterschrift_urkunden': Spec(BAUSTEIN, 'Unterschriften auf Urkunden', '', 'Präsidentin oder Präsident\nVorsitz Prüfungsausschuss', on=('urkunde',)),
+    'ds_hochschule': Spec(BAUSTEIN, 'Diploma Supplement: Hochschule und Status', '', '{hochschule}\nUniversity of Music, state institution', on=('supplement',)),
     'ds_hochschulsystem': Spec(  # KMK/HRK 2018
         BAUSTEIN, 'Diploma Supplement: Hochschulsystem (Abschnitt 8)', '',
         'The information on the national higher education system on the following pages provides a context '
@@ -543,7 +549,7 @@ TEXTS = {
         'Hochschulrektorenkonferenz (HRK) (German Rectors’ Conference); Leipziger Platz 11, D-10117 Berlin, '
         'Phone: +49 30 206292-11; www.hrk.de; E-Mail: post@hrk.de\n\n- "Higher Education Compass" of the '
         'German Rectors’ Conference features comprehensive information on institutions, programs of study, '
-        'etc. (www.higher-education-compass.de)',
+        'etc. (www.higher-education-compass.de)', on=('supplement',),
     ),
     'ds_hochschulsystem_de': Spec(
         BAUSTEIN, 'Diploma Supplement: Hochschulsystem (Abschnitt 8, deutsch)', '',
@@ -682,7 +688,7 @@ TEXTS = {
         'Informationen zum Bildungswesen in Deutschland; www.kmk.org; E-Mail: eurydice@kmk.org\n\n- '
         'Hochschulrektorenkonferenz (HRK); Leipziger Platz 11, D-10117 Berlin, Tel.: +49 30 206292-11; '
         'www.hrk.de; E-Mail: post@hrk.de\n\n- „Hochschulkompass“ der Hochschulrektorenkonferenz, enthält '
-        'umfassende Informationen zu Hochschulen, Studiengängen etc. (www.hochschulkompass.de)',
+        'umfassende Informationen zu Hochschulen, Studiengängen etc. (www.hochschulkompass.de)', on=('supplement',),
     ),
     'barrierefreiheit_stand': Spec(
         BAUSTEIN, 'Barrierefreiheit: Stand und Ausnahmen', '',
@@ -721,6 +727,30 @@ TEXTS = {
         'Unterlagen hoch. Bis zur Frist können Sie alles ändern.\n\nEinladungen und Bescheide erhalten Sie in Ihr Postfach.',
     ),
 }
+EXAMPLES = {  # what each placeholder holds, written as ConCampus fills it in, to show a text as it arrives (documents.views.text_preview)
+    'vorname': 'Erika', 'nachname': 'Mustermann', 'studiengang': 'Bachelor Musik', 'hauptfach': 'Violine', 'semester': 'Wintersemester 2026/27',
+    'matrikelnummer': '100123', 'rueckmeldesemester': 'Sommersemester 2027', 'frist': '15.01.2027', 'zum': '31.03.2027', 'tag': '31.01.2027',
+    'grund': 'auf eigenen Antrag', 'begruendung': 'Die Eignung ist nicht festgestellt.', 'wahl': 'Schwerpunkt', 'schwerpunkt': 'Alte Musik',
+    'inhalt': 'Historische Aufführungspraxis und Generalbass, im 3. bis 6. Semester.', 'aendern': 'bis zum Ende des 4. Semesters', 'fachsemester': '3',
+    'bisher': 'Bachelor Musik, Hauptfach Viola', 'art': 'Gaststudierende', 'regelstudienzeit': '8', 'erlaubt': '4', 'gezaehlt': '13', 'betrag': '500',
+    'beitrag': '262,50', 'modul': 'Hauptfach 6', 'thema': 'Bachs Sonaten und Partiten in historischer Aufführungspraxis', 'versuch': '3',
+    'gutachter': 'Prof. Anna Berger, Dr. Jonas Wendt', 'massnahme': '30 Minuten mehr Zeit in schriftlichen Prüfungen', 'herkunft': 'der Universität der Künste Berlin',
+    'pruefung': 'Hauptfachprüfung Violine', 'stufen': 'die Präsenzrunde', 'termin': '12.01.2027, 10:00', 'neuer_termin': '14.01.2027, 10:00', 'raum': 'Saal 1',
+    'programm': 'J. S. Bach: Partita Nr. 2 d-Moll, Chaconne\nW. A. Mozart: Violinkonzert Nr. 5 A-Dur, 1. Satz', 'danach': '– Präsenzrunde\n– Gehörbildung',
+    'fehlt': '– Sprachnachweis Deutsch', 'veranstaltung': 'Kammermusik Streicher', 'veranstaltungen': '– Kammermusik Streicher\n– Orchesterstudien Violine',
+    'besetzung': 'Streichquartett', 'von': 'Prof. Anna Berger', 'betreuung': 'Prof. Anna Berger', 'instrument': 'Viola Nr. 12', 'platz': '2', 'gruppe': 'B',
+    'zeit': 'Dienstag, 14:00 Uhr', 'ab': '20.10.2026', 'studierende': 'Erika Mustermann', 'anzahl': '2', 'entscheidung': 'übernommen', 'bewerbung': 'Erika Mustermann',
+    'kandidat': 'Erika Mustermann', 'fuer': 'Prof. Jonas Wendt', 'buchung': 'Probe Streichquartett', 'zeitraum': '19.10.2026 bis 06.02.2027', 'umfang': '2 SWS',
+    'verguetung': '38 € je Unterrichtsstunde', 'berechtigung': 'Studierende auflisten und exportieren', 'amt': 'Prüfungsamt', 'bis': ' bis 31.03.2027',
+    'termine': '– 10:00 Kammermusik Streicher, Saal 1\n– 14:00 Hauptfach Violine, Raum 207', 'pruefungsteil': 'die Videostufe', 'ergebnis': '14 von 25 Punkten',
+    'zweck': 'zum Nachteilsausgleich', 'link': 'https://campus.example/bestaetigen/…', 'zugang': 'https://campus.example/zugang/…', 'benutzername': 'emustermann',
+}
+UNLIKE = {'berechtigung_erteilt': {'ab': ''}, 'lehrauftrag': {'veranstaltungen': 'Kammermusik Streicher (2 SWS)'}}  # where a text fills one otherwise
+
+
+def examples(key):
+    """EXAMPLES as the text takes them."""
+    return EXAMPLES | UNLIKE.get(key, {})
 
 
 class Values(dict):
@@ -781,7 +811,8 @@ def block(key, **values):
 def send(key, person, link='', **values):
     """A message to the Postfach; a Bescheid with its sender, which gives it an Aktenzeichen to quote in a Widerspruch."""
     subject, body = render(key, vorname=person.first_name, nachname=person.last_name, **values)
-    return Message.send(person, subject, body, link, sender=block('absender_bescheide') if TEXTS[key].group == BESCHEID else '')
+    bescheid = TEXTS[key].group == BESCHEID
+    return Message.send(person, subject, body, link, sender=block('absender_bescheide') if bescheid else '', template=key if bescheid else '')
 
 
 def mail(key, person, **values):

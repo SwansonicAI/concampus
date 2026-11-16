@@ -108,6 +108,7 @@ DOCUMENTS = {  # key (data-paper on the template's .document): (what it is, its 
     'vordruck': ('Vordruck der Kommission', 'bescheinigung'),
 }
 LETTERS = {'brief'}  # documents with an address: on a Briefbogen with an address window
+OWN_LETTER = 'bescheid:'  # in Institution.papers, with a text's key: a Bescheid on a Briefbogen of its own, not that of all letters
 
 
 def element(kind, key, x, y, w, h, pages='all', **fields):
@@ -156,7 +157,6 @@ STANDARD = {  # key: (name, design): ConCampus's own Briefbögen, until the Hoch
         element('body', 'b2', 28, 30, 154, 237, 'later'),
     ]}),
 }
-SAMPLES = {'brief': 'Brief', 'bescheinigung': 'Bescheinigung', 'urkunde': 'Urkunde'}  # what a Briefbogen is tried on (sample())
 
 
 # ---- fonts ---------------------------------------------------------------------------------------------------------
@@ -358,10 +358,16 @@ def layouts():
 
 
 def chosen(institution=None, found=None):
-    """The Briefbogen of each document: {document: key}."""
+    """The Briefbogen of each document: {document: key}; a Bescheid on one of its own also under OWN_LETTER and its text."""
     papers = (institution or Institution.get()).papers or {}
     found = found if found is not None else layouts()
-    return {doc: papers[doc] if papers.get(doc) in found else standard for doc, (_, standard) in DOCUMENTS.items()}
+    every = {doc: papers[doc] if papers.get(doc) in found else standard for doc, (_, standard) in DOCUMENTS.items()}
+    return every | {slot: key for slot, key in papers.items() if slot.startswith(OWN_LETTER) and key in found}
+
+
+def letter_paper(chosen, template):
+    """The Briefbogen of a letter from the text `template`: its own, else that of all letters."""
+    return chosen.get(OWN_LETTER + template, chosen['brief'])
 
 
 def number(value, low, high, name):
@@ -999,7 +1005,7 @@ def document_of(el):
 
 def pdf(page, title='', design=None):
     """The `.document`s of a rendered page as one PDF, each from a new page on its Briefbogen, with its own page
-    numbers; `design`: every one on this one instead, to try it (setup.views.paper_preview)."""
+    numbers; `design`: every one on this one instead, to try it (documents.views.preview)."""
     institution = Institution.get()
     accent, own = institution.accent or '#008a00', own_fonts()
     found = layouts() if design is None else {}
@@ -1008,7 +1014,8 @@ def pdf(page, title='', design=None):
     story, templates = [], []
     for index, el in enumerate(root.find_class('document')):
         kind = classes(el)
-        layout = design or found[papers[document_of(el)]][1]
+        doc = document_of(el)
+        layout = design or found[letter_paper(papers, el.get('data-template', '')) if doc in LETTERS else papers[doc]][1]
         look = Look(layout['style'], accent, own)
         head = next(iter(el.find_class('letterhead')), None)
         office = [line for line in lines(next(iter(head.find_class('muted')), head)) if line not in institution.address.splitlines()] if head is not None and head.find_class('muted') else []
@@ -1046,11 +1053,6 @@ def pdf(page, title='', design=None):
 def letter(message):
     """A message from the Postfach as a letter, its PDF: a Bescheid as it is issued (students.Study.notify)."""
     return pdf(render_to_string('core/_letter.html', {'letter': message, 'institution': Institution.get()}), message.subject)
-
-
-def sample(kind):
-    """A made-up document to try a Briefbogen on: a letter, a Bescheinigung over two pages, or an Urkunde."""
-    return render_to_string('core/_sample.html', {'kind': kind, 'institution': Institution.get(), 'rows': range(1, 41), 'today': timezone.localdate()})
 
 
 def respond(data, name):

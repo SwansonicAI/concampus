@@ -550,6 +550,7 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
         'view_students', 'manage_students', 'manage_reregistration', 'message_students',  # outcomes of exams, not grades: those are the Prüfungsamt's
         'view_applications', 'decide_applications', 'run_auditions',  # halls for the auditions too
         'view_curriculum', 'book_any_room', 'view_bookings', 'manage_terms', 'view_statistics', 'report_statistics', 'dispose_files',
+        'word_texts',  # the Bescheide it issues, in its own words
     ],
     'Hochschularchiv': ['assess_files'],
     'Prüfungsamt': ['view_students', 'view_files', 'manage_exams', 'decide_results', 'view_curriculum', 'book_any_room', 'view_bookings'],
@@ -557,7 +558,7 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
     'Personalabteilung': ['manage_staff', 'view_teaching_load'],  # takes teachers on and enters their Lehrverpflichtung; pay stays in MACH
     'Dekanatsreferat': ['manage_courses', 'plan_teaching', 'view_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings'],
     'Veranstaltungsbüro': ['book_any_room', 'view_bookings', 'manage_bookings', 'manage_rooms', 'manage_instruments'],
-    'ConCampus-Team': ['manage_accounts', 'manage_institution', 'manage_terms'],
+    'ConCampus-Team': ['manage_accounts', 'manage_institution', 'word_texts', 'design_papers', 'manage_terms'],
     'Präsidium': ['view_statistics', 'view_curriculum', 'view_teaching_load'],
     'Institut Streichinstrumente und Harfe': [
         'view_students', 'view_files', 'message_students', 'view_applications', 'run_auditions', 'manage_courses', 'view_teaching_load',

@@ -921,6 +921,43 @@ kbd { padding: 0 5px; border: 1px solid var(--line); border-radius: var(--radius
 .key[aria-pressed="false"]::before { background: var(--line); }
 @media (max-width: 1100px) { .charts, .sections { grid-template-columns: 1fr; } }
 
+/* Dokumente (documents/): the Briefbögen as cards, each its sample at a glance, the card opening it; each document on its
+   Briefbogen, a grid as the Berechtigungen; a text worded beside the frame that shows it as it arrives, staying in view */
+.sheets { display: grid; grid-template-columns: repeat(auto-fill, 200px); gap: 24px; margin-bottom: 8px; }
+.sheet { position: relative; display: grid; align-content: start; gap: 4px; font-size: 14px; }
+.sheet .page { width: 200px; height: 283px; margin-bottom: 8px; overflow: hidden; outline: 1px solid var(--line); background: var(--soft); }
+.sheet iframe { display: block; width: 221px; height: 283px; border: 0; pointer-events: none; }  /* the first page across the card's width, the viewer's margin and scrollbar beyond it */
+.sheet a { color: var(--ink); font-size: 16px; }
+.sheet a::after { content: ''; position: absolute; inset: 0; }  /* the whole card */
+.sheet:hover .page { outline-color: var(--accent); }
+.sheet:hover a { color: var(--accent); text-decoration: none; }
+.sheet.new { height: 283px; padding: 16px; border: 1px dashed var(--accent); }
+.sheet.new summary { color: var(--accent); font-weight: 600; cursor: pointer; }
+.sheet.new .form { gap: 12px; margin-top: 12px; }
+.sheet.new label { display: grid; gap: 4px; font-weight: 600; }
+.sheet.new :is(input, select) { width: 100%; }
+.matrix th.layout { padding: 0 10px 10px; vertical-align: bottom; font-weight: 600; letter-spacing: 0; text-align: center; text-transform: none; }
+.matrix button:disabled { cursor: not-allowed; }
+.matrix button:disabled .check { visibility: hidden; }
+.wording { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 40px; align-items: start; }
+.worded-fields { display: grid; gap: 14px; }
+.worded-fields > div:not(.chips) { display: grid; gap: 6px; }
+.worded-fields .chips { margin-top: -4px; }
+details.worded { padding-top: 14px; border-top: 1px solid var(--line); }
+details.worded > summary { cursor: pointer; }
+details.worded[open] > summary { margin-bottom: 14px; }
+.worded-own { margin: 0; font-size: 14px; }
+.paper-choice > div { display: flex; align-items: center; gap: 14px; }
+.paper-choice select { flex: 1; }
+button.chip { padding: 2px 8px; background: #fff; font: inherit; font-size: 13px; cursor: pointer; }
+button.chip:hover { border-color: var(--accent); color: var(--accent); }
+.wording-preview { position: sticky; top: 16px; }
+.wording-preview iframe { display: block; width: 100%; height: calc(100vh - 120px); border: 1px solid var(--line); background: var(--soft); }
+.wording-preview p { margin: 8px 0 0; font-size: 14px; }
+body.framed { display: block; min-height: 0; padding: 24px 28px; background: #fff; }
+body.framed h1 { margin-top: 0; font-size: 24px; }
+@media (max-width: 1100px) { .wording { grid-template-columns: minmax(0, 1fr); } .wording-preview { position: static; } }
+
 /* Briefbogen editor (setup/paper.html, paper.js): a workspace the window's size. The page on grey under rulers that
    stay in view, the rail docked at the window's right edge; what is picked outlined in the accent, guides in blue */
 body:has(#paper) { --rail: 460px; }
@@ -961,7 +998,9 @@ body:has(#paper) > .foot { display: none; }
 .paper-legend .paper-var { padding: 0 3px; color: var(--ink); }
 .paper-variants button { padding: 0; border: 0; background: none; color: var(--ink); font: inherit; cursor: pointer; }
 .paper-variants button.on { color: var(--accent); text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
-.paper-zoom[hidden], .paper-sample[hidden] { display: none; }
+.paper-zoom[hidden] { display: none; }
+.paper-shown { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 14px; }  /* the document the page and the PDF show */
+.paper-shown select { max-width: 260px; padding-block: 5px; }
 .paper-desk { position: relative; flex: 1; min-height: 0; overflow: auto; background: var(--soft); scrollbar-gutter: stable; scrollbar-width: thin; scrollbar-color: #c4c4c4 transparent; }  /* a quiet scrollbar on the grey, its room kept so fitting the page never sways */
 .paper-desk:hover { scrollbar-color: #9a9a9a transparent; }
 .paper-board { display: grid; grid-template-columns: 20px max-content; grid-template-rows: 20px max-content; width: max-content; margin: 0 auto; }
@@ -1035,6 +1074,18 @@ body:has(#paper) > .foot { display: none; }
 .paper-bar { display: inline-block; width: 240px; max-width: 40%; height: 7.3px; margin-bottom: 8px; }  /* 30 mm, 2.6 pt, as core/paper.py Bar */
 .paper-flow.centred .paper-bar { display: block; margin-inline: auto; }
 .paper-title { margin-bottom: 0.5em; font-weight: 700; line-height: 1.2; }
+/* a document's own content in the text area (views.paper_content), in the page's units as the PDF sets it */
+.paper-flow :is(h2, h3) { margin: 1em 0 0.4em; font-size: 1.15em; }
+.paper-flow section { margin: 1em 0; }
+.paper-flow table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
+.paper-flow :is(th, td) { padding: 0.2em 0.4em 0.2em 0; border-bottom: 1px solid #bbb; text-align: left; font-weight: inherit; letter-spacing: 0; text-transform: none; }
+.paper-flow th { font-weight: 700; }
+.paper-flow .num { text-align: right; }
+.paper-flow .facts { display: grid; grid-template-columns: 11em 1fr; gap: 0.2em 1em; margin: 0.6em 0; }
+.paper-flow .facts :is(dt, dd) { margin: 0; }
+.paper-flow :is(.sign, .signatures) { display: flex; justify-content: space-between; gap: 2em; margin-top: 3em; }
+.paper-flow .signatures span { flex: 1; padding-top: 0.3em; border-top: 1px solid currentColor; }
+.paper-flow.centred .sign { justify-content: center; }
 .paper-window { position: absolute; border: var(--px) dashed var(--blue); pointer-events: none; }
 .paper-window small { position: absolute; bottom: calc(2 * var(--px)); right: calc(4 * var(--px)); color: var(--blue); font: calc(11 * var(--px)) system-ui, sans-serif; }
 .paper-mark { position: absolute; height: 3.2px; background: var(--muted); pointer-events: none; }  /* 0.4 pt */

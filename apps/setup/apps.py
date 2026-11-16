@@ -38,10 +38,7 @@ class SetupConfig(Tile, AppConfig):
                 feature('Zugriffe', reverse('setup:sign_ins'), 'login anmeldungen fehlversuche protokoll sicherheit'),
             ]
         if 'manage_institution' in person.roles:
-            found += [
-                feature('Texte', reverse('setup:texts'), 'einstellungen bescheide nachrichten briefe vorlagen formulierung rechtsbehelfsbelehrung'),
-                feature('Barrierefreiheit', reverse('setup:feedback'), 'barrieren hinweise rückmeldungen beantworten'),
-            ]
+            found.append(feature('Barrierefreiheit', reverse('setup:feedback'), 'barrieren hinweise rückmeldungen beantworten'))
         if person.roles & {'manage_institution', 'manage_students'}:
             found.append(feature('Amtliche Verzeichnisse', reverse('setup:keys'), 'schlüssel destatis staaten kreise'))
         return found

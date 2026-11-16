@@ -9,10 +9,13 @@
 <div class="paper" id="paper">
   <div class="paper-main">
     <div class="paper-tools">
-      <a class="paper-back" href="{% url 'setup:papers' %}" title="Zurück zu allen Briefbögen"><i class="arrow left"></i>Briefbögen</a>
+      <a class="paper-back" href="{% url 'documents:papers' %}" title="Zurück zu allen Briefbögen"><i class="arrow left"></i>Briefbögen</a>
       <h1>{{ name }}</h1>
       <div class="filters paper-variants"><button type="button" class="on" data-variant="first">Erste Seite</button><button type="button" data-variant="later">Folgeseiten</button><button type="button" data-variant="pdf" title="Das Muster als PDF, wie dieser Briefbogen es setzt, auch ungespeichert">Vorschau</button></div>
-      <select name="muster" form="paper-preview" class="paper-sample" aria-label="Muster der Vorschau" hidden>{% for value, title in samples.items %}<option value="{{ value }}"{% if value == sample %} selected{% endif %}>Muster: {{ title }}</option>{% endfor %}</select>
+      <label class="paper-shown">Zeigen mit <select name="dokument" form="paper-preview" class="paper-sample">
+        {% if on %}<optgroup label="Auf diesem Briefbogen">{% for d in on %}<option value="{{ d.kind }}/{{ d.key }}"{% if shown == d.kind|add:'/'|add:d.key %} selected{% endif %}>{{ d.title }}</option>{% endfor %}</optgroup>{% endif %}
+        <optgroup label="{% if on %}Andere Dokumente{% else %}Dokumente{% endif %}">{% for d in others %}<option value="{{ d.kind }}/{{ d.key }}"{% if shown == d.kind|add:'/'|add:d.key %} selected{% endif %}>{{ d.title }}</option>{% endfor %}</optgroup>
+      </select></label>
       <div class="paper-view">
         <div class="paper-zoom" title="Strg und Mausrad: größer und kleiner, wo der Zeiger steht. Verschieben: auf dem Grau ziehen, oder mit gedrückter Leertaste">
           <button type="button" data-step="-1" aria-label="Kleiner">−</button>
@@ -57,7 +60,7 @@
   </aside>
   <dialog class="paper-dialog" aria-labelledby="paper-dialog-title"></dialog>
 </div>
-<form method="post" id="paper-preview" action="{% url 'setup:paper_preview' key %}" target="paper-frame">{% csrf_token %}<input type="hidden" name="design"></form>
+<form method="post" id="paper-preview" action="{% url 'documents:paper_preview' key %}" target="paper-frame">{% csrf_token %}<input type="hidden" name="design"></form>
 {{ editor|json_script:"paper-data" }}
 <script src="{% static 'core/paper.js' %}" defer></script>
 {% endblock %}

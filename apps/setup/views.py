@@ -1,6 +1,5 @@
 from datetime import timedelta
 
-from django import forms
 from django.contrib import messages
 from django.contrib.auth.models import Permission
 from django.contrib.auth.tokens import default_token_generator
@@ -19,11 +18,11 @@ from core.access import CAPABILITIES, CODENAMES, EVERYWHERE, LOCK, SENSITIVE, SH
 from core.forms import offered
 from core.history import because
 from core.keys import Edition, Key, review
-from core import paper, transfer
+from core import transfer
 from core.apps import plural
-from core.models import AccessRequest, Export, Feedback, Grant, Institute, Membership, Office, Person, SignIn, Term, Text, limited, waiting
+from core.models import AccessRequest, Export, Feedback, Grant, Institute, Membership, Office, Person, SignIn, Term, limited, waiting
 from core.text import collated, matching
-from core.texts import TEXTS, Values, basics, mail, wording
+from core.texts import mail
 from core.shortcuts import SHOWN
 from .editors import EDITORS, formfield
 
@@ -152,9 +151,6 @@ def places(person):
     found = [(e.section, e.title, reverse('setup:list', args=[e.key]), e.objects(person).count()) for e in usable(person)]
     if 'manage_accounts' in person.roles:
         found.append(('Verwaltung', 'Berechtigungen im Überblick', reverse('setup:rights'), len(CODENAMES)))
-    if 'manage_institution' in person.roles:
-        found.append(('Verwaltung', 'Texte', reverse('setup:texts'), len(TEXTS)))
-        found.append(('Verwaltung', 'Briefbögen', reverse('setup:papers'), len(paper.layouts())))
     if person.roles & {'manage_institution', 'manage_students'}:
         found.append(('Verwaltung', 'Amtliche Verzeichnisse', reverse('setup:keys'), len(Key.List)))
     return found
@@ -298,49 +294,6 @@ def edit(request, key, pk=None):
         'trail': [(None, reverse(e.home))] if e.home and not e.section else None,  # in the menu where its list is
         'history': pk and bool(e.model.seen_by(request.user, pk)), 'table': e.model._meta.label_lower,
         'used': uses(obj) if pk and e.deletable else '',
-    })
-
-
-class TextForm(forms.ModelForm):
-    class Meta:
-        model = Text
-        fields = ['subject', 'body']
-        widgets = {'body': forms.Textarea(attrs={'rows': 10})}
-
-
-@require('manage_institution')
-def texts(request):
-    """Every letter, message and text block, marked where the Hochschule has its own wording."""
-    own = set(Text.objects.values_list('key', flat=True))
-    groups = {}
-    for key, spec in TEXTS.items():
-        groups.setdefault(spec.group, []).append((key, spec, key in own))
-    return render(request, 'setup/texts.html', {'groups': groups})
-
-
-@require('manage_institution')
-def text(request, key):
-    spec = TEXTS.get(key)
-    if spec is None:
-        raise Http404
-    record = Text.objects.filter(key=key).first() or Text(key=key, subject=spec.subject, body=spec.body)
-    if request.method == 'POST' and 'standard' in request.POST:
-        if record.pk:
-            record.delete()
-        messages.success(request, f'„{spec.title}“ steht wieder auf dem Standard.')
-        return redirect('setup:texts')
-    form = TextForm(request.POST or None, instance=record)
-    if not spec.subject:
-        del form.fields['subject']
-    form.fields['body'].help_text = 'Platzhalter: ' + ', '.join('{' + name + '}' for name in spec.allowed)
-    if form.is_valid():
-        form.save()
-        messages.success(request, f'„{spec.title}“ gespeichert.')
-        return redirect('setup:texts')
-    sample = Values(basics(), vorname='Mei Lin', nachname='Chen')  # the Hochschule's own data; other placeholders stay visible
-    return render(request, 'setup/text.html', {
-        'spec': spec, 'form': form, 'record': record, 'own': bool(record.pk),
-        'preview': [part.format_map(sample) for part in wording(key)],  # as saved: the form may hold a broken draft
     })
 
 

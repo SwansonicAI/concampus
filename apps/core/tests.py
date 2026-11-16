@@ -23,6 +23,7 @@ from onelogin.saml2.utils import OneLogin_Saml2_Utils as Utils
 
 from courses.models import Course, Score
 from curriculum.models import Program
+from documents.catalogue import documents
 from rooms.models import Booking, Room
 from students.models import Document, Study
 from . import dates, sso
@@ -32,7 +33,7 @@ from .history import acting, restore
 from .models import Change, Institute, Institution, Message, Office, Person, Term, Text, Tracked
 from .testing import Empty, Seeded, flashes
 from .transfer import FORMAT, check, dump, everything, load, staff
-from .texts import TEXTS, render, send
+from .texts import TEXTS, examples, render, send, wording
 from .views import demo_people, found, ticket
 
 PANEL = {'X-Panel': '1'}
@@ -270,32 +271,45 @@ class TextTest(Seeded):
     """Letters and messages say what the Hochschule words; sent ones keep their wording."""
 
     def test_every_text_renders(self):
-        for key, spec in TEXTS.items():
+        for key in TEXTS:
             with self.subTest(key=key):
-                subject, body = render(key, **{name: f'<{name}>' for name in spec.allowed})
+                subject, body = render(key, **examples(key))  # every placeholder with an example, for its preview
                 self.assertNotIn('[', subject + body)
+
+    def posted(self, kind, key, **changed):
+        """What a document's page sends: each text on it as it stands, those `changed` ({text: (subject, body)}) as typed."""
+        found = {}
+        for text in documents()[kind, key].texts:
+            subject, body = changed.get(text, wording(text))
+            found |= {f'{text}-subject': subject, f'{text}-body': body}
+        return found
+
+    def test_preview_shows_a_draft_unsaved(self):
+        r = self.login('campus').post('/dokumente/bescheide/zulassung/vorschau/', self.posted('bescheide', 'zulassung', zulassung=('Ihre Zulassung', 'Willkommen, {vorname}.')))
+        self.assertEqual(r['Content-Type'], 'application/pdf')
+        self.assertFalse(Text.objects.filter(key='zulassung').exists())
 
     def test_placeholders_are_checked(self):
         campus = self.login('campus')
         for wrong in ['Hallo {vorname.__class__}', 'Hallo {passwort}', 'Hallo {vorname', 'Hallo {vorname!r}']:
             with self.subTest(wrong=wrong):
-                r = campus.post('/einstellungen/texte/willkommen/', {'subject': 'Willkommen', 'body': wrong})
-                self.assertTrue(r.context['form'].errors)
-        self.assertEqual(self.login('student').get('/einstellungen/texte/').status_code, 403)
+                r = campus.post('/dokumente/nachrichten/willkommen/', self.posted('nachrichten', 'willkommen', willkommen=('Willkommen', wrong)))
+                self.assertTrue(r.context['texts'][0][2].errors)
+        self.assertEqual(self.login('student').get('/dokumente/bescheide/').status_code, 403)
 
     def test_own_wording_then_back_to_standard(self):
         campus = self.login('campus')
         old = Message.objects.filter(subject='Bescheid über die Eignungsprüfung: Studienplatzangebot').first()
         before = old.body
-        campus.post('/einstellungen/texte/zulassung/', {'subject': 'Ihre Zulassung', 'body': 'Willkommen, {vorname}, zum {semester}.'})
+        campus.post('/dokumente/bescheide/zulassung/', self.posted('bescheide', 'zulassung', zulassung=('Ihre Zulassung', 'Willkommen, {vorname}, zum {semester}.')))
         study = Study.objects.filter(status='applied', participations=None).exclude(person__username='bewerbung').select_related('person').first()
         self.login('asa').post(f'/aufnahme/bewerbung/{study.pk}/entscheidung/', {'status': 'admitted'})
         letter = Message.objects.filter(person=study.person).first()
-        self.assertEqual((letter.subject, letter.body), ('Ihre Zulassung', f'Willkommen, {study.person.first_name}, zum {study.start_term}.'))
-        self.assertEqual(letter.sender, 'Akademische und Studentische Angelegenheiten')
+        self.assertEqual((letter.subject, letter.body.split('\n\n')[0]), ('Ihre Zulassung', f'Willkommen, {study.person.first_name}, zum {study.start_term}.'))  # the Rechtsbehelfsbelehrung follows
+        self.assertEqual((letter.sender, letter.template), ('Akademische und Studentische Angelegenheiten', 'zulassung'))  # its Briefbogen, by its text
         old.refresh_from_db()
         self.assertEqual(old.body, before)
-        campus.post('/einstellungen/texte/zulassung/', {'standard': '1'})
+        campus.post('/dokumente/bescheide/zulassung/', {'standard': 'zulassung'})
         self.assertFalse(Text.objects.filter(key='zulassung').exists())
 
     def test_mail_goes_out_once_saved(self):
@@ -440,7 +454,7 @@ class FreshInstallTest(Empty):
         '/lehre/meine/', '/lehre/stundenplan/', '/lehre/deputat/', '/lehre/semesterwechsel/', '/lehre/neu/', '/pruefungen/', '/pruefungen/neu/',
         '/pruefungen/anerkennung/', '/aufnahme/bewerbungen/', '/aufnahme/kommissionen/', '/aufnahme/meine/', '/aufnahme/bewerben/',
         '/raeume/', '/raeume/?von=10:00&personen=4', '/raeume/buchen/', '/raeume/meine/', '/raeume/veranstaltungen/', '/einstellungen/',
-        '/einstellungen/texte/', '/einstellungen/semester/', '/einstellungen/semester/neu/', '/einstellungen/eignungspruefungen/neu/',
+        '/dokumente/bescheide/', '/dokumente/bescheinigungen/urkunde/', '/dokumente/briefboegen/', '/einstellungen/semester/', '/einstellungen/semester/neu/', '/einstellungen/eignungspruefungen/neu/',
         '/auswertungen/', '/auswertungen/abfrage/', '/auswertungen/abfrage/?was=bewerbungen&nach=studienjahr', '/auswertungen/datensaetze/',
     ]
 

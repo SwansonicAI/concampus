@@ -184,7 +184,7 @@ class Institution(Tracked, models.Model):
     website = models.URLField('Website', blank=True)
     imprint = models.URLField('Impressum', blank=True)
     privacy = models.URLField('Datenschutz', blank=True)
-    accessibility = models.URLField('Barrierefreiheit der Website', blank=True, help_text='Die Erklärung der Website; ConCampus hat eine eigene, unter Texte.')
+    accessibility = models.URLField('Barrierefreiheit der Website', blank=True, help_text='Die Erklärung der Website; ConCampus hat eine eigene, unter Dokumente.')
     matriculation_start = models.PositiveIntegerField('Erste Matrikelnummer', default=100001, help_text='Danach fortlaufend.')
     university = KeyField('Hochschulnummer', max_length=4, keys=GERMAN, blank=True, help_text='Für die amtliche Statistik, aus dem Schlüsselverzeichnis.')
     region = KeyField('Kreis', max_length=5, keys=DISTRICTS, blank=True, help_text='Sitz der Hochschule, für die amtliche Statistik.')
@@ -903,7 +903,7 @@ class Holiday(Tracked, models.Model):
 class Text(Tracked, models.Model):
     """A letter, message or text block as the Hochschule words it (core.texts); without one, the default applies."""
 
-    capabilities = ('manage_institution',)
+    capabilities = ('word_texts',)
 
     key = models.CharField('Text', max_length=40, unique=True)
     subject = models.CharField('Betreff', max_length=200, blank=True)
@@ -933,7 +933,7 @@ class Layout(Tracked, models.Model):
     """A Briefbogen: what the pages of a document show around its text, and how the text is set (core.paper). The
     standard ones (paper.STANDARD) hold until the Hochschule saves its own under their key."""
 
-    capabilities = ('manage_institution',)
+    capabilities = ('design_papers',)
 
     key = models.SlugField('Schlüssel', max_length=40, unique=True)
     name = models.CharField('Name', max_length=80)
@@ -952,7 +952,7 @@ class Artwork(Tracked, models.Model):
     """A picture or a font face for the Briefbögen: checked on upload, a picture drawn anew, a font made TrueType that
     may be embedded (core.paper.accept, core.paper.faces); a face's family, weight and slant read from the font itself."""
 
-    capabilities = ('manage_institution',)
+    capabilities = ('design_papers',)
 
     class Kind(models.TextChoices):
         PICTURE = 'picture', 'Bild'
@@ -986,6 +986,7 @@ class Message(models.Model):
     created = models.DateTimeField('Gesendet', default=timezone.now)
     read = models.DateTimeField('Gelesen', null=True, blank=True)
     sender = models.CharField('Absender', max_length=200, blank=True, help_text='Bei Bescheiden: wer sie erlassen hat, wie es im Brief steht.')
+    template = models.CharField('Vorlage', max_length=40, blank=True, help_text='Bei einem Bescheid: der Text, aus dem er entstand; sein Briefbogen (core.paper.chosen).')
 
     class Meta:
         ordering = ['-created']
@@ -1004,8 +1005,8 @@ class Message(models.Model):
         return f'{self.created:%Y}-{self.pk}' if self.sender else ''
 
     @classmethod
-    def send(cls, person, subject, body, link='', sender=''):
-        message = cls.objects.create(person=person, subject=subject, body=body, link=link, sender=sender)
+    def send(cls, person, subject, body, link='', sender='', template=''):
+        message = cls.objects.create(person=person, subject=subject, body=body, link=link, sender=sender, template=template)
         if person.email:  # the Postfach has it either way
             cls.mail(person, subject, body)
         return message

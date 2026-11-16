@@ -24,6 +24,7 @@ urlpatterns = [
     path('instrumente/', include('instruments.urls')),
     path('international/', include('mobility.urls')),
     path('auswertungen/', include('analytics.urls')),
+    path('dokumente/', include('documents.urls')),
     path('einstellungen/', include('setup.urls')),
     path('', include('core.urls')),
 ]  # uploads are not served as files: admissions:document checks who may see each

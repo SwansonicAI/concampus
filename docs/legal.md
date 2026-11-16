@@ -65,7 +65,7 @@ Admission decisions, results and Exmatrikulationen are Verwaltungsakte.
 | Requirement | Source | Status | In ConCampus, or missing |
 |---|---|---|---|
 | WCAG 2.1 AA (EN 301 549) | ThürBarrWebG, ThürBITVO, § 3 BITV 2.0 | partly | 48 pages of every role checked automatically against WCAG 2.1 AA (axe-core 4.10) on 30.10.2026, every finding fixed: contrast, unnamed fields, links told apart by colour alone; a skip link. No manual test (BITV-Test) yet; printed documents are web pages, not tagged PDF |
-| Accessibility statement for ConCampus | ThürBarrWebG | yes | Under „Barrierefreiheit“ in the footer of every page, signed in or not: state, exceptions, how it was made, the enforcement body; worded under Einstellungen › Texte |
+| Accessibility statement for ConCampus | ThürBarrWebG | yes | Under „Barrierefreiheit“ in the footer of every page, signed in or not: state, exceptions, how it was made, the enforcement body; worded under Dokumente › Bausteine |
 | Feedback answered within the deadline | ThürBarrWebG | yes | A form under the statement, without signing in; the report goes to the Hochschule's address and to `manage_institution` as a to-do with its deadline (30 days), answered by e-mail and marked under Einstellungen › Barrierefreiheit |
 | Accessibility criteria in a tender | § 121(2) GWB | no | Needs a conformance report from an audit |
 
