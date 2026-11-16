@@ -6,7 +6,7 @@
   <h1>Raumplan</h1>
   <form class="actions">
     <input type="hidden" name="raeume" value="{{ group }}">
-    {% for field in finding %}{% if field.value %}<input type="hidden" name="{{ field.html_name }}" value="{{ field.value }}">{% endif %}{% endfor %}
+    {% for name, values in request.GET.lists %}{% if name != 'tag' and name != 'raeume' %}{% for value in values %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}{% endif %}{% endfor %}
     <a class="btn ghost" href="{% querystring tag=prev|date:'Y-m-d' %}" data-key="ArrowLeft" title="Vorheriger Tag (←)"><i class="arrow left"></i></a>
     <input name="tag" value="{{ day|date:'D d.m.Y' }}" data-day autocomplete="off" size="14" aria-label="Datum, z. B. morgen, fr oder 12.11.">
     <a class="btn ghost" href="{% querystring tag=next|date:'Y-m-d' %}" data-key="ArrowRight" title="Nächster Tag (→)"><i class="arrow"></i></a>
@@ -27,8 +27,8 @@
         {% endfor %}
       </select>
     </label>
-    {% for field in finding %}<label>{{ field.label }}{{ field }}</label>{% endfor %}
-    {% if found %}<a class="btn ghost" href="{% querystring von=None bis=None personen=None ausstattung=None %}">Filter aufheben</a>{% endif %}
+    {% for field in finding %}{% if field.use_fieldset %}<div>{{ field.label }}{{ field }}</div>{% else %}<label>{{ field.label }}{{ field }}</label>{% endif %}{% endfor %}
+    {% if found or finding.raum.value %}<a class="btn ghost" href="{% querystring raum=None von=None bis=None personen=None ausstattung=None %}">Filter aufheben</a>{% endif %}
   </div>
   {% if tones or hidden or mine %}<div class="legend"><span class="legend-items">{% for tone, label in tones %}<span class="legend-item"><span class="booking {{ tone }}"></span>{{ label }}</span>{% endfor %}{% if hidden %}<span class="legend-item"><span class="booking taken"></span>belegt</span>{% endif %}{% if mine %}<span class="legend-item"><span class="booking mine"></span>Ihre Buchung</span>{% endif %}</span></div>{% endif %}
 </form>
@@ -51,7 +51,7 @@
     {% if now %}<i class="now" style="grid-column: {{ now }}"></i>{% endif %}
   </div>
   {% empty %}
-  <p class="empty">{% if found %}Kein passender Raum frei. Andere Zeit oder weniger Ausstattung versuchen.{% else %}Keine Räume in dieser Auswahl.{% endif %}</p>
+  <p class="empty">{% if found %}Kein passender Raum frei. Andere Zeit oder weniger Ausstattung versuchen.{% elif finding.raum.value %}Kein Raum „{{ finding.raum.value }}“.{% else %}Keine Räume in dieser Auswahl.{% endif %}</p>
   {% endfor %}
 </div>
 <p class="muted"><small>Freie Zeit anklicken oder ziehen, um zu buchen · ← → wechselt den Tag</small></p>

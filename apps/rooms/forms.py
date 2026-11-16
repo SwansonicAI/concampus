@@ -488,14 +488,26 @@ class CancelForm(forms.Form):
         return data
 
 
-class FindForm(forms.Form):
-    """The room plan's filter: the rooms free from–until on the day it shows, for so many, with such equipment; „Von“
-    alone asks for an hour."""
+class Choices(forms.CheckboxSelectMultiple):
+    """Boxes to tick in a list that folds open, showing what is ticked."""
 
+    template_name = 'core/choices.html'
+
+
+class FindForm(forms.Form):
+    """The room plan's filter: rooms by name; the rooms free from–until on the day it shows, for so many, with all the
+    equipment ticked; „Von“ alone asks for an hour."""
+
+    raum = forms.CharField(label='Raum', required=False, widget=forms.TextInput(attrs={'placeholder': 'z. B. 208', 'size': 10}))
     von = ClockField(label='Frei von', required=False)
     bis = ClockField(label='bis', required=False)
     personen = forms.IntegerField(label='Personen', min_value=1, required=False, widget=forms.TextInput(attrs={'inputmode': 'numeric', 'size': 4}))
-    ausstattung = forms.CharField(label='Ausstattung', required=False, widget=forms.TextInput(attrs={'type': 'search', 'placeholder': 'z. B. Flügel, Orgel'}))
+    ausstattung = forms.MultipleChoiceField(label='Ausstattung', required=False, widget=Choices)
+
+    def __init__(self, *args, rooms, **kwargs):  # the equipment offered: what the rooms one books have
+        super().__init__(*args, **kwargs)
+        items = {i.strip() for e in rooms.values_list('equipment', flat=True) for i in e.split(',')} - {''}
+        self.fields['ausstattung'].choices = [(i, i) for i in sorted(items, key=collated)]
 
     def clean(self):
         data = super().clean()

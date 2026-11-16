@@ -678,7 +678,9 @@ document.addEventListener('change', ({target}) => {
 // button (data-print); an address selected to copy (data-select); a dialog opened (data-open="demo") and closed by a click
 // beside it (data-dismiss); forms that say they are busy (data-busy="Wird geöffnet …").
 document.addEventListener('change', ({target}) => {
-  if (target.matches('[data-submit]') || target.form?.matches('[data-submit]')) target.form.requestSubmit();
+  const choices = target.closest('details.choices');  // boxes in a list that folds open send their form once it closes
+  if (choices) choices.dataset.changed = '';
+  else if (target.matches('[data-submit]') || target.form?.matches('[data-submit]')) target.form.requestSubmit();
   if (target.dataset.tick) (target.closest('table') || target.form).querySelectorAll(`[name="${target.dataset.tick}"]:not(:disabled)`).forEach(box => { box.checked = target.checked; });
 });
 document.addEventListener('click', ({target}) => {
@@ -927,12 +929,13 @@ document.addEventListener('click', event => {
   else if (cancel && !cancel.closest('.drawer')) document.querySelectorAll('form[data-dirty]').forEach(form => delete form.dataset.dirty);
 });
 
-// The account menu closes on Escape or a click elsewhere.
-const menu = document.querySelector('details.menu');
-if (menu) {
-  document.addEventListener('click', event => menu.open && !menu.contains(event.target) && menu.removeAttribute('open'));
-  document.addEventListener('keydown', event => event.key === 'Escape' && menu.open && menu.removeAttribute('open'));
-}
+// The account menu and a list of boxes close on Escape or a click elsewhere.
+const folded = () => document.querySelectorAll('details.menu[open], details.choices[open]');
+document.addEventListener('click', event => folded().forEach(open => open.contains(event.target) || open.removeAttribute('open')));
+document.addEventListener('keydown', event => event.key === 'Escape' && folded().forEach(open => open.removeAttribute('open')));
+document.addEventListener('toggle', ({target}) => {
+  if (target.matches('details.choices') && !target.open && 'changed' in target.dataset && target.closest('form[data-submit]')) target.closest('form').requestSubmit();
+}, true);
 
 // Side panel: details open beside the page instead of replacing it. Each page opened within it is a step back can
 // return to, by its „Zurück“, named for where one came from, or the browser's back; „Schließen“ or Esc closes it at

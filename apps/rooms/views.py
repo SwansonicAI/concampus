@@ -62,7 +62,8 @@ ROOMS = ('student', 'teacher', *CODENAMES)  # who uses the rooms: not applicants
 @require(*ROOMS)
 def index(request):
     """The rooms of a day. Free time one may book is booked right here (rooms/_quick.html): in the rooms one books or,
-    as a teacher, asks for, from now on as far ahead as one books. The filter shows only the rooms free from–until,
+    as a teacher, asks for, from now on as far ahead as one books. A name sought finds its rooms among all, whatever
+    the group. The filter shows only the rooms free from–until,
     big enough, with the equipment asked for: those one reaches in time from one's dates before and after first, then
     the smallest, those for one's Hauptfach first."""
     person, today, now = request.user, timezone.localdate(), timezone.now()
@@ -74,10 +75,12 @@ def index(request):
     rooms = Room.objects.select_related('function').prefetch_related(Prefetch(
         'bookings', Booking.objects.filter(**starting(day), requested=False).select_related('course', 'person', 'category').prefetch_related('participants'), to_attr='day',
     ))
-    rooms = {
+    finding, found = FindForm(request.GET, rooms=Room.objects.filter(pk__in=allowed | asked)), None
+    known = finding.is_valid()
+    rooms = matching(rooms, sought, 'name', 'purpose', 'building') if (sought := finding.cleaned_data.get('raum')) else {
         'meine': rooms.filter(pk__in=allowed), 'zentral': rooms.filter(function__central=True), 'haus': rooms.filter(building=key), 'funktion': rooms.filter(function=key),
         'institut': rooms.filter(institutes=key) if key.isdigit() else rooms,
-    }.get(kind, rooms)
+    }.get(kind, rooms)  # a room sought by name among all
     rules = Institution.get()
     opens = timezone.make_aware(datetime.combine(day, time(rules.opens)))
     closes, earliest, ahead = opens + timedelta(hours=rules.closes - rules.opens), now - timedelta(minutes=15), horizon(person)
@@ -100,10 +103,11 @@ def index(request):
             b.editable = editable(b, person)
             b.hidden = not b.editable and private(b, person)
             b.quick = b.person_id == person.pk and not (b.course_id or b.series) and b.end > now  # changed or cancelled right there
-    finding, found = FindForm(request.GET), None
-    if finding.is_valid() and any(finding.cleaned_data.values()):
+    if known and any(v for k, v in finding.cleaned_data.items() if k != 'raum'):
         data, start = finding.cleaned_data, None
-        fitting = matching(Room.objects.filter(pk__in=allowed | asked, capacity__gte=data['personen'] or 1), data['ausstattung'], 'equipment', 'name', 'purpose', 'building')
+        fitting = Room.objects.filter(pk__in=allowed | asked, capacity__gte=data['personen'] or 1)
+        for item in data['ausstattung']:
+            fitting = matching(fitting, item, 'equipment')
         fitting = set(fitting.values_list('pk', flat=True))
         if data['von']:
             start, end = (timezone.make_aware(datetime.combine(day, t)) for t in (data['von'], data['bis']))
