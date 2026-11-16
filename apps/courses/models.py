@@ -212,6 +212,17 @@ class Course(Tracked, models.Model):
         app = {self.Kind.EXAM: 'exams:exam', self.Kind.RECOGNITION: 'exams:exam', self.Kind.THESIS: 'exams:exam', self.Kind.AUDITION: 'admissions:audition'}
         return reverse(app.get(self.kind, 'courses:course'), args=[self.pk])
 
+    @classmethod
+    def taught_alone(cls, prefix=''):
+        """`one_to_one` in a query; `prefix` for one through a relation, as 'course__'."""
+        return models.Q(**{f'{prefix}kind': cls.Kind.LESSON}) | models.Q(**{f'{prefix}kind': cls.Kind.COURSE, f'{prefix}format__per_head': True})
+
+    @property
+    def one_to_one(self):
+        """Taught one to one, each student at a weekly time of their own: a lesson class, or a course in a Lehrform
+        counted per participation, as Einzelunterricht."""
+        return self.kind == self.Kind.LESSON or self.kind == self.Kind.COURSE and bool(self.format_id) and self.format.per_head
+
     @property
     def minutes(self):
         """The weekly time as Studienpläne state it (V 90, G 60): its SWS at the Lehrform's minutes, to a quarter hour."""

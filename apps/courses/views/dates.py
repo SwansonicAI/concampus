@@ -122,7 +122,7 @@ def lessons(request, pk):
     to the end of the lecture period; one-off dates such as a make-up lesson, and dates called off, stay. All or none:
     a time is refused where the room is taken or teacher or student are elsewhere, the way between buildings
     included. The students hear their new time."""
-    course = get_object_or_404(Course.objects.select_related('term'), pk=pk, kind=Course.Kind.LESSON)
+    course = get_object_or_404(Course.objects.select_related('term', 'format').filter(Course.taught_alone()), pk=pk)
     if not teaches(request.user, course):
         raise PermissionDenied
     rows = lesson_times(course)

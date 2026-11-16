@@ -148,7 +148,7 @@ def accompanied(course):
 
 def course(request, pk):
     person = request.user
-    course = get_object_or_404(Course.objects.select_related('term', 'subject'), pk=pk, kind__in=TEACHING, term__in=Term.shown(person))
+    course = get_object_or_404(Course.objects.select_related('term', 'subject', 'format'), pk=pk, kind__in=TEACHING, term__in=Term.shown(person))
     staffed = teaches(person, course)
     office = person.may('manage_courses', course)
 
@@ -204,7 +204,7 @@ def course(request, pk):
     upcoming = course.bookings.filter(start__gte=timezone.now())
     if course.allocation == Course.Allocation.ENSEMBLE and staffed and not person.may('manage_courses', course):  # a coach: the course's own dates and their ensembles'
         upcoming = upcoming.filter(Q(ensemble=None) | Q(ensemble__coach=person))
-    if course.kind == Course.Kind.LESSON and not staffed:
+    if course.one_to_one and not staffed:
         upcoming = upcoming.filter(participants=person)  # one's own lessons, not everyone's
     elif not staffed:  # the dates for everyone, and those of one's own ensemble
         upcoming = upcoming.filter(Q(participants=None) | Q(participants=person) | Q(person=person)).distinct()
@@ -225,7 +225,7 @@ def course(request, pk):
                 and times[o.pk][0] < times[p.pk][1] and times[p.pk][0] < times[o.pk][1]
             )
     running = course.term.end >= timezone.localdate()  # what is over is planned no more
-    lessons = lesson_times(course) if staffed and running and course.kind == Course.Kind.LESSON and playing is None else []
+    lessons = lesson_times(course) if staffed and running and course.one_to_one and playing is None else []
     timetable = lessons and Lessons(sent(request, 'lessons'), initial=[row for _, row in lessons], form_kwargs={'person': person})
     ensembles = list(
         (course.ensembles if staffed else course.ensembles.filter(members__person=person).distinct())
@@ -235,8 +235,8 @@ def course(request, pk):
     return render(request, 'courses/course.html', {
         'trail': [('Meine Lehre', reverse('courses:mine')) if staffed and not office else ('Meine Lehrveranstaltungen', reverse('courses:mine')) if own else ('Vorlesungsverzeichnis', reverse('courses:catalogue'))],
         'course': course, 'playing': playing, 'players': list(course.staff.all()) if playing is not None else [],
-        'lengths': sorted(Counter(minutes(p.module) or course.hours for p in course.participations.select_related('module__program')).items(), reverse=True) if course.kind == Course.Kind.LESSON and staffed else [],
-        'share': minutes(own[0].module) or course.hours if own and course.kind == Course.Kind.LESSON else None,
+        'lengths': sorted(Counter(minutes(p.module) or course.hours for p in course.participations.select_related('module__program')).items(), reverse=True) if course.one_to_one and staffed else [],
+        'share': minutes(own[0].module) or course.hours if own and course.one_to_one else None,
         'staff': staff,
         'rows': rows if staffed else [],
         'own': own,
@@ -272,7 +272,7 @@ def course(request, pk):
         'moodle': moodle.place(course) if staffed or office or any(not p.waiting for p in own) else None,  # whoever has a place there
         'bookings': upcoming.select_related('room', 'category', 'group').prefetch_related('participants', 'absent')[:8],
         'rooms': bool(person.roles & set(ROOMS)),  # applicants and former students see no room's plan
-        'plan': PlanForm(sent(request, 'plan'), person=person, course=course) if staffed and running and not course.cancelled and course.kind != Course.Kind.LESSON else None,
+        'plan': PlanForm(sent(request, 'plan'), person=person, course=course) if staffed and running and not course.cancelled and not course.one_to_one else None,
         'date': DateForm(sent(request, 'date'), person=person, course=course) if staffed and running and not course.cancelled else None,
         'lessons': timetable,
         'lesson_rows': zip([s for s, _ in lessons], timetable or []),

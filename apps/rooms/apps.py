@@ -88,12 +88,16 @@ class RoomsConfig(Tile, AppConfig):
             for p in polls.filter(person=person).annotate(answered=Count('options__answers__person', distinct=True), size=Count('people', distinct=True))
             if p.answered >= p.size or p.by < timezone.localdate()
         ]
+        soon = Booking.objects.filter(category__public=True, internal=False, requested=False, programme='', start__gte=timezone.now(), start__lte=timezone.now() + timedelta(days=14))
+        found += [  # one's own event: one enters it oneself
+            task(f'Programm eintragen: {b.label}', reverse('rooms:booking', args=[b.pk]), timezone.localdate(b.start))
+            for b in soon.filter(person=person).select_related('category', 'course')
+        ]
         if 'manage_bookings' not in person.roles:
             return found
-        soon = Booking.objects.filter(category__public=True, internal=False, requested=False, programme='', start__gte=timezone.now(), start__lte=timezone.now() + timedelta(days=14))
-        found += [
+        found += [  # the organiser's first; the office's in the last week
             task(f'Programm fehlt: {b.label}', reverse('rooms:booking', args=[b.pk]), timezone.localdate(b.start))
-            for b in person.within(soon, 'manage_bookings').select_related('category', 'course')
+            for b in person.within(soon.exclude(person=person).filter(start__lte=timezone.now() + timedelta(days=7)), 'manage_bookings').select_related('category', 'course')
         ]
         asked = person.within(Booking.objects.filter(requested=True, end__gte=timezone.now()), 'manage_bookings').order_by('start')
         if first := asked.first():

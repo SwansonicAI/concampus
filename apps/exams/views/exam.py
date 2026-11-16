@@ -85,8 +85,9 @@ def index(request):
         program, stand, q = (request.GET.get(key, '').strip() for key in ('studiengang', 'stand', 'q'))
         if stand == 'ohne-termin':  # not yet given a day: one to book before registration opens
             exams = exams.filter(kind=Course.Kind.EXAM, bookings=None, released=None)
-        if stand == 'kommission':
-            exams = exams.filter(pk__in=Course.short_panels(Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], term=term)))
+        short = {c.pk: c.shortfall for c in Course.panels(Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], term=term))} if stand == 'kommission' else {}
+        if stand == 'kommission':  # each with why
+            exams = exams.filter(pk__in=[pk for pk, why in short.items() if why])
         exams = exams.filter(pk__in=person.within(Course.objects.all(), 'manage_exams', 'decide_results', 'correct_scores').values('pk')) if office else exams.filter(staff=person)
         own = office and 'teacher' in person.roles and request.GET.get('meine') == '1'  # an office that also examines: its own exams and theses
         if own:
@@ -96,7 +97,7 @@ def index(request):
         candidate = [f'participations__study__person__{name}' for name in ('first_name', 'last_name', 'matriculation')]
         exams = list(matching(exams, q, 'title', 'subject__name', 'staff__last_name', *candidate))
         for c in exams:
-            c.programs = sorted({m.program.title for m in c.modules.all()})
+            c.programs, c.short = sorted({m.program.title for m in c.modules.all()}), short.get(c.pk, '')
             c.state = 'freigegeben' if c.released else 'bewertung' if c.graded or c.date and c.date <= timezone.now() else 'offen'  # held: marks are due
         context.update(
             exams=[c for c in exams if stand in ('', 'kommission', 'ohne-termin') or c.state == stand], q=q, stand=stand, program=program, programs=Program.planned(),

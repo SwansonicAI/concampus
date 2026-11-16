@@ -63,8 +63,11 @@ def approvals(request):
     for a in asks:  # the offices that hold it, those for the person's own Institut first
         a.short, a.label = SHORT.get(a.capability, a.capability), labels.get(a.capability, '')
         a.offices = sorted(holding(a.capability), key=lambda o: (a.person.institute_id not in {i.pk for i in o.institutes.all()}, collated(o.name)))
+    grants, givers = list(Grant.objects.select_related('office', 'by')), Person.holding('manage_accounts')
+    for g in grants:  # nobody may confirm rights for their own office: where all who give rights are in it, nobody can
+        g.nobody = not givers.exclude(pk=g.by_id).exclude(groups=g.office).exists()
     return render(request, 'setup/approvals.html', {
-        'asks': asks, 'grants': Grant.objects.select_related('office', 'by'), 'own': set(request.user.groups.values_list('pk', flat=True)), 'members': Membership.objects.filter(confirmed_by=None).select_related('person', 'office', 'by'),
+        'asks': asks, 'grants': grants, 'own': set(request.user.groups.values_list('pk', flat=True)), 'members': Membership.objects.filter(confirmed_by=None).select_related('person', 'office', 'by'),
     })
 
 

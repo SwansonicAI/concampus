@@ -2,7 +2,7 @@
 from django.db.models import Min, Q
 from django.utils import timezone
 
-from core.models import Term
+from core.models import Change, Term
 from courses.models import Course, Participation
 from curriculum.models import Module
 from students.models import Study
@@ -15,6 +15,13 @@ STATES = [('offen', 'offen'), ('bewertung', 'in Bewertung'), ('freigegeben', 'fr
 def handed_in(participation):
     """The file handed in for a thesis: the latest since it was registered."""
     return participation.study.documents.filter(kind='abschlussarbeit', created__gte=participation.created).last()
+
+
+def appointed(course, person):
+    """The day the person last joined the course's examiners, as its history records it; None if not recorded."""
+    joined = [c.at for c in Change.objects.filter(table='courses.course', row=course.pk, action=Change.Action.CHANGED, fields__has_key='staff')
+              if person.pk in c.fields['staff'][1] and person.pk not in c.fields['staff'][0]]
+    return timezone.localdate(max(joined)) if joined else None
 
 
 def offered(person):

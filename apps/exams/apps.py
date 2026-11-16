@@ -128,10 +128,16 @@ class ExamsConfig(Tile, AppConfig):
             for exam in vacant.distinct():
                 found.append(task(f'{exam.title}: Ersatz für eine befangene Person bestellen', exam.get_absolute_url()))
         if 'teacher' in person.roles:
+            from .views.common import appointed, handed_in
+
             pending = Q(passed=None) & ~Q(remark=Participation.Remark.EXCUSED)  # as panel.due: no mark for who has a result or withdrew for good reason
-            standing_in = Participation.objects.filter(pending,recusals__substitute=person, course__released=None).exclude(scores__in=marked(person)).exclude(course__kind=Course.Kind.AUDITION)
-            for row in standing_in.values('course', 'course__title').annotate(n=Count('pk')):
-                found.append(task(f'{row["course__title"]}: Ihre Wertung als Ersatz fehlt für {plural(row["n"], "Teilnahme", "Teilnahmen")}', reverse('exams:exam', args=[row['course']])))
+            for exam in exams.filter(participations__recusals__substitute=person).distinct():  # standing in: due as for the examiners, once held or handed in
+                if exam.kind == Course.Kind.THESIS:
+                    due = (handed := handed_in(exam.participations.first())) and timezone.localdate(handed.created) + timedelta(weeks=rules.review_weeks)
+                else:
+                    due = exam.held and exam.held <= now and graded_by(exam)
+                if due and (n := exam.participations.filter(pending, recusals__substitute=person).exclude(scores__in=marked(person)).count()):
+                    found.append(task(f'{exam.title}: Ihre Wertung als Ersatz fehlt für {plural(n, "Teilnahme", "Teilnahmen")}', exam.get_absolute_url(), due))
             for exam in exams.filter(staff=person, held__lte=now):
                 missing = exam.participations.filter(pending).exclude(scores__in=marked(person)).exclude(recusals__examiner=person).count()
                 if missing:
@@ -141,12 +147,11 @@ class ExamsConfig(Tile, AppConfig):
                 Course.objects.filter(handed, kind=Course.Kind.THESIS, staff=person, released=None)
                 .exclude(participations__scores__in=marked(person)).exclude(participations__recusals__examiner=person)
             )
-            from .views.common import handed_in
-
             for thesis in theses.distinct().prefetch_related('participations__study__person'):
                 who = ', '.join(str(p.study.person) for p in thesis.participations.all())
-                handed = handed_in(thesis.participations.all()[0])
-                found.append(task(f'Gutachten: {who}, {thesis.title}', thesis.get_absolute_url(), handed and timezone.localdate(handed.created) + timedelta(weeks=rules.review_weeks)))
+                handed = handed_in(thesis.participations.all()[0])  # the weeks for a Gutachten from the hand-in, or from joining later, as a third Gutachter:in
+                start = max(filter(None, [handed and timezone.localdate(handed.created), appointed(thesis, person)]), default=None)
+                found.append(task(f'Gutachten: {who}, {thesis.title}', thesis.get_absolute_url(), start and start + timedelta(weeks=rules.review_weeks)))
         if 'student' in person.roles:
             from courses.models import Participation
             from .views.common import handed_in, offered

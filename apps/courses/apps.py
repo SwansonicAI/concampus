@@ -143,7 +143,7 @@ class CoursesConfig(Tile, AppConfig):
             for s in advising:
                 if (options := choices.setdefault(s.program_id, s.program.choices())) and s.fs >= (first := min(o.first or 99 for o in options)) - 1:
                     found.append(task(f'Studienfachberatung: {s.person} ({options[0].choice.title})', reverse('students:progress', args=[s.pk]), Study.choose_by(s.fs, first)))
-            for course in person.teaching.filter(term=term, kind=TEACHING[0], bookings=None, cancelled=None).exclude(Q(format__dated=False) | Q(format__per_head=True)):  # one-to-one: no time for all at once
+            for course in person.teaching.filter(term=term, kind=TEACHING[0], bookings=None, cancelled=None).exclude(Q(format__dated=False) | Q(format__per_head=True)):  # one to one: each their own time, „ohne Unterrichtszeit“ above
                 found.append(task(f'Termine planen: {course.title}', course.get_absolute_url()))
             for planned in Term.objects.filter(planning=True, replies_by__isnull=False):  # the next semester: one's courses to confirm
                 if n := person.teaching.filter(term=planned, kind__in=TEACHING, confirmed=None, cancelled=None, origin__isnull=False).count():
@@ -167,14 +167,14 @@ class CoursesConfig(Tile, AppConfig):
             if over := sum(1 for row in loads(planned, person, institute=str(min(person.ours('view_teaching_load'))) if len(person.ours('view_teaching_load')) == 1 else '') if row.balance and row.balance > 0):
                 found.append(task(f'{planned} planen: {plural(over, "Lehrperson", "Lehrpersonen")} über der Lehrverpflichtung', f"{reverse('courses:load')}?semester={planned.pk}&stand=ueber"))
         if 'manage_courses' in person.roles and term:  # ensembles waiting for the office to give them a coach: an Institut's, where one keeps the course
-            ensembles = person.within(term.courses.filter(allocation=Course.Allocation.ENSEMBLE), 'manage_courses')
+            ensembles = person.within(Course.objects.filter(term__in={term, registering()} - {None}, allocation=Course.Allocation.ENSEMBLE), 'manage_courses')  # also the semester registering
             if person.everywhere('manage_courses'):
                 from core.models import Office
 
                 kept = Office.objects.filter(permissions__codename='manage_courses').exclude(institutes=None).values('institutes')
                 ensembles = ensembles.exclude(Q(subject__institute__in=kept) | Q(staff__institute__in=kept))
-            for course in ensembles.annotate(n=Count('ensembles', filter=Q(ensembles__coach=None))).filter(n__gt=0):
-                found.append(task(f'{course.title}: {plural(course.n, "Ensemble", "Ensembles")} ohne Betreuung zuteilen', course.get_absolute_url()))
+            for course in ensembles.select_related('term').annotate(n=Count('ensembles', filter=Q(ensembles__coach=None))).filter(n__gt=0):
+                found.append(task(f'{course.title}{"" if course.term == term else f" ({course.term})"}: {plural(course.n, "Ensemble", "Ensembles")} ohne Betreuung zuteilen', course.get_absolute_url()))
         if 'manage_courses' in person.roles and not person.everywhere('manage_courses'):  # an Institut's office
             if n := person.within(untimed(Participation.objects.all()), 'manage_courses').values('study').distinct().count():
                 found.append(task(f'Einzelunterricht: {plural(n, "Person", "Personen")} ohne Unterrichtszeit', f"{reverse('students:list')}?stand=unterricht"))

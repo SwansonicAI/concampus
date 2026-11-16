@@ -25,7 +25,7 @@
       <td>{% if c.kind == 'thesis' %}Abgabe {{ c.deadline|date:"j.n.Y" }}{% else %}{{ c.date|date:"D j.n.Y"|default:"–" }}{% endif %}</td>
       <td><a href="{% url 'exams:exam' c.pk %}"><b>{{ c.title }}</b></a>{% if c.kind == 'thesis' %}<br><small class="muted">Abschlussarbeit {{ c.candidate }}</small>{% elif c.subject and c.subject.name not in c.title %}<br><small class="muted">{{ c.subject }}</small>{% endif %}</td>
       <td><small>{{ c.programs|join:", "|default:"–" }}</small></td>
-      <td>{% for s in c.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if c.assessor %}<br><small class="muted">Beisitz {{ c.assessor.last_name }}</small>{% endif %}</td>
+      <td>{% for s in c.staff.all %}{{ s.last_name }}{% if not forloop.last %}, {% endif %}{% endfor %}{% if c.assessor %}<br><small class="muted">Beisitz {{ c.assessor.last_name }}</small>{% endif %}{% if c.short %}<br><span class="badge no" title="{{ c.short }}">{% if 'bestellt' in c.short %}nicht bestellt{% else %}zu wenige{% endif %}</span>{% endif %}</td>
       <td class="num">{{ c.size }}</td>
       <td>{% if c.released %}<span class="badge green">freigegeben</span>{% elif c.state == 'bewertung' %}<span class="badge wait">in Bewertung{% if c.graded %}: {{ c.graded }} von {{ c.size }}{% endif %}</span>{% else %}<span class="badge open">offen</span>{% endif %}</td>
     </tr>

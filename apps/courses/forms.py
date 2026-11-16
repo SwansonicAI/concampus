@@ -138,9 +138,9 @@ class DateForm(forms.Form):
     def __init__(self, *args, person, course=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['room'].queryset = bookable(person)
-        if course and course.kind == Course.Kind.COURSE:  # a lesson's date is for one
+        if course and not course.one_to_one:  # a lesson's date is for one
             self.fields['room'].need = needed(course)
-        if course and course.kind == Course.Kind.LESSON:
+        if course and course.one_to_one:
             self.fields['student'] = forms.ModelChoiceField(
                 label='Für', queryset=Person.objects.filter(studies__participations__course=course).distinct(), empty_label='Bitte wählen',
             )
