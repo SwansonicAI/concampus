@@ -3,10 +3,12 @@ from collections import defaultdict
 from datetime import timedelta
 
 from django.db.models import Count, F, Max, OuterRef, Subquery, Sum
+from django.urls import reverse
 from django.utils import timezone
 
 from core import texts
 from core.dates import months_before, working
+from core.models import Institution, Message
 from courses.models import Course, Participation
 from curriculum.models import Module, coverage
 from curriculum.plans import plan
@@ -63,6 +65,22 @@ def achievements(study):
         'thesis': thesis and thesis.course.title,
         'honours': None not in (average, honours) and average <= honours, 'today': timezone.localdate(), 'signature': texts.block('unterschrift_zeugnisse'),
     }
+
+
+def overdue(done):
+    """The day a Zeugnis was due (certificate_weeks after the last result, `done` from achievements()), once
+    certificate_overdue_days have passed since: for who corrects results to remind the Prüfungsamt; else None."""
+    rules = Institution.get()
+    due = done['completed'] and done['completed'] + timedelta(weeks=rules.certificate_weeks)
+    if due and rules.certificate_overdue_days is not None and due + timedelta(days=rules.certificate_overdue_days) < timezone.localdate():
+        return due
+    return None
+
+
+def reminded(study):
+    """Whether the Prüfungsamt was reminded of the study's Zeugnis within the week: a message about it to someone else."""
+    sent = Message.objects.filter(link=reverse('exams:transcript', args=[study.pk]), created__gte=timezone.now() - timedelta(weeks=1))
+    return sent.exclude(person=study.person).exists()
 
 
 def finished(studies):

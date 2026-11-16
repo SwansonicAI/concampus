@@ -89,8 +89,9 @@ class AdmissionsConfig(Tile, AppConfig):
                 found.append(task(f'{row["participation__course__title"]}: {plural(row["n"], "Korrektur", "Korrekturen")} beantragt', reverse('admissions:audition', args=[row['participation__course']])))
         if 'run_auditions' in person.roles:
             juries = person.within(Course.objects.filter(kind=Course.Kind.AUDITION, released=None).exclude(participations=None), 'run_auditions')
-            if short := len(Course.short_panels(juries)):
-                found.append(task(f'{plural(short, "Eignungsprüfung", "Eignungsprüfungen")}: Kommission zu klein', reverse('admissions:board')))
+            if short := Course.objects.filter(pk__in=Course.short_panels(juries)).order_by('term__start'):  # one: its page; more: the semester's list, what is to do
+                url = short[0].get_absolute_url() if len(short) == 1 else f"{reverse('admissions:auditions')}?semester={short[0].term_id}&stand=offen"
+                found.append(task(f'{plural(len(short), "Eignungsprüfung", "Eignungsprüfungen")}: Kommission ergänzen', url))
             vacant = Q(participations__recusals__isnull=False, participations__recusals__substitute=None)
             courses = person.within(Course.objects.filter(vacant, kind=Course.Kind.AUDITION, released=None), 'run_auditions')
             for course in courses.annotate(n=Count('participations__recusals', filter=vacant, distinct=True)):
@@ -127,7 +128,7 @@ class AdmissionsConfig(Tile, AppConfig):
                 if missing := incomplete(study, types):
                     deadline = study.participations.filter(course__program__isnull=False).values_list('course__deadline', flat=True).first()
                     found.append(task(f'Für die Bewerbung {study.subject} fehlt noch: {", ".join(missing)}', reverse('admissions:mine'), deadline))
-            elif late := owed(checklist(study, types)):
+            elif late := [item for item in owed(checklist(study, types)) if item['required']]:  # not yet what only the Immatrikulation needs
                 found.append(task(f'Für die Bewerbung {study.subject} nachreichen: {", ".join(item["label"] for item in late)}', reverse('admissions:mine')))
         days = Institution.get().accept_days
         for study in person.studies.filter(status=Study.Status.ADMITTED, terms=None):
@@ -137,6 +138,6 @@ class AdmissionsConfig(Tile, AppConfig):
             if yours := study.steps()[0]:
                 found.append(task(f'Zur Immatrikulation {study.subject}: {", ".join(yours)}', reverse('admissions:mine'), study.fee_due if any(s.startswith('Semesterbeitrag') for s in yours) else None))
         for p in person.studies.filter(status=Study.Status.APPLIED).values_list('participations__course__title', 'participations__slot'):
-            if p[1] and p[1] > timezone.now():
+            if p[1] and timezone.now() < p[1] <= timezone.now() + timedelta(days=7):  # in its week: Meine Bewerbung shows it from the invitation on
                 found.append(task(f'{p[0]} am {date_format(timezone.localtime(p[1]), "j.n.Y, G:i")} Uhr', reverse('admissions:mine')))  # an appointment, not a deadline
         return found

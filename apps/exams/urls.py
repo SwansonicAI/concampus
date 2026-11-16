@@ -9,6 +9,7 @@ urlpatterns = [
     path('leistungen/<int:pk>/', transcripts.transcript, name='transcript'),
     path('leistungen/<int:pk>/diploma-supplement/', transcripts.supplement, name='supplement'),
     path('leistungen/<int:pk>/ausstellen/', transcripts.issue, name='issue'),
+    path('leistungen/<int:pk>/erinnern/', transcripts.remind, name='remind_issue'),
     path('leistungen/<int:pk>/urkunde/', transcripts.certificate, name='certificate'),
     path('abschlussarbeit/<int:pk>/', thesis.thesis, name='thesis'),
     path('neu/', exam.edit, name='new'),

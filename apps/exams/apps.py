@@ -1,8 +1,7 @@
 from datetime import timedelta
 
 from django.apps import AppConfig
-from django.db.models import Count, Exists, F, Min, OuterRef, Q, Subquery
-from django.db.models.functions import Coalesce
+from django.db.models import Count, Exists, F, Min, OuterRef, Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.formats import date_format
@@ -97,31 +96,20 @@ class ExamsConfig(Tile, AppConfig):
                     + (f'Wertung fehlt: {late}' if late else f'{plural(exam.open, "Teilnahme", "Teilnahmen")} offen'),
                     exam.get_absolute_url(), due,
                 ))
-        overdue = rules.certificate_overdue_days
-        if overdue is not None and 'correct_scores' in person.roles and 'decide_results' not in person.roles:  # who corrects results hears of a Zeugnis long overdue
+        if rules.certificate_overdue_days is not None and 'correct_scores' in person.roles and 'decide_results' not in person.roles:  # who corrects results reminds the Prüfungsamt of a Zeugnis long overdue, once a week
             from students.models import Study
-            from .results import finished
+            from .results import finished, overdue, reminded
 
             for study, done in finished(person.within(Study.objects.filter(status=Study.Status.ENROLLED, issued=None), 'correct_scores')):
-                if done['completed'] and done['completed'] + timedelta(weeks=rules.certificate_weeks, days=overdue) < timezone.localdate():
-                    found.append(task(
-                        f'Zeugnis seit über {plural(overdue, "Tag", "Tagen")} überfällig: {study.person}, {study.program.title}',
-                        reverse('exams:transcript', args=[study.pk]), done['completed'] + timedelta(weeks=rules.certificate_weeks),
-                    ))
+                if (due := overdue(done)) and not reminded(study):
+                    found.append(task(f'Zeugnis überfällig: {study.person}, {study.program.title}, ans Ausstellen erinnern', reverse('exams:transcript', args=[study.pk]), due))
         if 'manage_exams' in person.roles:
             from core.models import Term
             from students.models import Document
 
-            if short := len(Course.short_panels(person.within(Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], released=None), 'manage_exams'))):
-                found.append(task(f'{plural(short, "Prüfung", "Prüfungen")}: Kommission prüfen', f"{reverse('exams:index')}?stand=kommission"))
-            failed = Participation.objects.filter(study__person=OuterRef('study__person'), module=OuterRef('module'), passed=False, course__released__isnull=False)
-            last = (
-                person.within(Participation.objects.filter(course__kind=Course.Kind.EXAM, course__released=None), 'manage_exams')
-                .annotate(failed=Coalesce(Subquery(failed.values('module').annotate(n=Count('pk')).values('n')[:1]), 0)).filter(failed__gte=F('study__program__attempts') - 1)
-                .values('course', 'course__title').annotate(n=Count('pk'))
-            )
-            for row in last:
-                found.append(task(f'{row["course__title"]}: {plural(row["n"], "Anmeldung", "Anmeldungen")} im letzten Versuch', reverse('exams:exam', args=[row['course']])))
+            unreleased = person.within(Course.objects.filter(kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], released=None), 'manage_exams')
+            if short := Course.objects.filter(pk__in=Course.short_panels(unreleased)).order_by('term__start'):  # a last attempt's stricter panel among them
+                found.append(task(f'{plural(len(short), "Prüfung", "Prüfungen")}: Kommission prüfen', f"{reverse('exams:index')}?semester={short[0].term_id}&stand=kommission"))
 
             undated = person.within(Course.objects.filter(kind=Course.Kind.EXAM, term=Term.current(), bookings=None, released=None), 'manage_exams')
             if soon := list(undated.filter(Q(opens=None) | Q(opens__lte=timezone.localdate() + timedelta(days=14))).values_list('opens', flat=True)):  # registration open or near

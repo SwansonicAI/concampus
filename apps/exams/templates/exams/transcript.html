@@ -19,6 +19,7 @@
     <dt>Ausgefertigt am</dt><dd>{% if study.issued %}{{ study.issued|date:"j. F Y" }}{% else %}noch nicht{% endif %}</dd>{% endif %}
   </dl>
   {% if issue %}<form method="post" action="{% url 'exams:issue' study.pk %}" class="no-print panel" style="margin-top: 16px">{% csrf_token %}<p style="margin-top: 0">Alle Leistungen sind erbracht. Ausgestellt, erhält {{ study.person.first_name }} {{ study.person.last_name }} Bescheid und Abschriften von Zeugnis, Urkunde und Diploma Supplement; die Exmatrikulation folgt.</p><button class="btn" data-confirm="Zeugnis ausstellen?">Zeugnis ausstellen</button></form>{% endif %}
+  {% if late %}<form method="post" action="{% url 'exams:remind_issue' study.pk %}" class="no-print panel" style="margin-top: 16px">{% csrf_token %}<p style="margin-top: 0"><span class="badge no">überfällig</span> Alle Leistungen sind erbracht; das Zeugnis war bis zum {{ late|date:"j.n.Y" }} auszustellen. Ausstellen kann es: {{ issuer|default:"das Prüfungsamt" }}.</p>{% if reminded %}<small class="muted">Diese Woche schon erinnert.</small>{% else %}<button class="btn ghost">Erinnern</button>{% endif %}</form>{% endif %}
   <section>
     <table>
       <thead><tr><th>Modul</th><th>Titel</th><th class="num">CP</th><th class="num">Gewicht</th><th class="num">Note</th></tr></thead>

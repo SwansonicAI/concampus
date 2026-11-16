@@ -10,11 +10,11 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from core import texts
-from core.models import Office
+from core.models import Message, Office, Person
 from students.leaving import leaving
 from students.models import Study
 from students.trail import above
-from ..results import achievements
+from ..results import achievements, overdue, reminded
 
 GRADES = [(1.5, 'sehr gut', 'very good'), (2.5, 'gut', 'good'), (3.5, 'befriedigend', 'satisfactory'), (4.0, 'ausreichend', 'sufficient')]
 
@@ -34,13 +34,31 @@ def transcript(request, pk):
         raise PermissionDenied
     found, office = achievements(study), request.user.may('decide_results', study)  # a Zeugnis comes from the office
     copy = not office and study.person == request.user and study.issued and found['finished']  # graduates print their own
+    late = not office and found['finished'] and study.issued is None and request.user.may('correct_scores', study) and overdue(found)  # theirs to remind
     return render(request, 'exams/transcript.html', found | {
         'trail': [(None, request.path)] if study.person == request.user else above(request.user, study),  # one's own: a page of Mein Studium
         'complete': found['finished'] and (office or copy), 'copy': copy, 'supplement': (office or copy) and study.program.level,
         'issue': office and found['finished'] and study.issued is None and study.status == Study.Status.ENROLLED,
         'still': [item for item in leaving(study) if not item[0].startswith('Zeugnis')] if office and found['finished'] and study.issued is None else [],
         'verbal': verbal(found['average']) if found['average'] else '', 'sender': texts.block('absender_leistungen'),
+        'late': late, 'reminded': late and reminded(study), 'issuer': late and Office.holding('decide_results', program=study.program, linked=True),
     })
+
+
+@require_POST
+def remind(request, pk):
+    """Remind whoever issues the study's Zeugnis that it is long overdue; for who corrects results, once a week."""
+    study = get_object_or_404(Study.objects.select_related('person', 'program'), pk=pk, status=Study.Status.ENROLLED, issued=None)
+    if not request.user.may('correct_scores', study):
+        raise PermissionDenied
+    due = overdue(achievements(study))
+    if due and not reminded(study):
+        values = {'studierende': study.person, 'studiengang': study.program.title, 'frist': f'{due:%d.%m.%Y}'}
+        for p in Person.holding('decide_results'):
+            if p.may('decide_results', study):
+                Message.send(p, *texts.render('zeugnis_ueberfaellig', vorname=p.first_name, nachname=p.last_name, **values), reverse('exams:transcript', args=[study.pk]))
+        messages.success(request, 'Erinnert.')
+    return redirect('exams:transcript', study.pk)
 
 
 @require_POST

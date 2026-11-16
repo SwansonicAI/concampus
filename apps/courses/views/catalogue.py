@@ -278,7 +278,7 @@ def course(request, pk):
         'lesson_rows': zip([s for s, _ in lessons], timetable or []),
         'ensembles': ensembles,
         'grouping': EnsembleForm(sent(request, 'ensemble'), course=course, person=person) if course.allocation == Course.Allocation.ENSEMBLE else None,
-        'adding': AddForm(course=course) if staffed and (office or course.allocation != Course.Allocation.ENSEMBLE) else None,  # a coach's people come through their ensembles
+        'adding': AddForm(course=course, initial={'who': request.GET.get('eintragen', '')}) if staffed and (office or course.allocation != Course.Allocation.ENSEMBLE) else None,  # a coach's people come through their ensembles
         'reachable': Study.reachable(person, Study.objects.filter(Q(participations__course=course) | Q(signups__course=course))) if staffed else set(),
         'panel': False,
     })

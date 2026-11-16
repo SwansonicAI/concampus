@@ -379,7 +379,7 @@ def remind(request):
             due = min(p.course.deadline for p in study.stages if p.course.program_id and p.course.deadline)
             key, items, values = 'unterlagen_fehlen', incomplete(study, types), {'frist': date_format(due, 'j. F Y')}
         elif study.status == Study.Status.ADMITTED and study.terms.filter(term=study.start_term).exists():  # the place taken up
-            key, items, values = 'immatrikulation_offen', study.missing(), {}
+            key, items, values = 'immatrikulation_offen', study.steps()[0], {}  # theirs, not what waits on others
         else:
             continue
         if not items:

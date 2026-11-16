@@ -47,17 +47,17 @@ class SetupConfig(Tile, AppConfig):
         return found
 
     def tasks(self, person):
-        from core.models import Office, Term
+        from django.db.models import Exists, OuterRef
+
+        from core.models import AccessRequest, Grant, Membership, Office, Term
 
         found = []
         if 'manage_terms' in person.roles and not Term.upcoming():
             found.append(task('Nächstes Semester anlegen', reverse('setup:new', args=['semester'])))
         if 'manage_accounts' in person.roles:  # Berechtigungen asked for, and sensitive ones someone else gave, for this person to decide
-            from core.models import AccessRequest, Grant, Membership
-
             if n := AccessRequest.objects.exclude(person=person).count():
                 found.append(task(f'{plural(n, "Antrag", "Anträge")} auf Berechtigungen entscheiden', reverse('setup:approvals')))
-            if n := Grant.objects.exclude(by=person).exclude(office__in=person.groups.all()).count() +Membership.objects.filter(confirmed_by=None).exclude(by=person).exclude(person=person).count():
+            if n := Grant.objects.exclude(by=person).exclude(office__in=person.groups.all()).count() + Membership.objects.filter(confirmed_by=None).exclude(by=person).exclude(person=person).count():
                 found.append(task(f'{plural(n, "Änderung", "Änderungen")} der Berechtigungen bestätigen', reverse('setup:approvals')))
         if 'manage_institution' in person.roles:
             from core.models import Feedback
@@ -65,6 +65,7 @@ class SetupConfig(Tile, AppConfig):
             if open_ := list(Feedback.objects.filter(answered=None).order_by('received')):
                 found.append(task(f'Barrierefreiheit: {plural(len(open_), "Hinweis", "Hinweise")} beantworten', reverse('setup:feedback'), open_[0].due))
         if 'manage_accounts' in person.roles:  # an office nobody holds: what it decides goes nowhere
-            for office in Office.objects.filter(user=None).order_by('name'):
-                found.append(task(f'Amt ohne Mitglieder: {office.name}', reverse('setup:list', args=['konten'])))
+            entered = Membership.objects.filter(office=OuterRef('pk'), confirmed_by=None)  # waiting: the Freigabe's to-do
+            for office in Office.objects.filter(user=None).exclude(Exists(entered)).order_by('name'):
+                found.append(task(f'Amt ohne Mitglieder: {office.name}, Mitglieder eintragen', reverse('setup:edit', args=['aemter', office.pk])))
         return found

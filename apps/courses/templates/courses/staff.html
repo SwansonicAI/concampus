@@ -4,13 +4,14 @@
 {% block content %}
 <h1>Lehrende</h1>
 <div class="head">
-  <p class="lead">{% for key, label, n in stands %}{% if n %}<a class="badge {% if key == 'ohne' %}no{% elif key == 'befristet' or key == 'neu' %}wait{% endif %}" href="?stand={{ key }}">{{ n }} {{ label }}</a> {% endif %}{% endfor %}</p>
+  <p class="lead">{% for key, label, n in stands %}{% if n %}<a class="badge {% if key == 'ohne' %}no{% elif key == 'befristet' or key == 'neu' %}wait{% endif %}" href="?stand={{ key }}{% if term %}&semester={{ term.pk }}{% endif %}">{{ n }} {{ label }}</a> {% endif %}{% endfor %}</p>
   {% if keeping %}<div class="actions">
     {% if uninvited %}<form method="post" action="{% url 'setup:invite_new' %}">{% csrf_token %}<button class="btn ghost" data-confirm="{{ uninvited }} Lehrende, die sich noch nie angemeldet haben, per E-Mail einladen?">{{ uninvited }} einladen</button></form>{% endif %}
     <a class="btn" href="{% url 'setup:new' 'lehrende' %}" data-panel>Neu anlegen</a>
   </div>{% endif %}
 </div>
 <form class="toolbar">
+  {% if term %}<input type="hidden" name="semester" value="{{ term.pk }}">{% endif %}
   <div class="inline">
     <label>Institut<select name="institut" data-submit><option value="">Alle</option>{% for i in institutes %}<option value="{{ i.pk }}"{% if i.pk|stringformat:'s' == institute %} selected{% endif %}>{{ i }}</option>{% endfor %}</select></label>
     <label>Beschäftigung<select name="art" data-submit><option value="">Alle</option>{% for value, label in kinds %}<option value="{{ value }}"{% if value == kind %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>

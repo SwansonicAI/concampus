@@ -165,7 +165,7 @@ def exam(request, pk):
             refused, (staff, rows) = error, sheet()
             messages.error(request, 'Nichts gespeichert. Bitte die markierte Zeile berichtigen.')
         else:
-            messages.success(request, 'Entwurf gespeichert; abgegeben ist das Gutachten mit seiner Note.' if draft else 'Gutachten abgegeben.' if course.kind == Course.Kind.THESIS else 'Ergebnisse gespeichert.')
+            messages.success(request, 'Entwurf gespeichert; abgegeben ist das Gutachten mit seiner Note.' if draft else 'Gutachten abgegeben.' if course.kind == Course.Kind.THESIS and member else 'Ergebnisse gespeichert.')  # the office's Vermerk is no Gutachten
             return redirect(course)
     panel.blind(rows, person, office=decide or correct)
     if refused:

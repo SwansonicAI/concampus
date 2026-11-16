@@ -72,7 +72,8 @@ def share(course, coached):
 
 def taught(person, term):
     """The person's class, each study with `lesson`, the person's own lesson class it is in in `term`, and else `until`,
-    the last semester its Studienplan has Hauptfach lessons in: past it, none is due; before it, one is `missing`."""
+    the last semester its Studienplan has Hauptfach lessons in: past it, none is due; before it, one is `missing`, with
+    `into`, the person's class of its Hauptfach in `term` to enter it in, else another of theirs."""
     today = timezone.localdate()
     studies = list(
         Study.objects.filter(teacher=person, status=Study.Status.ENROLLED).select_related('person', 'program', 'subject', 'start_term')
@@ -90,10 +91,12 @@ def taught(person, term):
         Participation.objects.filter(study__in=studies, passed=False, course__kind__in=[Course.Kind.EXAM, Course.Kind.THESIS], course__released__isnull=False)
         .values_list('study', 'module')
     )
+    classes = {c.subject_id: c for c in Course.objects.filter(term=term, kind=Course.Kind.LESSON, subject__isnull=False, staff=person, cancelled=None)}
     choices = {}
     for s in studies:  # a plan without lessons, such as a doctorate's, owes none
         s.lesson, s.until = lessons.get(s.pk), until.get(s.program_id)
         s.missing = not s.lesson and s.until is not None and s.fs <= s.until
+        s.into = s.missing and (classes.get(s.subject_id) or next(iter(classes.values()), None))
         tries = [n for (study, module), n in failed.items() if study == s.pk and (study, module) not in passed]
         s.lost, s.last = any(n >= s.program.attempts for n in tries), any(n == s.program.attempts - 1 for n in tries)
         s.over = s.fs > s.program.semesters

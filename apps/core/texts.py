@@ -274,6 +274,11 @@ TEXTS = {
     ),
     'pruefungsanmeldung': Spec(NACHRICHT, 'Prüfungsanmeldung', 'Prüfungsanmeldung: {pruefung}', 'Sie sind zur Prüfung {pruefung} ({modul}) angemeldet.', ('pruefung', 'modul')),
     'ergebnis': Spec(NACHRICHT, 'Ergebnis freigegeben', 'Ergebnis: {pruefung}', 'Ihr Prüfungsergebnis ist freigegeben.', ('pruefung',)),
+    'zeugnis_ueberfaellig': Spec(
+        NACHRICHT, 'Zeugnis überfällig', 'Zeugnis überfällig: {studierende}',
+        '{studierende} hat alle Leistungen im {studiengang} erbracht; das Zeugnis war bis zum {frist} auszustellen. Bitte stellen Sie es aus.',
+        ('studierende', 'studiengang', 'frist'),
+    ),
     'wertung_fehlt': Spec(
         NACHRICHT, 'Wertung fehlt', 'Ihre Wertung fehlt: {pruefung}',
         'Für „{pruefung}“ fehlt noch Ihre Wertung ({anzahl}). Bitte tragen Sie sie ein, damit das Ergebnis freigegeben werden kann.',

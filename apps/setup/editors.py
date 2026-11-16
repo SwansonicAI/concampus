@@ -192,7 +192,10 @@ class OfficeForm(forms.ModelForm):
         if self.instance.pk:
             self.initial['capabilities'] = list(self.instance.permissions.values_list('codename', flat=True))
             members = ', '.join(str(p) for p in self.instance.user_set.order_by('last_name'))
-            waiting = '; '.join(', '.join(g.labels) for g in self.instance.grants.all())
+            waiting = '; '.join([
+                *(', '.join(g.labels) for g in self.instance.grants.all()),
+                *(str(m.person) for m in self.instance.memberships.filter(confirmed_by=None).select_related('person')),  # joining
+            ])
             self.lead = format_html(
                 'Mitglieder: {}. Wer dazugehört, wird bei der Person unter <a href="{}">Konten</a> eingetragen.{}', members or 'noch niemand',
                 reverse('setup:list', args=['konten']), f' Wartet auf Bestätigung: {waiting}.' if waiting else '',

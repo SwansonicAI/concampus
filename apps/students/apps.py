@@ -1,4 +1,4 @@
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import timedelta
 
 from django.apps import AppConfig
@@ -8,11 +8,6 @@ from django.urls import reverse
 from django.utils.formats import date_format, number_format
 
 from core.apps import Tile, feature, page, plural, task
-
-WAITS = {  # the first word of what an accepted place still lacks: what it waits for, as the office's to-do says it
-    'Versicherungsmeldung': 'die Krankenkasse', 'Semesterbeitrag': 'den Semesterbeitrag', 'Hochschulzugangsberechtigung': 'den Hochschulzugang',
-    'Sperre:': 'die Aufhebung einer Sperre', 'Leihinstrument': 'ein Leihinstrument', 'Beitragsrückstand': 'die Krankenkasse',
-}
 
 
 class StudentsConfig(Tile, AppConfig):
@@ -113,28 +108,28 @@ class StudentsConfig(Tile, AppConfig):
             from admissions.papers import papers
 
             accepted = papers(person.within(Study.objects.filter(status=Study.Status.ADMITTED, terms__term=F('start_term')), 'manage_students')).select_related('start_term')
-            terms = defaultdict(lambda: ([], Counter()))  # ready to enrol; what the others wait for
+            terms = defaultdict(lambda: ([], []))  # ready to enrol; a Hochschulzugang from abroad to check, the office's own step: the rest waits on the applicant or the insurer
             for s in accepted.order_by('start_term__start'):
-                ready, waiting = terms[s.start_term]
-                if missing := s.missing():
-                    waiting.update({WAITS.get(reason.split()[0], 'Unterlagen') for reason in missing})
-                else:
+                ready, checks = terms[s.start_term]
+                if not (missing := s.missing()):
                     ready.append(s)
-            for start, (ready, waiting) in terms.items():
+                elif any(m.startswith('Hochschulzugangsberechtigung aus dem Ausland') for m in missing):
+                    checks.append(s)
+            for start, (ready, checks) in terms.items():
                 url = f"{reverse('admissions:board')}?semester={start.pk}&ansicht=immatrikulieren"
                 if ready:
                     found.append(task(f'{plural(len(ready), "angenommenen Studienplatz", "angenommene Studienplätze")} zum {start} immatrikulieren', url, start.start))
-                if waiting:  # not overdue: it is up to others
-                    found.append(task(f'Immatrikulation zum {start}: ' + ', '.join(f'{n} {"wartet" if n == 1 else "warten"} auf {what}' for what, n in waiting.items()), url))
+                if checks:
+                    found.append(task(f'Immatrikulation zum {start}: {plural(len(checks), "Hochschulzugang", "Hochschulzugänge")} aus dem Ausland prüfen', url, start.start))
             from exams.results import exhausted, lost
 
             for study in Study.objects.filter(pk__in=lost(person.within(enrolled, 'manage_students'))).select_related('person', 'program'):
                 final = max(m.appeal for m in exhausted(study)) + timedelta(days=1)  # once the Widerspruchsfrist is over
                 found.append(task(f'Exmatrikulieren{"" if final <= today else " ab " + date_format(final, "j.n.")}: {study.person}, Prüfung endgültig nicht bestanden', study.get_absolute_url(), final))
-        if 'view_students' in person.roles and (not person.everywhere('view_students') or 'decide_results' in person.roles):  # an Institut's office, and the office deciding results: who should have chosen
+        if {'view_students', 'decide_results'} <= person.roles:  # who should have chosen, for the office that records it (views.study.decides)
             from .views.lists import cases, semesters
 
-            if n := cases(semesters(person.within(enrolled, 'view_students')), 'schwerpunkt').count():
+            if n := cases(semesters(person.within(enrolled, 'decide_results')), 'schwerpunkt').count():
                 found.append(task(f'Schwerpunkt nicht gewählt: {plural(n, "Person", "Personen")}', f"{reverse('students:list')}?stand=schwerpunkt"))
         if 'manage_students' in person.roles:  # a town moved to another Kreis: who lives in the old one without a town to tell
             from core.keys import review

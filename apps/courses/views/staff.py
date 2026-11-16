@@ -24,13 +24,14 @@ def reach(person):
 
 @require('manage_staff', 'view_teaching_load')
 def staff(request):
-    """The teachers, by Institut, Beschäftigung and what needs doing: without a Lehrverpflichtung while teaching this
-    term, a contract ending, never signed in, left. Each with their Soll this term, or their Lehrauftrag."""
-    person, term, today = request.user, Term.current(), timezone.localdate()
+    """The teachers, by Institut, Beschäftigung and what needs doing: without a Lehrverpflichtung while teaching in the
+    term (?semester=, else this one), a contract ending, never signed in, left. Each with their Soll then, or their
+    Lehrauftrag."""
+    person, term, today = request.user, Term.pick(request.GET.get('semester', '')), timezone.localdate()
     every = reach(person)
     teaching = Q(teaching__term=term, teaching__kind__in=TEACHING, teaching__cancelled=None) if term else Q(pk=None)
     stands = {
-        'ohne': ('ohne Lehrverpflichtung', every.filter(teaching, is_active=True).exclude(employment=Person.Employment.LEHRAUFTRAG).exclude(obligations__term__start__lte=term.start if term else today)),
+        'ohne': (f'ohne Lehrverpflichtung im {term}', every.filter(teaching, is_active=True).exclude(employment=Person.Employment.LEHRAUFTRAG).exclude(obligations__term__start__lte=term.start if term else today)),
         'befristet': ('befristet, bald zu Ende', every.filter(is_active=True, contract_end__lte=today + timedelta(weeks=8))),
         'neu': ('noch nie angemeldet', every.filter(is_active=True, last_login=None)),
         'aus': ('ausgeschieden', every.filter(is_active=False)),
