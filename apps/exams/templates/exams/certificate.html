@@ -1,7 +1,7 @@
 {% extends base %}
 {% block title %}Urkunde {{ study.person.name }}{% endblock %}
 {% block content %}
-<div class="document ceremony{% if copy %} copy{% endif %}">
+<div class="document ceremony{% if copy %} copy{% endif %}" data-paper="urkunde">
   <p class="no-print actions"><a class="btn" href="{% querystring pdf=1 %}" target="_blank">PDF</a><a class="more" href="{% url 'exams:transcript' study.pk %}">Zum Zeugnis</a></p>
   {% include "core/_letterhead.html" with plain=True %}
   <h1>Urkunde</h1>

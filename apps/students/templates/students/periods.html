@@ -1,7 +1,7 @@
 {% extends base %}
 {% block title %}Studienzeitbescheinigung{% endblock %}
 {% block content %}
-<div class="document">
+<div class="document" data-paper="studienzeiten">
   <p class="no-print actions"><a class="btn" href="{% querystring pdf=1 %}" target="_blank">PDF</a><a class="btn ghost" href="?xml">Als XHochschule-Datei</a><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
   {% include "core/_letterhead.html" with office=sender %}
   <h1>Studienzeit&shy;bescheinigung</h1>

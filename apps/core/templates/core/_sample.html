@@ -1,0 +1,42 @@
+{# A made-up document to try a Briefbogen on (core.paper.sample): a letter or a Bescheinigung over two pages, or an Urkunde. #}
+{% if kind == 'brief' %}
+<div class="document letter" data-paper="brief">
+  <p class="address">Erika Mustermann<br>Musterstraße 1<br>12345 Musterstadt</p>
+  <p class="dated" data-date="{{ today|date:'j. F Y' }}" data-reference="{{ today|date:'Y' }}-1234" data-office="Akademische und Studentische Angelegenheiten"></p>
+  <h2>Zulassung zum Studium</h2>
+  <p>Guten Tag Erika Mustermann,</p>
+  <p>so erhalten Bewerbende und Studierende Briefe und Bescheide aus ConCampus: die Anschrift im Fenster eines Umschlags DIN lang, daneben das Amt, das Aktenzeichen und das Datum, unten die Hochschule mit ihrer Bankverbindung.</p>
+  <p>Den Wortlaut jedes Briefs bestimmen die Texte unter Einstellungen; was um ihn herum steht, dieser Briefbogen. Ein Brief über mehr als eine Seite zeigt ab der zweiten die Folgeseiten.</p>
+  {% for n in rows|slice:":9" %}<p>Absatz {{ n }}: Ein Bescheid begründet, was er entscheidet, und sagt, wie man ihm widerspricht. So viel Text, wie es braucht, damit auch die Folgeseite zu sehen ist.</p>{% endfor %}
+  <p>Mit freundlichen Grüßen<br>Akademische und Studentische Angelegenheiten</p>
+  <p class="muted"><small>Dieses Schreiben wurde maschinell erstellt und ist ohne Unterschrift gültig.</small></p>
+</div>
+{% elif kind == 'urkunde' %}
+<div class="document ceremony" data-paper="urkunde">
+  <h1>Urkunde</h1>
+  <p style="margin-top: 32px">Die {{ institution.name }} verleiht</p>
+  <p style="font-size: 22px"><b>Erika Mustermann</b></p>
+  <p>geboren am 1. April 2001 in Musterstadt,</p>
+  <p>nach bestandener Prüfung im Studiengang Bachelor Musik, Hauptfach Violine, den akademischen Grad</p>
+  <p style="font-size: 22px"><b>Bachelor of Music</b></p>
+  <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ today|date:"j. F Y" }}</span></div>
+  <div class="signatures"><span>Präsidentin</span><span>Vorsitz des Prüfungsausschusses</span></div>
+</div>
+{% else %}
+<div class="document" data-paper="leistungen">
+  <div class="letterhead"><div class="muted">Prüfungsamt</div></div>
+  <h1>Musterbescheinigung</h1>
+  <p>Hiermit wird bescheinigt, dass</p>
+  <dl class="facts">
+    <dt>Name</dt><dd><b>Erika Mustermann</b></dd>
+    <dt>Geboren</dt><dd>1. April 2001 in Musterstadt</dd>
+    <dt>Matrikelnummer</dt><dd>100123</dd>
+  </dl>
+  <p style="margin-top: 24px">folgende Leistungen erbracht hat:</p>
+  <table>
+    <thead><tr><th>Modul</th><th>Semester</th><th class="num">CP</th><th class="num">Note</th></tr></thead>
+    <tbody>{% for n in rows %}<tr><td>Modul {{ n }}: Hauptfach, Kammermusik und Ensemble</td><td class="nowrap">WiSe 2025/26</td><td class="num">6</td><td class="num">1,{{ n|divisibleby:3|yesno:"0,3" }}</td></tr>{% endfor %}</tbody>
+  </table>
+  <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ today|date:"j. F Y" }}</span><span>Prüfungsamt</span></div>
+</div>
+{% endif %}

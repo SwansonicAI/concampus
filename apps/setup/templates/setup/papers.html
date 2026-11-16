@@ -1,0 +1,43 @@
+{% extends base %}
+{% block title %}Briefbögen{% endblock %}
+{% block content %}
+<p class="eyebrow"><a href="{% url 'setup:index' %}">Einstellungen</a></p>
+<h1>Briefbögen</h1>
+<p class="lead">Was Briefe, Bescheinigungen und Urkunden um ihren Text zeigen. Gesendete Bescheide bleiben, wie sie waren.</p>
+<table data-fixed>
+  <thead><tr><th>Briefbogen</th><th>Für</th><th></th><th></th></tr></thead>
+  <tbody>
+    {% for key, name, standard, changed, used, sample in layouts %}
+    <tr>
+      <td><a href="{% url 'setup:paper' key %}"><b>{{ name }}</b></a></td>
+      <td>{% for doc, title in used %}{{ title }}{% if not forloop.last %}, {% endif %}{% empty %}<span class="muted">–</span>{% endfor %}</td>
+      <td>{% if not standard %}<span class="badge green">eigener</span>{% elif changed %}<span class="badge open">geändert</span>{% else %}<span class="badge">Standard</span>{% endif %}</td>
+      <td class="nowrap"><a href="{% url 'setup:paper_preview' key %}?muster={{ sample }}" target="_blank">Muster (PDF)</a></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+<details style="margin-top: 16px"><summary>Neuer Briefbogen</summary>
+  <form method="post" class="inline" style="margin-top: 8px">
+    {% csrf_token %}<input type="hidden" name="art" value="neu">
+    <label>Name<input name="name" maxlength="80" required placeholder="z. B. Festliche Urkunde"></label>
+    <label>Ausgehend von<select name="vorlage">{% for key, name in choices %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select></label>
+    <button class="btn ghost small">Anlegen</button>
+  </form>
+</details>
+
+<section>
+  <h2>Welches Dokument auf welchem</h2>
+  <form method="post" class="form">
+    {% csrf_token %}<input type="hidden" name="art" value="zuordnung">
+    <table data-fixed>
+      <tbody>
+        {% for doc, title, chosen in documents %}
+        <tr><td>{{ title }}</td><td><select name="{{ doc }}" aria-label="Briefbogen für {{ title }}">{% for key, name in choices %}<option value="{{ key }}"{% if key == chosen %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <div class="actions"><button class="btn">Speichern</button></div>
+  </form>
+</section>
+{% endblock %}

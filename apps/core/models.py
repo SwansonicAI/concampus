@@ -319,6 +319,7 @@ class Institution(Tracked, models.Model):
     closes = models.PositiveSmallIntegerField('Räume bis (Uhr)', default=22, validators=[MinValueValidator(1), MaxValueValidator(24)])
     walk_minutes = models.PositiveSmallIntegerField('Weg zwischen Gebäuden (Min.)', default=15, help_text='Kürzere Abstände im Stundenplan werden angemerkt.')
     feedback_days = models.PositiveSmallIntegerField('Antwort auf gemeldete Barrieren (Tage)', default=30, help_text='Wie das Landesgesetz zur Barrierefreiheit sie verlangt.')
+    papers = models.JSONField('Briefbögen der Dokumente', default=dict, blank=True)  # {document: Layout key} where not its standard (core.paper)
 
     class Meta:
         verbose_name = 'Hochschule'
@@ -926,6 +927,56 @@ class Text(Tracked, models.Model):
                 check(getattr(self, field), TEXTS[self.key].allowed)
             except ValidationError as error:
                 raise ValidationError({field: error.messages})
+
+
+class Layout(Tracked, models.Model):
+    """A Briefbogen: what the pages of a document show around its text, and how the text is set (core.paper). The
+    standard ones (paper.STANDARD) hold until the Hochschule saves its own under their key."""
+
+    capabilities = ('manage_institution',)
+
+    key = models.SlugField('Schlüssel', max_length=40, unique=True)
+    name = models.CharField('Name', max_length=80)
+    design = models.JSONField('Gestaltung', default=dict)
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = 'Briefbogen'
+        verbose_name_plural = 'Briefbögen'
+
+    def __str__(self):
+        return self.name
+
+
+class Artwork(Tracked, models.Model):
+    """A picture or a font face for the Briefbögen: checked and, a picture, drawn anew on upload (core.paper.accept)."""
+
+    capabilities = ('manage_institution',)
+
+    class Kind(models.TextChoices):
+        PICTURE = 'picture', 'Bild'
+        FONT = 'font', 'Schrift'
+
+    class Face(models.TextChoices):
+        REGULAR = 'regular', 'Normal'
+        BOLD = 'bold', 'Fett'
+        ITALIC = 'italic', 'Kursiv'
+        BOLD_ITALIC = 'bolditalic', 'Fett kursiv'
+
+    kind = models.CharField('Art', max_length=8, choices=Kind)
+    name = models.CharField('Name', max_length=80, help_text='Bei einer Schrift: ihre Familie.')
+    face = models.CharField('Schnitt', max_length=10, choices=Face, blank=True)
+    file = models.FileField('Datei', upload_to='briefbogen/')
+    width = models.PositiveIntegerField('Breite (Pixel)', null=True, blank=True)
+    height = models.PositiveIntegerField('Höhe (Pixel)', null=True, blank=True)
+
+    class Meta:
+        ordering = ['kind', 'name', 'face']
+        verbose_name = 'Bild oder Schrift'
+        verbose_name_plural = 'Bilder und Schriften'
+
+    def __str__(self):
+        return f'{self.name} ({self.get_face_display()})' if self.face else self.name
 
 
 class Message(models.Model):

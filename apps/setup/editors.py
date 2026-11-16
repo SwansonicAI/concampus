@@ -171,11 +171,11 @@ class DocumentTypeForm(forms.ModelForm):
 
 
 class InstitutionForm(forms.ModelForm):
-    """The Hochschule's own data, its letters' Briefbogen among them, to look at as a PDF."""
+    """The Hochschule's own data, which its Briefbögen fill in."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.lead = format_html('Briefe und Bescheide nehmen Schriftzug oder Logo, Farbe, Anschrift und Bankverbindung von hier. <a href="{}" target="_blank">Briefbogen ansehen (PDF)</a>', reverse('sample'))
+        self.lead = format_html('Schriftzug, Logo, Farbe, Anschrift und Bankverbindung füllen die <a href="{}">Briefbögen</a>.', reverse('setup:papers'))
 
 
 class OfficeForm(forms.ModelForm):

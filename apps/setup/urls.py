@@ -1,10 +1,16 @@
 from django.urls import path
 
-from . import views
+from . import papers, views
 
 app_name = 'setup'
 urlpatterns = [
     path('', views.index, name='index'),
+    path('briefboegen/', papers.papers, name='papers'),
+    path('briefboegen/dateien/', papers.artworks, name='artworks'),
+    path('briefboegen/dateien/<int:pk>/', papers.artwork, name='artwork'),
+    path('briefboegen/dateien/<int:pk>/loeschen/', papers.artwork_delete, name='artwork_delete'),
+    path('briefboegen/<slug:key>/', papers.editor, name='paper'),
+    path('briefboegen/<slug:key>/muster/', papers.preview, name='paper_preview'),
     path('texte/', views.texts, name='texts'),
     path('texte/<str:key>/', views.text, name='text'),
     path('konten/<int:pk>/einladung/', views.invite, name='invite'),

@@ -336,20 +336,6 @@ def message(request, pk):
     return response
 
 
-@require('manage_institution')
-def sample(request):
-    """A letter as the Hochschule's settings set it, to see before anyone receives one: the Briefbogen."""
-    person = Person(first_name='Erika', last_name='Mustermann', address='Musterstraße 1\n12345 Musterstadt')
-    body = (
-        'so erhalten Bewerbende und Studierende Briefe und Bescheide aus ConCampus: die Anschrift im Fenster eines '
-        'Umschlags DIN lang, rechts daneben das Amt, das Aktenzeichen und das Datum, unten die Hochschule mit ihrer '
-        'Bankverbindung.\n\nSchriftzug oder Logo, Akzentfarbe, Anschrift, E-Mail, Website und Bankverbindung stehen in '
-        'den Einstellungen der Hochschule; den Wortlaut jedes Briefs bestimmen die Texte.'
-    )
-    letter = Message(pk=1, person=person, subject='Briefbogen der Hochschule', body=body, sender=texts.block('absender_bescheide'), created=timezone.now())
-    return paper.respond(paper.letter(letter), 'Briefbogen')
-
-
 def letter(request, pk):
     """A message from the Postfach as a printable letter, for its recipient; a Bescheid in the student file also for the
     student office and the office deciding results (docs/privacy.md)."""

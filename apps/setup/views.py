@@ -19,7 +19,7 @@ from core.access import CAPABILITIES, CODENAMES, EVERYWHERE, LOCK, SENSITIVE, SH
 from core.forms import offered
 from core.history import because
 from core.keys import Edition, Key, review
-from core import transfer
+from core import paper, transfer
 from core.apps import plural
 from core.models import AccessRequest, Export, Feedback, Grant, Institute, Membership, Office, Person, SignIn, Term, Text, limited, waiting
 from core.text import collated, matching
@@ -154,6 +154,7 @@ def places(person):
         found.append(('Verwaltung', 'Berechtigungen im Überblick', reverse('setup:rights'), len(CODENAMES)))
     if 'manage_institution' in person.roles:
         found.append(('Verwaltung', 'Texte', reverse('setup:texts'), len(TEXTS)))
+        found.append(('Verwaltung', 'Briefbögen', reverse('setup:papers'), len(paper.layouts())))
     if person.roles & {'manage_institution', 'manage_students'}:
         found.append(('Verwaltung', 'Amtliche Verzeichnisse', reverse('setup:keys'), len(Key.List)))
     return found

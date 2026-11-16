@@ -1,0 +1,53 @@
+{% extends base %}
+{% load static %}
+{% block title %}{{ name }} · Briefbogen{% endblock %}
+{% block content %}
+<style>{% for key, family in editor.fonts.items %}{% for face, url in family.faces.items %}
+@font-face { font-family: "paper-{{ key }}"; src: url("{{ url }}") format("truetype"); font-weight: {% if 'bold' in face %}700{% else %}400{% endif %}; font-style: {% if 'italic' in face %}italic{% else %}normal{% endif %}; }{% endfor %}{% endfor %}
+</style>
+{# The editor (core/static/core/paper.js), the window's width and height: the page under rulers, or the PDF it makes; at the window's right edge the rail, to save, to add, and to edit what is picked, else the Briefbogen. #}
+<div class="paper" id="paper">
+  <div class="paper-main">
+    <div class="paper-head">
+      <p class="eyebrow"><a href="{% url 'setup:papers' %}">Briefbögen</a>{% if used %} · für {% for doc, title in used %}{{ title }}{% if not forloop.last %}, {% endif %}{% endfor %}{% endif %}</p>
+      <h1>{{ name }}</h1>
+    </div>
+    <div class="paper-tools">
+      <div class="filters paper-variants"><button type="button" class="on" data-variant="first">Erste Seite</button><button type="button" data-variant="later">Folgeseiten</button><button type="button" data-variant="pdf" title="Das Muster als PDF, wie dieser Briefbogen es setzt, auch ungespeichert">Vorschau</button></div>
+      <select name="muster" form="paper-preview" class="paper-sample" aria-label="Muster der Vorschau" hidden>{% for value, title in samples.items %}<option value="{{ value }}"{% if value == sample %} selected{% endif %}>Muster: {{ title }}</option>{% endfor %}</select>
+      <div class="paper-seg paper-zoom" aria-label="Größe"><button type="button" data-zoom="page" title="Ganze Seite">Seite</button><button type="button" data-zoom="width" title="So breit wie Platz ist">Breite</button><button type="button" data-zoom="100" title="Wirkliche Größe">100 %</button><button type="button" data-zoom="200">200 %</button></div>
+    </div>
+    <div class="paper-desk">
+      <div class="paper-board">
+        <i class="paper-corner"></i><canvas class="paper-ruler top"></canvas><canvas class="paper-ruler left"></canvas>
+        <div class="paper-sheet" tabindex="0" aria-label="Seite, A4"></div>
+      </div>
+      <iframe name="paper-frame" class="paper-frame" title="Vorschau als PDF" hidden></iframe>
+    </div>
+  </div>
+  <aside class="paper-rail" aria-label="Briefbogen bearbeiten">
+    <form method="post" id="paper-save" class="paper-dock">
+      {% csrf_token %}<input type="hidden" name="design"><input type="hidden" name="name">
+      <button class="btn">Speichern</button>
+      <span>
+        {% if standard and own %}<button class="link" name="art" value="standard" data-confirm="Eigene Gestaltung verwerfen?">Auf Standard zurücksetzen</button>{% endif %}
+        {% if not standard %}<button class="link" name="art" value="loeschen" data-confirm="Briefbogen löschen?">Löschen</button>{% endif %}
+        {% if record %}<a href="{% url 'history' 'core.layout' record.pk %}">Verlauf</a>{% endif %}
+      </span>
+    </form>
+    <div class="paper-add" aria-label="Hinzufügen">
+      <button type="button" data-add="text" title="Text mit Platzhaltern"><b>T</b>Text</button>
+      <button type="button" data-add="wordmark" title="Schriftzug oder Logo der Hochschule"><b>Aa</b>Schriftzug</button>
+      <button type="button" data-add="picture" title="Siegel, Unterschrift, Ornament: PNG oder JPEG"><b class="paper-icon-picture"></b>Bild</button>
+      <button type="button" data-add="box" title="Fläche in einer Farbe"><b class="paper-icon-box"></b>Fläche</button>
+      <button type="button" data-add="rule" title="Linie, oder als Rahmen"><b class="paper-icon-rule"></b>Linie</button>
+      <button type="button" data-add="address" title="Anschrift der Empfänger:in, im Fenster des Umschlags"><b class="paper-icon-address"></b>Anschrift</button>
+      <button type="button" data-add="info" title="Amt, Aktenzeichen und Datum eines Briefs"><b class="paper-icon-info"></b>Infoblock</button>
+    </div>
+    <div class="paper-panel form" aria-label="Eigenschaften"></div>
+  </aside>
+</div>
+<form method="post" id="paper-preview" action="{% url 'setup:paper_preview' key %}" target="paper-frame">{% csrf_token %}<input type="hidden" name="design"></form>
+{{ editor|json_script:"paper-data" }}
+<script src="{% static 'core/paper.js' %}" defer></script>
+{% endblock %}

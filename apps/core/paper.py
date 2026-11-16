@@ -1,7 +1,10 @@
-"""Documents as PDF: letters after DIN 5008 (Form B), Bescheinigungen, Zeugnisse and Urkunden, set from the templates
-that show them on screen. Each `.document` of a rendered page becomes one; only the markup those templates use is read
-(blocks(), inline()), every text is escaped, and nothing is fetched. ReportLab sets the pages, in PT Sans and PT Serif
-(OFL, core/fonts)."""
+"""Documents as PDF, set from the templates that show them on screen: each `.document` of a rendered page becomes one, on
+the Briefbogen chosen for its kind (Institution.papers, else DOCUMENTS). A Briefbogen (Layout, else STANDARD) places
+its elements on the page in mm from the top left: the text area each page's text flows into, texts with placeholders,
+the wordmark, pictures, areas and rules, a letter's address window and information block; and sets the text's type.
+Only the markup the templates use is read (blocks(), inline()), every text is escaped, nothing is fetched; a design is
+checked field by field before it is kept (clean()), uploads are tested and pictures drawn anew (accept()). ReportLab
+sets the pages, in the open-licence fonts of core/static/core/fonts or the Hochschule's own."""
 import re
 from collections import Counter
 from copy import deepcopy
@@ -10,11 +13,17 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from xml.sax.saxutils import escape
 
+from django.core.exceptions import ValidationError
+from django.core.files.base import ContentFile
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.template.loader import render_to_string
+from django.utils import timezone
+from django.utils.dateformat import format as date_format
 from django.utils.http import content_disposition_header
+from django.utils.text import slugify
 from lxml import html as lxml_html
+from PIL import Image, UnidentifiedImageError
 from reportlab.graphics.barcode.qr import QrCodeWidget
 from reportlab.graphics.shapes import Drawing
 from reportlab.lib.colors import HexColor
@@ -32,43 +41,490 @@ from reportlab.platypus import (
     PageTemplate, Paragraph, Spacer, Table, TableStyle,
 )
 
-from .models import Institution
+from .models import Artwork, Institution, Layout
 
-FONTS = Path(__file__).parent / 'fonts'
-for family in ('PTSans', 'PTSerif'):
-    for face in ('Regular', 'Bold', 'Italic', 'BoldItalic'):
-        pdfmetrics.registerFont(TTFont(f'{family}-{face}', FONTS / f'{family}-{face}.ttf'))
-    registerFontFamily(family, normal=f'{family}-Regular', bold=f'{family}-Bold', italic=f'{family}-Italic', boldItalic=f'{family}-BoldItalic')
-
-INK, MUTED, LINE, RED = HexColor('#000000'), HexColor('#5f5f5f'), HexColor('#d6d6d6'), HexColor('#c4262e')
+FONTS = Path(__file__).parent / 'static' / 'core' / 'fonts'
+FAMILIES = {  # key: (name, file stem), the fonts that come with ConCampus, each in four faces
+    'ptsans': ('PT Sans', 'PTSans'), 'lato': ('Lato', 'Lato'), 'fira': ('Fira Sans', 'FiraSans'),
+    'ptserif': ('PT Serif', 'PTSerif'), 'plexserif': ('IBM Plex Serif', 'IBMPlexSerif'), 'crimson': ('Crimson Text', 'CrimsonText'),
+}
+FACES = {'regular': 'Regular', 'bold': 'Bold', 'italic': 'Italic', 'bolditalic': 'BoldItalic'}
+OWN = 'eigen-'  # the key of a family the Hochschule uploaded: this and its name, slugified
 WIDTH, HEIGHT = A4
-LEFT, RIGHT = 25 * mm, 20 * mm  # DIN 5008: the text from 25 mm, to 20 mm before the edge
-TEXT = WIDTH - LEFT - RIGHT
-FOOT = 27 * mm  # the footer's height from the bottom edge
+PAGE = (210, 297)  # mm
+INK, MUTED, LINE = HexColor('#000000'), HexColor('#5f5f5f'), HexColor('#d6d6d6')
+SWATCHES = {'accent': None, 'ink': '#000000', 'muted': '#5f5f5f', 'line': '#d6d6d6', 'white': '#ffffff'}  # None: the Hochschule's
 SKIP = {'form', 'button', 'script', 'style', 'input', 'select', 'textarea'}
 GERMAN = {'page': 'Seite {} von {}', 'bank': 'Bankverbindung', 'copy': 'ABSCHRIFT'}  # what the pages say around a document
 ENGLISH = {'page': 'Page {} of {}', 'bank': 'Bank details', 'copy': 'COPY'}
 BLOCK = {'table', 'p', 'dl', 'ul', 'ol', 'div', 'section', 'h2', 'h3'}  # what stands on its own lines, also inside a cell
 URL = re.compile(r'(https?://[^\s<>"]+[^\s<>".,;:!?)])')
+FIELD = re.compile(r'\{(\w+)\}')
+BOLD = re.compile(r'\*\*(.+?)\*\*', re.S)
+LEADING = 1.25  # a text's lines, apart by its size times this, unless it sets its own; as the editor shows them (paper.js)
 
+FIELDS = {  # the placeholders a text on a Briefbogen may hold: what each says. A line whose placeholders are all empty goes
+    'name': 'Name der Hochschule', 'kurzname': 'Kurzname, sonst Name', 'anschrift': 'Anschrift, Zeile für Zeile',
+    'anschrift_zeile': 'Anschrift in einer Zeile', 'ort': 'Ort', 'email': 'E-Mail', 'website': 'Website',
+    'empfaenger': 'Zahlungsempfänger oder „Bankverbindung“, mit IBAN', 'iban': 'IBAN', 'bic': 'BIC',
+    'amt': 'Das Amt, das ausstellt', 'titel': 'Titel des Dokuments', 'aktenzeichen': 'Aktenzeichen eines Bescheids',
+    'datum': 'Datum', 'seitenzahl': '„Seite 1 von 2“, nur bei mehr als einer Seite', 'seite': 'Seite', 'seiten': 'Seiten insgesamt',
+}
+PAGED = {'seitenzahl', 'seite', 'seiten'}  # known once the document is set: drawn last (Numbered)
+
+DOCUMENTS = {  # key (data-paper on the template's .document): (what it is, its standard Briefbogen)
+    'brief': ('Briefe und Bescheide', 'brief'),
+    'immatrikulation': ('Immatrikulationsbescheinigung', 'bescheinigung'),
+    'studienzeiten': ('Studienzeitbescheinigung', 'bescheinigung'),
+    'exmatrikulation': ('Exmatrikulationsbescheinigung', 'bescheinigung'),
+    'leistungen': ('Leistungsübersicht und Zeugnis', 'bescheinigung'),
+    'urkunde': ('Urkunde', 'urkunde'),
+    'supplement': ('Diploma Supplement', 'bescheinigung'),
+    'notenliste': ('Notenliste', 'bescheinigung'),
+    'leihvertrag': ('Leihvertrag', 'bescheinigung'),
+    'vordruck': ('Vordruck der Kommission', 'bescheinigung'),
+}
+LETTERS = {'brief'}  # documents with an address: on a Briefbogen with an address window
+
+
+def element(kind, key, x, y, w, h, pages='all', **fields):
+    return {'id': key, 'type': kind, 'x': x, 'y': y, 'w': w, 'h': h, 'pages': pages, **fields}
+
+
+def text(key, x, y, w, h, words, size, pages='all', **fields):
+    return element('text', key, x, y, w, h, pages, text=words, size=size, **{'colour': 'muted'} | fields)
+
+
+LATER = [  # every Briefbogen's following pages: the Hochschule and the title over a hairline
+    text('k1', 25, 11.4, 80, 4, '{kurzname}', 7.5, 'later'),
+    text('k2', 110, 11.4, 80, 4, '{titel}', 7.5, 'later', align='right'),
+    element('box', 'k3', 25, 16, 165, 0.18, 'later', colour='line', fill=True, line=0),
+]
+FOOTER = [  # name and address, how to reach the Hochschule, where to pay: three columns under a hairline; the page
+    element('box', 'f1', 25, 270, 165, 0.18, colour='line', fill=True, line=0),
+    text('f2', 25, 271.6, 55, 16, '**{name}**\n{anschrift}', 7, leading=1.35),
+    text('f3', 80, 271.6, 55, 16, '{email}\n{website}', 7, leading=1.35),
+    text('f4', 135, 271.6, 55, 16, '{empfaenger}\nIBAN {iban}\nBIC {bic}', 7, leading=1.35),
+    text('f5', 125, 263.5, 65, 4, '{seitenzahl}', 7.5, align='right'),
+]
+SANS = {'font': 'ptsans', 'heading': 'ptsans', 'size': 10, 'title': 19, 'bar': True, 'align': 'left', 'middle': False, 'marks': False}
+STANDARD = {  # key: (name, design): ConCampus's own Briefbögen, until the Hochschule keeps its own under the key
+    'brief': ('Brief', {'style': SANS | {'marks': True}, 'elements': [
+        element('wordmark', 'm', 25, 14, 100, 17, 'first', size=15, align='left'),
+        text('r', 25, 57.4, 85, 3, '{kurzname} · {anschrift_zeile}', 6.5, 'first', underline=True),
+        element('address', 'a', 25, 63.5, 80, 26.5, 'first', size=10),
+        element('info', 'i', 125, 47, 65, 40, 'first', size=8.5),
+        element('body', 'b1', 25, 98, 165, 164, 'first'),
+        element('body', 'b2', 25, 26, 165, 236, 'later'),
+        *LATER, *FOOTER,
+    ]}),
+    'bescheinigung': ('Bescheinigung', {'style': SANS, 'elements': [
+        element('wordmark', 'm', 25, 14, 100, 17, 'first', size=15, align='left'),
+        text('o', 105, 14, 85, 16, '**{amt}**\n{anschrift}', 8.5, 'first', align='right', leading=1.35),
+        element('body', 'b1', 25, 44, 165, 218, 'first'),
+        element('body', 'b2', 25, 26, 165, 236, 'later'),
+        *LATER, *FOOTER,
+    ]}),
+    'urkunde': ('Urkunde', {'style': SANS | {'font': 'ptserif', 'heading': 'ptserif', 'size': 12, 'title': 30, 'align': 'center', 'middle': True}, 'elements': [
+        element('box', 'r1', 12, 12, 186, 273, colour='accent', fill=False, line=1.2),
+        element('box', 'r2', 14.5, 14.5, 181, 268, colour='accent', fill=False, line=0.4),
+        element('wordmark', 'm', 30, 32, 150, 17, 'first', size=17, align='center'),
+        element('body', 'b1', 28, 50, 154, 217, 'first'),
+        element('body', 'b2', 28, 30, 154, 237, 'later'),
+    ]}),
+}
+SAMPLES = {'brief': 'Brief', 'bescheinigung': 'Bescheinigung', 'urkunde': 'Urkunde'}  # what a Briefbogen is tried on (sample())
+
+
+# ---- fonts ---------------------------------------------------------------------------------------------------------
+
+def own_fonts():
+    """The Hochschule's own families: {key: (name, {face: Artwork})}."""
+    found = {}
+    for art in Artwork.objects.filter(kind=Artwork.Kind.FONT):
+        found.setdefault(OWN + slugify(art.name), (art.name, {}))[1][art.face] = art
+    return found
+
+
+def families():
+    """Every family a Briefbogen may set: {key: name}, ConCampus's first."""
+    return {key: name for key, (name, _) in FAMILIES.items()} | {key: name for key, (name, _) in own_fonts().items()}
+
+
+def registered(key, own=None):
+    """The family `key` ready to set, its faces as ReportLab names it: {face: name}; an unknown one PT Sans. A face it
+    lacks is set in its regular one."""
+    if key in FAMILIES:
+        faces = {face: f'{FAMILIES[key][1]}-{stem}' for face, stem in FACES.items()}
+        files = {face: FONTS / f'{name}.ttf' for face, name in faces.items()}
+    elif key in (own := own if own is not None else own_fonts()) and 'regular' in own[key][1]:
+        arts = own[key][1]
+        faces = {face: f'Own{arts.get(face, arts["regular"]).pk}' for face in FACES}
+        files = {face: Path(arts.get(face, arts['regular']).file.path) for face in FACES}
+    else:
+        return registered('ptsans')
+    for face, name in faces.items():
+        if name not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont(name, files[face]))
+    registerFontFamily(faces['regular'], normal=faces['regular'], bold=faces['bold'], italic=faces['italic'], boldItalic=faces['bolditalic'])
+    return faces
+
+
+def font(key, bold=False, italic=False, own=None):
+    return registered(key, own)[('bold' if bold else '') + ('italic' if italic else '') or 'regular']
+
+
+# ---- uploads -------------------------------------------------------------------------------------------------------
+
+def accept(upload, kind):
+    """An uploaded picture or font face, checked: (file to keep, width, height); else ValidationError. A picture is
+    drawn anew from its pixels, PNG or JPEG, so nothing it carried besides them is kept; a font must be TrueType that
+    ReportLab reads and may embed."""
+    if upload.size > 5 * 1024 * 1024:
+        raise ValidationError('Größer als 5 MB.')
+    data = upload.read()
+    if kind == Artwork.Kind.FONT:
+        if data[:4] == b'OTTO':
+            raise ValidationError('Eine OpenType-Schrift mit CFF-Umrissen; nötig ist TrueType (.ttf).')
+        if data[:4] not in (b'\x00\x01\x00\x00', b'true'):
+            raise ValidationError('Keine TrueType-Schrift (.ttf).')
+        try:
+            probe = TTFont('probe', BytesIO(data))
+            probe.face.makeSubset(list(range(32, 127)))  # as a PDF embeds it: refused where the font forbids it
+        except Exception as error:  # a malformed file raises more than TTFError: struct, index and value errors
+            raise ValidationError(f'Diese Schrift lässt sich nicht einbetten: {error}') from None
+        return ContentFile(data, f'{slugify(Path(upload.name).stem) or "schrift"}.ttf'), None, None
+    Image.MAX_IMAGE_PIXELS = 40_000_000  # a picture larger than any letterhead needs is refused, not decoded
+    try:
+        with Image.open(BytesIO(data)) as probe:
+            probe.verify()
+        picture = Image.open(BytesIO(data))
+        if picture.format not in ('PNG', 'JPEG'):
+            raise ValidationError('Nur PNG oder JPEG.')
+        picture.load()
+    except (UnidentifiedImageError, Image.DecompressionBombError, OSError, SyntaxError):
+        raise ValidationError('Kein Bild, das sich lesen lässt (PNG oder JPEG).') from None
+    picture.thumbnail((4000, 4000))
+    alpha = picture.mode in ('RGBA', 'LA', 'PA') or 'transparency' in picture.info
+    fresh = Image.new('RGBA' if alpha else 'RGB', picture.size)
+    fresh.paste(picture.convert('RGBA' if alpha else 'RGB'))
+    out, png = BytesIO(), alpha or picture.format == 'PNG'
+    fresh.save(out, 'PNG' if png else 'JPEG', **({'optimize': True} if png else {'quality': 92}))
+    return ContentFile(out.getvalue(), f'{slugify(Path(upload.name).stem) or "bild"}.{"png" if png else "jpg"}'), *fresh.size
+
+
+# ---- designs -------------------------------------------------------------------------------------------------------
+
+def layouts():
+    """Every Briefbogen: {key: (name, design, standard)}; the standard ones first, as the Hochschule keeps them where it does."""
+    own = {layout.key: layout for layout in Layout.objects.all()}
+    found = {key: (own[key].name if key in own else name, own[key].design if key in own else design, True) for key, (name, design) in STANDARD.items()}
+    return found | {key: (layout.name, layout.design, False) for key, layout in own.items() if key not in STANDARD}
+
+
+def chosen(institution=None, found=None):
+    """The Briefbogen of each document: {document: key}."""
+    papers = (institution or Institution.get()).papers or {}
+    found = found if found is not None else layouts()
+    return {doc: papers[doc] if papers.get(doc) in found else standard for doc, (_, standard) in DOCUMENTS.items()}
+
+
+def number(value, low, high, name):
+    try:
+        value = float(value)
+    except (TypeError, ValueError):
+        raise ValidationError(f'{name}: keine Zahl.') from None
+    if not low <= value <= high:
+        raise ValidationError(f'{name}: zwischen {low:g} und {high:g}'.replace('.', ',') + '.')
+    return round(value, 2)
+
+
+def colour_of(value):
+    if value in SWATCHES or isinstance(value, str) and re.fullmatch(r'#[0-9a-fA-F]{6}', value):
+        return value
+    raise ValidationError('Eine Farbe ist keine.')
+
+
+def clean(design, letter=False):
+    """A design as the editor sends it, checked field by field and reduced to what it may hold; ValidationError where it
+    cannot be set. `letter`: it carries letters, so it needs an address window."""
+    if not isinstance(design, dict) or not isinstance(design.get('style'), dict) or not isinstance(design.get('elements'), list):
+        raise ValidationError('Kein Briefbogen.')
+    fonts, style = families(), design['style']
+    if style.get('font') not in fonts or style.get('heading') not in fonts:
+        raise ValidationError('Eine Schrift gibt es nicht.')
+    out = {'style': {
+        'font': style['font'], 'heading': style['heading'], 'size': number(style.get('size'), 7, 16, 'Schriftgröße'),
+        'title': number(style.get('title'), 10, 48, 'Titelgröße'), 'bar': bool(style.get('bar')),
+        'align': 'center' if style.get('align') == 'center' else 'left', 'middle': bool(style.get('middle')), 'marks': bool(style.get('marks')),
+    }, 'elements': []}
+    if len(design['elements']) > 100:
+        raise ValidationError('Mehr als 100 Elemente.')
+    pictures = set(Artwork.objects.filter(kind=Artwork.Kind.PICTURE).values_list('pk', flat=True))
+    for el in design['elements']:
+        if not isinstance(el, dict) or el.get('type') not in ('body', 'text', 'wordmark', 'picture', 'box', 'address', 'info'):
+            raise ValidationError('Ein Element gibt es nicht.')
+        kind = el['type']
+        x, y = number(el.get('x'), -5, PAGE[0], 'Links'), number(el.get('y'), -5, PAGE[1], 'Oben')
+        w, h = number(el.get('w'), 0.1, PAGE[0] + 10, 'Breite'), number(el.get('h'), 0.1, PAGE[1] + 10, 'Höhe')
+        clean_el = {
+            'id': re.sub(r'[^\w-]', '', str(el.get('id', '')))[:16] or f'e{len(out["elements"])}', 'type': kind, 'x': x, 'y': y, 'w': w, 'h': h,
+            'pages': el.get('pages') if el.get('pages') in ('first', 'later', 'all') else 'all',
+            **({'locked': True} if el.get('locked') else {}),  # held fast in the editor; the PDF knows nothing of it
+        }
+        if kind == 'text':
+            words = str(el.get('text', ''))[:1000]
+            if unknown := set(FIELD.findall(words)) - set(FIELDS):
+                raise ValidationError(f'Platzhalter gibt es nicht: {", ".join("{" + u + "}" for u in sorted(unknown))}.')
+            clean_el |= {
+                'text': words, 'size': number(el.get('size'), 4, 72, 'Schriftgröße'), 'leading': number(el.get('leading', LEADING), 0.8, 3, 'Zeilenabstand'),
+                'font': el.get('font') if el.get('font') in fonts else '', 'colour': colour_of(el.get('colour', 'ink')),
+                'align': el.get('align') if el.get('align') in ('left', 'center', 'right') else 'left',
+                **{flag: bool(el.get(flag)) for flag in ('bold', 'italic', 'underline', 'caps')},
+            }
+        elif kind == 'wordmark':
+            clean_el |= {'size': number(el.get('size'), 6, 60, 'Schriftgröße'), 'align': el.get('align') if el.get('align') in ('left', 'center', 'right') else 'left'}
+        elif kind == 'picture':
+            if el.get('artwork') not in pictures:
+                raise ValidationError('Ein Bild gibt es nicht mehr.')
+            clean_el['artwork'] = el['artwork']
+        elif kind == 'box':
+            clean_el |= {'colour': colour_of(el.get('colour', 'accent')), 'fill': bool(el.get('fill')), 'line': number(el.get('line', 0.5), 0, 10, 'Linie')}
+        elif kind in ('address', 'info'):
+            clean_el['size'] = number(el.get('size'), 6, 14, 'Schriftgröße')
+        out['elements'].append(clean_el)
+    bodies = Counter(el['pages'] for el in out['elements'] if el['type'] == 'body')
+    if bodies != Counter({'first': 1, 'later': 1}):
+        raise ValidationError('Je ein Textbereich für die erste Seite und die Folgeseiten.')
+    for el in out['elements']:
+        if el['type'] == 'body' and (el['w'] < 40 or el['h'] < 40):
+            raise ValidationError('Ein Textbereich ist kleiner als 4 × 4 cm.')
+    if letter and not any(el['type'] == 'address' for el in out['elements']):
+        raise ValidationError('Briefe brauchen ein Anschriftfeld.')
+    return out
+
+
+# ---- the pages around the text -------------------------------------------------------------------------------------
+
+def named(url):
+    """A web address as one reads it on paper: host and path where short enough to type, else the host."""
+    parts = urlsplit(url)
+    host = (parts.hostname or '').removeprefix('www.')
+    return f'{host}{parts.path}'.rstrip('/') if len(host + parts.path) <= 48 and not parts.query else host
+
+
+def values(institution, meta):
+    """What each placeholder says on this document's pages, the page numbers aside (Sheet.paged)."""
+    i, words = institution, meta['words']
+    return {
+        'name': i.name, 'kurzname': i.short_name or i.name, 'anschrift': i.address.strip(),
+        'anschrift_zeile': ' · '.join(line.strip() for line in i.address.splitlines() if line.strip()),
+        'ort': i.place, 'email': i.email, 'website': named(i.website) if i.website else '',
+        'empfaenger': (i.payee if i.payee and i.payee != i.name else words['bank']) if i.iban else '', 'iban': i.iban, 'bic': i.bic,
+        'amt': '\n'.join(meta['office']), 'titel': meta['title'], 'aktenzeichen': meta.get('reference', ''), 'datum': meta.get('date', ''),
+    }
+
+
+def filled(words, found):
+    """A text's lines with its placeholders filled in; a line whose placeholders are all empty left out."""
+    lines = []
+    for line in words.splitlines():
+        names = FIELD.findall(line)
+        if names and not any(found.get(n) for n in names):
+            continue
+        lines += FIELD.sub(lambda m: str(found.get(m.group(1), m.group(0))), line).splitlines() or ['']
+    return lines
+
+
+def colour(value, accent):
+    return HexColor(accent if value == 'accent' else SWATCHES.get(value) or value)
+
+
+class Sheet:
+    """The pages of one document around its text, as its Briefbogen places them."""
+
+    def __init__(self, institution, design, meta, accent, own):
+        self.i, self.design, self.meta, self.accent, self.own = institution, design, meta, accent, own
+        self.style = design['style']
+        self.values = values(institution, meta)
+        logo = institution.logo
+        self.logo = ImageReader(logo.path) if logo and logo.name.lower().endswith('.png') else None  # an SVG: the wordmark stands in
+        arts = {el['artwork'] for el in design['elements'] if el['type'] == 'picture'}
+        self.pictures = {a.pk: ImageReader(a.file.path) for a in Artwork.objects.filter(pk__in=arts)} if arts else {}
+
+    def on(self, variant):
+        return [el for el in self.design['elements'] if el['pages'] in ('all', variant)]
+
+    def frame(self, variant, ident):
+        body = next(el for el in self.on(variant) if el['type'] == 'body')
+        return Frame(body['x'] * mm, HEIGHT - (body['y'] + body['h']) * mm, body['w'] * mm, body['h'] * mm, 0, 0, 0, 0, id=ident)
+
+    def paged(self, el):
+        return el['type'] == 'text' and bool(PAGED & set(FIELD.findall(el['text'])))
+
+    def under(self, variant):
+        """What a page shows under its text: drawn as it begins."""
+        def draw(c, doc):
+            c.meta, c.variant = self.meta, variant
+            c.saveState()
+            for el in self.on(variant):
+                if not self.paged(el):
+                    self.draw(c, el, self.values)
+            if variant == 'first' and self.style['marks']:  # fold and hole marks at the left edge, DIN 5008
+                c.setStrokeColor(MUTED)
+                c.setLineWidth(0.4)
+                for at, long in ((105, False), (148.5, True), (210, False)):
+                    c.line(4 * mm, HEIGHT - at * mm, (10 if long else 7.5) * mm, HEIGHT - at * mm)
+            c.restoreState()
+        return draw
+
+    def over(self, c, doc):
+        """Across a copy, faint: a copy to read, not the signed and sealed original."""
+        if self.meta.get('copy'):
+            c.saveState()
+            c.translate(WIDTH / 2, HEIGHT / 2)
+            c.rotate(55)
+            c.setFillColor(INK, alpha=0.05)
+            c.setFont(font(self.style['heading'], bold=True, own=self.own), 96)
+            c.drawCentredString(0, -32, self.meta['words']['copy'])
+            c.restoreState()
+
+    def numbered(self, c, variant, page, pages):
+        """The texts that say which page this is, once the document's pages are counted."""
+        found = self.values | {'seite': str(page), 'seiten': str(pages), 'seitenzahl': self.meta['words']['page'].format(page, pages) if pages > 1 else ''}
+        c.saveState()
+        for el in self.on(variant):
+            if self.paged(el):
+                self.draw(c, el, found)
+        c.restoreState()
+
+    def draw(self, c, el, found):
+        x, top, w, h = el['x'] * mm, HEIGHT - el['y'] * mm, el['w'] * mm, el['h'] * mm
+        kind = el['type']
+        if kind == 'text':
+            lines = filled(el['text'], found)
+            if not any(line.strip() for line in lines):
+                return
+            words = '\n'.join(lines)  # bold over a placeholder of many lines holds for each of them
+            markup = BOLD.sub(r'<b>\1</b>', escape(words.upper() if el.get('caps') else words)).replace('\n', '<br/>')
+            if el.get('underline'):
+                markup = f'<u>{markup}</u>'
+            style = ParagraphStyle(
+                'el', fontName=font(el.get('font') or self.style['font'], el.get('bold'), el.get('italic'), self.own), fontSize=el['size'],
+                leading=el['size'] * el.get('leading', LEADING), textColor=colour(el['colour'], self.accent),
+                alignment={'center': TA_CENTER, 'right': TA_RIGHT}.get(el.get('align'), 0),
+            )
+            p = Paragraph(markup, style)
+            _, height = p.wrapOn(c, w, HEIGHT)
+            p.drawOn(c, x, top - height)
+        elif kind == 'box':
+            ink = colour(el['colour'], self.accent)
+            if el['fill']:
+                c.setFillColor(ink)
+                c.rect(x, top - h, w, h, stroke=0, fill=1)
+            elif el['line']:
+                c.setStrokeColor(ink)
+                c.setLineWidth(el['line'])
+                c.rect(x, top - h, w, h, stroke=1, fill=0)
+        elif kind == 'picture' and el['artwork'] in self.pictures:
+            self.image(c, self.pictures[el['artwork']], x, top, w, h, 'center')
+        elif kind == 'wordmark':
+            if self.logo:
+                self.image(c, self.logo, x, top, w, h, el['align'])
+            else:
+                self.wordmark(c, el, x, top, w)
+        elif kind == 'address':
+            self.lines(c, [(line, el['size'], INK, False) for line in self.meta.get('address', [])[:6]], x, top, el['size'] * 1.3)
+        elif kind == 'info':
+            size, y = el['size'], top
+            for n, line in enumerate(self.meta.get('office', [])):
+                c.setFont(font(self.style['font'], bold=n == 0, own=self.own), size)
+                c.setFillColor(INK if n == 0 else MUTED)
+                c.drawString(x, y - size, line)
+                y -= size * 1.33
+            y -= size * 0.9
+            for label, value in self.meta.get('info', []):
+                if value:
+                    c.setFont(font(self.style['font'], own=self.own), size * 0.82)
+                    c.setFillColor(MUTED)
+                    c.drawString(x, y - size, label)
+                    c.setFont(font(self.style['font'], own=self.own), size * 1.06)
+                    c.setFillColor(INK)
+                    c.drawString(x + min(24 * mm, w / 2.6), y - size, value)
+                    y -= size * 1.53
+
+    def lines(self, c, rows, x, top, leading):
+        y = top
+        for words, size, ink, bold in rows:
+            c.setFont(font(self.style['font'], bold=bold, own=self.own), size)
+            c.setFillColor(ink)
+            c.drawString(x, y - size, words)
+            y -= leading
+
+    @staticmethod
+    def image(c, picture, x, top, w, h, align):
+        """A picture as large as its box holds it, its proportions kept."""
+        pw, ph = picture.getSize()
+        k = min(w / pw, h / ph)
+        dw, dh = pw * k, ph * k
+        left = x + {'center': (w - dw) / 2, 'right': w - dw}.get(align, 0)
+        c.drawImage(picture, left, top - dh, dw, dh, mask='auto')
+
+    def wordmark(self, c, el, x, top, w):
+        """The Schriftzug, its later lines in small capitals and the accent colour, as on screen."""
+        size, face = el['size'], font(self.style['font'], own=self.own)
+        y, ink = top, colour('accent', self.accent)
+        for n, line in enumerate(self.i.lines):
+            if n == 0:
+                runs = [(line, size)]
+                y -= size
+            else:
+                runs = [(ch.upper(), size * (0.78 if ch.islower() else 1)) for ch in line]
+                y -= size * 1.15
+            width = sum(stringWidth(ch, face, s) + (size * 0.03 if n else 0) for ch, s in runs)
+            cx = x + {'center': (w - width) / 2, 'right': w - width}.get(el['align'], 0)
+            c.setFillColor(INK if n == 0 else ink)
+            for ch, s in runs:
+                c.setFont(face, s)
+                c.drawString(cx, y, ch)
+                cx += stringWidth(ch, face, s) + (size * 0.03 if n else 0)
+
+
+class Numbered(Canvas):
+    """A canvas that holds its pages back to number them, each document on its own: „Seite 2 von 3“."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pages = []
+
+    def showPage(self):
+        self.pages.append(dict(self.__dict__))
+        self._startPage()
+
+    def save(self):
+        totals, seen = Counter(id(page.get('meta')) for page in self.pages), Counter()
+        for page in self.pages:
+            self.__dict__.update(page)
+            meta = page.get('meta')
+            seen[id(meta)] += 1
+            if meta:
+                meta['sheet'].numbered(self, page.get('variant', 'first'), seen[id(meta)], totals[id(meta)])
+            super().showPage()
+        super().save()
+
+
+# ---- the text ------------------------------------------------------------------------------------------------------
 
 def classes(el):
     return set((el.get('class') or '').split())
 
 
-def named(url):
-    """A web address as one reads it on paper: host and path where short enough to type, else the host."""
-    parts = urlsplit(url)
-    host = parts.hostname.removeprefix('www.')
-    return f'{host}{parts.path}'.rstrip('/') if len(host + parts.path) <= 48 and not parts.query else host
-
-
-def esc(text, colour='#000000'):
+def esc(words, link='#000000'):
     """Text as ReportLab's paragraph markup takes it: escaped, without soft hyphens, which it would print; a web address
     a link, named so that it reads (named())."""
-    parts = URL.split((text or '').replace('\xad', ''))
+    parts = URL.split((words or '').replace('\xad', ''))
     return ''.join(
-        f'<link href="{escape(part, {chr(34): "&quot;"})}" color="{colour}">{escape(named(part))}</link>'
+        f'<link href="{escape(part, {chr(34): "&quot;"})}" color="{link}">{escape(named(part))}</link>'
         if n % 2 and urlsplit(part).hostname else escape(part) for n, part in enumerate(parts)
     )
 
@@ -105,27 +561,30 @@ def px(el, name):
 
 
 class Look:
-    """Type and colour of one document: sans for letters and Bescheinigungen, serif and centred for an Urkunde."""
+    """Type and colour of a document's text, as its Briefbogen sets them (its `style`)."""
 
-    def __init__(self, accent, ceremony=False):
-        self.accent, self.link, self.ceremony = HexColor(accent), accent, ceremony
-        face, size = ('PTSerif', 12) if ceremony else ('PTSans', 10)
-        align = TA_CENTER if ceremony else 0
-        self.face, self.size = face, size
-        base = ParagraphStyle('body', fontName=f'{face}-Regular', fontSize=size, leading=size * 1.45, spaceAfter=size * 0.7, alignment=align, textColor=INK)
+    def __init__(self, style, accent, own=None):
+        self.accent, self.link, self.centred = HexColor(accent), accent, style['align'] == 'center'
+        size, align = style['size'], TA_CENTER if style['align'] == 'center' else 0
+        self.size, self.bar = size, style['bar']
+        regular, bold = font(style['font'], own=own), font(style['font'], bold=True, own=own)
+        heading = font(style['heading'], bold=True, own=own)
+        self.regular, self.bold = regular, bold
+        base = ParagraphStyle('body', fontName=regular, fontSize=size, leading=size * 1.45, spaceAfter=size * 0.7, alignment=align, textColor=INK)
         self.body = base
         self.muted = ParagraphStyle('muted', base, textColor=MUTED)
-        self.small = ParagraphStyle('small', base, fontSize=8, leading=11, textColor=MUTED)
-        self.large = ParagraphStyle('large', base, fontName=f'{face}-Bold', fontSize=size * (2 if ceremony else 1.6), leading=size * (2.5 if ceremony else 2.1), spaceBefore=size * 0.4)
-        self.title = ParagraphStyle('title', base, fontName=f'{face}-Bold', fontSize=30 if ceremony else 19, leading=36 if ceremony else 23, spaceAfter=14 if ceremony else 10)
-        self.heading = ParagraphStyle('heading', base, fontName=f'{face}-Bold', fontSize=11.5, leading=15, spaceBefore=14, spaceAfter=6, keepWithNext=True)
-        self.term = ParagraphStyle('term', base, fontSize=9, leading=12.5, textColor=MUTED, spaceAfter=0)
+        self.small = ParagraphStyle('small', base, fontSize=size * 0.8, leading=size * 1.1, textColor=MUTED)
+        self.large = ParagraphStyle('large', base, fontName=heading, fontSize=size * 1.6, leading=size * 2.1, spaceBefore=size * 0.4)
+        title = style['title']
+        self.title = ParagraphStyle('title', base, fontName=heading, fontSize=title, leading=title * 1.2, spaceAfter=title * 0.5)
+        self.heading = ParagraphStyle('heading', base, fontName=heading, fontSize=size * 1.15, leading=size * 1.5, spaceBefore=size * 1.4, spaceAfter=size * 0.6, keepWithNext=True)
+        self.term = ParagraphStyle('term', base, fontSize=size * 0.9, leading=size * 1.25, textColor=MUTED, spaceAfter=0)
         self.fact = ParagraphStyle('fact', base, fontSize=size, leading=size * 1.35, spaceAfter=0)
-        self.cell = ParagraphStyle('cell', base, fontSize=8.8, leading=11.5, spaceAfter=0, alignment=0)
+        self.cell = ParagraphStyle('cell', base, fontSize=size * 0.88, leading=size * 1.15, spaceAfter=0, alignment=0)
         self.number = ParagraphStyle('number', self.cell, alignment=TA_RIGHT)
-        self.head = ParagraphStyle('head', self.cell, fontName=f'{face}-Bold', fontSize=7.2, leading=9.5, textColor=MUTED)
+        self.head = ParagraphStyle('head', self.cell, fontName=bold, fontSize=size * 0.72, leading=size * 0.95, textColor=MUTED)
         self.head_number = ParagraphStyle('head_number', self.head, alignment=TA_RIGHT)
-        self.sign = ParagraphStyle('sign', base, fontSize=size if ceremony else 9, leading=size * 1.4 if ceremony else 12.5, textColor=INK if ceremony else MUTED, spaceAfter=0)
+        self.sign = ParagraphStyle('sign', base, fontSize=size if self.centred else size * 0.9, leading=size * 1.4 if self.centred else size * 1.25, textColor=INK if self.centred else MUTED, spaceAfter=0)
 
 
 class Bar(Flowable):
@@ -145,7 +604,7 @@ class Bar(Flowable):
 
 
 class Centred(Flowable):
-    """An Urkunde's text, upright in the middle of the page under its head; on one page, as an Urkunde is."""
+    """A document's text, upright in the middle of its text area, as an Urkunde stands; on one page."""
 
     def __init__(self, flowables):
         super().__init__()
@@ -163,20 +622,6 @@ class Centred(Flowable):
             y -= f.getSpaceBefore() + h
             f.drawOn(self.canv, (self.room - w) / 2 if getattr(f, 'hAlign', 'LEFT') == 'CENTER' else 0, y)
             y -= f.getSpaceAfter()
-
-
-class Start(Flowable):
-    """Where a document begins: what its pages show around it (Paper.chrome) from here on."""
-
-    def __init__(self, meta):
-        super().__init__()
-        self.meta = meta
-
-    def wrap(self, *_):
-        return 0, 0
-
-    def draw(self):
-        self.canv.meta = self.meta
 
 
 def inline(el, look, size):
@@ -205,11 +650,12 @@ def plain(el):
     return ' '.join(el.text_content().replace('\xad', '').split())
 
 
-def widths(columns, total):
+def widths(columns, total, look):
     """Column widths for a table: numbers and dates as wide as their widest cell or heading, the rest sharing what is
     left by their length, none narrower than its longest word."""
-    natural = [max([stringWidth(text, 'PTSans-Regular', 8.8) + 10 for text in texts] + [head], default=20) for texts, _, head in columns]
-    least = [max([stringWidth(word, 'PTSans-Regular', 8.8) + 10 for text in texts for word in text.split()] + [head], default=20) for texts, _, head in columns]
+    size = look.cell.fontSize
+    natural = [max([stringWidth(t, look.regular, size) + 10 for t in texts] + [head], default=20) for texts, _, head in columns]
+    least = [max([stringWidth(word, look.regular, size) + 10 for t in texts for word in t.split()] + [head], default=20) for texts, _, head in columns]
     fixed = [tight for _, tight, _ in columns]
     given = [n if tight else 0 for n, tight in zip(natural, fixed)]
     left = total - sum(given)
@@ -221,7 +667,7 @@ def widths(columns, total):
     return [w * scale for w in given]
 
 
-def table(el, look, width=TEXT):
+def table(el, look, width):
     rows, spans, styles, header = [], [], [], 0
     for section in el:
         for tr in section if section.tag in ('thead', 'tbody', 'tfoot') else [section]:
@@ -250,25 +696,24 @@ def table(el, look, width=TEXT):
                 texts, tight, head = columns[col]
                 tight = tight and bool({'num', 'nowrap'} & classes(td) or td.tag == 'th' or not plain(td))
                 if td.tag == 'th':
-                    head = max(head, stringWidth(plain(td).upper(), 'PTSans-Bold', 7.2) + 8)
+                    head = max(head, stringWidth(plain(td).upper(), look.bold, look.head.fontSize) + 8)
                 columns[col] = (texts + ([plain(td)] if td.tag == 'td' else []), tight, head)
             col += span
-    sizes = widths(columns, width)
+    sizes = widths(columns, width, look)
     data = []
     for r, (tr, cells) in enumerate(rows):
-        row, col, total = [], 0, 'total' in classes(tr)
+        row, total = [], 'total' in classes(tr)
         for td, span in cells:
             number = 'num' in classes(td)
             style = (look.head_number if number else look.head) if td.tag == 'th' else look.number if number else look.cell
-            text = inline(td, look, style.fontSize)
-            text = text.upper() if td.tag == 'th' else text
+            markup = inline(td, look, style.fontSize)
+            markup = markup.upper() if td.tag == 'th' else markup
             if 'muted' in classes(td) or 'empty' in classes(td):
-                text = f'<font color="#5f5f5f">{text}</font>'
+                markup = f'<font color="#5f5f5f">{markup}</font>'
             if 'fail' in classes(td):
-                text = f'<font color="#c4262e">{text}</font>'
-            row.append(Paragraph(f'<b>{text}</b>' if total else text, style))
+                markup = f'<font color="#c4262e">{markup}</font>'
+            row.append(Paragraph(f'<b>{markup}</b>' if total else markup, style))
             row.extend([''] * (span - 1))
-            col += span
         row.extend([''] * (count - len(row)))
         data.append(row)
         if total:
@@ -294,31 +739,31 @@ def content(el, look, style, width):
     run.text = el.text
     for child in el:
         if isinstance(child.tag, str) and child.tag in BLOCK:
-            if text := inline(run, look, style.fontSize):
-                found.append(Paragraph(text, style))
+            if markup := inline(run, look, style.fontSize):
+                found.append(Paragraph(markup, style))
             holder, run = lxml_html.Element('div'), lxml_html.Element('span')
             holder.append(deepcopy(child))
             run.text = child.tail
             found += blocks(holder, look, width)
         else:
             run.append(deepcopy(child))
-    if text := inline(run, look, style.fontSize):
-        found.append(Paragraph(text, style))
+    if markup := inline(run, look, style.fontSize):
+        found.append(Paragraph(markup, style))
     return found
 
 
-def facts(el, look, width=TEXT):
+def facts(el, look, width):
     """A <dl class="facts">: a term to the left, muted, what it says to the right."""
-    pairs, term = [], None
+    pairs, term, left = [], None, min(48 * mm, width * 0.32)
     for child in el:
         if child.tag == 'dt':
-            term = Paragraph(inline(child, look, 9), look.term)
+            term = Paragraph(inline(child, look, look.term.fontSize), look.term)
         elif child.tag == 'dd':
-            pairs.append([term or '', content(child, look, look.fact, width - 48 * mm - 8)])
+            pairs.append([term or '', content(child, look, look.fact, width - left - 8)])
             term = None
     if not pairs:
         return []
-    t = Table(pairs, colWidths=[48 * mm, width - 48 * mm], hAlign='LEFT')
+    t = Table(pairs, colWidths=[left, width - left], hAlign='LEFT')
     t.setStyle(TableStyle([
         ('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
         ('TOPPADDING', (0, 0), (-1, -1), 2.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
@@ -326,10 +771,10 @@ def facts(el, look, width=TEXT):
     return [Spacer(1, 4), t, Spacer(1, 8)]
 
 
-def sign(el, look, width=TEXT):
+def sign(el, look, width):
     """A <div class="sign">: place and date to the left, who signs to the right."""
     parts = [s for s in el if isinstance(s.tag, str)]
-    spans = [Paragraph(inline(s, look, 9), ParagraphStyle('s', look.sign, alignment=TA_CENTER if look.ceremony else TA_RIGHT if i else 0)) for i, s in enumerate(parts)]
+    spans = [Paragraph(inline(s, look, look.sign.fontSize), ParagraphStyle('s', look.sign, alignment=TA_CENTER if look.centred else TA_RIGHT if i else 0)) for i, s in enumerate(parts)]
     if not spans:
         return []
     t = Table([spans], colWidths=[width / len(spans)] * len(spans), hAlign='LEFT')
@@ -337,16 +782,15 @@ def sign(el, look, width=TEXT):
     return [Spacer(1, 26), KeepTogether([t])]
 
 
-def signatures(el, look, width=TEXT):
-    """A <div class="signatures">: a line to sign above each name, three to a row; on an Urkunde no wider than a hand
-    signs."""
-    names = [Paragraph(inline(s, look, 9), ParagraphStyle('n', look.sign, alignment=TA_CENTER)) for s in el if isinstance(s.tag, str)]
+def signatures(el, look, width):
+    """A <div class="signatures">: a line to sign above each name, three to a row; centred, no wider than a hand signs."""
+    names = [Paragraph(inline(s, look, look.sign.fontSize), ParagraphStyle('n', look.sign, alignment=TA_CENTER)) for s in el if isinstance(s.tag, str)]
     if not names:
         return []
     per = min(3, len(names))
     rows = [names[i:i + per] + [''] * (per - len(names[i:i + per])) for i in range(0, len(names), per)]
-    gap = 10 * mm if not look.ceremony else 24 * mm
-    width = min((width - gap * (per - 1)) / per, 66 * mm if look.ceremony else width)
+    gap = 24 * mm if look.centred else 10 * mm
+    width = min((width - gap * (per - 1)) / per, 66 * mm if look.centred else width)
     data, style = [], [('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0), ('TOPPADDING', (0, 0), (-1, -1), 5)]
     for row in rows:
         r = len(data)
@@ -357,7 +801,7 @@ def signatures(el, look, width=TEXT):
     return [Spacer(1, 20 * mm), KeepTogether([t])]
 
 
-def blocks(el, look, width=TEXT):
+def blocks(el, look, width):
     """The flowables of an element's children: headings, paragraphs, facts, tables, lists, the lines to sign."""
     found = []
     for child in el:
@@ -366,22 +810,21 @@ def blocks(el, look, width=TEXT):
         kind = classes(child)
         if kind & {'no-print', 'letterhead', 'address', 'dated', 'actions'}:
             continue
-        before = px(child, 'margin-top')
-        if before:
+        if before := px(child, 'margin-top'):
             found.append(Spacer(1, before * 0.8))
         if child.tag == 'h1':
-            text = inline(child, look, look.title.fontSize)
+            markup = inline(child, look, look.title.fontSize)
             bar = min(width, max(30 * mm, stringWidth(plain(child), look.title.fontName, look.title.fontSize)))
-            found.append(KeepTogether([Bar(bar, look.accent, look.ceremony), Paragraph(text, look.title)]))
+            found.append(KeepTogether(([Bar(bar, look.accent, look.centred)] if look.bar else []) + [Paragraph(markup, look.title)]))
         elif child.tag in ('h2', 'h3'):
             found.append(Paragraph(inline(child, look, look.heading.fontSize), look.heading))
         elif child.tag == 'p':
-            text = inline(child, look, look.size)
-            if not text:
+            markup = inline(child, look, look.size)
+            if not markup:
                 continue
             only_small = len(child) == 1 and child[0].tag == 'small' and not (child.text or '').strip()
             style = look.small if only_small else look.large if px(child, 'font-size') >= 15 else look.muted if 'muted' in kind else look.body
-            paragraph = Paragraph(f'<font color="#c4262e">{text}</font>' if 'fail' in kind else text, style)
+            paragraph = Paragraph(f'<font color="#c4262e">{markup}</font>' if 'fail' in kind else markup, style)
             if link := child.get('data-qr'):  # a code to check the document by, beside the words that say so
                 t = Table([[paragraph, qr(link)]], colWidths=[width - 26 * mm, 26 * mm], hAlign='LEFT')
                 t.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'BOTTOM'), ('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0), ('ALIGN', (1, 0), (1, 0), 'RIGHT')]))
@@ -402,219 +845,62 @@ def blocks(el, look, width=TEXT):
             if child.tag == 'section':
                 found.append(CondPageBreak(30 * mm))
             found += blocks(child, look, width)
-        elif text := inline(child, look, look.size):
-            found.append(Paragraph(text, look.body))
+        elif markup := inline(child, look, look.size):
+            found.append(Paragraph(markup, look.body))
     return found
 
 
-class Numbered(Canvas):
-    """A canvas that holds its pages back to number them, each document on its own: „Seite 2 von 3“."""
+# ---- the PDF -------------------------------------------------------------------------------------------------------
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.pages = []
-
-    def showPage(self):
-        self.pages.append(dict(self.__dict__))
-        self._startPage()
-
-    def save(self):
-        totals, seen = Counter(page.get('meta', {}).get('index') for page in self.pages), Counter()
-        for page in self.pages:
-            self.__dict__.update(page)
-            meta = getattr(self, 'meta', {})
-            seen[meta.get('index')] += 1
-            if totals[meta.get('index')] > 1 and not meta.get('ceremony'):
-                self.setFont('PTSans-Regular', 7.5)
-                self.setFillColor(MUTED)
-                self.drawRightString(WIDTH - RIGHT, FOOT + 3 * mm, meta.get('words', GERMAN)['page'].format(seen[meta.get('index')], totals[meta.get('index')]))
-            super().showPage()
-        super().save()
+def document_of(el):
+    """Which of DOCUMENTS a `.document` is: its data-paper, else by its kind."""
+    if (key := el.get('data-paper')) in DOCUMENTS:
+        return key
+    kind = classes(el)
+    return 'brief' if 'letter' in kind else 'urkunde' if 'ceremony' in kind else 'immatrikulation'
 
 
-class Paper:
-    """The pages around a document's text: letterhead, address window, information block, fold marks and footer."""
-
-    def __init__(self, institution):
-        self.i = institution
-        self.accent = HexColor(institution.accent or '#008a00')
-        logo = institution.logo
-        self.logo = ImageReader(logo.path) if logo and logo.name.lower().endswith('.png') else None  # an SVG: the wordmark stands in
-
-    def wordmark(self, c, x, top, size=15, centred=False):
-        """The Schriftzug, its later lines in small capitals and the accent colour, as on screen; or the logo."""
-        if self.logo:
-            w, h = self.logo.getSize()
-            height = min(17 * mm, 70 * mm * h / w)
-            width = height * w / h
-            c.drawImage(self.logo, x - width / 2 if centred else x, top - height, width, height, mask='auto')
-            return top - height
-        y = top
-        for n, line in enumerate(self.i.lines):
-            if n == 0:
-                y -= size
-                c.setFont('PTSans-Regular', size)
-                c.setFillColor(INK)
-                (c.drawCentredString if centred else c.drawString)(x, y, line)
-                continue
-            y -= size * 1.15
-            runs = [(ch.upper(), size * (0.78 if ch.islower() else 1)) for ch in line]
-            width = sum(stringWidth(ch, 'PTSans-Regular', s) + size * 0.03 for ch, s in runs)
-            cx = x - width / 2 if centred else x
-            c.setFillColor(self.accent)
-            for ch, s in runs:
-                c.setFont('PTSans-Regular', s)
-                c.drawString(cx, y, ch)
-                cx += stringWidth(ch, 'PTSans-Regular', s) + size * 0.03
-        return y
-
-    def footer(self, c, words):
-        """Name and address, how to reach the Hochschule, where to pay: three columns under a hairline."""
-        c.setStrokeColor(LINE)
-        c.setLineWidth(0.5)
-        c.line(LEFT, FOOT, WIDTH - RIGHT, FOOT)
-        payee = self.i.payee if self.i.payee and self.i.payee != self.i.name else words['bank']
-        bank = [payee, f'IBAN {self.i.iban}', f'BIC {self.i.bic}' if self.i.bic else ''] if self.i.iban else []
-        columns = [[self.i.name, *self.i.address.splitlines()], [self.i.email, self.i.website.removeprefix('https://').removeprefix('http://')], bank]
-        x, width = LEFT, TEXT / 3
-        for column in columns:
-            y = FOOT - 4.2 * mm
-            for n, text in enumerate(t for t in column if t):
-                c.setFont('PTSans-Bold' if n == 0 and column is columns[0] else 'PTSans-Regular', 7)
-                c.setFillColor(INK if n == 0 and column is columns[0] else MUTED)
-                c.drawString(x, y, text)
-                y -= 3.3 * mm
-            x += width
-
-    def later(self, c, meta):
-        """The head of a page after the first: the Hochschule and what the document is, small, over a hairline."""
-        c.setFont('PTSans-Regular', 7.5)
-        c.setFillColor(MUTED)
-        c.drawString(LEFT, HEIGHT - 14 * mm, self.i.short_name or self.i.name)
-        c.drawRightString(WIDTH - RIGHT, HEIGHT - 14 * mm, meta.get('title', '')[:90])
-        c.setStrokeColor(LINE)
-        c.setLineWidth(0.5)
-        c.line(LEFT, HEIGHT - 16 * mm, WIDTH - RIGHT, HEIGHT - 16 * mm)
-
-    def letter(self, c, meta):
-        """DIN 5008 Form B: the address in the window, the return line above it, the information block to the right,
-        fold and hole marks at the edge."""
-        self.wordmark(c, LEFT, HEIGHT - 14 * mm)
-        back = ' · '.join([self.i.short_name or self.i.name, *self.i.address.splitlines()])
-        c.setFont('PTSans-Regular', 6.5)
-        c.setFillColor(MUTED)
-        c.drawString(LEFT, HEIGHT - 60 * mm, back[:110])
-        c.setStrokeColor(MUTED)
-        c.setLineWidth(0.3)
-        c.line(LEFT, HEIGHT - 60.8 * mm, LEFT + min(80 * mm, stringWidth(back[:110], 'PTSans-Regular', 6.5)), HEIGHT - 60.8 * mm)
-        text = c.beginText(LEFT, HEIGHT - 67.5 * mm)
-        text.setFont('PTSans-Regular', 10, 13)
-        text.setFillColor(INK)
-        for line in meta.get('address', [])[:6]:
-            text.textLine(line)
-        c.drawText(text)
-        x, y = 125 * mm, HEIGHT - 50 * mm
-        for n, line in enumerate(meta.get('office', [])):
-            c.setFont('PTSans-Bold' if n == 0 else 'PTSans-Regular', 8.5)
-            c.setFillColor(INK if n == 0 else MUTED)
-            c.drawString(x, y, line)
-            y -= 4 * mm
-        y -= 3 * mm
-        for label, value in meta.get('info', []):
-            if value:
-                c.setFont('PTSans-Regular', 7)
-                c.setFillColor(MUTED)
-                c.drawString(x, y, label)
-                c.setFont('PTSans-Regular', 9)
-                c.setFillColor(INK)
-                c.drawString(x + 24 * mm, y, value)
-                y -= 4.6 * mm
-        c.setStrokeColor(MUTED)
-        c.setLineWidth(0.4)
-        for at, long in ((105, False), (148.5, True), (210, False)):
-            c.line(4 * mm, HEIGHT - at * mm, (10 if long else 7.5) * mm, HEIGHT - at * mm)
-
-    def document(self, c, meta):
-        """A Bescheinigung's first page: the wordmark to the left, the office and its address to the right."""
-        self.wordmark(c, LEFT, HEIGHT - 14 * mm)
-        y = HEIGHT - 17 * mm
-        for n, line in enumerate(meta.get('office', [])):
-            c.setFont('PTSans-Bold' if n == 0 else 'PTSans-Regular', 8.5)
-            c.setFillColor(INK if n == 0 else MUTED)
-            c.drawRightString(WIDTH - RIGHT, y, line)
-            y -= 4 * mm
-
-    def ceremony(self, c, meta):
-        """An Urkunde: a double rule round the page in the accent colour, the wordmark centred."""
-        c.setStrokeColor(self.accent)
-        c.setLineWidth(1.2)
-        c.rect(12 * mm, 12 * mm, WIDTH - 24 * mm, HEIGHT - 24 * mm)
-        c.setLineWidth(0.4)
-        c.rect(14.5 * mm, 14.5 * mm, WIDTH - 29 * mm, HEIGHT - 29 * mm)
-        self.wordmark(c, WIDTH / 2, HEIGHT - 32 * mm, size=17, centred=True)
-
-    def chrome(self, c, doc):
-        meta = getattr(c, 'meta', {})
-        c.saveState()
-        if doc.pageTemplate.id == 'later':
-            self.later(c, meta)
-        else:
-            getattr(self, meta.get('layout', 'document'))(c, meta)
-        if meta.get('layout') != 'ceremony':
-            self.footer(c, meta.get('words', GERMAN))
-        if meta.get('copy'):  # across the page, faint: a copy to read, not the signed and sealed original
-            c.translate(WIDTH / 2, HEIGHT / 2)
-            c.rotate(55)
-            c.setFillColor(INK, alpha=0.05)
-            c.setFont('PTSans-Bold', 96)
-            c.drawCentredString(0, -32, meta.get('words', GERMAN)['copy'])
-        c.restoreState()
-
-
-def pdf(page, title=''):
-    """The `.document`s of a rendered page as one PDF, each from a new page with its own page numbers."""
+def pdf(page, title='', design=None):
+    """The `.document`s of a rendered page as one PDF, each from a new page on its Briefbogen, with its own page
+    numbers; `design`: every one on this one instead, to try it (setup.views.paper_preview)."""
     institution = Institution.get()
+    accent, own = institution.accent or '#008a00', own_fonts()
+    found = layouts() if design is None else {}
+    papers = chosen(institution, found) if design is None else {}
     root = lxml_html.document_fromstring(page)
-    paper, story = Paper(institution), []
-    layouts = []
+    story, templates = [], []
     for index, el in enumerate(root.find_class('document')):
         kind = classes(el)
-        layout = 'letter' if 'letter' in kind else 'ceremony' if 'ceremony' in kind else 'document'
-        look = Look(institution.accent or '#008a00', ceremony=layout == 'ceremony')
+        layout = design or found[papers[document_of(el)]][1]
+        look = Look(layout['style'], accent, own)
         head = next(iter(el.find_class('letterhead')), None)
         office = [line for line in lines(next(iter(head.find_class('muted')), head)) if line not in institution.address.splitlines()] if head is not None and head.find_class('muted') else []
-        heading = next((plain(h) for h in el.iter('h1', 'h2')), title)
         meta = {
-            'index': index, 'layout': layout, 'office': office, 'title': heading, 'ceremony': layout == 'ceremony', 'copy': 'copy' in kind,
-            'words': ENGLISH if el.get('lang') == 'en' else GERMAN,
+            'office': office, 'title': next((plain(h) for h in el.iter('h1', 'h2')), title), 'copy': 'copy' in kind,
+            'words': ENGLISH if el.get('lang') == 'en' else GERMAN, 'date': date_format(timezone.localdate(), 'j. F Y'),
         }
-        if layout == 'letter':
-            address, dated = next(iter(el.find_class('address')), None), next(iter(el.find_class('dated')), None)
-            meta['address'] = lines(address) if address is not None else []
-            meta['office'] = [dated.get('data-office')] if dated is not None and dated.get('data-office') else []
-            meta['info'] = [('Aktenzeichen', dated.get('data-reference', '')), ('Datum', dated.get('data-date', ''))] if dated is not None else []
+        address, dated = next(iter(el.find_class('address')), None), next(iter(el.find_class('dated')), None)
+        if address is not None:
+            meta['address'] = lines(address)
+        if dated is not None:
+            meta['office'] = [dated.get('data-office')] if dated.get('data-office') else office
+            meta['reference'], meta['date'] = dated.get('data-reference', ''), dated.get('data-date', '') or meta['date']
+            meta['info'] = [('Aktenzeichen', meta['reference']), ('Datum', meta['date'])]
+        sheet = Sheet(institution, layout, meta, accent, own)
+        meta['sheet'] = sheet
+        templates += [
+            PageTemplate(id=f'first{index}', frames=[sheet.frame('first', f'first{index}')], onPage=sheet.under('first'), onPageEnd=sheet.over, autoNextPageTemplate=f'later{index}'),
+            PageTemplate(id=f'later{index}', frames=[sheet.frame('later', f'later{index}')], onPage=sheet.under('later'), onPageEnd=sheet.over),
+        ]
         if story:
-            story += [NextPageTemplate(layout), PageBreak()]
-        layouts.append(layout)
-        story += [Start(meta), Centred(blocks(el, look))] if layout == 'ceremony' else [Start(meta), *blocks(el, look)]
+            story += [NextPageTemplate(f'first{index}'), PageBreak()]
+        flowables = blocks(el, look, min(sheet.frame(variant, 'w').width for variant in ('first', 'later')))
+        story += [Centred(flowables)] if layout['style']['middle'] else flowables
     if not story:
-        story = [Paragraph('Kein Dokument.', Look('#008a00').body)]
-        layouts = ['document']
+        return pdf('<div class="document"><p>Kein Dokument.</p></div>', title, design)
     buffer = BytesIO()
-    doc = BaseDocTemplate(
-        buffer, pagesize=A4, title=title or next((m for m in (getattr(s, 'meta', {}).get('title') for s in story) if m), ''),
-        author=institution.name, creator='ConCampus', subject=title, lang='de-DE',
-    )
-    frames = {  # where the text runs: under the letterhead, or under the address window and information block
-        'letter': Frame(LEFT, FOOT + 8 * mm, TEXT, HEIGHT - 98 * mm - FOOT - 8 * mm, 0, 0, 0, 0, id='letter'),
-        'document': Frame(LEFT, FOOT + 8 * mm, TEXT, HEIGHT - 44 * mm - FOOT - 8 * mm, 0, 0, 0, 0, id='document'),
-        'ceremony': Frame(28 * mm, 30 * mm, WIDTH - 56 * mm, HEIGHT - 80 * mm, 0, 0, 0, 0, id='ceremony'),
-        'later': Frame(LEFT, FOOT + 8 * mm, TEXT, HEIGHT - 26 * mm - FOOT - 8 * mm, 0, 0, 0, 0, id='later'),
-    }
-    order = [layouts[0]] + [k for k in frames if k != layouts[0]]
-    doc.addPageTemplates([
-        PageTemplate(id=k, frames=[frames[k]], onPageEnd=paper.chrome, autoNextPageTemplate=None if k == 'later' else 'later') for k in order
-    ])
+    doc = BaseDocTemplate(buffer, pagesize=A4, title=title, author=institution.name, creator='ConCampus', subject=title, lang='de-DE')
+    doc.addPageTemplates(templates)
     doc.build(story, canvasmaker=Numbered)
     return buffer.getvalue()
 
@@ -622,6 +908,11 @@ def pdf(page, title=''):
 def letter(message):
     """A message from the Postfach as a letter, its PDF: a Bescheid as it is issued (students.Study.notify)."""
     return pdf(render_to_string('core/_letter.html', {'letter': message, 'institution': Institution.get()}), message.subject)
+
+
+def sample(kind):
+    """A made-up document to try a Briefbogen on: a letter, a Bescheinigung over two pages, or an Urkunde."""
+    return render_to_string('core/_sample.html', {'kind': kind, 'institution': Institution.get(), 'rows': range(1, 41), 'today': timezone.localdate()})
 
 
 def respond(data, name):
