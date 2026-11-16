@@ -386,3 +386,46 @@ def schedule(course, rows, start, minutes, room, person, pause=0):
         return
     for p in rows:
         texts.send('einladung', p.study.person, reverse('exams:index'), pruefung=course.title, termin=date_format(timezone.localtime(p.slot), 'l, j. F Y, G:i'), raum=f'{room} ({room.building})')
+
+
+def fill(bookings, count, minutes, pause, taken=()):
+    """`count` times one after another in the days booked, each `minutes` long with `pause` between, a day's last over
+    by its end, around the times `taken` already. Raises ValidationError saying how much is missing."""
+    times, length, step = [], timedelta(minutes=minutes), timedelta(minutes=minutes + pause)
+    for b in bookings:
+        t = b.start
+        while len(times) < count and t + length <= b.end:
+            if not any(s < t + length and t < s + length for s in taken):
+                times.append(t)
+            t += step
+    if len(times) < count:
+        raise ValidationError(f'Die gebuchten Tage reichen für {len(times)} von {count}; für die übrigen fehlen {(count - len(times)) * (minutes + pause)} Minuten.')
+    return times
+
+
+def shift(course, day, to, room=None, save=True):
+    """Move what of the course is held on `day` to `to`, at the same hours: its bookings, into `room` if given, and the
+    slots. Returns (bookings, participations) moved; nothing is saved without `save`, to show first.
+
+    Raises ValidationError if a room is taken then.
+    """
+    def moved(moment):  # the same wall-clock time, across a change of daylight saving
+        return timezone.make_aware(timezone.localtime(moment).replace(tzinfo=None) + (to - day))
+
+    bookings = [b for b in course.bookings.all() if timezone.localdate(b.start) == day]
+    rows = [p for p in course.participations.filter(slot__isnull=False).select_related('study__person') if timezone.localdate(p.slot) == day]
+    for b in bookings:
+        b.start, b.end, b.room = moved(b.start), moved(b.end), room or b.room
+        if taken := b.clashes().first():
+            start, end = timezone.localtime(taken.start), timezone.localtime(taken.end)
+            raise ValidationError(f'{b.room.name} ist am {date_format(start, "D j.n.")} von {start:%H:%M} bis {end:%H:%M} belegt: {taken.label}. Einen anderen Raum wählen?')
+        b.full_clean()
+    for p in rows:
+        p.slot = moved(p.slot)
+    if save:
+        with transaction.atomic():
+            for b in bookings:
+                b.save()
+            Participation.objects.bulk_update(rows, ['slot'])
+            history.saved(rows)
+    return bookings, rows

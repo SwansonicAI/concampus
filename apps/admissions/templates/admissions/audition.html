@@ -12,13 +12,13 @@
     {% if not course.video and rankable %}<a class="btn ghost" href="{% if request.GET.sortierung %}?{% else %}?sortierung=punkte{% endif %}">{% if request.GET.sortierung %}Nach Termin{% else %}Rangliste{% endif %}</a>{% endif %}
     {% if office %}<a class="btn ghost" href="{% url 'setup:edit' 'eignungspruefungen' course.pk %}?next={{ request.path|urlencode }}" data-panel>Bearbeiten</a>{% endif %}
     {% if history %}<a class="btn ghost" href="{% url 'history' 'courses.course' course.pk %}" data-panel>Verlauf</a>{% endif %}
-    {% if office and not course.released or correct and course.released %}<form method="post" action="{% url 'admissions:close' course.pk %}">{% csrf_token %}<button class="btn{% if course.released %} ghost{% endif %}"{% if missing and not course.released %} title="Noch {{ missing }} ohne Ergebnis" disabled{% endif %}>{% if course.released %}Wieder öffnen{% else %}Abschließen{% endif %}</button></form>{% endif %}
+    {% if office and not course.released and rows or correct and course.released %}<form method="post" action="{% url 'admissions:close' course.pk %}">{% csrf_token %}<button class="btn{% if course.released %} ghost{% endif %}"{% if missing and not course.released %} title="Noch {{ missing }} ohne Ergebnis" disabled{% endif %}>{% if course.released %}Wieder öffnen{% else %}Abschließen{% endif %}</button></form>{% endif %}
   </div>
 </div>
 <p class="lead">Studienbeginn {{ course.term }}{% if course.subject %} · {{ course.subject }}{% endif %}{% if course.released %} · <span class="badge green">abgeschlossen, gesperrt</span>{% endif %}</p>
 
 {# the jury: who marks with them, how, and where; the office also what the stage is for #}
-<div{% if office %} class="cols"{% endif %}>
+<div{% if side %} class="cols"{% endif %}>
   <dl class="facts">
     <dt>Kommission</dt><dd>{% for s in staff %}{{ s }}{% if not forloop.last %}<br>{% endif %}{% empty %}–{% endfor %}{% if short %}<br><small class="fail">{{ short }}</small>{% endif %}</dd>
     <dt>Bewertung</dt><dd>{% if course.votes %}Ja oder Nein je Mitglied, die Mehrheit entscheidet{% elif course.joint %}Die Kommission entscheidet gemeinsam{% elif course.points %}0–{{ course.max_points }} Punkte je Mitglied, bestanden ab {{ course.pass_mark }}{% else %}Noten je Mitglied, bestanden bis 4,0{% endif %}{% if course.entry != 'members' or course.chair or course.reveal == 'stage' and course.entry == 'members' %}<br><small class="muted">
@@ -29,32 +29,34 @@
     {% if course.program %}<dt>Bewerbung für</dt><dd>{{ course.program }}, Frist {{ course.deadline|date:"j. F Y" }}</dd>{% endif %}
     {% if course.capacity %}<dt>Studienplätze</dt><dd>{{ course.capacity }}</dd>{% endif %}
     {% endif %}
-    {% if not course.video %}<dt>Räume</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, {{ b.room }}<br>{% empty %}noch kein Raum gebucht{% endfor %}</dd>
+    {% if plan %}<dt>Dauer</dt><dd>{{ plan.count }} × {{ plan.each }} Min. = {{ plan.hours|floatformat:"-1" }} Std.<br><small class="muted">{% if plan.basis %}geschätzt: {{ plan.basis }}{% else %}die Eingeladenen{% endif %}</small></dd>{% endif %}
+    {% if not course.video %}<dt>{% if bookings|length > 1 %}Termine{% else %}Termin{% endif %}</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, {{ b.room }}{% if b == spare %} <button class="link" form="freigeben" data-confirm="{{ b.start|date:'D j.n.' }} freigeben? Der Raum wird frei, die Kommission erfährt es." title="Die Eingeladenen brauchen den Tag nicht"><small>freigeben</small></button>{% endif %}<br>{% endfor %}
+      {% if poll %}<a class="badge wait" href="{{ poll.get_absolute_url }}">Umfrage · {{ poll.answered }}/{{ poll.size }} geantwortet</a>
+      {% elif plan and bookings %}{% if lacking > 0 %}<span class="badge {% if plan.basis %}wait{% else %}no{% endif %}">fehlen {{ lacking|floatformat:"-1" }} Std.</span>{% else %}<span class="badge yes">reicht</span>{% endif %}
+      {% elif not bookings %}<span class="muted">noch keiner</span>{% endif %}
+      {% if fixing %}<details{% if not bookings and not poll or lacking > 0 and not poll %} open{% endif %}><summary><small>{% if bookings %}Tag hinzufügen{% else %}Tag festlegen{% endif %}</small></summary>
+        <form method="post" action="{% url 'admissions:book' course.pk %}" class="inline" style="margin-top: 8px">{% csrf_token %}{% for field in fixing %}<label>{{ field.label }}{{ field }}</label>{% endfor %}<button class="btn small"{% if poll %} data-confirm="Die Terminumfrage endet damit; alle Gefragten erfahren den Tag."{% endif %}>Festlegen</button></form>
+        {% if institution.polls and not poll %}<p style="margin: 8px 0 0"><small><a href="{% url 'rooms:new_poll' %}?zu={{ course.pk }}">Oder die Kommission fragen</a></small></p>{% endif %}</details>{% endif %}
+      {% if shifting %}<details><summary><small>Tag verlegen</small></summary><form method="post" action="{% url 'admissions:shift' course.pk %}" class="inline" style="margin-top: 8px">{% csrf_token %}{% for field in shifting %}{% if field.is_hidden %}{{ field }}{% else %}<label>{{ field.label }}{{ field }}</label>{% endif %}{% endfor %}<button class="btn ghost small">Prüfen</button></form></details>{% endif %}
+      {% if scheduled and not course.video %}<details><summary><small>Einen Termin verlegen</small></summary><form method="post" action="{% url 'admissions:move' course.pk %}" class="inline" style="margin-top: 8px">{% csrf_token %}
+        <label>Wer<select name="participation" required><option value="">Bitte wählen</option>{% for p in scheduled %}<option value="{{ p.pk }}">{{ p.slot|date:"D H:i" }} {{ p.study.person.name }}</option>{% endfor %}</select></label>
+        <label>Neuer Termin<input name="slot" data-moment autocomplete="off" required placeholder="z. B. 13.1. 14:30"></label>
+        <button class="btn ghost small" data-confirm="Termin verlegen und eine neue Einladung senden?">Verlegen und neu einladen</button></form></details>{% endif %}</dd>
     {% elif not jury %}<dt>Sichtung</dt><dd>online{% if course.deadline %}, {% if sighting == 'Mappen sichten' %}Mappen{% else %}Videos{% endif %} bis {{ course.deadline|date:"j. F Y" }}{% endif %}{% if course.marks_by %}; Wertungen bis {{ course.marks_by|date:"j. F Y" }}{% endif %}</dd>{% endif %}
   </dl>
-  {% if office %}
-  <div>
+  {% if spare %}<form method="post" action="{% url 'admissions:release' course.pk spare.pk %}" id="freigeben" hidden>{% csrf_token %}</form>{% endif %}
+  {% if side %}
+  <div style="display: grid; gap: 16px; align-content: start">
     {% if not course.released and not course.video %}
-    <form method="post" action="{% url 'admissions:plan' course.pk %}" class="panel">
+    {% if waiting %}<form method="post" action="{% url 'admissions:plan' course.pk %}" class="panel">
       {% csrf_token %}
       <h3>Termine vergeben</h3>
       <div class="inline">{% for field in slots %}<label>{{ field.label }}{{ field }}</label>{% endfor %}</div>
       <p style="margin: 12px 0"><button class="btn">Termine prüfen</button> <small class="muted">Erst die Reihenfolge und das Ende des Tages, dann die Einladungen.</small></p>
-    </form>
-    {% if scheduled %}
-    <form method="post" action="{% url 'admissions:move' course.pk %}" class="panel" style="margin-top: 16px">
-      {% csrf_token %}
-      <h3>Termin verlegen</h3>
-      <div class="inline">
-        <label>Wer<select name="participation" required><option value="">Bitte wählen</option>{% for p in scheduled %}<option value="{{ p.pk }}">{{ p.slot|date:"H:i" }} {{ p.study.person.name }}</option>{% endfor %}</select></label>
-        <label>Neuer Termin<input name="slot" data-moment autocomplete="off" required placeholder="z. B. 13.1. 14:30"></label>
-      </div>
-      <p style="margin: 12px 0"><button class="btn ghost" data-confirm="Termin verlegen und eine neue Einladung senden?">Verlegen und neu einladen</button></p>
-    </form>
-    {% endif %}
+    </form>{% endif %}
     {% endif %}
     {% if stages %}
-    <form method="post" action="{% url 'admissions:advance' course.pk %}" class="panel"{% if not course.released %} style="margin-top: 16px"{% endif %}>
+    <form method="post" action="{% url 'admissions:advance' course.pk %}" class="panel">
       {% csrf_token %}
       <h3>Nächste Stufe</h3>
       <p>{% for s in stages %}<a href="{% url 'admissions:audition' s.pk %}">{{ s.title }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</p>
@@ -68,6 +70,8 @@
 
 <section>
   <h2>Bewerbende</h2>
+  {% if not rows %}<p class="empty">{% with before=course.after.all %}{% if before %}Noch niemand: hierher kommt, wer {% for s in before %}„{{ s.title }}“{% if not forloop.last %} oder {% endif %}{% endfor %} besteht.{% else %}Noch keine Bewerbungen.{% endif %}{% endwith %}</p>
+  {% else %}
   {% if office and not correct and not columns and course.entry == 'members' %}<p class="lead">Die Wertungen trägt die Kommission ein; berichtigen kann sie nur der Prüfungsausschuss.</p>{% endif %}
   {% if corrections %}
   <div class="panel" style="margin-bottom: 24px">
@@ -85,5 +89,6 @@
   <div data-panel>{% include "courses/_sheet.html" with panel=True decide=correct review=course.video %}</div>
   {% if retractable and jury %}<form method="post" action="{% url 'admissions:take_back' course.pk %}" style="margin-top: 16px">{% csrf_token %}<button class="link" title="Ihre abgegebenen Wertungen, die noch nicht alle gesehen haben, werden wieder Entwürfe"><small>Abgabe zurücknehmen</small></button></form>{% endif %}
   {% include "courses/_recuse.html" %}{# the jury stands back from one person on their card or in the Sichtung; the form stays for the office's substitutes #}
+  {% endif %}
 </section>
 {% endblock %}

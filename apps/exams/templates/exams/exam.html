@@ -50,8 +50,8 @@
     {% endif %}
     <dt>Bewertung</dt><dd>{% if course.points %}Punkte, bestanden ab {{ course.pass_mark }}{% else %}Noten 1,0–5,0, bestanden bis 4,0{% endif %}</dd>
     <dt>Module</dt><dd>{% for title, programs in modules %}{{ title }}<br><small class="muted">{% for program, codes in programs %}{{ program.title }} {{ codes|join:", " }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</small><br>{% empty %}–{% endfor %}</dd>
-    {% if course.kind != 'thesis' %}<dt>Räume</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, <a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a><br>{% empty %}–{% endfor %}
-      {% if booking %}<details{% if not bookings %} open{% endif %}><summary><small>Tag und Raum buchen</small></summary><form method="post" action="{% url 'exams:book' course.pk %}" class="inline" style="margin-top: 8px">{% csrf_token %}{% for field in booking %}<label>{{ field.label }}{{ field }}</label>{% endfor %}<button class="btn ghost small">Buchen</button></form></details>{% endif %}</dd>{% endif %}
+    {% if course.kind != 'thesis' %}<dt>Räume</dt><dd>{% for b in bookings %}{{ b.start|date:"D j.n., H:i" }}–{{ b.end|time:"H:i" }}, <a href="{% url 'rooms:room' b.room.pk %}?tag={{ b.start|date:'Y-m-d' }}">{{ b.room }}</a><br>{% empty %}{% if not booking %}–{% endif %}{% endfor %}
+      {% if booking %}{% if poll %}<a class="badge wait" href="{{ poll.get_absolute_url }}">Terminumfrage läuft</a>{% elif not bookings and institution.polls %}<a href="{% url 'rooms:new_poll' %}?zu={{ course.pk }}">Termin finden</a>{% endif %}<details{% if not bookings %} open{% endif %}><summary><small>Tag und Raum buchen</small></summary><form method="post" action="{% url 'exams:book' course.pk %}" class="inline" style="margin-top: 8px">{% csrf_token %}{% for field in booking %}<label>{{ field.label }}{{ field }}</label>{% endfor %}<button class="btn ghost small">Buchen</button></form></details>{% endif %}</dd>{% endif %}
   </dl>
   {% if slots and not course.released and course.kind == 'exam' %}
   <form method="post" action="{% url 'exams:plan' course.pk %}" class="panel">

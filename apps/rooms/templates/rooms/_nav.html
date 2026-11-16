@@ -3,6 +3,7 @@
   <a href="{% url 'rooms:index' %}" class="{% if here == 'index' or here == 'room' or here == 'new' %}on{% endif %}">Raumplan</a>
   <a href="{% url 'rooms:mine' %}" class="{% if here == 'mine' or here == 'booking' %}on{% endif %}">Meine Buchungen</a>
   <a href="{% url 'rooms:events' %}" class="{% if here == 'events' %}on{% endif %}">Veranstaltungen</a>
+  {% if institution.polls %}<a href="{% url 'rooms:polls' %}" class="{% if here == 'polls' or here == 'new_poll' or here == 'poll' %}on{% endif %}">Terminumfragen</a>{% endif %}
   {% if 'manage_bookings' in user.roles %}<a href="{% url 'rooms:requests' %}" class="{% if here == 'requests' %}on{% endif %}">Anfragen</a>{% endif %}
 </nav>
 {% endwith %}

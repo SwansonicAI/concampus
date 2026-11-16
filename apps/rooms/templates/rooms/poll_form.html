@@ -1,0 +1,15 @@
+{% extends base %}
+{% block title %}{% if course %}Termin finden{% else %}Neue Terminumfrage{% endif %}{% endblock %}
+{% block subnav %}{% include "rooms/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>{% if course %}Termin finden{% else %}Neue Terminumfrage{% endif %}</h1>
+{% if course %}<p class="lead"><a href="{{ course.get_absolute_url }}">{{ course.title }}</a></p>{% endif %}
+<form method="post" class="form">
+  {% csrf_token %}
+  {{ form }}
+  <div class="actions">
+    <button class="btn">Fragen</button>
+    <a class="btn ghost" data-close href="{% if course %}{{ course.get_absolute_url }}{% else %}{% url 'rooms:polls' %}{% endif %}">Abbrechen</a>
+  </div>
+</form>
+{% endblock %}

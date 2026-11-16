@@ -24,6 +24,22 @@ function init(root) {
   root.querySelectorAll('table:not(.hours, [data-fixed])').forEach(sortable);  // data-fixed: rows in an order that means something
   root.querySelectorAll('table').forEach(scrolling);
   root.querySelectorAll('input[type=file]').forEach(picker);
+  root.querySelectorAll('[data-cycle]').forEach(cycle);
+  root.querySelectorAll('.calendar').forEach(calendar);
+}
+
+// One's own field in a Terminumfrage: each click the next answer, ✓, ~, ✗, then none again. Saved with the form.
+function cycle(button) {
+  const answers = [['', '', ''], ['yes', 'yes', '✓'], ['move', 'wait', '~'], ['no', 'no', '✗']];
+  const input = button.querySelector('input'), mark = button.querySelector('b'), cell = button.parentElement;
+  button.addEventListener('click', () => {
+    const [value, tone, symbol] = answers[(answers.findIndex(([v]) => v === input.value) + 1) % answers.length];
+    cell.classList.remove('yes', 'wait', 'no');
+    tone && cell.classList.add(tone);
+    input.value = value;
+    mark.textContent = symbol;
+    input.dispatchEvent(new Event('input', {bubbles: true}));  // unsaved: leaving the page asks first
+  });
 }
 
 // A wide table scrolls within itself, never the page.
@@ -211,8 +227,10 @@ function lookup(list) {
 }
 
 // Type-to-filter for long choice lists; a list of people (data-search) adds whoever else the name finds.
+// A quiet list (class quiet) shows nothing until a name is typed: whom one asks is found, the ticked stand as chips.
 function filterable(list) {
-  const input = Object.assign(document.createElement('input'), {type: 'search', className: 'filter', placeholder: list.dataset.search ? 'Name tippen …' : 'Liste filtern …'});
+  const quiet = list.classList.contains('quiet');
+  const input = Object.assign(document.createElement('input'), {type: 'search', className: 'filter', placeholder: list.dataset.search || quiet ? 'Name tippen …' : 'Liste filtern …'});
   list.before(input);
   let timer;
   list.dataset.search && input.addEventListener('input', () => {
@@ -233,8 +251,9 @@ function filterable(list) {
     for (const label of list.querySelectorAll('label:has(input)')) {
       const box = label.querySelector('input');
       const text = fold(`${label.textContent} ${label.querySelector('[title]')?.title ?? ''}`);  // a module's Studiengänge too
-      label.parentElement.hidden = !box.checked && !words.every(word => text.includes(word));
+      label.parentElement.hidden = !(box.checked && !quiet) && !(words.length && words.every(word => text.includes(word)));
     }
+    list.hidden = quiet && !words.length;
     for (const group of list.children) {  // programme headings disappear with all their entries
       if (group.querySelector(':scope > label:not(:has(input))')) {
         group.hidden = !group.querySelector(':scope > div:not([hidden])');
@@ -259,6 +278,21 @@ function filterable(list) {
   };
   list.addEventListener('change', sum);
   sum();
+  if (quiet) {  // ticked, the name is done with: the field is empty for the next
+    list.addEventListener('change', () => { input.value = ''; narrow(); input.focus(); });
+    narrow();
+  }
+}
+
+// Days ticked on a calendar: how many, beneath it.
+function calendar(days) {
+  const told = days.nextElementSibling, hint = told.textContent;
+  const count = () => {
+    const n = days.querySelectorAll('input:checked').length;
+    told.textContent = n ? `${n} ${n === 1 ? 'Tag' : 'Tage'} gewählt` : hint;
+  };
+  days.addEventListener('change', count);
+  count();
 }
 
 // In a course's form, who taught the modules ticked comes first, in a group of its own: the page's „taught“ says who

@@ -1,0 +1,8 @@
+<div class="calendar">{% for first, days in widget.months %}
+  <div class="month">
+    <p>{{ first|date:"F Y" }}</p>
+    {% for name in widget.weekdays %}<small>{{ name }}</small>{% endfor %}
+    {% for d in days %}{% if d %}<label class="day{% if d.off %} off{% endif %}"{% if d.holiday %} title="Feiertag"{% endif %}><input type="checkbox" name="{{ widget.name }}" value="{{ d.value }}" aria-label="{{ d.day|date:'l, j. F Y' }}"{% if d.on %} checked{% endif %}{% if d.past %} disabled{% endif %}><b>{{ d.day.day }}</b></label>{% else %}<span></span>{% endif %}{% endfor %}
+  </div>{% endfor %}
+</div>
+<p class="helptext">Noch kein Tag gewählt</p>

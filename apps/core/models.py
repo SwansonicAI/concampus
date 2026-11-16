@@ -218,6 +218,10 @@ class Institution(Tracked, models.Model):
     student_ahead_hours = models.PositiveSmallIntegerField('Vorlauf für Studierende (Std.)', default=24, help_text='So weit im Voraus buchen Studierende.')
     last_minute_hours = models.PositiveSmallIntegerField('Kurzfristig ohne Kontingent (Std.)', default=3, help_text='Was so bald beginnt, zählt nicht zum Tageskontingent.')
     teacher_ahead_days = models.PositiveSmallIntegerField('Vorlauf für Lehrende (Tage)', default=183)
+    polls = models.BooleanField(
+        'Terminumfragen', default=True,
+        help_text='Zeiten mit Kommissionen und Gremien abstimmen; ohne Haken legt das Amt Termine selbst fest.',
+    )
     credit_hours = models.PositiveSmallIntegerField(
         'Arbeitsstunden je CP', null=True, blank=True, help_text='Wie die Prüfungsordnung einen Leistungspunkt rechnet, meist 30; leer: im Studienplan nicht genannt.',
     )

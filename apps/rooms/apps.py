@@ -7,6 +7,13 @@ from django.utils.formats import number_format
 from core.apps import Tile, feature, page, plural, task
 
 
+def place(poll):
+    """Where a Terminumfrage's task belongs on the start page: with its audition or exam, else under Räume."""
+    if poll.course is None:
+        return {}
+    return {'app': 'Bewerbungen' if poll.course.kind == poll.course.Kind.AUDITION else 'Prüfungen'}
+
+
 class RoomsConfig(Tile, AppConfig):
     name = 'rooms'
     verbose_name = 'Räume'
@@ -19,10 +26,15 @@ class RoomsConfig(Tile, AppConfig):
             return 'Räume'
 
     def pages(self, person):
+        from .polls import may_ask
+
         found = [page('Raumplan', 'rooms:index', 'room', 'new'), page('Meine Buchungen', 'rooms:mine', 'booking', 'day_off'), page('Veranstaltungen', 'rooms:events')]
+        found += [page('Terminumfragen', 'rooms:polls', 'new_poll', 'poll', 'choose')] if may_ask(person) else []
         return found + ([page('Anfragen', 'rooms:requests')] if 'manage_bookings' in person.roles else [])
 
     def features(self, person):
+        from .polls import may_ask
+
         if not self.title(person.roles):
             return []
         found = [
@@ -33,6 +45,8 @@ class RoomsConfig(Tile, AppConfig):
             feature('Veranstaltungen', reverse('rooms:events'), 'konzert klassenabend meisterkurs vortrag programm'),
             feature('Kalender abonnieren', f"{reverse('rooms:mine')}#kalender", 'ical ics outlook google apple handy feed'),
         ]
+        if may_ask(person):
+            found.append(feature('Terminumfragen', reverse('rooms:polls'), 'termin finden umfrage doodle sitzung besprechung treffen kommission wann abstimmen'))
         if 'manage_bookings' in person.roles:
             found += [
                 feature('Veranstaltung anlegen', f"{reverse('rooms:new')}?veranstaltung", 'konzert klassenabend'),
@@ -60,12 +74,24 @@ class RoomsConfig(Tile, AppConfig):
     def tasks(self, person):
         from django.utils import timezone
 
-        from .models import Booking
+        from django.db.models import Count, Q
 
+        from .models import Booking, Poll
+
+        polls = Poll.objects.filter(chosen=None).select_related('course')
+        asked = polls.filter(people=person).annotate(times=Count('options', distinct=True), mine=Count('options__answers', filter=Q(options__answers__person=person), distinct=True))
+        found = [  # asked and not every time answered; one's own, all answered or past the day; where its exam or audition is
+            {**task(f'Wann können Sie? {p.title}' + (f' (noch {p.times - p.mine} Zeiten)' if p.mine else ''), p.get_absolute_url(), p.by), **place(p)}
+            for p in asked if p.mine < p.times
+        ] + [
+            {**task(f'Termin wählen: {p.title}', p.get_absolute_url(), p.by), **place(p)}
+            for p in polls.filter(person=person).annotate(answered=Count('options__answers__person', distinct=True), size=Count('people', distinct=True))
+            if p.answered >= p.size or p.by < timezone.localdate()
+        ]
         if 'manage_bookings' not in person.roles:
-            return []
+            return found
         soon = Booking.objects.filter(category__public=True, internal=False, requested=False, programme='', start__gte=timezone.now(), start__lte=timezone.now() + timedelta(days=14))
-        found = [
+        found += [
             task(f'Programm fehlt: {b.label}', reverse('rooms:booking', args=[b.pk]), timezone.localdate(b.start))
             for b in person.within(soon, 'manage_bookings').select_related('category', 'course')
         ]

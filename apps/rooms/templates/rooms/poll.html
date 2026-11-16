@@ -1,0 +1,56 @@
+{% extends base %}
+{% block title %}{% if poll.course %}Terminumfrage{% else %}{{ poll.title }}{% endif %}{% endblock %}
+{% block subnav %}{% include "rooms/_nav.html" %}{% endblock %}
+{% block content %}
+<h1>{% if poll.course %}Terminumfrage{% else %}{{ poll.title }}{% endif %}</h1>
+<p class="lead">{% if poll.course %}<a href="{{ poll.course.get_absolute_url }}">{{ poll.course.title }}</a> · {% endif %}{% if held %}<span class="badge yes">Festgelegt</span> {% for b in held %}{{ b.start|date:"D j.n., G" }}–{{ b.end|time:"G" }} Uhr, <a href="{% url 'rooms:booking' b.pk %}">{{ b.room }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}
+{% elif poll.chosen %}<span class="badge yes">Termin steht</span> {% with held=poll.booking|default:poll.chosen %}{{ held.start|date:"l, j. F Y, H:i" }}–{{ held.end|time:"H:i" }}{% endwith %}{% if poll.booking %}, <a href="{% url 'rooms:booking' poll.booking.pk %}">{{ poll.booking.room }}</a>{% endif %}
+{% else %}{{ done }} von {{ size }} geantwortet · Antwort bis {{ poll.by|date:"j.n." }}{% if not choosing %} · gefragt von {{ poll.person }}{% endif %}{% if poll.room %} · {{ poll.room }}{% endif %}{% endif %}</p>
+<form method="post" id="antworten">{% csrf_token %}</form>
+<form method="post" id="zeiten">{% csrf_token %}</form>
+{% if choosing %}<form id="wahl" action="{% url 'rooms:choose' poll.pk %}"></form>{% endif %}
+<div class="poll">
+  <table data-fixed>
+    <thead>
+      <tr><th></th>{% for day, times in days %}<th colspan="{{ times|length }}"><span class="day"><small>{{ day|date:"D" }}</small><b>{{ day|date:"j.n." }}</b></span></th>{% endfor %}</tr>
+      <tr><th></th>{% for o in options %}<th class="time{% if o.best %} best{% endif %}">{% if choosing and done %}<label title="Zum Festlegen ankreuzen"><input type="checkbox" form="wahl" name="zeit" value="{{ o.pk }}"{% if o.picked %} checked{% endif %}>{{ o.start|time:"G" }}–{{ o.end|time:"G" }}</label>{% else %}{{ o.start|time:"G" }}–{{ o.end|time:"G" }}{% endif %}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% if answering %}
+      <tr class="mine">
+        <th>Sie</th>
+        {% for o in options %}<td class="cell {{ o.mark.0 }}"><button type="button" data-cycle title="{{ o.busy|default:'Keine eigenen Termine' }}"><input type="hidden" form="antworten" name="antwort-{{ o.pk }}" value="{{ o.mine }}"><b>{{ o.mark.1 }}</b>{% if o.blocks %}<span class="busy bar">{% for left, width in o.blocks %}<i style="left: {{ left|stringformat:'s' }}%; width: {{ width|stringformat:'s' }}%"></i>{% endfor %}</span>{% endif %}</button></td>{% endfor %}
+      </tr>
+      {% endif %}
+      {% for p in rows %}
+      <tr>
+        <th{% if p.optional %} class="muted"{% endif %} title="{{ p }}">{{ p.last_name }}{% if choosing %} <button class="chip{% if p.optional %} on{% endif %}" form="zeiten" formaction="{% url 'rooms:optional' poll.pk p.pk %}" title="{% if p.optional %}Muss doch kommen{% else %}Kann kommen, muss aber nicht: zählt beim Wählen zuletzt{% endif %}">optional</button>{% elif p.optional %} <small>optional</small>{% endif %}</th>
+        {% for c in p.cells %}<td class="cell {{ c.0 }}" title="{{ p.name }}{% if c %}: {{ c.2 }}{% endif %}">{{ c.1 }}</td>{% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      {% if done %}<tr><th>✓</th>{% for o in options %}<td class="{% if o.best %}best{% endif %}">{% if o.yes %}{{ o.yes }}{% endif %}{% if o.move %} <small>~{{ o.move }}</small>{% endif %}</td>{% endfor %}</tr>{% endif %}
+      {% if choosing and poll.room %}<tr><th>{{ poll.room.name }}</th>{% for o in options %}<td>{% if o.taken %}<span class="fail" title="{{ o.taken.label }}">belegt</span>{% endif %}</td>{% endfor %}</tr>{% endif %}
+    </tfoot>
+  </table>
+</div>
+<div class="legend"><span class="legend-items"><span class="legend-item"><span class="cell yes">✓</span>passt</span><span class="legend-item"><span class="cell wait">~</span>mit Umplanen</span><span class="legend-item"><span class="cell no">✗</span>geht nicht</span>{% if answering %}<span class="legend-item"><span class="busy bar"><i style="left: 0; width: 60%"></i></span>Ihre eigenen Termine</span>{% endif %}</span></div>
+{% if answering %}<p><button class="btn" form="antworten">Speichern</button> <small class="muted">Ihre Felder: jeder Klick die nächste Antwort.</small></p>{% endif %}
+{% if choosing and done %}<p><button class="btn" form="wahl">Angekreuzte festlegen</button> <small class="muted">{% if lacking %}Gebraucht: {{ lacking|floatformat:"-1" }} Std.; {% if wanted > 1 %}angekreuzt sind die besten {{ wanted }}, möglichst ganze Tage{% else %}angekreuzt ist die beste{% endif %}.{% else %}Angekreuzt ist die beste.{% endif %}</small></p>{% endif %}
+{% if choosing %}
+<div class="actions">
+  {% if late %}<button class="btn ghost small" form="zeiten" formaction="{% url 'rooms:remind' poll.pk %}" title="Eine Nachricht an alle, die noch nicht geantwortet haben">Erinnern: {{ late|join:", " }}</button>{% endif %}
+  <details><summary><small>Zeit hinzufügen</small></summary>
+    <form method="post" action="{% url 'rooms:add_option' poll.pk %}" class="inline" style="margin-top: 8px">
+      {% csrf_token %}
+      <label>Tag<input name="day" data-day autocomplete="off" required placeholder="z. B. 14.1."></label>
+      <label>Von<input name="begin" autocomplete="off" required size="9" placeholder="z. B. 9"></label>
+      <label>Bis<input name="until" autocomplete="off" required size="9" placeholder="z. B. 17"></label>
+      <button class="btn ghost small">Hinzufügen</button>
+    </form>
+  </details>
+  <button class="link" form="zeiten" formaction="{% url 'rooms:delete_poll' poll.pk %}" data-confirm="Terminumfrage löschen?"><small>Umfrage löschen</small></button>
+</div>
+{% endif %}
+{% endblock %}

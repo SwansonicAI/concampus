@@ -1,12 +1,13 @@
 import re
 from collections import defaultdict
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django import forms
 from django.conf import settings
 from django.db.models import F, Max, Min, Q
 from django.utils import timezone
+from django.utils.formats import date_format
 from django.utils.html import format_html
 
 from core.dates import ClockField, DayField, MomentField, working
@@ -171,8 +172,38 @@ class SlotForm(forms.Form):
         booked = course.bookings.order_by('start').first()
         if booked:  # the block starts where the exam is booked
             self.fields['room'].initial, self.fields['start'].initial = booked.room_id, timezone.localtime(booked.start)
-        if length := re.findall(r'(\d+) Min\.', ' '.join([course.title, *course.modules.values_list('title', flat=True)])):  # e.g. '(15–25 Min.)': the longest
-            self.fields['minutes'].initial = max(int(n) for n in length)
+        self.fields['minutes'].initial = length(course) or 20
+        if course.kind == Course.Kind.AUDITION and booked:  # the days are booked: the times fill them, in their rooms
+            del self.fields['start'], self.fields['room']
+
+
+def length(course):
+    """The minutes an exam takes as its title or its modules say, e.g. '(15–25 Min.)': the longest; None if they don't."""
+    found = re.findall(r'(\d+) Min\.', ' '.join([course.title, *course.modules.values_list('title', flat=True)]))
+    return max(int(n) for n in found) if found else None
+
+
+class ShiftForm(forms.Form):
+    """A day of an exam or audition moved to another: its room and everyone's time, the same hours, in the same room or
+    another."""
+
+    day = forms.TypedChoiceField(label='Tag', coerce=date.fromisoformat)
+    to = DayField(label='Neuer Tag')
+    room = RoomField(label='Raum', queryset=None, required=False, empty_label='derselbe Raum')
+
+    def __init__(self, *args, person, course, **kwargs):
+        super().__init__(*args, **kwargs)
+        days = sorted({timezone.localdate(b.start) for b in course.bookings.all()})
+        self.fields['day'].choices = [(d.isoformat(), date_format(d, 'D j.n.')) for d in days]
+        if len(days) == 1:
+            self.fields['day'].widget, self.fields['day'].initial = forms.HiddenInput(), days[0].isoformat()
+        self.fields['room'].queryset = bookable(person)
+
+    def clean(self):
+        data = super().clean()
+        if data.get('day') and data.get('to') == data['day']:
+            self.add_error('to', 'Derselbe Tag.')
+        return data
 
 
 def teachers(subject=None, institutes=(), module=(), appointed=None):

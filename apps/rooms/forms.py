@@ -1,9 +1,12 @@
 import uuid
+from calendar import monthrange
 from collections import defaultdict
 from datetime import date, datetime, time, timedelta
 
 from django import forms
-from django.db.models import Min, Q
+from django.db import transaction
+from django.db.models import Min, Prefetch, Q
+from django.template.defaultfilters import floatformat
 from django.utils import timezone
 from django.utils.formats import number_format
 from django.utils.html import escape
@@ -11,10 +14,10 @@ from django.utils.html import escape
 from core import history
 from core.dates import ClockField, DayField, starting
 from core.apps import plural
-from core.models import Institution, Person, Term
+from core.models import Holiday, Institution, Office, Person, Term
 from core.shortcuts import ids
 from core.text import collated
-from .models import Booking, BookingCategory, Room, later, span
+from .models import Booking, BookingCategory, Option, Poll, Room, later, span
 from .plans import agenda
 
 
@@ -306,6 +309,160 @@ class ServiceForm(forms.Form):
         if data.get('begin') and data.get('until') and data['until'] <= data['begin']:
             raise forms.ValidationError('„Bis“ muss nach „Von“ liegen.')
         return data
+
+
+def asked(person, course=None):
+    """Whom a poll may ask, as choices: those of its course first (commission or teachers, then who takes part), then the
+    teachers, the person's Institut first, then the offices; each once."""
+    from courses.forms import teachers
+    from courses.models import Course
+
+    groups, seen = [], set()
+
+    def add(label, people):
+        people = [(pk, name) for pk, name in people if pk not in seen]
+        seen.update(pk for pk, _ in people)
+        if people:
+            groups.append((label, people))
+
+    if course:
+        add('Kommission' if course.kind in Course.PANEL else 'Lehrende', [(p.pk, str(p)) for p in course.staff.all()])
+        add('Teilnehmende', [(p.pk, str(p)) for p in Person.objects.filter(studies__participations__course=course, studies__status='enrolled').distinct()])
+    for label, people in teachers(course.subject if course else None, {person.institute_id}):
+        add(label, people)
+    for office in Office.objects.prefetch_related(Prefetch('user_set', Person.objects.filter(is_active=True).order_by('last_name'))):
+        add(office.name, [(p.pk, str(p)) for p in office.user_set.all()])
+    return groups
+
+
+def months(count=6):
+    """The first days of this month and the `count` - 1 after it."""
+    today = timezone.localdate()
+    return [date(today.year + (today.month - 1 + n) // 12, (today.month - 1 + n) % 12 + 1, 1) for n in range(count)]
+
+
+class Calendar(forms.CheckboxSelectMultiple):
+    """Days ticked on months laid out as calendars: weekends and public holidays set apart, days gone by not offered."""
+
+    template_name = 'rooms/calendar.html'
+
+    def get_context(self, name, value, attrs):
+        context = super().get_context(name, value, attrs)
+        today, picked, shown = timezone.localdate(), set(context['widget']['value'] or ()), months()
+        off = Holiday.days(shown[0], shown[-1] + timedelta(days=31), public=True)
+        context['widget']['months'] = [(first, [None] * first.weekday() + [
+            {'value': d.isoformat(), 'day': d, 'off': d.weekday() > 4 or d in off, 'holiday': d in off, 'past': d < today, 'on': d.isoformat() in picked}
+            for d in (first + timedelta(days=n) for n in range(monthrange(first.year, first.month)[1]))
+        ]) for first in shown]
+        context['widget']['weekdays'] = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So']
+        return context
+
+
+TIMES = {'9-17': ('ganzer Tag', time(9), time(17)), '9-13': ('vormittags', time(9), time(13)), '13-17': ('nachmittags', time(13), time(17))}
+
+
+class PollForm(forms.ModelForm):
+    """A Terminumfrage: whom it asks, and the times it offers: each day ticked at each time chosen."""
+
+    days = forms.TypedMultipleChoiceField(label='Tage', coerce=date.fromisoformat, widget=Calendar, error_messages={'required': 'Bitte die Tage anklicken.'})
+    times = forms.MultipleChoiceField(
+        label='Zeiten', required=False, initial=['9-17'], widget=forms.CheckboxSelectMultiple(attrs={'class': 'choices'}),
+        choices=[(key, f'{label}, {a.hour}–{b.hour} Uhr') for key, (label, a, b) in TIMES.items()],
+    )
+    begin = ClockField(label='Andere Zeit von', example='10', required=False)
+    until = ClockField(label='bis', example='12', required=False)
+    by = DayField(label='Antwort bis')
+    layout = [(None, [('title', 'category')]), ('Wer', ['people']), ('Wann', ['days', 'times', ('begin', 'until')]), ('Wo', ['room']), ('Antworten', ['by', 'open'])]
+
+    class Meta:
+        model = Poll
+        fields = ['title', 'category', 'room', 'people', 'by', 'open']
+        field_classes = {'room': RoomField}
+        widgets = {'people': forms.CheckboxSelectMultiple(attrs={'class': 'quiet'})}
+        help_texts = {'room': 'Leer: erst beim Wählen, oder ohne Raum.', 'open': 'Sonst sieht sie nur, wer fragt.'}
+
+    def __init__(self, *args, person, course=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.person, self.course = person, course
+        self.fields['category'].queryset = BookingCategory.objects.exclude(tone__in=[BookingCategory.Tone.SERVICE, BookingCategory.Tone.BLOCKED, BookingCategory.Tone.CANCELLED])
+        self.fields['room'].queryset = bookable(person)
+        self.fields['room'].empty_label = 'Noch keiner'
+        self.fields['people'].choices = asked(person, course)
+        self.fields['people'].help_text = 'Wer kommen kann, aber nicht muss, wird danach in der Umfrage „optional“.'
+        self.fields['days'].choices = [(d.isoformat(), d) for first in months() for d in (first + timedelta(days=n) for n in range(monthrange(first.year, first.month)[1]))]
+        if course:
+            from courses.models import Course
+
+            key = 'eignungspruefung' if course.kind == Course.Kind.AUDITION else 'pruefung' if course.kind in Course.PANEL else 'unterricht'
+            self.initial.setdefault('title', course.title)
+            self.initial.setdefault('category', key)
+            for name in ('title', 'category'):  # the exam's or audition's own, as the page says above
+                self.fields[name].widget = forms.HiddenInput()
+            if course.kind == Course.Kind.AUDITION:  # how many days to offer
+                from admissions.auditions import booked, need
+
+                if (plan := need(course)) and (lacking := plan.hours - booked(course)) > 0:
+                    self.fields['days'].help_text = (
+                        f'Gebraucht: {floatformat(lacking, -1)} Stunden, {plan.count} × {plan.each} Min. ({plan.basis or "die Eingeladenen"}). '
+                        'Mehr Tage anbieten, als gebraucht werden.'
+                    )
+                    if lacking <= 4:  # a morning will do
+                        self.initial.setdefault('times', ['9-13'])
+            self.initial.setdefault('people', list(course.staff.values_list('pk', flat=True)))
+            self.initial.setdefault('room', course.bookings.values_list('room', flat=True).first())
+        self.initial.setdefault('by', timezone.localdate() + timedelta(days=7))
+
+    def clean(self):
+        data = super().clean()
+        if data.get('by') and data['by'] < timezone.localdate():
+            self.add_error('by', 'Liegt in der Vergangenheit.')
+        spans = [TIMES[key][1:] for key in data.get('times') or ()]
+        begin, until = data.get('begin'), data.get('until')
+        if begin and until and until <= begin or bool(begin) != bool(until):
+            self.add_error('until', '„Bis“ muss nach „von“ liegen.' if begin and until else 'Bitte von und bis angeben.')
+        elif begin:
+            spans.append((begin, until))
+        if not spans and not (begin or until):  # a wrong time of one's own says so itself
+            self.add_error('times', 'Bitte eine Zeit wählen.')
+        self.slots = [
+            (timezone.make_aware(datetime.combine(day, a)), timezone.make_aware(datetime.combine(day, b)))
+            for day in sorted(data.get('days') or ()) for a, b in sorted(spans)
+        ]
+        if len(self.slots) > 60:
+            raise forms.ValidationError(f'{len(self.slots)} Zeiten sind zu viele zum Beantworten; höchstens 60.')
+        return data
+
+    def save(self):
+        poll = super().save(commit=False)
+        poll.person, poll.course = self.person, self.course
+        with transaction.atomic():
+            poll.save()
+            self.save_m2m()
+            Option.objects.bulk_create(Option(poll=poll, start=start, end=end) for start, end in self.slots)
+        return poll
+
+
+def overlapping(times):
+    """Bookings that overlap any of `times` (each with start and end)."""
+    found = Q(pk__in=[])
+    for t in times:
+        found |= Q(start__lt=t.end, end__gt=t.start)
+    return found
+
+
+class ChooseForm(forms.Form):
+    """The room for the times chosen: of those the person books, the ones free at all of them."""
+
+    room = RoomField(label='Raum', queryset=None, required=False, empty_label='Ohne Raum')
+
+    def __init__(self, *args, person, poll, options, **kwargs):
+        super().__init__(*args, **kwargs)
+        taken = Booking.objects.filter(overlapping(options), category__blocks=True, requested=False).values('room')
+        self.fields['room'].queryset = bookable(person).exclude(pk__in=taken)
+        lately = Booking.objects.filter(category=poll.category_id).order_by('-created').values_list('room', flat=True)[:40]  # where such dates are held
+        self.fields['room'].recent = list(dict.fromkeys(lately))[:5]
+        free = set(self.fields['room'].queryset.filter(pk__in=[poll.room_id, *self.fields['room'].recent]).values_list('pk', flat=True))
+        self.fields['room'].initial = next((pk for pk in [poll.room_id, *(self.fields['room'].recent if poll.course_id else [])] if pk in free), None)  # an exam is held in a room
 
 
 class CancelForm(forms.Form):

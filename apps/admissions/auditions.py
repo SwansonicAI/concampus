@@ -2,6 +2,8 @@
 still to give."""
 from collections import defaultdict
 from datetime import date, timedelta
+from math import ceil
+from types import SimpleNamespace
 
 from django.db.models import Q
 from django.urls import reverse
@@ -10,8 +12,41 @@ from django.utils.formats import date_format
 
 from core.models import Entry
 from core.text import collated
+from courses.forms import length
 from courses.models import Course, marked
 from .papers import judged
+
+
+DAY = 8  # hours an audition day holds, 9 to 17
+
+
+def need(course):
+    """How long an audition in person will take, to book its days by: those invited to it; else as many as came the last
+    time it was held, in proportion to the applications once they are in; each as long as then, from one to the next,
+    else as its title says and five minutes to change, else 25. None with nothing to go by or nobody to come. With
+    `count`, `each` (minutes), `hours`, `days`, and `basis`: where the count is from, in words; None for those invited."""
+    count, basis = course.participations.count(), None
+    before = Course.objects.filter(kind=course.kind, title=course.title, term__start__lt=course.term.start).order_by('-term__start').first()
+    if not count and before:
+        count, basis = before.participations.count(), f'so viele wie im {before.term}'
+        first, then = origin(course), origin(before)
+        if first and then and first != course and first.deadline and first.deadline < timezone.localdate():  # the applications are in
+            applied, earlier = first.participations.count(), then.participations.count()
+            if earlier:
+                count = round(count * applied / earlier)
+                basis = f'{applied} Bewerbungen; im {before.term} kamen {before.participations.count()} von {earlier} hierher'
+    if not count:
+        return None
+    slots = sorted(before.participations.exclude(slot=None).values_list('slot', flat=True)) if before else []
+    gaps = [int((b - a).total_seconds() // 60) for a, b in zip(slots, slots[1:]) if b - a < timedelta(hours=2)]  # within a day
+    each = max(set(gaps), key=gaps.count) if gaps else (length(course) or 20) + 5
+    hours = count * each / 60
+    return SimpleNamespace(count=count, each=each, hours=hours, days=ceil(hours / DAY), basis=basis)
+
+
+def booked(course):
+    """The hours of the days booked for the course."""
+    return sum((b.end - b.start).total_seconds() for b in course.bookings.all()) / 3600
 
 
 def unmarked(person):

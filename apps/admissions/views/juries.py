@@ -1,9 +1,11 @@
 """The Eignungsprüfung as its juries run it: appointments, stages, results, Nachrücken."""
 import re
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta
+from itertools import groupby
 
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import transaction
 from django.db.models import Count, F, Min, Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -12,18 +14,19 @@ from django.utils.formats import date_format
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from core import texts
+from core import history, texts
 from core.dates import MomentField
 from core.access import require
 from core.apps import plural
-from core.models import Entry, Institution
+from core.models import Entry, Institution, Message
 from core.text import untimed
 from core.shortcuts import preview
 from courses import panel
-from courses.forms import SlotForm, substitutes
+from courses.forms import DateForm, ShiftForm, SlotForm, substitutes
 from courses.models import Correction, Course, Participation, Score
+from rooms.models import Booking, BookingCategory, Option
 from students.models import Study
-from ..auditions import after, held, invite, next_stages, origin, unmarked
+from ..auditions import after, booked, held, invite, need, next_stages, origin, unmarked
 from ..papers import Condition, checklist, judged, shown
 from .board import DECISIONS, offer, vacancies
 
@@ -111,6 +114,15 @@ def audition(request, pk):
     invited = set(Participation.objects.filter(course__in=next_stages(course)).values_list('study', flat=True)) if office else set()
     left, drafts = (0, 0) if office or correct else next(((n, d) for c, n, d, _ in unmarked(person) if c.pk == course.pk), (0, 0))
     rankable = not any(getattr(p, 'blind', False) for p in rows)  # a ranking would tell the others' marks
+    plan = need(course) if office and not course.video and not course.released else None
+    days = list(course.bookings.select_related('room').order_by('start'))
+    hours = booked(course)
+    spare = next((b for b in reversed(days) if not any(p.slot and b.start <= p.slot < b.end for p in rows)), None) if plan and plan.basis is None and len(days) > 1 else None
+    if spare and hours - (spare.end - spare.start).total_seconds() / 3600 < plan.hours:  # a day the invited do not need
+        spare = None
+    stages = list(next_stages(course)) if office and rows else []  # nobody in the stage yet: nothing to pass on
+    waiting = sum(1 for p in rows if p.slot is None and p.study.status == Study.Status.APPLIED)
+    scheduled = list(course.participations.filter(slot__isnull=False).select_related('study__person').order_by('slot')) if office and not course.released else []
     if request.GET.get('sortierung') == 'punkte' and rankable:
         rows.sort(key=lambda p: p.grade if p.grade is not None else (p.mean or 0), reverse=True)
     return render(request, 'admissions/audition.html', {
@@ -130,11 +142,15 @@ def audition(request, pk):
         'candidates': substitutes(course) if office and any(p.vacant for p in rows) else [],
         'history': bool(Course.seen_by(person, course.pk)),
         'slots': SlotForm(person=person, course=course) if office else None,
-        'scheduled': course.participations.filter(slot__isnull=False).select_related('study__person').order_by('slot') if office and not course.released else [],
-        'stages': next_stages(course) if office else [],
+        'scheduled': scheduled,
+        'side': office and (stages or not course.released and not course.video and waiting),  # the office's panels beside the facts
+        'fixing': fixing(person, course, plan=plan) if office and not course.released and not course.video else None,
+        'stages': stages, 'waiting': waiting,
         'ready': sum(1 for p in rows if p.passed and p.study.status == Study.Status.APPLIED and p.study_id not in invited),  # not yet at the next stage
         'missing': sum(1 for p in rows if panel.due(p)),
-        'bookings': course.bookings.select_related('room'),
+        'bookings': days, 'plan': plan, 'booked': hours, 'lacking': plan and plan.hours - hours, 'spare': spare,
+        'poll': course.polls.filter(chosen=None).annotate(answered=Count('options__answers__person', distinct=True), size=Count('people', distinct=True)).first(),
+        'shifting': ShiftForm(person=person, course=course) if office and not course.released and not course.video and course.bookings.exists() else None,
         'reachable': Study.reachable(person, Study.objects.filter(participations__course=course)),
     })
 
@@ -145,32 +161,47 @@ def plan(request, pk):
     course = get_object_or_404(request.user.within(Course.objects.all(), 'run_auditions'), pk=pk, kind=Course.Kind.AUDITION)
     form = SlotForm(request.POST, person=request.user, course=course)
     rows = list(course.participations.filter(slot=None, study__status=Study.Status.APPLIED).select_related('study__person', 'study__program', 'study__subject').order_by('created'))
-    if form.is_valid() and rows and not request.POST.get('bestaetigt'):  # the times first, with the end of the day, then the letters
-        data = form.cleaned_data
-        step = timedelta(minutes=data['minutes'] + data['pause'])
-        times = [timezone.localtime(data['start'] + step * n) for n in range(len(rows))]
-        end = times[-1] + timedelta(minutes=data['minutes'])
+    if not (form.is_valid() and rows):
+        messages.error(request, 'Bitte Beginn, Dauer und Raum angeben.' if rows else 'Alle Bewerbenden haben schon einen Termin.')
+        return redirect(course)
+    data, days = form.cleaned_data, list(course.bookings.select_related('room').order_by('start'))
+    filling = 'start' not in data  # the days are booked: the times fill them one after another
+    if filling:
+        try:
+            times = panel.fill(days, len(rows), data['minutes'], data['pause'], course.participations.exclude(slot=None).values_list('slot', flat=True))
+        except ValidationError as error:
+            messages.error(request, f'{" ".join(error.messages)} Einen Tag hinzufügen oder kürzere Termine?')
+            return redirect(course)
+    else:
+        times = [data['start'] + timedelta(minutes=data['minutes'] + data['pause']) * n for n in range(len(rows))]
+    if not request.POST.get('bestaetigt'):  # the times first, a day each with its end, then the letters
+        times = [timezone.localtime(t) for t in times]
+        rooms = {t: next((b.room for b in days if b.start <= t < b.end), None) or data.get('room') for t in times}
         letter = rows[0].study.wording(
-            'einladung_eignungspruefung', pruefung=course.title, termin=date_format(times[0], 'l, j. F Y, H:i'), raum=data['room'].place(linked=True),
+            'einladung_eignungspruefung', pruefung=course.title, termin=date_format(times[0], 'l, j. F Y, H:i'), raum=rooms[times[0]].place(linked=True),
             programm=rows[0].note or '–', danach='\n'.join(f'– {line}' for line in after(course)) or '–',
         )
         notes = [
-            f'{plural(len(rows), "Termin", "Termine")} am {date_format(times[0], "l, j. F Y")} in {data["room"]}, von {times[0]:%H:%M} bis {end:%H:%M} Uhr.',
-            'Reihenfolge: ' + ', '.join(f'{t:%H:%M} {p.study.person.name}' for t, p in zip(times, rows)) + '.',
-            'Einzelne Termine lassen sich danach verlegen, mit neuer Einladung.',
-        ]
+            f'{date_format(day, "l, j. F")}, {rooms[group[0][0]]}: {group[0][0]:%H:%M} bis {group[-1][0] + timedelta(minutes=data["minutes"]):%H:%M} Uhr · '
+            + ', '.join(f'{t:%H:%M} {p.study.person.name}' for t, p in group)
+            for day, group in ((d, list(g)) for d, g in groupby(zip(times, rows), key=lambda tp: tp[0].date()))
+        ] + ['Einzelne Termine lassen sich danach verlegen, mit neuer Einladung.']
         return preview(request, f'Termine: {course.title}', [('Einladung', [p.study.person for p in rows], letter)], f'{plural(len(rows), "Termin", "Termine")} vergeben und einladen', course.get_absolute_url(), notes)
-    if form.is_valid() and rows:
-        try:
-            panel.schedule(course, rows, form.cleaned_data['start'], form.cleaned_data['minutes'], form.cleaned_data['room'], request.user, form.cleaned_data['pause'])
-        except ValidationError as error:
-            messages.error(request, ' '.join(error.messages))
+    try:
+        if filling:
+            for p, t in zip(rows, times):
+                p.slot = t
+            with transaction.atomic():
+                Participation.objects.bulk_update(rows, ['slot'])
+                history.saved(rows)
         else:
-            for p in rows:
-                invite(p)
-            messages.success(request, f'{len(rows)} Termine vergeben, Einladungen versandt.')
-    else:
-        messages.error(request, 'Bitte Beginn, Dauer und Raum angeben.' if rows else 'Alle Bewerbenden haben schon einen Termin.')
+            panel.schedule(course, rows, data['start'], data['minutes'], data['room'], request.user, data['pause'])
+    except ValidationError as error:
+        messages.error(request, ' '.join(error.messages))
+        return redirect(course)
+    for p in rows:
+        invite(p)
+    messages.success(request, f'{len(rows)} Termine vergeben, Einladungen versandt.')
     return redirect(course)
 
 
@@ -194,6 +225,101 @@ def move(request, pk):
     invite(p)
     messages.success(request, f'{p.study.person} verlegt auf {date_format(timezone.localtime(slot), "j.n.Y, H:i")}; neue Einladung versandt.' + ('' if held(p)[2] else ' Für diese Zeit ist noch kein Raum gebucht.'))
     return redirect(p.course)
+
+
+@require('run_auditions')
+@require_POST
+def shift(request, pk):
+    """Move a day of the stage to another, its room and everyone's time at the same hours: first the new invitations
+    to look at, then they go out and the commission hears of it."""
+    course = get_object_or_404(request.user.within(Course.objects.filter(released=None), 'run_auditions'), pk=pk, kind=Course.Kind.AUDITION)
+    form = ShiftForm(request.POST, person=request.user, course=course)
+    if not form.is_valid():
+        messages.error(request, 'Tag verlegen: ' + ' '.join(e for errors in form.errors.values() for e in errors))
+        return redirect(course)
+    day, to, room = form.cleaned_data['day'], form.cleaned_data['to'], form.cleaned_data['room']
+    confirmed = request.POST.get('bestaetigt')
+    try:
+        bookings, rows = panel.shift(course, day, to, room, save=bool(confirmed))
+    except ValidationError as error:
+        messages.error(request, ' '.join(error.messages))
+        return redirect(course)
+    where = ', '.join(dict.fromkeys(str(b.room) for b in bookings))
+    if not confirmed:
+        notes = [f'Vom {date_format(day, "l, j. F")} auf {date_format(to, "l, j. F Y")}, zur selben Zeit, {where}.', f'Die Kommission erfährt es: {", ".join(p.last_name for p in course.staff.all())}.']
+        groups = []
+        if rows:
+            letter = rows[0].study.wording(
+                'einladung_eignungspruefung', pruefung=course.title, termin=date_format(timezone.localtime(rows[0].slot), 'l, j. F Y, H:i'),
+                raum=bookings[0].room.place(linked=True) if bookings else 'wird mitgeteilt', programm=rows[0].note or '–', danach='\n'.join(f'– {line}' for line in after(course)) or '–',
+            )
+            groups = [('Neue Einladung', [p.study.person for p in rows], letter)]
+        return preview(request, f'Tag verlegen: {course.title}', groups, f'Verlegen{" und neu einladen" if rows else ""}', course.get_absolute_url(), notes)
+    for p in rows:
+        invite(p)
+    for person in course.staff.all():
+        Message.send(person, f'Tag verlegt: {course.title}', f'Vom {date_format(day, "l, j. F")} auf {date_format(to, "l, j. F Y")}, zur selben Zeit, {where}.', course.get_absolute_url())
+    messages.success(request, f'Verlegt auf {date_format(to, "l, j. F Y")}, {where}; {plural(len(rows), "neue Einladung", "neue Einladungen")}, die Kommission ist benachrichtigt.')
+    return redirect(course)
+
+
+def fixing(person, course, data=None, plan=None):
+    """The form to set a day of the stage outright: from 9 to 17, or to 13 where a morning will do, in the hall such
+    auditions were last held in."""
+    form = DateForm(data, person=person, initial={'begin': time(9), 'until': time(13 if plan and plan.hours - booked(course) <= 4 else 17)})
+    lately = Booking.objects.filter(category='eignungspruefung').order_by('-created').values_list('room', flat=True)[:40]
+    form.fields['room'].recent = list(dict.fromkeys(lately))[:5]
+    form.fields['room'].initial = next(iter(form.fields['room'].recent), None)
+    return form
+
+
+@require('run_auditions')
+@require_POST
+def book(request, pk):
+    """Set a day of the stage outright: its room booked and the commission told. A Terminumfrage running for the stage
+    ends with this day as its own, and all it asked hear of it."""
+    course = get_object_or_404(request.user.within(Course.objects.filter(released=None, video=False), 'run_auditions'), pk=pk, kind=Course.Kind.AUDITION)
+    form = fixing(request.user, course, request.POST)
+    if not form.is_valid():
+        messages.error(request, 'Tag festlegen: ' + ' '.join(e for errors in form.errors.values() for e in errors))
+        return redirect(course)
+    data = form.cleaned_data
+    start, end = (timezone.make_aware(datetime.combine(data['day'], data[t])) for t in ('begin', 'until'))
+    booking = Booking(room=data['room'], start=start, end=end, person=request.user, course=course, category=BookingCategory.system('eignungspruefung'))
+    try:
+        booking.full_clean()
+    except ValidationError as error:
+        messages.error(request, ' '.join(error.messages))
+        return redirect(course)
+    poll = course.polls.filter(chosen=None).first()
+    with transaction.atomic():
+        booking.save()
+        if poll:
+            poll.chosen = poll.options.filter(start=start, end=end).first() or Option.objects.create(poll=poll, start=start, end=end)
+            poll.booking = booking
+            poll.save()
+    when = f'{date_format(timezone.localtime(start), "l, j. F Y")}, {timezone.localtime(start):%H:%M}–{timezone.localtime(end):%H:%M} Uhr, {data["room"]} ({data["room"].building})'
+    for person in (poll.people if poll else course.staff).exclude(pk=request.user.pk):
+        Message.send(person, f'Termin: {course.title}', f'{when}.' + (' Die Terminumfrage ist damit beendet.' if poll else ''), course.get_absolute_url())
+    messages.success(request, f'Festgelegt: {when}. Die Kommission ist benachrichtigt' + ('; die Terminumfrage ist beendet.' if poll else '.'))
+    return redirect(course)
+
+
+@require('run_auditions')
+@require_POST
+def release(request, pk, booking):
+    """Give back a day booked for the stage that the invited do not need: the room is free again, the commission is told."""
+    course = get_object_or_404(request.user.within(Course.objects.filter(released=None), 'run_auditions'), pk=pk, kind=Course.Kind.AUDITION)
+    day = get_object_or_404(course.bookings, pk=booking)
+    if course.participations.filter(slot__gte=day.start, slot__lt=day.end).exists():
+        messages.error(request, 'An diesem Tag haben schon Bewerbende einen Termin.')
+        return redirect(course)
+    when = f'{date_format(timezone.localtime(day.start), "l, j. F Y")}, {day.room}'
+    day.delete()
+    for person in course.staff.all():
+        Message.send(person, f'Tag entfällt: {course.title}', f'{when} wird nicht gebraucht.', course.get_absolute_url())
+    messages.success(request, f'{when} freigegeben; die Kommission ist benachrichtigt.')
+    return redirect(course)
 
 
 @require('run_auditions')

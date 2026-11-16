@@ -187,6 +187,7 @@ def exam(request, pk):
         'booking': DateForm(sent(request, 'tag'), person=person) if office and not course.released and course.kind == Course.Kind.EXAM else None,
         'modules': credited(course),
         'bookings': course.bookings.select_related('room'),
+        'poll': course.polls.filter(chosen=None).first(),
         'missing': sum(1 for p in rows if panel.due(p)),
         'short': course.panel().shortfall,
         'dropping': office and not course.released and course.kind == Course.Kind.EXAM,

@@ -1,0 +1,31 @@
+{% extends base %}
+{% block title %}Festlegen{% endblock %}
+{% block content %}
+<h1>Festlegen</h1>
+<p class="lead">{{ poll.title }}</p>
+<div class="poll">
+  <table data-fixed>
+    <thead>
+      <tr><th></th>{% for day, times in days %}<th colspan="{{ times|length }}"><span class="day"><small>{{ day|date:"D" }}</small><b>{{ day|date:"j.n." }}</b></span></th>{% endfor %}</tr>
+      <tr><th></th>{% for o in options %}<th class="time">{{ o.start|time:"G" }}–{{ o.end|time:"G" }}</th>{% endfor %}</tr>
+    </thead>
+    <tbody>
+      {% for p in people %}
+      <tr>
+        <th{% if p.optional %} class="muted"{% endif %}>{{ p }}{% if p.optional %} <small>optional</small>{% endif %}</th>
+        {% for c in p.cells %}<td class="cell {{ c.mark.0 }}" title="{% if c.mark %}{{ c.mark.2 }}{% else %}keine Antwort{% endif %}{% if c.blocks %} · eigene Termine in dieser Zeit{% endif %}">{{ c.mark.1 }}{% if c.blocks %}<span class="busy bar">{% for left, width in c.blocks %}<i style="left: {{ left|stringformat:'s' }}%; width: {{ width|stringformat:'s' }}%"></i>{% endfor %}</span>{% endif %}</td>{% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+<form method="post" class="form">
+  {% csrf_token %}
+  {% for o in options %}<input type="hidden" name="zeit" value="{{ o.pk }}">{% endfor %}
+  {{ form }}
+  <div class="actions">
+    <button class="btn">Festlegen und benachrichtigen</button>
+    <a class="btn ghost" data-close href="{{ poll.get_absolute_url }}">Zurück</a>
+  </div>
+</form>
+{% endblock %}

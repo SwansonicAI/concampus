@@ -3,6 +3,7 @@ from urllib.parse import quote
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.urls import reverse
 from django.utils import timezone
 
 from core.models import Institute, Keyed, Person, Tracked
@@ -215,3 +216,68 @@ class Booking(Tracked, models.Model):
     def clean(self):
         if self.room_id and self.start and self.end and self.category_id and self.category.blocks and self.clashes().exists():
             raise ValidationError('Der Raum ist in diesem Zeitraum bereits belegt.')
+
+
+class Poll(Tracked, models.Model):
+    """A time asked of several people: an exam, an audition, a meeting. The time chosen is booked where a room is given;
+    without one, everyone is only told."""
+
+    owner = 'person_id'
+    capabilities = ('manage_bookings',)
+    keep = timedelta(days=730)
+
+    title = models.CharField('Titel', max_length=120)
+    category = models.ForeignKey(BookingCategory, models.PROTECT, to_field='key', related_name='polls', verbose_name='Art')
+    course = models.ForeignKey(Course, models.CASCADE, null=True, blank=True, related_name='polls', verbose_name='Gehört zu')
+    room = models.ForeignKey(Room, models.SET_NULL, null=True, blank=True, related_name='polls', verbose_name='Raum')
+    person = models.ForeignKey(Person, models.CASCADE, related_name='polls', verbose_name='Gefragt von')
+    people = models.ManyToManyField(Person, related_name='asked', verbose_name='Gefragt')
+    optional = models.ManyToManyField(Person, blank=True, related_name='+', verbose_name='Optional', help_text='Wer kommen kann, aber nicht muss.')
+    by = models.DateField('Antwort bis')
+    open = models.BooleanField('Antworten für alle sichtbar', default=True)
+    chosen = models.ForeignKey('Option', models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Gewählt')
+    booking = models.ForeignKey(Booking, models.SET_NULL, null=True, blank=True, related_name='+', verbose_name='Buchung')
+    created = models.DateTimeField('Angelegt', default=timezone.now)
+
+    class Meta:
+        ordering = ['-created']
+        verbose_name = 'Terminumfrage'
+        verbose_name_plural = 'Terminumfragen'
+
+    def __str__(self):
+        return self.title
+
+    def get_absolute_url(self):
+        return reverse('rooms:poll', args=[self.pk])
+
+
+class Option(models.Model):
+    """One time a poll offers."""
+
+    poll = models.ForeignKey(Poll, models.CASCADE, related_name='options', verbose_name='Terminumfrage')
+    start = models.DateTimeField('Beginn')
+    end = models.DateTimeField('Ende')
+
+    class Meta:
+        ordering = ['start']
+        verbose_name = 'Zeit'
+        verbose_name_plural = 'Zeiten'
+        constraints = [models.CheckConstraint(condition=models.Q(end__gt=models.F('start')), name='option_ends_after_start')]
+
+
+class Answer(models.Model):
+    """Whether one person can at one time."""
+
+    class Choice(models.TextChoices):
+        YES = 'yes', 'passt'
+        MOVE = 'move', 'mit Umplanen'
+        NO = 'no', 'geht nicht'
+
+    option = models.ForeignKey(Option, models.CASCADE, related_name='answers', verbose_name='Zeit')
+    person = models.ForeignKey(Person, models.CASCADE, related_name='+', verbose_name='Person')
+    choice = models.CharField('Antwort', max_length=4, choices=Choice)
+
+    class Meta:
+        verbose_name = 'Antwort'
+        verbose_name_plural = 'Antworten'
+        constraints = [models.UniqueConstraint(fields=['option', 'person'], name='unique_answer')]

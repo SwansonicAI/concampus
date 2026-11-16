@@ -17,8 +17,9 @@ from core.models import Term
 from core.text import collated, fold, words
 from courses.models import Course, Participation
 from courses.views.rollover import copy_auditions
+from rooms.models import Poll
 from students.models import Document, Study
-from ..auditions import chains, days
+from ..auditions import booked, chains, days, need
 
 URGENT = {'no': 3, 'open': 2, 'wait': 1}  # how urgent a step is, by what its badge says
 
@@ -39,14 +40,18 @@ def staged(person, term):
         rows[r['course']].append(r)
     entered = {(c, r['study']) for c, found in rows.items() for r in found}
     handed = set(Document.objects.filter(study__in={s for _, s in entered}, kind__jury=True, kind__shared=False).values_list('study', flat=True))
+    polls = {p.course_id: p for p in Poll.objects.filter(course__in=courses, chosen=None).annotate(answered=Count('options__answers__person', distinct=True), size=Count('people', distinct=True))}
     for c in courses:
+        c.poll = polls.get(c.pk)
+        c.lacking = (plan.hours - booked(c)) if not (c.video or c.released) and c.date and (plan := need(c)) else 0  # booked days too short
         c.size, c.step, c.days = len(rows[c.pk]), next_step(c, rows[c.pk], handed, entered, today), days(c.date, c.until)
     return grouped, shared
 
 
 def next_step(c, rows, handed, entered, today):
-    """What a stage needs next, as (badge, words), or None while nothing is due: a commission to complete, dates to
-    give, results to enter, the stage to close, those who passed to invite."""
+    """What a stage needs next, as (badge, words), or None while nothing is due: a commission to complete, its day to
+    find (`poll`, a Terminumfrage running), dates to give, results to enter, the stage to close, those who passed to
+    invite."""
     applied = Study.Status.APPLIED
     if c.released:
         n = sum(1 for r in rows if r['passed'] and r['study__status'] == applied and not any((f, r['study']) in entered for f in c.next_pks))
@@ -55,11 +60,15 @@ def next_step(c, rows, handed, entered, today):
         return 'no', 'Kommission zu klein'
     if c.vacant:
         return 'no', 'Ersatz bestellen'
+    if not c.video and not c.date:  # the day comes first, before anyone applies
+        if c.poll and (c.poll.answered >= c.poll.size or c.poll.by < today):
+            return 'open', 'Termin wählen'
+        return ('wait', 'Antworten abwarten') if c.poll else ('open', 'Tag festlegen')
+    if c.lacking > 0:
+        return ('wait', 'Antworten abwarten') if c.poll else ('open', 'Tag hinzufügen')
     if not rows or c.deadline and c.deadline >= today:  # nobody yet, or applications still coming in
         return None
     if not c.video:
-        if not c.date:
-            return 'open', 'Termine vergeben'
         if n := sum(1 for r in rows if r['slot'] is None and r['passed'] is None and r['study__status'] == applied):
             return 'open', f'{n} ohne Termin'
         if c.date > timezone.now():
@@ -81,6 +90,7 @@ def lane(own, shared=False):
         'name': name, 'first': first, 'program': first.program, 'shared': shared, 'size': first.size, 'capacity': first.capacity,
         'now': now, 'at': own.index(now) + 1 if now else 0, 'count': len(own),
         'days': days(min(s.date for s in held), max(s.until for s in held)) if held else '',
+        'poll': next((s.poll for s in own if s.poll), None),  # a day still being found
         'step': due and due.step, 'due': due, 'urgency': URGENT[due.step[0]] if due else 0, 'done': now is None and not due,
         'text': fold(' '.join([name, str(first.program or ''), *(s.title for s in own)])),
     }

@@ -1,0 +1,25 @@
+{% extends base %}
+{% block title %}Terminumfragen{% endblock %}
+{% block subnav %}{% include "rooms/_nav.html" %}{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Terminumfragen</h1>
+  {% if may_ask %}<div class="actions"><a class="btn" href="{% url 'rooms:new_poll' %}">Neue Terminumfrage</a></div>{% endif %}
+</div>
+<table>
+  <thead><tr><th>Titel</th><th>Von</th><th class="num">Zeiten</th><th class="num">Geantwortet</th><th>Antwort bis</th><th>Stand</th></tr></thead>
+  <tbody>
+    {% for p in polls %}
+    <tr>
+      <td><a href="{{ p.get_absolute_url }}"><b>{{ p.title }}</b></a></td>
+      <td>{% if p.person == user %}<span class="muted">Ihnen</span>{% else %}{{ p.person }}{% endif %}</td>
+      <td class="num">{{ p.times }}</td>
+      <td class="num">{{ p.answered }}/{{ p.size }}</td>
+      <td data-value="{{ p.by|date:'c' }}">{{ p.by|date:"j.n.Y" }}</td>
+      <td>{% if p.chosen %}<span class="badge yes">{{ p.chosen.start|date:"D j.n., H:i" }}</span>{% elif p.person == user %}<span class="badge {% if p.answered == p.size or p.by < today %}open{% else %}wait{% endif %}">{% if p.answered == p.size or p.by < today %}Termin wählen{% else %}Antworten abwarten{% endif %}</span>{% elif p.mine < p.times %}<span class="badge open">Antworten</span>{% else %}<span class="muted">beantwortet</span>{% endif %}</td>
+    </tr>
+    {% empty %}<tr><td colspan="6" class="empty">Keine Terminumfragen.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

@@ -50,7 +50,7 @@ def home(request):
     marked = busy(agenda(person), monday, 28)
     titles = dict(tiles(person))
     tasks = sorted(  # from every app, also one without a tile for the person, such as their own loan or stay abroad
-        ({**t, 'app': titles.get(app, app.verbose_name)} for app in tile_apps() for t in app.tasks(person)),
+        ({'app': titles.get(app, app.verbose_name), **t} for app in tile_apps() for t in app.tasks(person)),  # a task may name its place itself
         key=lambda t: (t['due'] is None, t['due'] or today),
     )
     return render(request, 'core/home.html', {

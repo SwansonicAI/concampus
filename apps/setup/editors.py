@@ -404,7 +404,7 @@ EDITORS = {e.key: e for e in [
                 ('oral_results_days', 'written_results_weeks', 'review_weeks'), ('certificate_weeks', 'certificate_overdue_days'), 'protocol_first',
             ]),
             ('Räume', [('opens', 'closes', 'walk_minutes')]),
-            ('Raumbuchung', [('student_daily_hours', 'student_ahead_hours'), ('last_minute_hours', 'teacher_ahead_days')]),
+            ('Raumbuchung', [('student_daily_hours', 'student_ahead_hours'), ('last_minute_hours', 'teacher_ahead_days'), 'polls']),
             ('Barrierefreiheit', ['feedback_days']),
             ('Deputat', [('load_since', 'load_years'), ('load_floor', 'lesson_minutes'), 'assignment_max']),
             ('Studienpläne', ['credit_hours', 'public']),

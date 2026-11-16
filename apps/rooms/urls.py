@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import polls, views
 
 app_name = 'rooms'
 urlpatterns = [
@@ -20,4 +20,12 @@ urlpatterns = [
     path('buchung/<int:pk>/abmelden/', views.absent, name='absent'),
     path('anfragen/', views.requests, name='requests'),
     path('anfragen/<int:pk>/', views.answer, name='answer'),
+    path('terminumfragen/', polls.index, name='polls'),
+    path('terminumfragen/neu/', polls.new, name='new_poll'),
+    path('terminumfragen/<int:pk>/', polls.detail, name='poll'),
+    path('terminumfragen/<int:pk>/waehlen/', polls.choose, name='choose'),
+    path('terminumfragen/<int:pk>/zeit/', polls.add, name='add_option'),
+    path('terminumfragen/<int:pk>/erinnern/', polls.remind, name='remind'),
+    path('terminumfragen/<int:pk>/optional/<int:person>/', polls.optional, name='optional'),
+    path('terminumfragen/<int:pk>/loeschen/', polls.delete, name='delete_poll'),
 ]
