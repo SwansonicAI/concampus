@@ -11,10 +11,7 @@
 </div>
 <p class="lead">{{ count }} Einträge{% if q %} passen zu „{{ q }}“{% endif %}</p>
 <form class="toolbar">
-  <div class="inline">
-    {% if editor.period %}<label>Studienbeginn<select name="semester" data-submit><option value=""{% if not term %} selected{% endif %}>Alle</option>{% for t in terms %}<option value="{{ t.pk }}"{% if t == term %} selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>{% endif %}
-    <label>Suche<input type="search" name="q" value="{{ q }}"></label>
-  </div>
+  <div class="inline"><label>Suche<input type="search" name="q" value="{{ q }}"></label></div>
 </form>
 <table data-panel{% if editor.ordered %} data-fixed{% endif %}>
   <thead><tr>{% for heading, _ in editor.columns %}<th>{{ heading }}</th>{% endfor %}{% if editor.ordered and not q %}<th class="num" title="So in den Listen und für Bewerbende">Reihenfolge</th>{% endif %}</tr></thead>

@@ -192,13 +192,12 @@ def entrance(request, pk):
 @require_POST
 def upload(request, pk):
     """Hand in a document or a video for an application, until its deadline; the office running auditions at any time."""
-    study = get_object_or_404(Study.objects.select_related('person', 'start_term'), pk=pk, status__in=[Study.Status.APPLIED, Study.Status.ADMITTED])
+    study = get_object_or_404(Study.objects.select_related('person'), pk=pk, status__in=[Study.Status.APPLIED, Study.Status.ADMITTED])
     office = request.user.may('run_auditions', study)
     if not (office or study.person == request.user):
         raise PermissionDenied
     back = redirect('admissions:mine' if study.person == request.user else study.get_absolute_url())
-    kind = DocumentType.objects.exclude(condition=Condition.NEVER).select_related('since', 'until').filter(key=request.POST.get('kind')).first()
-    kind = kind if kind and kind.applies(study.start_term) else None  # only what is asked of those starting then
+    kind = DocumentType.objects.exclude(condition=Condition.NEVER).filter(key=request.POST.get('kind'), retired=False).first()
     file = request.FILES.get('file')
     if not (office or uploads_open(study) or any(item['kind'] == kind for item in owed(checklist(study)))):
         messages.error(request, 'Die Frist für Unterlagen ist abgelaufen.')

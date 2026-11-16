@@ -22,7 +22,7 @@ def stages():
 
 def document_types():
     """The kinds of documents an application can ask for, each with its Hauptfächer; fetch once for many studies."""
-    return once('document_types', lambda: list(DocumentType.objects.exclude(condition=Condition.NEVER).select_related('since', 'until').prefetch_related('subjects')))
+    return once('document_types', lambda: list(DocumentType.objects.exclude(condition=Condition.NEVER).exclude(retired=True).prefetch_related('subjects')))
 
 
 def kinds():
@@ -33,29 +33,26 @@ def kinds():
 def papers(studies):
     """The studies with what Study.missing() and checklist() read, fetched at once for many: loans still out, documents,
     the person's other studies, the registrations, the audition stages."""
-    return studies.select_related('person', 'program', 'start_term').prefetch_related(
+    return studies.select_related('person', 'program').prefetch_related(
         Prefetch('person__loans', Loan.objects.filter(returned=None).select_related('instrument')), 'person__documents', 'person__studies', 'terms',
         Prefetch('participations', stages(), to_attr='stages'),
     )
 
 
 def checklist(study, types=None):
-    """What a complete application holds, as the document types that applied to its Studienbeginn say: [{kind, label,
-    note, required, documents}]; after them, what was handed in under a type no longer asked (`old`), still to read;
-    under an earlier type of the same name, it counts for the one asked now.
-    What holds for all of a person's applications, like a CV, counts once handed in with any of them. Reads
-    `study.person.documents.all()` and `study.person.studies.all()`; prefetch them for many studies."""
+    """What a complete application holds, as the document types say: [{kind, label, note, required, documents}]; after
+    them, what was handed in under a type no longer asked (`old`), still to read. What holds for all of a person's
+    applications, like a CV, counts once handed in with any of them. Reads `study.person.documents.all()` and
+    `study.person.studies.all()`; prefetch them for many studies."""
     person, handed, borrowed, today = study.person, defaultdict(list), defaultdict(list), timezone.localdate()
     same = {s.pk for s in person.studies.all() if s.subject_id == study.subject_id and s.pk != study.pk}  # the same Hauptfach elsewhere
-    types, every = [t for t in (document_types() if types is None else types) if t.applies(study.start_term)], kinds()
+    types = document_types() if types is None else types
     shared = {t.key for t in types if t.shared}
-    successor = {k.key: t.key for t in types for k in every.values() if k.name == t.name}  # an earlier type of the same name counts for it
     for d in person.documents.all():
-        key = successor.get(d.kind_id, d.kind_id)
         if d.study_id == study.pk:
-            handed[key].append(d)
-        elif d.study_id and key in shared:
-            borrowed[key].append(d)
+            handed[d.kind_id].append(d)
+        elif d.study_id and d.kind_id in shared:
+            borrowed[d.kind_id].append(d)
     steps = getattr(study, 'stages', None)
     online = any(p.course.video for p in steps) if steps is not None else Participation.objects.filter(study=study, course__video=True).exists()
     mappe = any(t.condition == Condition.SUBJECTS and t.jury and study.subject_id in {s.pk for s in t.subjects.all()} for t in types)
@@ -75,7 +72,7 @@ def checklist(study, types=None):
         }
         for t in types if applies.get(t.condition) or t.condition == Condition.SUBJECTS and study.subject_id in {s.pk for s in t.subjects.all()}
     ]
-    asked = {item['kind'].key for item in items}
+    asked, every = {item['kind'].key for item in items}, kinds()
     return items + [  # handed in, but no longer asked: kept to read, never to hand in again
         {'kind': every[key], 'label': every[key].name, 'note': '', 'required': False, 'documents': documents, 'enrolment': False, 'reusable': [], 'old': True}
         for key, documents in handed.items() if key not in asked and key in every and key not in DocumentType.SYSTEM
