@@ -2176,9 +2176,10 @@ class Command(BaseCommand):
     def assessors(self):
         """Oral and practical exams marked as such; with one examiner, a colleague of their Institut sits in. The demo
         student's Musikgeschichte exam still lacks one, for the office to find."""
-        oral = Course.objects.filter(kind=Course.Kind.EXAM).filter(
-            models.Q(title__contains='Mündliche') | models.Q(title__contains='Künstlerisch-praktische') | models.Q(title__contains='Lehrprobe') | models.Q(title__contains='Rezital')
-        )
+        played = models.Q()  # what is said, played, conducted or shown, by its title
+        for word in ('Mündliche', 'Künstlerisch-praktische', 'Praktische', 'Präsentation', 'Konzert', 'Vortrag', 'improvisation', 'Chorleitung', 'Literaturspiel', 'Lehrprobe', 'Rezital'):
+            played |= models.Q(title__contains=word)
+        oral = Course.objects.filter(played, kind=Course.Kind.EXAM)
         oral.update(oral=True)
         alone = oral.annotate(n=models.Count('staff')).filter(n=1).exclude(term=self.current, title__startswith='Musikgeschichte').prefetch_related('staff')
         colleagues = defaultdict(list)

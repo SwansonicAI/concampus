@@ -23,7 +23,7 @@
 
 {% elif view == 'entscheiden' %}
 <h1>Zu entscheiden</h1>
-<p class="lead">{{ term }}{% if chosen %} · {{ chosen }}{% endif %}. Wer eine Prüfungsstufe nicht bestanden hat, wird abgelehnt; wer bestanden hat, erhält nach der Rangliste einen freien Studienplatz, sonst einen Platz auf der Nachrückliste, sobald im selben Hauptfach alle Ergebnisse vorliegen.</p>
+<p class="lead">{{ term }}{% if chosen %} · {{ chosen }}{% endif %}. Wer eine Prüfungsstufe nicht bestanden hat, wird abgelehnt; wer bestanden hat, erhält nach der Rangliste einen freien Studienplatz, sonst einen Platz auf der Nachrückliste, sobald im selben Hauptfach alle Ergebnisse vorliegen. Ohne Eignungsprüfung entscheiden die Unterlagen: dafür unten eine Entscheidung wählen.</p>
 <form method="post" action="{% url 'admissions:decide_many' %}">
   {% csrf_token %}<input type="hidden" name="semester" value="{{ term.pk }}">
   <table>
@@ -35,7 +35,7 @@
         <td class="mid"><a href="{% url 'admissions:application' s.pk %}">{{ s.person.name }}</a></td>
         <td class="mid">{{ s.program.title }} · {{ s.subject }}</td>
         <td class="mid"><span class="chips">{% include "admissions/_stages.html" %}</span></td>
-        <td class="mid">{{ s.verb|default:"wartet auf die übrigen Ergebnisse" }}</td>
+        <td class="mid">{% if s.on_papers %}<span title="Keine Eignungsprüfung: nach den Unterlagen entscheiden">nach Unterlagen</span>{% else %}{{ s.verb|default:"wartet auf die übrigen Ergebnisse" }}{% endif %}</td>
       </tr>
       {% empty %}<tr><td colspan="5" class="empty">Nichts zu entscheiden.</td></tr>
       {% endfor %}

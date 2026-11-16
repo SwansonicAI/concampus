@@ -117,7 +117,7 @@ class AdmissionsConfig(Tile, AppConfig):
         if 'decide_applications' in person.roles:  # as the page counts them: with advice, not waiting on others in the intake
             applied = person.within(Study.objects.filter(status=Study.Status.APPLIED), 'decide_applications').values('start_term')
             for term in Term.objects.filter(pk__in=applied).order_by('start'):
-                if n := sum(1 for s in recommendations(term, person) if s.advice):
+                if n := sum(1 for s in recommendations(term, person) if s.advice or s.on_papers):
                     found.append(task(f'{plural(n, "Bewerbung", "Bewerbungen")} zum {term} entscheiden', f"{reverse('admissions:board')}?semester={term.pk}&ansicht=entscheiden"))
             for term in filter(None, [Term.current(), Term.upcoming()]):
                 if moves := vacancies(term, person):

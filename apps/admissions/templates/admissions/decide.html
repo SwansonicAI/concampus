@@ -12,6 +12,7 @@
 </section>
 {% endfor %}
 {% if waiting %}<p class="muted">Ohne Bescheid, weil die übrigen Ergebnisse im Hauptfach fehlen: {% for s in waiting %}{{ s.person.name }}{% if not forloop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+{% if on_papers %}<p class="muted">Ohne Bescheid, weil ohne Eignungsprüfung nichts zu empfehlen ist; dafür eine Entscheidung wählen: {% for s in on_papers %}{{ s.person.name }}{% if not forloop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
 <form method="post" action="{% url 'admissions:decide_many' %}" class="actions" style="margin-top: 24px">
   {% csrf_token %}
   <input type="hidden" name="semester" value="{{ term.pk }}"><input type="hidden" name="status" value="{{ chosen }}"><input type="hidden" name="bestaetigt" value="1">

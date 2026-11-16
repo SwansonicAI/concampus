@@ -76,7 +76,8 @@ def verdict(steps):
 def recommendations(term, person):
     """The applications of the term the person decides that their results settle, each with `advice`: a failed stage
     means rejection; who passed gets a free place in the order of the ranking, the others the Nachrückliste, once
-    everyone in the intake has all results."""
+    everyone in the intake has all results. Where the Hochschule holds no Eignungsprüfung for it, as for a Konzertexamen
+    or a Promotion, an application is decided on its documents: listed `on_papers`, without advice."""
     days = Institution.get().accept_days
     studies = ranked(
         person.within(Study.objects.filter(start_term=term, status__in=[Study.Status.APPLIED, Study.Status.ADMITTED, Study.Status.ENROLLED]), 'decide_applications')
@@ -89,8 +90,10 @@ def recommendations(term, person):
         if s.status != Study.Status.APPLIED:
             taken[key] += not lapsed(s, days)
             continue
-        s.advice = verdict(s.stages)
-        if s.advice == Study.Status.REJECTED:
+        s.advice, s.on_papers = verdict(s.stages), not s.stages and key not in places
+        if s.on_papers:
+            found.append(s)
+        elif s.advice == Study.Status.REJECTED:
             found.append(s)
         elif s.advice:
             passed[key].append(s)  # in the order of the ranking
@@ -304,7 +307,8 @@ def decide_many(request):
     chosen = request.POST.get('status', '')
     if chosen and chosen not in DECISIONS:
         raise PermissionDenied
-    advice = {s.pk: s.advice for s in recommendations(term, request.user)}
+    advised = recommendations(term, request.user)
+    advice, on_papers = {s.pk: s.advice for s in advised}, {s.pk for s in advised if s.on_papers}
     ticked = set(ids(request.POST.getlist('study')))
     studies = request.user.within(Study.objects.filter(pk__in=ticked & advice.keys()), 'decide_applications').select_related('person', 'program', 'subject', 'start_term')
     if not request.POST.get('bestaetigt'):
@@ -317,19 +321,22 @@ def decide_many(request):
                 (VERBS[status], BESCHEIDE[status], group, group[0].wording(DECISIONS[status], frist=f'{accept_by(group[0], days):%d.%m.%Y}', begruendung=grounds(group[0])))
                 for status, group in plan.items() if status
             ],
-            'waiting': plan.get(None, []),
+            'waiting': [s for s in plan.get(None, []) if s.pk not in on_papers], 'on_papers': [s for s in plan.get(None, []) if s.pk in on_papers],
         })
-    decided, skipped = Counter(), 0
+    decided, skipped, unchosen = Counter(), 0, 0
     for study in studies:
         if status := chosen or advice[study.pk]:
             offer(study, status)
             decided[status] += 1
+        elif study.pk in on_papers:
+            unchosen += 1
         else:
             skipped += 1
     counts = [plural(decided[s], *forms) for s, forms in BESCHEIDE.items() if decided[s]]
     messages.success(request, ' '.join(filter(None, [
         f'Bescheide versandt: {", ".join(counts)}.' if counts else 'Nichts entschieden.',
         skipped and f'{plural(skipped, "Bewerbung wartet", "Bewerbungen warten")} noch auf die Ergebnisse der anderen im selben Hauptfach.',
+        unchosen and f'{plural(unchosen, "Bewerbung", "Bewerbungen")} ohne Eignungsprüfung: bitte eine Entscheidung wählen.',
     ])))
     return redirect(f"{reverse('admissions:board')}?semester={term.pk}&ansicht=entscheiden")
 
