@@ -20,7 +20,9 @@
   const COLOURS = {accent: ['Akzent', data.accent], ink: ['Schwarz', '#000000'], muted: ['Grau', '#5f5f5f'], line: ['Hellgrau', '#d6d6d6'], white: ['Weiß', '#ffffff']};
   const NAMES = {body: 'Textbereich', text: 'Text', wordmark: 'Schriftzug', picture: 'Bild', box: 'Fläche', address: 'Anschriftfeld', info: 'Infoblock'};
   const PAGES = {first: 'erste Seite', later: 'Folgeseiten', all: 'alle Seiten'};
-  const FACES = {regular: 'Normal', bold: 'Fett', italic: 'Kursiv', bolditalic: 'Fett kursiv'};
+  const WEIGHTS = {100: 'Dünn', 200: 'Extraleicht', 300: 'Leicht', 400: 'Normal', 500: 'Mittel', 600: 'Halbfett', 700: 'Fett', 800: 'Extrafett', 900: 'Schwarz'};  // core/paper.py WEIGHTS
+  const faceName = f => `${WEIGHTS[f.w] || f.w}${f.i ? ' kursiv' : ''}`;
+  const weightOf = el => el.weight || (el.bold ? 700 : 400);
   const ALIGN = [['left', 'Links'], ['center', 'Mitte'], ['right', 'Rechts']];
   const ADDRESS = ['Erika Mustermann', 'Musterstraße 1', '12345 Musterstadt'];
   const GRIPS = ['nw', 'ne', 'sw', 'se'].map(c => `<i class="paper-grip" data-corner="${c}"></i>`).join('');
@@ -55,8 +57,23 @@
     redos = [];
     typed = field;
     was = now;
-    saveForm.dataset.dirty = '1';  // leaving asks first (app.js)
+    saveShown();
   }
+  // The save button says whether anything differs from what is saved: quiet „Gespeichert“, or green „Speichern“; leaving
+  // with something unsaved asks first (app.js, the form's dirty mark). Taken back to what was saved, nothing is.
+  const saveButton = saveForm.querySelector('.paper-save'), saved = data.unsaved ? null : was;
+  function saveShown() {
+    const dirty = was !== saved;
+    if (dirty) saveForm.dataset.dirty = '1';
+    else delete saveForm.dataset.dirty;
+    saveButton.disabled = !dirty;
+    saveButton.textContent = dirty ? 'Speichern' : 'Gespeichert';
+  }
+  document.addEventListener('keydown', e => {  // Ctrl+S saves, in a field too, not the browser's „Seite speichern“
+    if (!((e.ctrlKey || e.metaKey) && (e.key || '').toLowerCase() === 's')) return;
+    e.preventDefault();
+    if ('dirty' in saveForm.dataset) saveForm.requestSubmit(saveButton);
+  });
   function restore(from, to) {
     if (!from.length) return;
     to.push(was);
@@ -64,37 +81,130 @@
     [design, name] = JSON.parse(was);
     typed = null;
     if (picked && !byId(picked)) picked = null;
-    saveForm.dataset.dirty = '1';
+    saveShown();
     draw();
     inspect();
   }
 
-  // ---- placeholders, as core/paper.py filled() fills them
+  // ---- placeholders, as core/paper.py filled() fills them. On the page each value is marked by where it comes from
+  // (mark): the Hochschule's own, as it will print; or a document's, an example. Markers round each value survive
+  // escaping and capitals, and become its mark.
+  const FIELDS = Object.fromEntries(data.fields.map((f, n) => [f.key, {...f, n}]));
   function filled(text, values) {
     const out = [];
     for (const line of String(text).split('\n')) {
       const names = [...line.matchAll(/\{(\w+)\}/g)].map(m => m[1]);
       if (names.length && !names.some(n => values[n])) continue;
-      out.push(...line.replace(/\{(\w+)\}/g, (m, n) => n in values ? values[n] : m).split('\n'));
+      out.push(...line.replace(/\{(\w+)\}/g, (m, n) => n in values ? `${FIELDS[n]?.n ?? ''}${values[n]}` : m).split('\n'));
     }
     return out;
   }
-  const markup = (words, caps) => esc(caps ? words.toUpperCase() : words).replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>');  // bold may span lines
+  const mark = (f, words) => `<span class="paper-var${f?.example ? ' example' : ''}" title="${esc(f ? `${f.group}: ${f.label}${f.example ? ', hier ein Beispiel' : ''}` : '')}">${words}</span>`;
+  const markup = (words, caps) => esc(caps ? words.toUpperCase() : words)
+    .replace(/\*\*(.+?)\*\*/gs, '<b>$1</b>')  // bold may span lines
+    .replace(/(\d*)([^]*)/g, (_, n, value) => mark(data.fields[n], value));
+  const example = (words, about) => `<span class="paper-var example" title="${esc(about)}, hier ein Beispiel">${esc(words)}</span>`;
   const smallCaps = line => [...line].map(ch => ch !== ch.toUpperCase() ? `<span>${esc(ch.toUpperCase())}</span>` : esc(ch)).join('');
 
-  // ---- the page's size: the whole page, the desk's width, real size or twice it
+  // ---- the page's size: the whole page, the desk's width, or a share of real size ('100' is real size). The wheel
+  // scrolls, as everywhere; with Ctrl (a trackpad's pinch sends it too) it zooms, the point under the pointer staying put.
   function measure() {
     const room = [desk.clientWidth - RULER - 2 * GUTTER, desk.clientHeight - RULER - 2 * GUTTER];
-    return {page: Math.min(room[0] / W, room[1] / H), width: room[0] / W, 100: REAL, 200: 2 * REAL}[zoom] || room[0] / W;
+    return zoom === 'page' ? Math.min(room[0] / W, room[1] / H) : zoom === 'width' ? room[0] / W : clamp(+zoom || 100, 25, 400) / 100 * REAL;
   }
-  root.querySelector('.paper-zoom').addEventListener('click', e => {
-    const z = e.target.closest('[data-zoom]')?.dataset.zoom;
-    if (!z) return;
-    zoom = z;
-    localStorage.setItem('paper-zoom', z);
+  function zoomTo(z, x, y) {  // keeping the page's point at screen point x, y where it is, else the middle of the desk
+    const d = desk.getBoundingClientRect(), r = sheet.getBoundingClientRect();
+    [x, y] = [x ?? d.left + d.width / 2, y ?? d.top + d.height / 2];
+    const at = [(x - r.left) / k, (y - r.top) / k];
+    zoom = String(z);
+    localStorage.setItem('paper-zoom', zoom);
     draw();
+    const now = sheet.getBoundingClientRect();
+    desk.scrollLeft += now.left + at[0] * k - x;
+    desk.scrollTop += now.top + at[1] * k - y;
+  }
+  // The control: − and + step through STEPS, the menu fits the page or picks a step, and names a size reached otherwise.
+  const STEPS = [25, 50, 75, 100, 125, 150, 200, 300, 400], picker = root.querySelector('.paper-zoom select');
+  function zoomShown() {
+    const now = Math.round(k / REAL * 100), fit = zoom === 'page' || zoom === 'width';
+    picker.innerHTML = `<option value="page">Ganze Seite</option><option value="width">Seitenbreite</option>` +
+      [...new Set([...STEPS, now])].sort((a, b) => a - b).map(p => `<option value="${p}">${p} %</option>`).join('');
+    picker.value = fit ? zoom : String(now);
+    if (fit) picker.options[picker.selectedIndex].textContent = `${now} %`;  // a fit says how large it came out
+  }
+  picker.addEventListener('change', () => zoomTo(picker.value));
+  root.querySelector('.paper-zoom').addEventListener('click', e => {
+    const step = +e.target.closest('[data-step]')?.dataset.step;
+    if (!step) return;
+    const now = k / REAL * 100;
+    zoomTo(step > 0 ? STEPS.find(p => p > now + 1) ?? 400 : [...STEPS].reverse().find(p => p < now - 1) ?? 25);
   });
+  let wheeling = 0, wheel = 0, wheelAt = null;
+  desk.addEventListener('wheel', e => {
+    if (!(e.ctrlKey || e.metaKey) || variant === 'pdf') return;
+    e.preventDefault();  // not the browser's own zoom
+    wheel += e.deltaY;
+    wheelAt = [e.clientX, e.clientY];
+    wheeling ||= requestAnimationFrame(() => {
+      wheeling = 0;
+      zoomTo(clamp(k / REAL * 100 * Math.exp(-wheel * 0.002), 25, 400), ...wheelAt);
+      wheel = 0;
+    });
+  }, {passive: false});
   new ResizeObserver(() => variant !== 'pdf' && Math.abs(measure() - k) > 0.001 && draw()).observe(desk);
+
+  // ---- moving round the page: drag the grey, or anywhere with the Space bar held or the middle button
+  let space = false;
+  const quiet = target => target.closest?.('input, textarea, select, button, a, [contenteditable]');
+  document.addEventListener('keydown', e => {
+    if (e.code !== 'Space' || quiet(e.target) || variant === 'pdf') return;
+    e.preventDefault();  // not the page scrolling
+    space = true;
+    desk.classList.add('paper-hand');
+  });
+  document.addEventListener('keyup', e => {
+    if (e.code !== 'Space') return;
+    space = false;
+    desk.classList.remove('paper-hand');
+  });
+  desk.addEventListener('mousedown', e => { if (e.button === 1) e.preventDefault(); });  // not the browser's autoscroll
+  desk.addEventListener('pointerdown', e => {
+    const d = desk.getBoundingClientRect(), bar = e.clientX - d.left >= desk.clientWidth || e.clientY - d.top >= desk.clientHeight;  // its scrollbars stay its own
+    const grey = e.button === 0 && !e.target.closest('.paper-sheet, .paper-ruler, .paper-corner');
+    if (bar || !(grey || space || e.button === 1) || variant === 'pdf') return;
+    e.preventDefault();
+    e.stopPropagation();  // nothing on the page is picked or moved
+    const from = [e.clientX, e.clientY, desk.scrollLeft, desk.scrollTop];
+    desk.setPointerCapture(e.pointerId);
+    desk.classList.add('paper-panning');
+    const move = ev => {
+      desk.scrollLeft = from[2] - (ev.clientX - from[0]);
+      desk.scrollTop = from[3] - (ev.clientY - from[1]);
+    };
+    const up = () => {
+      desk.removeEventListener('pointermove', move);
+      desk.removeEventListener('pointerup', up);
+      desk.removeEventListener('pointercancel', up);
+      desk.classList.remove('paper-panning');
+    };
+    desk.addEventListener('pointermove', move);
+    desk.addEventListener('pointerup', up);
+    desk.addEventListener('pointercancel', up);
+  }, true);
+
+  // ---- the whole window for the workspace, the preview with it, over the page's head; the same button or Esc ends it
+  // (the browser's own full screen, F11, takes away its tabs as well)
+  const full = root.querySelector('.paper-full');
+  const ENTER = 'M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4', LEAVE = 'M6 2v4H2M10 2v4h4M10 14v-4h4M6 14v-4H2';
+  function fullShown(on) {
+    root.classList.toggle('full', on);
+    full.innerHTML = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${on ? LEAVE : ENTER}"/></svg>${on ? '<span>Vollbild beenden</span>' : ''}`;
+    full.title = on ? 'Vollbild beenden (Esc)' : 'Vollbild: nur die Seite und die Leiste';
+    full.setAttribute('aria-label', on ? 'Vollbild beenden' : 'Vollbild');
+    full.classList.toggle('on', on);
+  }
+  full.addEventListener('click', () => fullShown(!root.classList.contains('full')));
+  fullShown(false);
 
   // ---- rulers: mm from the page's corner, ticks as dense as they stay apart; what is picked marked on them
   function ruler(canvas, length, across) {
@@ -149,6 +259,7 @@
     root.querySelectorAll('[data-add]').forEach(b => { b.disabled = pdf || (b.dataset.add === 'address' || b.dataset.add === 'info') && design.elements.some(el => el.type === b.dataset.add); });
     if (pdf) return;
     k = measure();
+    zoomShown();
     Object.assign(sheet.style, {width: `${W * k}px`, height: `${H * k}px`});
     const first = variant === 'first';
     const guides = (first && data.letters ? `<div class="paper-window" style="${place({x: 20, y: 45, w: 85, h: 45})}"><small>Fenster DIN 5008</small></div>` : '') +
@@ -165,7 +276,7 @@
       const lines = filled(el.text, data.values);
       inner = `<div class="paper-lines">${!lines.some(l => l.trim()) ? `<span class="paper-raw">${esc(el.text)}</span>` : markup(lines.join('\n'), el.caps)}</div>`;
       css += `;font-family:${family(font)};font-size:${px(el.size)}px;line-height:${el.leading || LEADING};color:${colour(el.colour)};text-align:${el.align || 'left'};` +
-        `font-weight:${el.bold ? 700 : 400};font-style:${el.italic ? 'italic' : 'normal'};text-decoration:${el.underline ? 'underline' : 'none'}`;
+        `font-weight:${weightOf(el)};font-style:${el.italic ? 'italic' : 'normal'};text-decoration:${el.underline ? 'underline' : 'none'}`;
     } else if (el.type === 'wordmark') {
       if (data.logo) inner = `<img src="${esc(data.logo)}" alt="" style="object-position:${{center: 'center', right: 'right'}[el.align] || 'left'} top">`;
       else inner = data.wordmark.map((line, n) => n ? `<div class="paper-caps" style="color:${data.accent}">${smallCaps(line)}</div>` : `<div>${esc(line)}</div>`).join('');
@@ -177,11 +288,12 @@
       css += el.fill ? `;background:${colour(el.colour)}` : `;border:${Math.max(S * 0.15, px(el.line))}px solid ${colour(el.colour)}`;
       if (!el.fill) inner = '<i class="paper-edge n"></i><i class="paper-edge e"></i><i class="paper-edge s"></i><i class="paper-edge w"></i>';  // a frame is grabbed by its edges
     } else if (el.type === 'address') {
-      inner = ADDRESS.map(l => `<div>${esc(l)}</div>`).join('');
+      inner = ADDRESS.map(l => `<div>${example(l, 'Name und Anschrift der Empfänger:in, aus ihrem Konto')}</div>`).join('');
       css += `;font-family:${family(st.font)};font-size:${px(el.size)}px;line-height:1.3`;
     } else if (el.type === 'info') {
       const v = data.values;
-      inner = `<div><b>${esc(v.amt)}</b></div><dl><dt>Aktenzeichen</dt><dd>${esc(v.aktenzeichen)}</dd><dt>Datum</dt><dd>${esc(v.datum)}</dd></dl>`;
+      inner = `<div><b>${example(v.dokument_amt, 'Das Amt, das den Brief schickt')}</b></div><dl><dt>Aktenzeichen</dt><dd>${example(v.dokument_aktenzeichen, 'Das Aktenzeichen eines Bescheids')}</dd>` +
+        `<dt>Datum</dt><dd>${example(v.dokument_datum, 'Der Tag, an dem er ausgestellt ist')}</dd></dl>`;
       css += `;font-family:${family(st.font)};font-size:${px(el.size)}px`;
     } else if (el.type === 'body') {
       const title = variant === 'first' ? `${st.bar ? `<i class="paper-bar" style="background:${data.accent}"></i>` : ''}<div class="paper-title" style="font-family:${family(st.heading)};font-size:${px(st.title)}px">Titel des Dokuments</div>` : '';
@@ -193,6 +305,7 @@
   }
 
   function pick(id) {
+    if (id !== picked) panel.scrollTop = 0;  // what is picked anew shows from its top
     picked = id;
     sheet.querySelectorAll('.paper-el').forEach(node => {
       const on = node.dataset.id === id;
@@ -303,15 +416,16 @@
 
   // ---- keys: anywhere on the page but in a field
   document.addEventListener('keydown', e => {
-    if (typing() || e.target.closest?.('.drawer, dialog') || variant === 'pdf') return;
+    if (typing() || e.target.closest?.('.drawer, dialog')) return;
     const key = (e.key || '').toLowerCase(), mod = e.ctrlKey || e.metaKey;
+    if (key === 'escape') return picked && variant !== 'pdf' ? pick(null) : root.classList.contains('full') && fullShown(false);  // first letting go, then leaving
+    if (variant === 'pdf') return;
     if (mod && (key === 'z' || key === 'y')) {
       e.preventDefault();
       return key === 'z' && !e.shiftKey ? restore(undos, redos) : restore(redos, undos);
     }
     const el = picked && byId(picked);
     if (!el) return;
-    if (key === 'escape') return pick(null);
     if (mod && key === 'd') {
       e.preventDefault();
       return duplicate(el);
@@ -333,7 +447,7 @@
 
   // ---- adding, doubling, removing, layering
   const NEW = {
-    text: () => ({type: 'text', w: 80, h: 8, text: 'Neuer Text', size: 10, leading: LEADING, colour: 'ink', align: 'left', font: '', bold: false, italic: false, underline: false, caps: false}),
+    text: () => ({type: 'text', w: 80, h: 8, text: 'Neuer Text', size: 10, leading: LEADING, colour: 'ink', align: 'left', font: '', weight: 400, italic: false, underline: false, caps: false}),
     wordmark: () => ({type: 'wordmark', w: 100, h: 17, size: 15, align: 'left'}),
     picture: () => ({type: 'picture', w: 40, h: 40}),
     box: () => ({type: 'box', w: 60, h: 30, colour: 'accent', fill: true, line: 0.5}),
@@ -358,8 +472,7 @@
     const kind = e.target.closest('[data-add]')?.dataset.add;
     if (!kind) return;
     if (kind !== 'picture') return add(kind);
-    if (data.pictures.length) return add('picture', sized(data.pictures.at(-1)));
-    choose('picture').then(pic => pic && add('picture', sized(pic)));
+    openDialog({kind: 'pictures', mode: 'add'});  // which picture, or a new one, before anything is placed
   });
   const sized = pic => ({artwork: pic.pk, w: 40, h: round(pic.w && pic.h ? 40 * pic.h / pic.w : 40)});
   function duplicate(el) {
@@ -385,101 +498,203 @@
     inspect();
   }
 
-  // ---- uploads (setup.papers.artworks): a picture, or a face of the Hochschule's own font
-  async function upload(kind, file, extra = {}) {
+  // ---- uploads (setup.papers.artworks): a picture, or the files of a font family, all at once
+  async function upload(kind, files, extra = {}) {
     const form = new FormData();
     form.append('art', kind);
-    form.append('datei', file);
+    files.forEach(file => form.append('datei', file));
     Object.entries(extra).forEach(([key, value]) => form.append(key, value));
     const r = await fetch(data.upload, {method: 'POST', body: form, headers: {'X-CSRFToken': csrf}, credentials: 'same-origin'}).catch(() => null);
     const d = r ? await r.json().catch(() => ({})) : {};
-    if (!r?.ok) throw new Error(d.error || 'Hochladen fehlgeschlagen. Bitte die Verbindung prüfen.');
+    if (!r?.ok) throw new Error(d.error || d.refused?.join(' ') || 'Hochladen fehlgeschlagen. Bitte die Verbindung prüfen.');
     return d;
   }
-  function choose(kind, extra = {}) {
+  // Files to upload, chosen or dropped; what came of them said in the dialog.
+  const ACCEPT = {font: '.ttf,.otf,.woff,font/ttf,font/otf,font/woff', picture: 'image/png,image/jpeg'};
+  function choose(kind) {
     return new Promise(resolve => {
-      const input = Object.assign(document.createElement('input'), {type: 'file', accept: kind === 'font' ? '.ttf,font/ttf' : 'image/png,image/jpeg'});
-      input.addEventListener('change', async () => {
-        if (!input.files[0]) return resolve(null);
-        note = {text: 'Lädt hoch …'};
-        inspect();
-        try {
-          const d = await upload(kind, input.files[0], extra);
-          note = null;
-          if (kind === 'picture') data.pictures.push({pk: d.pk, name: d.name, url: d.url, w: d.w, h: d.h});
-          else await learn(d);
-          resolve(d);
-        } catch (error) {
-          note = {text: error.message, error: true};
-          resolve(null);
-        }
-        inspect();
-      });
+      const input = Object.assign(document.createElement('input'), {type: 'file', multiple: kind === 'font', accept: ACCEPT[kind]});
+      input.addEventListener('change', () => resolve(input.files.length ? send(kind, [...input.files]) : null));
       input.click();
     });
   }
+  async function send(kind, files) {
+    const font = kind === 'font';
+    told({text: font ? `${files.length} Datei${files.length > 1 ? 'en werden' : ' wird'} gelesen …` : 'Lädt hoch …'});
+    try {
+      const d = await upload(kind, font ? files : files.slice(0, 1), font ? {lizenz: '1'} : {});
+      if (!font) {
+        data.pictures.push({pk: d.pk, name: d.name, url: d.url, w: d.w, h: d.h});
+        told(null);
+      } else {
+        await Promise.all(d.kept.map(learn));
+        const names = [...new Set(d.kept.map(f => f.name))];
+        told(d.refused.length ? {text: `${d.kept.length} Schnitte aufgenommen. Nicht: ${d.refused.join(' ')}`, error: true}
+          : {text: `Aufgenommen: ${names.join(', ')}, ${d.kept.map(faceName).join(', ')}.`});
+      }
+      return d;
+    } catch (error) {
+      told({text: error.message, error: true});
+      return null;
+    }
+  }
   async function learn(d) {  // a face uploaded: known to the page's fonts and to the editor's
-    const f = data.fonts[d.key] ||= {name: d.name, own: true, faces: {}, files: []};
-    f.faces[d.face] = d.url;
-    f.files = [...f.files.filter(x => x.face !== d.face), {pk: d.pk, face: d.face}];
-    const face = new FontFace(`paper-${d.key}`, `url("${d.url}")`, {weight: d.face.includes('bold') ? '700' : '400', style: d.face.includes('italic') ? 'italic' : 'normal'});
+    const f = data.fonts[d.key] ||= {name: d.name, own: true, faces: []};
+    f.faces = [...f.faces.filter(x => x.w !== d.w || x.i !== d.i), {pk: d.pk, w: d.w, i: d.i, url: d.url}].sort((a, b) => a.w - b.w || a.i - b.i);
+    const face = new FontFace(`paper-${d.key}`, `url("${d.url}")`, {weight: String(d.w), style: d.i ? 'italic' : 'normal'});
     document.fonts.add(await face.load().catch(() => face));
     draw();
   }
   async function discard(pk, kind) {
     const r = await fetch(`${data.upload}${pk}/loeschen/`, {method: 'POST', headers: {'X-CSRFToken': csrf}, credentials: 'same-origin'}).catch(() => null);
     const d = r ? await r.json().catch(() => ({})) : {};
-    if (!r?.ok) {
-      note = {text: d.error || 'Nicht gelöscht.', error: true};
-      return inspect();
-    }
-    note = null;
+    if (!r?.ok) return told({text: d.error || 'Nicht gelöscht.', error: true});
     if (kind === 'picture') data.pictures = data.pictures.filter(p => p.pk !== pk);
     else for (const [key, f] of Object.entries(data.fonts)) {
-      f.files = (f.files || []).filter(x => x.pk !== pk);
-      if (f.own && !f.files.length) delete data.fonts[key];
+      f.faces = f.faces.filter(x => x.pk !== pk);
+      if (f.own && !f.faces.length) delete data.fonts[key];
     }
+    told(null);
     draw();
     inspect();
   }
+
+  // ---- the dialog for the Hochschule's own fonts, opened from where a font is chosen, and for pictures, opened
+  // where one is placed: what there is, to use or delete, and the upload
+  const dialog = root.querySelector('.paper-dialog');
+  let view = null, said = null, licensed = false;  // view: {kind: 'fonts', into: the font field it was opened from} or {kind: 'pictures', mode: 'add' or 'swap'}
+  function openDialog(v) {
+    [view, said] = [v, null];
+    dialogShown();
+    if (!dialog.open) dialog.showModal();
+  }
+  function told(message) {  // a message in the dialog where it is open, else over the panel
+    if (dialog.open) {
+      said = message;
+      dialogShown();
+    } else {
+      note = message;
+      inspect();
+    }
+  }
+  function dialogShown() {
+    if (!view) return;
+    const fonts = view.kind === 'fonts';
+    dialog.innerHTML = `<header><h3 id="paper-dialog-title">${fonts ? 'Eigene Schriften' : view.mode === 'add' ? 'Bild einfügen' : 'Bild wählen'}</h3>` +
+      '<button type="button" class="paper-x" data-close aria-label="Schließen">×</button></header>' +
+      (said ? `<p class="flash${said.error ? ' error' : ''}">${esc(said.text)}</p>` : '') + (fonts ? fontsShown() : picturesShown());
+  }
+  // Where files are dropped or chosen: a frame of its own, what it takes said small beneath.
+  const drop = (kind, words, takes, off) => `<div class="paper-drop${off ? ' off' : ''}" data-drop="${kind}"><span>${words}</span>` +
+    `<button type="button" class="btn ghost small" data-upload="${kind}"${off ? ' disabled' : ''}>Auswählen</button><small>${takes}</small></div>`;
+  function fontsShown() {
+    const own = Object.entries(data.fonts).filter(([, f]) => f.own);
+    return (own.length ? `<ul class="paper-families">${own.map(([key, f]) => `<li><b style="font-family:${family(key)}">${esc(f.name)}</b><span class="chips">` +
+        f.faces.map(x => `<span class="chip">${faceName(x)}<button type="button" class="link" data-discard="${x.pk}" data-kind="font" title="${faceName(x)} löschen" aria-label="${faceName(x)} löschen">×</button></span>`).join('') + '</span></li>').join('')}</ul>`
+        : '<p class="muted">Noch keine. Hochgeladen steht sie in jeder Schriftauswahl.</p>') +
+      `<label class="option paper-licence"><input type="checkbox" data-licence autofocus${licensed ? ' checked' : ''}> Die Lizenz erlaubt, die Schrift in PDF-Dokumente einzubetten</label>` +
+      drop('font', 'Schriftdateien hierher ziehen', 'TTF · OTF · WOFF · auch variabel · alle Schnitte einer Familie auf einmal', !licensed);
+  }
+  function picturesShown() {
+    const grid = data.pictures.map((p, n) => `<li${p.pk === byId(picked)?.artwork ? ' class="on"' : ''}><button type="button" data-picture="${p.pk}"${n ? '' : ' autofocus'} title="${esc(p.name)} ${view.mode === 'add' ? 'einfügen' : 'wählen'}"><img src="${esc(p.url)}" alt=""><small>${esc(p.name)}</small></button>` +
+      `<button type="button" class="paper-delete" data-discard="${p.pk}" data-kind="picture" title="Löschen, wo kein Briefbogen es verwendet" aria-label="${esc(p.name)} löschen">×</button></li>`).join('');
+    return (grid ? `<ul class="paper-pictures">${grid}</ul>` : '') + drop('picture', grid ? 'Neues Bild hierher ziehen' : 'Siegel, Unterschrift, Ornament hierher ziehen', 'PNG oder JPEG · bis 5 MB');
+  }
+  function placed(pk) {  // a picture chosen: onto the page, or into the picture picked
+    const pic = data.pictures.find(p => p.pk === pk), mode = view.mode;
+    dialog.close();
+    if (mode === 'add') add('picture', sized(pic));
+    else set('artwork', pk);
+  }
+  dialog.addEventListener('click', e => {
+    const b = e.target.closest('button');
+    if (e.target === dialog || b?.dataset.close !== undefined) return dialog.close();  // a click beside it, or ×
+    if (!b) return;
+    if (b.dataset.picture) return placed(+b.dataset.picture);
+    if (b.dataset.discard) return discard(+b.dataset.discard, b.dataset.kind);
+    if (b.dataset.upload) choose(b.dataset.upload).then(uploaded);
+  });
+  function uploaded(d) {  // a picture uploaded goes where it was wanted; a font, into the menu it was opened from
+    if (d?.pk) placed(d.pk);
+    else if (d?.kept?.length && view?.into) set(view.into, d.kept[0].key);
+  }
+  dialog.addEventListener('change', e => {
+    if (!e.target.matches('[data-licence]')) return;
+    licensed = e.target.checked;
+    dialogShown();
+  });
+  dialog.addEventListener('dragover', e => {
+    const zone = e.target.closest?.('[data-drop]');
+    if (!zone || zone.classList.contains('off')) return;
+    e.preventDefault();  // it may be dropped here
+    zone.classList.add('over');
+  });
+  dialog.addEventListener('dragleave', e => e.target.closest?.('[data-drop]')?.classList.remove('over'));
+  dialog.addEventListener('drop', e => {
+    const zone = e.target.closest?.('[data-drop]');
+    if (!zone) return;
+    e.preventDefault();
+    zone.classList.remove('over');
+    if (zone.classList.contains('off')) return;
+    const files = [...e.dataTransfer.files].filter(f => zone.dataset.drop === 'font' ? /\.(ttf|otf|woff)$/i.test(f.name) : /^image\/(png|jpeg)$/.test(f.type));
+    if (!files.length) return told({text: zone.dataset.drop === 'font' ? 'Keine Schriftdatei darunter: TTF, OTF oder WOFF.' : 'Kein Bild darunter: PNG oder JPEG.', error: true});
+    send(zone.dataset.drop, files).then(uploaded);
+  });
+  dialog.addEventListener('close', () => { if (!dialog.open) view = null; });  // the event comes later: not when it opened again meanwhile
 
   // ---- the panel: what is picked, else the Briefbogen
   const field = (label, html, narrow = false) => `<div${narrow ? ' class="paper-narrow"' : ''}><label>${label}</label>${html}</div>`;
   const number = (key, value, step, min, max) => `<input type="number" data-key="${key}" value="${value ?? ''}" step="${step}" min="${min}" max="${max}">`;
   const check = (key, label, on) => `<label class="option"><input type="checkbox" data-key="${key}"${on ? ' checked' : ''}> ${label}</label>`;
   const options = (pairs, value) => pairs.map(([v, l]) => `<option value="${esc(v)}"${v === value ? ' selected' : ''}>${esc(l)}</option>`).join('');
-  const fontPick = (key, value, inherit) => `<select data-key="${key}">${inherit ? '<option value="">Wie der Text</option>' : ''}${options(Object.entries(data.fonts).map(([v, f]) => [v, f.name]), value)}</select>`;
+  // A font menu: ConCampus's fonts, the Hochschule's own, and at its end the way to add one (openDialog).
+  const fontPick = (key, value, inherit) => `<select data-key="${key}">${inherit ? '<option value="">Wie der Text</option>' : ''}` +
+    `<optgroup label="Mitgeliefert">${options(Object.entries(data.fonts).filter(([, f]) => !f.own).map(([v, f]) => [v, f.name]), value)}</optgroup>` +
+    (Object.values(data.fonts).some(f => f.own) ? `<optgroup label="Eigene">${options(Object.entries(data.fonts).filter(([, f]) => f.own).map(([v, f]) => [v, f.name]), value)}</optgroup>` : '') +
+    '<option value="+">Eigene Schrift hochladen …</option></select>';
+  const fontsLink = '<button type="button" class="link paper-aside" data-open="fonts">Eigene Schriften</button>';  // in a section's heading, at its end
+  // The weights the text's family has, as it names them; the one set kept where the family lacks it (paper.py nearest).
+  function weightPick(el) {
+    const now = weightOf(el), faces = data.fonts[el.font || design.style.font]?.faces || [];
+    const weights = [...new Set([...faces.map(f => f.w), now])].sort((a, b) => a - b);
+    return `<select data-key="weight">${weights.map(w => `<option value="${w}"${w === now ? ' selected' : ''}>${WEIGHTS[w] || w}${faces.some(f => f.w === w) ? '' : ' (fehlt, die nächste steht)'}</option>`).join('')}</select>`;
+  }
   const segments = (key, pairs, value) => `<div class="paper-seg">${pairs.map(([v, l]) => `<button type="button" data-key="${key}" data-value="${v}"${v === value ? ' class="on"' : ''}>${l}</button>`).join('')}</div>`;
   const swatches = (key, value) => `<div class="paper-swatches">${Object.entries(COLOURS).map(([v, [l, c]]) =>
     `<button type="button" data-key="${key}" data-value="${v}" title="${l}" style="background:${c}"${v === value ? ' class="on"' : ''}></button>`).join('')}` +
     `<input type="color" data-key="${key}" value="${/^#/.test(value) ? value : colour(value)}" title="Eigene Farbe"></div>`;
-  const section = (title, html) => `<section class="paper-section"><h4>${title}</h4>${html}</section>`;
+  const section = (title, html, aside = '') => `<section class="paper-section"><h4>${title}${aside}</h4>${html}</section>`;
 
   function inspect() {
-    const el = picked && byId(picked);
+    const el = picked && byId(picked), open = new Set([...panel.querySelectorAll('details[open] > summary')].map(s => s.firstChild.textContent));
     panel.innerHTML = (note ? `<p class="flash${note.error ? ' error' : ''}">${esc(note.text)}</p>` : '') + (el ? elementPanel(el) : layoutPanel());
+    panel.querySelectorAll('details > summary').forEach(s => { if (open.has(s.firstChild.textContent)) s.parentElement.open = true; });  // what was open stays so
   }
   function elementPanel(el) {
     let html = `<p class="paper-crumb"><button type="button" class="link" data-act="none"><i class="arrow left"></i> Briefbogen</button></p><h3>${named(el)}</h3>`;
     if (el.type === 'text') {
       html += field('Text', `<textarea data-key="text" rows="4" spellcheck="false">${esc(el.text)}</textarea>`) +
-        `<p class="chips paper-fields">${Object.entries(data.fields).map(([f, about]) => `<button type="button" class="chip" data-field="${f}" title="${esc(about)}">{${f}}</button>`).join('')}</p>` +
-        '<p class="muted paper-hint"><small>Ein Klick setzt den Platzhalter ein. **so** steht fett. Eine Zeile, deren Platzhalter alle leer sind, entfällt.</small></p>' +
+        placeholders() +
+        '<p class="muted paper-hint"><small>Einsetzen, wo die Schreibmarke steht · **fett** · eine Zeile ohne Werte entfällt</small></p>' +
         section('Schrift', field('Schrift', fontPick('font', el.font || '', true)) +
           `<div class="row">${field('Größe (pt)', number('size', el.size, 0.5, 4, 72), true)}${field('Zeilenabstand', number('leading', el.leading ?? LEADING, 0.05, 0.8, 3), true)}</div>` +
-          `<div class="paper-checks">${check('bold', 'Fett', el.bold)}${check('italic', 'Kursiv', el.italic)}${check('underline', 'Unterstrichen', el.underline)}${check('caps', 'Großbuchstaben', el.caps)}</div>` +
-          field('Farbe', swatches('colour', el.colour)) + field('Ausrichtung', segments('align', ALIGN, el.align || 'left')));
+          field('Stärke', weightPick(el)) +
+          `<div class="paper-checks">${check('italic', 'Kursiv', el.italic)}${check('underline', 'Unterstrichen', el.underline)}${check('caps', 'Großbuchstaben', el.caps)}</div>` +
+          field('Farbe', swatches('colour', el.colour)) + field('Ausrichtung', segments('align', ALIGN, el.align || 'left')), fontsLink);
     } else if (el.type === 'wordmark') {
       html += (data.logo ? `<p class="muted"><small>Das Logo der Hochschule, so groß der Rahmen es fasst.${data.svg ? ' Als SVG steht im PDF der Schriftzug; für das PDF ein PNG hochladen (Einstellungen › Hochschule).' : ''}</small></p>` :
         '<p class="muted"><small>Der Schriftzug der Hochschule (Einstellungen › Hochschule), in der Schrift des Texts.</small></p>') +
         `<div class="row">${field('Größe (pt)', number('size', el.size, 0.5, 6, 60), true)}</div>` + field('Ausrichtung', segments('align', ALIGN, el.align));
     } else if (el.type === 'picture') {
-      html += pictures(el.artwork);
+      const pic = data.pictures.find(p => p.pk === el.artwork);
+      html += `<div class="paper-picked">${pic ? `<img src="${esc(pic.url)}" alt=""><span>${esc(pic.name)}</span>` : '<span class="muted">Bild fehlt</span>'}` +
+        '<button type="button" class="btn ghost small" data-open="pictures">Anderes Bild</button></div>' +
+        '<p class="muted"><small>So groß der Rahmen es fasst, in seinen Maßen.</small></p>';
     } else if (el.type === 'box') {
       html += field('Farbe', swatches('colour', el.colour)) + field('Art', segments('fill', [['1', 'Fläche'], ['0', 'Rahmen']], el.fill ? '1' : '0')) +
         (el.fill ? '' : `<div class="row">${field('Linie (pt)', number('line', el.line, 0.1, 0.1, 10), true)}</div>`);
     } else if (el.type === 'address' || el.type === 'info') {
-      html += `<p class="muted"><small>${el.type === 'address' ? 'Wem der Brief gilt, im Fenster des Umschlags: links 20, oben 45 mm, 85 × 45 mm nach DIN 5008.' : 'Das Amt, das Aktenzeichen und das Datum des Briefs.'}</small></p>` +
+      html += `<p class="muted"><small>${el.type === 'address' ? 'Name und Anschrift der Empfänger:in, aus ihrem Konto, für jeden Brief die eigenen; hier ein Beispiel. Im Fenster des Umschlags: links 20, oben 45 mm, 85 × 45 mm nach DIN 5008.' : 'Das Amt, das den Brief schickt, sein Aktenzeichen und sein Datum, für jeden Brief die eigenen; hier ein Beispiel.'}</small></p>` +
         `<div class="row">${field('Größe (pt)', number('size', el.size, 0.5, 6, 14), true)}</div>`;
     } else if (el.type === 'body') {
       html += `<p class="muted"><small>Hier fließt der Text des Dokuments, ${el.pages === 'first' ? 'auf der ersten Seite' : 'auf jeder weiteren'}. Schrift und Größe stehen beim Briefbogen.</small></p>`;
@@ -493,26 +708,38 @@
       `${el.type === 'body' ? '' : '<button type="button" class="link" data-act="remove" title="Entf">Entfernen</button>'}</div>`;
     return html;
   }
-  function pictures(chosen) {
-    return `<ul class="paper-pictures">${data.pictures.map(p => `<li${p.pk === chosen ? ' class="on"' : ''}><button type="button" data-picture="${p.pk}" title="${esc(p.name)}"><img src="${esc(p.url)}" alt="${esc(p.name)}"></button>` +
-      `<button type="button" class="link" data-discard="${p.pk}" data-kind="picture" title="Löschen, wo kein Briefbogen es verwendet">×</button></li>`).join('')}</ul>` +
-      `<p><button type="button" class="btn ghost small" data-upload="picture">Bild hochladen</button> <small class="muted">PNG oder JPEG, bis 5 MB</small></p>`;
+  // The placeholders by whose they are; the Hochschule's print as they show, a document's differ from one to the next.
+  function placeholders() {
+    const groups = {};
+    data.fields.forEach(f => (groups[f.group] ||= []).push(f));
+    const now = f => data.values[f.key] ? ` Hier: ${String(data.values[f.key]).replace(/\n/g, ', ')}` : ' Hier leer.';
+    return `<div class="paper-fields">${Object.entries(groups).map(([group, fs]) => `<p><small>${esc(group)}</small>` +
+      fs.map(f => `<button type="button" class="chip${f.example ? ' example' : ''}" data-field="${f.key}" title="${esc(`{${f.key}}: ${f.about}.${now(f)}${f.example ? ' (Beispiel)' : ''}`)}">${esc(f.label)}</button>`).join('') +
+      '</p>').join('')}<p class="paper-legend"><small><span class="paper-var">Hochschule</span> aus ihren Einstellungen, wie gedruckt</small>` +
+      '<small><span class="paper-var example">Beispiel</span> je Dokument anders</small></p></div>';
   }
+  // What an element shows, in a few words, as it prints: its text with the values filled in, else what it is.
+  function summary(el) {
+    if (el.type === 'text') return filled(el.text, data.values).join(' ').replace(/\d*||\*\*/g, '').trim() || el.text;
+    if (el.type === 'picture') return data.pictures.find(p => p.pk === el.artwork)?.name || 'Bild fehlt';
+    if (el.type === 'box') return `${mm(el.w)} × ${mm(el.h)} mm`;
+    return {wordmark: data.logo ? 'Logo der Hochschule' : data.wordmark.join(' '), address: 'Name und Anschrift der Empfänger:in',
+            info: 'Amt, Aktenzeichen und Datum', body: 'Hier fließt der Text des Dokuments'}[el.type];
+  }
+  const LOCK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4"/></svg>';  // core/access.py LOCK
   function layoutPanel() {
-    const st = design.style, own = Object.entries(data.fonts).filter(([, f]) => f.own);
-    const list = design.elements.filter(shown).reverse().map(el => `<li><button type="button" class="link" data-pick="${esc(el.id)}">${named(el)}</button>` +
-      `<small class="muted">${el.type === 'text' ? esc(el.text.split('\n')[0].slice(0, 28)) : ''}</small>` +
-      `<label title="Festhalten"><input type="checkbox" data-lock="${esc(el.id)}"${el.locked ? ' checked' : ''}> fest</label></li>`).join('');
+    const st = design.style;
+    const list = design.elements.filter(shown).reverse().map(el => `<li data-hint="${esc(el.id)}"><button type="button" data-pick="${esc(el.id)}">` +
+      `<small>${named(el)}</small><span>${esc(summary(el))}</span></button>` +
+      `<button type="button" class="paper-lock${el.locked ? ' on' : ''}" data-lock="${esc(el.id)}" title="${el.locked ? 'Festgehalten: lösen' : 'Festhalten: nicht verschieben, Klicks gehen hindurch'}" aria-pressed="${!!el.locked}">${LOCK}</button></li>`).join('');
+    const used = data.used.length ? `${esc(data.used[0])}${data.used.length > 1 ? ` und ${data.used.length - 1} weitere` : ''}` : 'kein Dokument';
     return `<h3>Briefbogen</h3>` + field('Name', `<input data-key="name" value="${esc(name)}" maxlength="80">`) +
+      `<p class="paper-used"><small title="${esc(data.used.join(', '))}">Gilt für ${used}</small><a href="${esc(data.assign)}">Zuordnen</a></p>` +
       section('Text des Dokuments', `<div class="row">${field('Schrift', fontPick('style.font', st.font))}${field('Überschriften', fontPick('style.heading', st.heading))}</div>` +
         `<div class="row">${field('Größe (pt)', number('style.size', st.size, 0.5, 7, 16), true)}${field('Titel (pt)', number('style.title', st.title, 1, 10, 48), true)}</div>` +
         `<div class="paper-checks">${check('style.bar', 'Balken über dem Titel', st.bar)}${check('style.center', 'Zentriert', st.align === 'center')}` +
-        `${check('style.middle', 'Senkrecht in der Mitte', st.middle)}${check('style.marks', 'Falz- und Lochmarken', st.marks)}</div>`) +
-      (variant === 'pdf' ? '' : section(`Elemente der ${variant === 'first' ? 'ersten Seite' : 'Folgeseiten'}, vorn zuerst`, `<ul class="paper-list">${list}</ul>`)) +
-      section('Eigene Schriften', own.map(([, f]) => `<p><b>${esc(f.name)}</b> ${(f.files || []).map(x => `<span class="chip">${FACES[x.face]} <button type="button" class="link" data-discard="${x.pk}" data-kind="font" title="Löschen">×</button></span>`).join(' ')}</p>`).join('') +
-        `<div class="row">${field('Familie', '<input data-font-name maxlength="80" placeholder="z. B. Hausschrift">')}${field('Schnitt', `<select data-font-face>${options(Object.entries(FACES), 'regular')}</select>`, true)}</div>` +
-        '<p><button type="button" class="btn ghost small" data-upload="font">Schrift hochladen</button> <small class="muted">TrueType (.ttf), die das Einbetten erlaubt</small></p>') +
-      section('Bilder', pictures(null));
+        `${check('style.middle', 'Senkrecht in der Mitte', st.middle)}${check('style.marks', 'Falz- und Lochmarken', st.marks)}</div>`, fontsLink) +
+      (variant === 'pdf' ? '' : section(variant === 'first' ? 'Auf der ersten Seite' : 'Auf den Folgeseiten', `<ul class="paper-list">${list}</ul>`));
   }
   // The visible fields follow what was dragged or nudged.
   function fields() {
@@ -526,20 +753,19 @@
     else if (key.startsWith('style.')) design.style[key.slice(6)] = value;
     else if (!el) return;
     else if (key === 'fill') el.fill = value === '1';
+    else if (key === 'weight') [el.weight, el.bold] = [+value, undefined];
     else el[key] = value;
     changed(input ? `${picked}:${key}` : null);
     draw();
     if (!input) inspect();
   }
   panel.addEventListener('input', e => {
-    const t = e.target;
-    if (t.dataset.lock) {
-      byId(t.dataset.lock).locked = t.checked;
-      changed();
-      return draw();
-    }
-    const key = t.dataset.key;
+    const t = e.target, key = t.dataset.key;
     if (!key) return;
+    if (t.value === '+') {  // a font menu's last entry: add one, then set it here
+      inspect();  // the menu as it was
+      return openDialog({kind: 'fonts', into: key});
+    }
     let value = t.type === 'checkbox' ? t.checked : t.value;
     if (t.type === 'number') {
       value = parseFloat(t.value);
@@ -561,17 +787,15 @@
       return set('text', area.value, true);
     }
     if (b.dataset.pick) return pick(b.dataset.pick);
-    if (b.dataset.picture) return set('artwork', +b.dataset.picture);
-    if (b.dataset.discard) return discard(+b.dataset.discard, b.dataset.kind);
-    if (b.dataset.upload === 'picture') return choose('picture').then(pic => pic && el?.type === 'picture' && set('artwork', pic.pk));
-    if (b.dataset.upload === 'font') {
-      const name = panel.querySelector('[data-font-name]').value.trim(), face = panel.querySelector('[data-font-face]').value;
-      if (!name) {
-        note = {text: 'Bitte den Namen der Schrift angeben.', error: true};
-        return inspect();
-      }
-      return choose('font', {name, schnitt: face});
+    if (b.dataset.lock) {
+      const held = byId(b.dataset.lock);
+      held.locked = !held.locked;
+      changed();
+      draw();
+      return inspect();
     }
+    if (b.dataset.open === 'fonts') return openDialog({kind: 'fonts'});
+    if (b.dataset.open === 'pictures') return openDialog({kind: 'pictures', mode: 'swap'});
     if (b.dataset.act === 'none') return pick(null);
     if (!el) return;
     if (b.dataset.act === 'front' || b.dataset.act === 'back') return layer(el, b.dataset.act === 'front');
@@ -579,6 +803,9 @@
     if (b.dataset.act === 'remove') return remove(el);
   });
   panel.addEventListener('focusout', () => { typed = null; });  // the next field typed into is a step of its own
+  const hint = (e, on) => { const id = e.target.closest?.('[data-hint]')?.dataset.hint; if (id) nodeOf(id)?.classList.toggle('hint', on); };  // a row of the list shows its element
+  panel.addEventListener('mouseover', e => hint(e, true));
+  panel.addEventListener('mouseout', e => hint(e, false));
 
   // ---- the page shown: the first, the following ones, or the PDF the sample makes on it as it stands
   function preview() {
@@ -601,6 +828,7 @@
     saveForm.elements.name.value = name;
   });
 
+  saveShown();
   draw();
   inspect();
   document.fonts.ready.then(draw);

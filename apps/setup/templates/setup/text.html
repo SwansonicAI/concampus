@@ -3,7 +3,7 @@
 {% block content %}
 <p class="eyebrow"><a href="{% url 'setup:texts' %}">Texte</a> · {{ spec.group }}</p>
 <h1>{{ spec.title }}</h1>
-{% if spec.appeal %}<p class="lead">Lehnt ab: die Rechtsbehelfsbelehrung folgt.</p>{% endif %}
+{% if spec.appealable %}<p class="lead">Darunter folgt die <a href="{% url 'setup:text' 'rechtsbehelf' %}">Rechtsbehelfsbelehrung</a>.</p>{% endif %}
 <form method="post" class="form">
   {% csrf_token %}
   {{ form }}

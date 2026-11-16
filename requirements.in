@@ -1,4 +1,5 @@
 Django
+fonttools  # a Hochschule's own fonts: OpenType and variable ones made embeddable TrueType (core/paper.py)
 gunicorn
 lxml
 psycopg[binary]

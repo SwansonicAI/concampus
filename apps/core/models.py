@@ -949,7 +949,8 @@ class Layout(Tracked, models.Model):
 
 
 class Artwork(Tracked, models.Model):
-    """A picture or a font face for the Briefbögen: checked and, a picture, drawn anew on upload (core.paper.accept)."""
+    """A picture or a font face for the Briefbögen: checked on upload, a picture drawn anew, a font made TrueType that
+    may be embedded (core.paper.accept, core.paper.faces); a face's family, weight and slant read from the font itself."""
 
     capabilities = ('manage_institution',)
 
@@ -957,26 +958,22 @@ class Artwork(Tracked, models.Model):
         PICTURE = 'picture', 'Bild'
         FONT = 'font', 'Schrift'
 
-    class Face(models.TextChoices):
-        REGULAR = 'regular', 'Normal'
-        BOLD = 'bold', 'Fett'
-        ITALIC = 'italic', 'Kursiv'
-        BOLD_ITALIC = 'bolditalic', 'Fett kursiv'
-
     kind = models.CharField('Art', max_length=8, choices=Kind)
     name = models.CharField('Name', max_length=80, help_text='Bei einer Schrift: ihre Familie.')
-    face = models.CharField('Schnitt', max_length=10, choices=Face, blank=True)
+    weight = models.PositiveSmallIntegerField('Stärke', null=True, blank=True, help_text='Bei einer Schrift: 100 bis 900, 400 normal, 700 fett.')
+    italic = models.BooleanField('Kursiv', default=False)
+    licensed = models.BooleanField('Lizenz bestätigt', default=False, help_text='Wer eine Schrift hochlädt, bestätigt, dass ihre Lizenz das Einbetten in PDF-Dokumente erlaubt.')
     file = models.FileField('Datei', upload_to='briefbogen/')
     width = models.PositiveIntegerField('Breite (Pixel)', null=True, blank=True)
     height = models.PositiveIntegerField('Höhe (Pixel)', null=True, blank=True)
 
     class Meta:
-        ordering = ['kind', 'name', 'face']
+        ordering = ['kind', 'name', 'weight', 'italic']
         verbose_name = 'Bild oder Schrift'
         verbose_name_plural = 'Bilder und Schriften'
 
     def __str__(self):
-        return f'{self.name} ({self.get_face_display()})' if self.face else self.name
+        return f'{self.name} {self.weight}{" kursiv" if self.italic else ""}' if self.kind == self.Kind.FONT else self.name
 
 
 class Message(models.Model):

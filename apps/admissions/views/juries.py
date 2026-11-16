@@ -179,7 +179,7 @@ def plan(request, pk):
         rooms = {t: next((b.room for b in days if b.start <= t < b.end), None) or data.get('room') for t in times}
         letter = rows[0].study.wording(
             'einladung_eignungspruefung', pruefung=course.title, termin=date_format(times[0], 'l, j. F Y, H:i'), raum=rooms[times[0]].place(linked=True),
-            programm=rows[0].note or '–', danach='\n'.join(f'– {line}' for line in after(course)) or '–',
+            programm=rows[0].note, danach='\n'.join(f'– {line}' for line in after(course)),
         )
         notes = [
             f'{date_format(day, "l, j. F")}, {rooms[group[0][0]]}: {group[0][0]:%H:%M} bis {group[-1][0] + timedelta(minutes=data["minutes"]):%H:%M} Uhr · '
@@ -251,7 +251,7 @@ def shift(request, pk):
         if rows:
             letter = rows[0].study.wording(
                 'einladung_eignungspruefung', pruefung=course.title, termin=date_format(timezone.localtime(rows[0].slot), 'l, j. F Y, H:i'),
-                raum=bookings[0].room.place(linked=True) if bookings else 'wird mitgeteilt', programm=rows[0].note or '–', danach='\n'.join(f'– {line}' for line in after(course)) or '–',
+                raum=bookings[0].room.place(linked=True) if bookings else 'wird mitgeteilt', programm=rows[0].note, danach='\n'.join(f'– {line}' for line in after(course)),
             )
             groups = [('Neue Einladung', [p.study.person for p in rows], letter)]
         return preview(request, f'Tag verlegen: {course.title}', groups, f'Verlegen{" und neu einladen" if rows else ""}', course.get_absolute_url(), notes)

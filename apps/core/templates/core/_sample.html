@@ -1,6 +1,6 @@
 {# A made-up document to try a Briefbogen on (core.paper.sample): a letter or a Bescheinigung over two pages, or an Urkunde. #}
 {% if kind == 'brief' %}
-<div class="document letter" data-paper="brief">
+<div class="document letter" data-paper="brief" data-person="Erika Mustermann" data-matrikel="100123">
   <p class="address">Erika Mustermann<br>Musterstraße 1<br>12345 Musterstadt</p>
   <p class="dated" data-date="{{ today|date:'j. F Y' }}" data-reference="{{ today|date:'Y' }}-1234" data-office="Akademische und Studentische Angelegenheiten"></p>
   <h2>Zulassung zum Studium</h2>
@@ -12,7 +12,7 @@
   <p class="muted"><small>Dieses Schreiben wurde maschinell erstellt und ist ohne Unterschrift gültig.</small></p>
 </div>
 {% elif kind == 'urkunde' %}
-<div class="document ceremony" data-paper="urkunde">
+<div class="document ceremony" data-paper="urkunde" data-person="Erika Mustermann" data-matrikel="100123">
   <h1>Urkunde</h1>
   <p style="margin-top: 32px">Die {{ institution.name }} verleiht</p>
   <p style="font-size: 22px"><b>Erika Mustermann</b></p>
@@ -23,7 +23,7 @@
   <div class="signatures"><span>Präsidentin</span><span>Vorsitz des Prüfungsausschusses</span></div>
 </div>
 {% else %}
-<div class="document" data-paper="leistungen">
+<div class="document" data-paper="leistungen" data-person="Erika Mustermann" data-matrikel="100123">
   <div class="letterhead"><div class="muted">Prüfungsamt</div></div>
   <h1>Musterbescheinigung</h1>
   <p>Hiermit wird bescheinigt, dass</p>

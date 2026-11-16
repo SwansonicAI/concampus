@@ -1,4 +1,4 @@
-<div class="document letter" data-paper="brief">
+<div class="document letter" data-paper="brief" data-person="{{ letter.person.legal_name }}" data-matrikel="{{ letter.person.matriculation|default:'' }}">
   {% include "core/_letterhead.html" with office=letter.sender|default:institution.name %}
   <p class="address">{{ letter.person.legal_name }}<br>{{ letter.person.address|linebreaksbr }}</p>
   <p class="dated" data-date="{{ letter.created|date:'j. F Y' }}" data-reference="{{ letter.reference }}" data-office="{{ letter.sender|default:institution.name }}">{% if institution.place %}{{ institution.place }}, {% endif %}{{ letter.created|date:"j. F Y" }}{% if letter.reference %}<br><small>Aktenzeichen {{ letter.reference }}</small>{% endif %}</p>

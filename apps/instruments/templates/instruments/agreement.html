@@ -1,7 +1,7 @@
 {% extends base %}
 {% block title %}Leihvertrag {{ loan.instrument.name }}{% endblock %}
 {% block content %}
-<div class="document" data-paper="leihvertrag">
+<div class="document" data-paper="leihvertrag" data-person="{{ loan.person.legal_name }}" data-matrikel="{{ loan.person.matriculation|default:'' }}">
   <p class="no-print actions"><a class="btn" href="{% querystring pdf=1 %}" target="_blank">PDF</a><a class="more" href="{% url 'instruments:instrument' loan.instrument_id %}">Zum Instrument</a></p>
   {% include "core/_letterhead.html" with office=sender %}
   <h1>Leihvertrag</h1>

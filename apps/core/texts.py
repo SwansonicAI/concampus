@@ -19,11 +19,17 @@ class Spec:
     subject: str
     body: str
     placeholders: tuple = ()
-    appeal: bool = False  # turns someone down: the Rechtsbehelfsbelehrung follows
+    appeal: bool | None = None  # the Rechtsbehelfsbelehrung follows; None: where it is a Bescheid
 
     @property
     def allowed(self):
         return ALWAYS + self.placeholders
+
+    @property
+    def appealable(self):
+        """Whether the Rechtsbehelfsbelehrung follows: on every Bescheid, a Verwaltungsakt that can be challenged (§ 37 Abs. 6
+        VwVfG), favourable or not, unless it says otherwise."""
+        return self.group == BESCHEID if self.appeal is None else self.appeal
 
 
 BESCHEID, NACHRICHT, BAUSTEIN = 'Bescheide', 'Nachrichten', 'Bausteine'
@@ -44,7 +50,7 @@ TEXTS = {
         BESCHEID, 'Ablehnung', 'Bescheid über die Eignungsprüfung',
         'Ihre Bewerbung für den Studiengang {studiengang}, Hauptfach {hauptfach}, zum {semester} wird abgelehnt.\n\n'
         'Begründung: {begruendung}\n\nWir danken Ihnen für Ihre Bewerbung und wünschen Ihnen für Ihren weiteren Weg alles Gute.',
-        STUDY + ('begruendung',), appeal=True,
+        STUDY + ('begruendung',),
     ),
     'immatrikulation': Spec(
         BESCHEID, 'Immatrikulation', 'Immatrikulationsbescheid',
@@ -93,7 +99,7 @@ TEXTS = {
         'Semester: gezählt sind {gezaehlt} Semester, ohne Urlaubssemester, ein Teilzeitsemester halb. Für das Semester ist deshalb '
         'eine Langzeitstudiengebühr von {betrag} € zu zahlen, mit dem Semesterbeitrag bei der Rückmeldung.\n\n'
         'Wer Kinder erzieht, Angehörige pflegt oder in Gremien der Hochschule mitarbeitet, kann den Erlass beantragen.',
-        STUDY + ('rueckmeldesemester', 'regelstudienzeit', 'erlaubt', 'gezaehlt', 'betrag'), appeal=True,
+        STUDY + ('rueckmeldesemester', 'regelstudienzeit', 'erlaubt', 'gezaehlt', 'betrag'),
     ),
     'gebuehren_erlassen': Spec(
         BESCHEID, 'Gebühren erlassen', 'Bescheid über den Erlass von Gebühren',
@@ -121,7 +127,7 @@ TEXTS = {
         BESCHEID, 'Exmatrikulation ohne Rückmeldung', 'Exmatrikulationsbescheid',
         'Sie haben sich nicht fristgerecht zum {rueckmeldesemester} zurückgemeldet und sind daher mit Ablauf des {zum} aus dem '
         'Studiengang {studiengang}, Hauptfach {hauptfach}, exmatrikuliert.',
-        STUDY + ('rueckmeldesemester', 'zum'), appeal=True,
+        STUDY + ('rueckmeldesemester', 'zum'),
     ),
     'abschlussarbeit': Spec(
         BESCHEID, 'Abschlussarbeit angemeldet', 'Ausgabe des Themas der Abschlussarbeit',
@@ -144,7 +150,7 @@ TEXTS = {
         'Sie haben die Prüfung „{pruefung}“ im Modul {modul} auch im {versuch}. Versuch nicht bestanden. Weitere Versuche sieht die '
         'Prüfungsordnung nicht vor: Die Prüfung ist endgültig nicht bestanden, der Prüfungsanspruch im Studiengang {studiengang} ist '
         'erloschen. Über die Exmatrikulation erhalten Sie einen gesonderten Bescheid.',
-        STUDY + ('pruefung', 'modul', 'versuch'), appeal=True,
+        STUDY + ('pruefung', 'modul', 'versuch'),
     ),
     'email_bestaetigen': Spec(
         NACHRICHT, 'Neue E-Mail-Adresse bestätigen', 'E-Mail-Adresse bestätigen',
@@ -173,6 +179,7 @@ TEXTS = {
         'Sie sind zur {pruefung} eingeladen.\n\nTermin: {termin} Uhr\nOrt: {raum}\n\nIhr Programm:\n{programm}\n\n'
         'Wenn Sie bestehen, folgen:\n{danach}\n\nBitte erscheinen Sie 30 Minuten vorher und bringen Sie einen Lichtbildausweis mit. '
         'Dieses Schreiben können Sie für ein Visum vorlegen.', STUDY + ('pruefung', 'termin', 'raum', 'programm', 'danach'),
+        appeal=False,  # a summons, no Verwaltungsakt: nothing in it to challenge
     ),
     'unterlagen_fehlen': Spec(
         NACHRICHT, 'Bewerbung unvollständig', 'Ihre Bewerbung: es fehlt noch etwas',
@@ -315,7 +322,7 @@ TEXTS = {
     'lehrauftrag_zurueckgezogen': Spec(
         BESCHEID, 'Lehrauftrag zurückgezogen', 'Bescheid: Lehrauftrag {semester} zurückgezogen',
         'Ihr Lehrauftrag für das {semester} wird mit Ablauf des {tag} zurückgezogen. Grund: {grund}. Die bis dahin gehaltenen Stunden werden vergütet; '
-        'bitte bestätigen Sie sie unter „Meine Lehre“.', ('semester', 'grund', 'tag', 'von'), appeal=True,
+        'bitte bestätigen Sie sie unter „Meine Lehre“.', ('semester', 'grund', 'tag', 'von'),
     ),
     'unterrichtszeit': Spec(
         NACHRICHT, 'Unterrichtszeit eingetragen', 'Unterrichtszeit: {veranstaltung}', '{von} hat Ihre Unterrichtszeit eingetragen: {zeit} in {raum}, ab {ab}.',
@@ -747,13 +754,23 @@ def basics():
     }
 
 
+def filled(template, values):
+    """A text with its placeholders filled in; a paragraph whose placeholders are all empty left out, as „Wenn Sie
+    bestehen, folgen:“ with nothing to follow, the rule of the Briefbögen (core.paper.filled)."""
+    def kept(paragraph):
+        names = [name for _, name, _, _ in Formatter().parse(paragraph) if name]
+        return not names or any(str(values[name]).strip() for name in names)
+    return '\n\n'.join(p for p in template.split('\n\n') if kept(p)).format_map(values)
+
+
 def render(key, *after, **values):
-    """(subject, body) with the placeholders filled in and the text blocks `after` following; a Bescheid that turns
-    someone down gets the Rechtsbehelfsbelehrung, others where they name it."""
+    """(subject, body) with the placeholders filled in and the text blocks `after` following; a Bescheid gets the
+    Rechtsbehelfsbelehrung (Spec.appealable), others where they name it."""
     values = Values(basics(), **{name: str(value) for name, value in values.items()})
-    subject, body = (part.format_map(values) for part in wording(key))
-    for block in dict.fromkeys([*after, *(['rechtsbehelf'] if TEXTS[key].appeal else [])]):
-        body += '\n\n' + wording(block)[1].format_map(values)
+    subject, body = wording(key)
+    subject, body = subject.format_map(values), filled(body, values)
+    for block in dict.fromkeys([*after, *(['rechtsbehelf'] if TEXTS[key].appealable else [])]):
+        body += '\n\n' + filled(wording(block)[1], values)
     return subject, body
 
 

@@ -119,7 +119,10 @@ def editor(request, key):
         'menu': None,  # the window's width for the page and the rail (setup/paper.html)
         'key': key, 'name': name, 'standard': standard, 'own': bool(record), 'record': record, 'used': uses(key, found),
         'letters': letters, 'sample': sample_for(key, design, found), 'samples': paper.SAMPLES,
-        'editor': editor_data(design, name) | {'letters': letters},
+        'editor': editor_data(design, name) | {
+            'letters': letters, 'used': [title for _, title in uses(key, found)], 'assign': reverse('setup:papers'),
+            'unsaved': request.method == 'POST',  # a save refused: what was sent stands, still to be saved
+        },
     })
 
 
@@ -127,16 +130,19 @@ def editor_data(design, name):
     """What the page in the browser needs to lay the Briefbogen out as the PDF will (paper.js)."""
     institution = Institution.get()
     own = paper.own_fonts()
-    fonts = {key: {'name': title, 'faces': {face: static(f'core/fonts/{stem}-{suffix}.ttf') for face, suffix in paper.FACES.items()}} for key, (title, stem) in paper.FAMILIES.items()}
-    fonts |= {key: {'name': title, 'own': True, 'faces': {face: reverse('setup:artwork', args=[art.pk]) for face, art in faces.items()},
-                    'files': [{'pk': art.pk, 'face': face} for face, art in faces.items()]} for key, (title, faces) in own.items()}
+    fonts = {key: {'name': title, 'faces': [{'w': w, 'i': i, 'url': static(f'core/fonts/{stem}-{suffix}.ttf')} for (w, i), suffix in paper.FACES.items()]}
+             for key, (title, stem) in paper.FAMILIES.items()}
+    fonts |= {key: {'name': title, 'own': True, 'faces': [face(art) for art in arts.values()]} for key, (title, arts) in own.items()}
     pictures = [{'pk': a.pk, 'name': a.name, 'url': reverse('setup:artwork', args=[a.pk]), 'w': a.width, 'h': a.height} for a in Artwork.objects.filter(kind=Artwork.Kind.PICTURE)]
     logo = institution.logo
-    sample = paper.values(institution, {
-        'words': paper.GERMAN, 'office': ['Akademische und Studentische Angelegenheiten'], 'title': 'Titel des Dokuments', 'reference': '2026-1234', 'date': '16. November 2026',
+    sample = paper.values(institution, {  # the Hochschule's own values; for a document, its person and its pages, an example
+        'words': paper.GERMAN, 'office': ['Akademische und Studentische Angelegenheiten'], 'title': 'Zulassung zum Studium', 'reference': '2026-1234',
+        'date': '16. November 2026', 'person': 'Erika Mustermann', 'matrikel': '100123',
     }) | {'seitenzahl': 'Seite 1 von 2', 'seite': '1', 'seiten': '2'}
     return {
-        'design': design, 'name': name, 'fonts': fonts, 'pictures': pictures, 'fields': paper.FIELDS, 'values': sample,
+        'design': design, 'name': name, 'fonts': fonts, 'pictures': pictures, 'values': sample,
+        'fields': [{'key': key, 'group': group, 'label': label, 'about': about, 'example': group not in (paper.HOCHSCHULE, paper.BANK)}
+                   for key, (group, label, about) in paper.FIELDS.items()],
         'accent': institution.accent or '#008a00', 'wordmark': institution.lines,
         'logo': reverse('logo') if logo else '', 'svg': bool(logo) and logo.name.lower().endswith('.svg'),
         'upload': reverse('setup:artworks'),
@@ -163,30 +169,46 @@ def preview(request, key):
     return paper.respond(paper.pdf(paper.sample(kind), f'Muster {paper.SAMPLES[kind]}', design=design), f'Briefbogen {paper.SAMPLES[kind]}')
 
 
+def face(art):
+    """A font face as the editor knows it (paper.js)."""
+    return {'pk': art.pk, 'w': art.weight or 400, 'i': art.italic, 'url': reverse('setup:artwork', args=[art.pk])}
+
+
 @require('manage_institution')
 @require_POST
 def artworks(request):
-    """A picture or a font face uploaded from the editor, checked and kept (paper.accept); a face the family has already
-    is replaced. JSON for the editor: the new one, or why not."""
-    kind, upload = request.POST.get('art'), request.FILES.get('datei')
-    if kind not in Artwork.Kind.values or not upload:
+    """Uploads from the editor, checked and kept. A picture (paper.accept); or the files of a font family, as many as
+    it has, once whoever uploads confirms its licence allows embedding it in PDF documents: each face found in them made
+    TrueType (paper.accept_font), one already there of the same family, weight and slant replaced. JSON for the editor:
+    what is kept, and what was not, saying why."""
+    kind, uploads = request.POST.get('art'), request.FILES.getlist('datei')
+    if kind not in Artwork.Kind.values or not uploads:
         return JsonResponse({'error': 'Bitte eine Datei wählen.'}, status=400)
-    face = request.POST.get('schnitt', 'regular') if kind == Artwork.Kind.FONT else ''
-    name = (request.POST.get('name', '').strip() or upload.name.rsplit('.', 1)[0])[:80]
-    if kind == Artwork.Kind.FONT and (face not in Artwork.Face.values or not request.POST.get('name', '').strip()):
-        return JsonResponse({'error': 'Bitte den Namen der Schrift und den Schnitt angeben.'}, status=400)
-    try:
-        file, width, height = paper.accept(upload, kind)
-    except ValidationError as error:
-        return JsonResponse({'error': ' '.join(error.messages)}, status=400)
-    if kind == Artwork.Kind.FONT:  # a new record, not the old one changed: a font is set by its record's number (paper.registered)
-        Artwork.objects.filter(kind=kind, name__iexact=name, face=face).delete()
-        name = next((a.name for a in Artwork.objects.filter(kind=kind) if slugify(a.name) == slugify(name)), name)
-    art = Artwork.objects.create(kind=kind, name=name, face=face, file=file, width=width, height=height)
-    return JsonResponse({
-        'pk': art.pk, 'kind': kind, 'name': art.name, 'face': face, 'key': paper.OWN + slugify(art.name),
-        'url': reverse('setup:artwork', args=[art.pk]), 'w': width, 'h': height,
-    })
+    if kind == Artwork.Kind.PICTURE:
+        try:
+            file, width, height = paper.accept(uploads[0])
+        except ValidationError as error:
+            return JsonResponse({'error': ' '.join(error.messages)}, status=400)
+        art = Artwork.objects.create(kind=kind, name=uploads[0].name.rsplit('.', 1)[0][:80], file=file, width=width, height=height)
+        return JsonResponse({'pk': art.pk, 'name': art.name, 'url': reverse('setup:artwork', args=[art.pk]), 'w': width, 'h': height})
+    if not request.POST.get('lizenz'):
+        return JsonResponse({'error': 'Bitte bestätigen, dass die Lizenz der Schrift das Einbetten in PDF-Dokumente erlaubt.'}, status=400)
+    if len(uploads) > 24:
+        return JsonResponse({'error': 'Höchstens 24 Dateien auf einmal.'}, status=400)
+    kept, refused = [], []
+    for upload in uploads:
+        try:
+            found = paper.accept_font(upload)
+        except ValidationError as error:
+            refused.append(f'{upload.name}: {" ".join(error.messages)}')
+            continue
+        for file, family, weight, italic in found:
+            family = next((a.name for a in Artwork.objects.filter(kind=kind) if slugify(a.name) == slugify(family)), family)  # one family, however written
+            # a new record, not the old one changed: a face is set by its record's number (paper.faces)
+            Artwork.objects.filter(kind=kind, name=family, weight=weight, italic=italic).delete()
+            art = Artwork.objects.create(kind=kind, name=family, weight=weight, italic=italic, licensed=True, file=file)
+            kept.append({'key': paper.OWN + slugify(family), 'name': family} | face(art))
+    return JsonResponse({'kept': kept, 'refused': refused}, status=200 if kept else 400)
 
 
 @require('manage_institution')

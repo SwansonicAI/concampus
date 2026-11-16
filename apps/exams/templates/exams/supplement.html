@@ -4,7 +4,7 @@
 {% block content %}
 {% language lang %}
 {% with p=study.person program=study.program %}
-<div class="document{% if copy %} copy{% endif %}" lang="{{ lang }}" data-paper="supplement">
+<div class="document{% if copy %} copy{% endif %}" lang="{{ lang }}" data-paper="supplement" data-person="{{ p.legal_name }}" data-matrikel="{{ p.matriculation|default:'' }}">
   <p class="no-print actions"><a class="btn" href="{% querystring pdf=1 %}" target="_blank">PDF</a>{% if de %}<a class="btn ghost" href="?">English</a>{% else %}<a class="btn ghost" href="?sprache=de">Deutsch</a>{% endif %}<a class="more" href="{% url 'exams:transcript' study.pk %}">Zum Zeugnis</a></p>
   {% if not finished %}<p class="fail">{% if de %}Entwurf: {{ earned }} von {{ total }} ECTS-Leistungspunkten erworben; die Gesamtnote folgt mit dem Abschluss.{% else %}Draft: {{ earned }} of {{ total }} ECTS credits earned; the overall grade follows with the degree.{% endif %}</p>{% endif %}
   {% include "core/_letterhead.html" with office=awarding|linebreaksbr %}

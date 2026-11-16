@@ -6,6 +6,7 @@ Only the markup the templates use is read (blocks(), inline()), every text is es
 checked field by field before it is kept (clean()), uploads are tested and pictures drawn anew (accept()). ReportLab
 sets the pages, in the open-licence fonts of core/static/core/fonts or the Hochschule's own."""
 import re
+import secrets
 from collections import Counter
 from copy import deepcopy
 from io import BytesIO
@@ -22,12 +23,17 @@ from django.utils import timezone
 from django.utils.dateformat import format as date_format
 from django.utils.http import content_disposition_header
 from django.utils.text import slugify
+from fontTools.pens.cu2quPen import Cu2QuPen
+from fontTools.pens.ttGlyphPen import TTGlyphPen
+from fontTools.ttLib import TTFont as Tools, newTable
+from fontTools.varLib import instancer
 from lxml import html as lxml_html
 from PIL import Image, UnidentifiedImageError
 from reportlab.graphics.barcode.qr import QrCodeWidget
 from reportlab.graphics.shapes import Drawing
 from reportlab.lib.colors import HexColor
 from reportlab.lib.enums import TA_CENTER, TA_RIGHT
+from reportlab.lib.fonts import addMapping
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.lib.units import mm
@@ -48,7 +54,8 @@ FAMILIES = {  # key: (name, file stem), the fonts that come with ConCampus, each
     'ptsans': ('PT Sans', 'PTSans'), 'lato': ('Lato', 'Lato'), 'fira': ('Fira Sans', 'FiraSans'),
     'ptserif': ('PT Serif', 'PTSerif'), 'plexserif': ('IBM Plex Serif', 'IBMPlexSerif'), 'crimson': ('Crimson Text', 'CrimsonText'),
 }
-FACES = {'regular': 'Regular', 'bold': 'Bold', 'italic': 'Italic', 'bolditalic': 'BoldItalic'}
+FACES = {(400, False): 'Regular', (700, False): 'Bold', (400, True): 'Italic', (700, True): 'BoldItalic'}  # (weight, italic): file suffix
+WEIGHTS = {100: 'Dünn', 200: 'Extraleicht', 300: 'Leicht', 400: 'Normal', 500: 'Mittel', 600: 'Halbfett', 700: 'Fett', 800: 'Extrafett', 900: 'Schwarz'}
 OWN = 'eigen-'  # the key of a family the Hochschule uploaded: this and its name, slugified
 WIDTH, HEIGHT = A4
 PAGE = (210, 297)  # mm
@@ -63,12 +70,28 @@ FIELD = re.compile(r'\{(\w+)\}')
 BOLD = re.compile(r'\*\*(.+?)\*\*', re.S)
 LEADING = 1.25  # a text's lines, apart by its size times this, unless it sets its own; as the editor shows them (paper.js)
 
-FIELDS = {  # the placeholders a text on a Briefbogen may hold: what each says. A line whose placeholders are all empty goes
-    'name': 'Name der Hochschule', 'kurzname': 'Kurzname, sonst Name', 'anschrift': 'Anschrift, Zeile für Zeile',
-    'anschrift_zeile': 'Anschrift in einer Zeile', 'ort': 'Ort', 'email': 'E-Mail', 'website': 'Website',
-    'empfaenger': 'Zahlungsempfänger oder „Bankverbindung“, mit IBAN', 'iban': 'IBAN', 'bic': 'BIC',
-    'amt': 'Das Amt, das ausstellt', 'titel': 'Titel des Dokuments', 'aktenzeichen': 'Aktenzeichen eines Bescheids',
-    'datum': 'Datum', 'seitenzahl': '„Seite 1 von 2“, nur bei mehr als einer Seite', 'seite': 'Seite', 'seiten': 'Seiten insgesamt',
+HOCHSCHULE, BANK, PERSON, DOKUMENT, SEITE = 'Hochschule', 'Bankverbindung der Hochschule', 'Person, um die es geht', 'Dieses Dokument', 'Seite'
+FIELDS = {  # the placeholders a text on a Briefbogen may hold, by where their value comes from: (from, label, what it says).
+    # The Hochschule's are its settings, the same on every document; a document's and a page's differ from one to the next.
+    'hochschule': (HOCHSCHULE, 'Name', 'Der Name der Hochschule'),
+    'hochschule_kurz': (HOCHSCHULE, 'Kurzname', 'Ihr Kurzname, sonst ihr Name'),
+    'hochschule_anschrift': (HOCHSCHULE, 'Anschrift', 'Ihre Anschrift, Zeile für Zeile'),
+    'hochschule_anschrift_zeile': (HOCHSCHULE, 'Anschrift in einer Zeile', 'Ihre Anschrift in einer Zeile, für die Rücksendeangabe'),
+    'hochschule_ort': (HOCHSCHULE, 'Ort', 'Ihr Ort'),
+    'hochschule_email': (HOCHSCHULE, 'E-Mail', 'Ihre E-Mail-Adresse'),
+    'hochschule_website': (HOCHSCHULE, 'Website', 'Ihre Website, ohne https://'),
+    'hochschule_bank': (BANK, 'Überschrift', 'Der Zahlungsempfänger, wo er anders heißt als die Hochschule, sonst „Bankverbindung“; leer ohne IBAN'),
+    'hochschule_iban': (BANK, 'IBAN', 'Die IBAN, auf die Studierende den Semesterbeitrag überweisen'),
+    'hochschule_bic': (BANK, 'BIC', 'Die BIC dazu'),
+    'person_name': (PERSON, 'Name', 'Wem es gilt oder wen es bescheinigt: Studierende, Bewerbende, Lehrende; leer auf Listen wie der Notenliste'),
+    'person_matrikelnummer': (PERSON, 'Matrikelnummer', 'Ihre Matrikelnummer; leer, wo sie keine hat, wie Lehrende und Bewerbende'),
+    'dokument_titel': (DOKUMENT, 'Titel', 'Seine Überschrift, z. B. „Immatrikulationsbescheinigung“ oder der Betreff des Briefs'),
+    'dokument_amt': (DOKUMENT, 'Amt', 'Das Amt, das es ausstellt, z. B. „Prüfungsamt“'),
+    'dokument_aktenzeichen': (DOKUMENT, 'Aktenzeichen', 'Das Aktenzeichen eines Bescheids; leer bei anderen'),
+    'dokument_datum': (DOKUMENT, 'Datum', 'Der Tag, an dem es ausgestellt ist'),
+    'seitenzahl': (SEITE, 'Seite x von y', '„Seite 2 von 3“, englisch „Page 2 of 3“; leer, wo das Dokument eine Seite hat'),
+    'seite': (SEITE, 'Seite', 'Die Nummer dieser Seite'),
+    'seiten': (SEITE, 'Seiten', 'Wie viele Seiten das Dokument hat'),
 }
 PAGED = {'seitenzahl', 'seite', 'seiten'}  # known once the document is set: drawn last (Numbered)
 
@@ -95,23 +118,23 @@ def text(key, x, y, w, h, words, size, pages='all', **fields):
     return element('text', key, x, y, w, h, pages, text=words, size=size, **{'colour': 'muted'} | fields)
 
 
-LATER = [  # every Briefbogen's following pages: the Hochschule and the title over a hairline
-    text('k1', 25, 11.4, 80, 4, '{kurzname}', 7.5, 'later'),
-    text('k2', 110, 11.4, 80, 4, '{titel}', 7.5, 'later', align='right'),
+LATER = [  # every Briefbogen's following pages: what it is and whom it is about, over a hairline, so no page goes astray
+    text('k1', 25, 11.4, 100, 4, '{dokument_titel}', 7.5, 'later'),
+    text('k2', 125, 11.4, 65, 4, '{person_name}', 7.5, 'later', align='right'),
     element('box', 'k3', 25, 16, 165, 0.18, 'later', colour='line', fill=True, line=0),
 ]
 FOOTER = [  # name and address, how to reach the Hochschule, where to pay: three columns under a hairline; the page
     element('box', 'f1', 25, 270, 165, 0.18, colour='line', fill=True, line=0),
-    text('f2', 25, 271.6, 55, 16, '**{name}**\n{anschrift}', 7, leading=1.35),
-    text('f3', 80, 271.6, 55, 16, '{email}\n{website}', 7, leading=1.35),
-    text('f4', 135, 271.6, 55, 16, '{empfaenger}\nIBAN {iban}\nBIC {bic}', 7, leading=1.35),
+    text('f2', 25, 271.6, 55, 16, '**{hochschule}**\n{hochschule_anschrift}', 7, leading=1.35),
+    text('f3', 80, 271.6, 55, 16, '{hochschule_email}\n{hochschule_website}', 7, leading=1.35),
+    text('f4', 135, 271.6, 55, 16, '{hochschule_bank}\nIBAN {hochschule_iban}\nBIC {hochschule_bic}', 7, leading=1.35),
     text('f5', 125, 263.5, 65, 4, '{seitenzahl}', 7.5, align='right'),
 ]
 SANS = {'font': 'ptsans', 'heading': 'ptsans', 'size': 10, 'title': 19, 'bar': True, 'align': 'left', 'middle': False, 'marks': False}
 STANDARD = {  # key: (name, design): ConCampus's own Briefbögen, until the Hochschule keeps its own under the key
     'brief': ('Brief', {'style': SANS | {'marks': True}, 'elements': [
         element('wordmark', 'm', 25, 14, 100, 17, 'first', size=15, align='left'),
-        text('r', 25, 57.4, 85, 3, '{kurzname} · {anschrift_zeile}', 6.5, 'first', underline=True),
+        text('r', 25, 57.4, 85, 3, '{hochschule_kurz} · {hochschule_anschrift_zeile}', 6.5, 'first', underline=True),
         element('address', 'a', 25, 63.5, 80, 26.5, 'first', size=10),
         element('info', 'i', 125, 47, 65, 40, 'first', size=8.5),
         element('body', 'b1', 25, 98, 165, 164, 'first'),
@@ -120,7 +143,7 @@ STANDARD = {  # key: (name, design): ConCampus's own Briefbögen, until the Hoch
     ]}),
     'bescheinigung': ('Bescheinigung', {'style': SANS, 'elements': [
         element('wordmark', 'm', 25, 14, 100, 17, 'first', size=15, align='left'),
-        text('o', 105, 14, 85, 16, '**{amt}**\n{anschrift}', 8.5, 'first', align='right', leading=1.35),
+        text('o', 105, 14, 85, 16, '**{dokument_amt}**\n{hochschule_anschrift}', 8.5, 'first', align='right', leading=1.35),
         element('body', 'b1', 25, 44, 165, 218, 'first'),
         element('body', 'b2', 25, 26, 165, 236, 'later'),
         *LATER, *FOOTER,
@@ -139,10 +162,10 @@ SAMPLES = {'brief': 'Brief', 'bescheinigung': 'Bescheinigung', 'urkunde': 'Urkun
 # ---- fonts ---------------------------------------------------------------------------------------------------------
 
 def own_fonts():
-    """The Hochschule's own families: {key: (name, {face: Artwork})}."""
+    """The Hochschule's own families: {key: (name, {(weight, italic): Artwork})}."""
     found = {}
     for art in Artwork.objects.filter(kind=Artwork.Kind.FONT):
-        found.setdefault(OWN + slugify(art.name), (art.name, {}))[1][art.face] = art
+        found.setdefault(OWN + slugify(art.name), (art.name, {}))[1][(art.weight or 400, art.italic)] = art
     return found
 
 
@@ -151,49 +174,161 @@ def families():
     return {key: name for key, (name, _) in FAMILIES.items()} | {key: name for key, (name, _) in own_fonts().items()}
 
 
-def registered(key, own=None):
-    """The family `key` ready to set, its faces as ReportLab names it: {face: name}; an unknown one PT Sans. A face it
-    lacks is set in its regular one."""
+def faces(key, own=None):
+    """The faces of family `key`: {(weight, italic): (ReportLab's name, file)}; of an unknown one, PT Sans's."""
     if key in FAMILIES:
-        faces = {face: f'{FAMILIES[key][1]}-{stem}' for face, stem in FACES.items()}
-        files = {face: FONTS / f'{name}.ttf' for face, name in faces.items()}
-    elif key in (own := own if own is not None else own_fonts()) and 'regular' in own[key][1]:
-        arts = own[key][1]
-        faces = {face: f'Own{arts.get(face, arts["regular"]).pk}' for face in FACES}
-        files = {face: Path(arts.get(face, arts['regular']).file.path) for face in FACES}
-    else:
-        return registered('ptsans')
-    for face, name in faces.items():
+        return {face: (f'{FAMILIES[key][1]}-{stem}', FONTS / f'{FAMILIES[key][1]}-{stem}.ttf') for face, stem in FACES.items()}
+    own = own if own is not None else own_fonts()
+    if key in own and own[key][1]:
+        return {face: (f'Own{art.pk}', Path(art.file.path)) for face, art in own[key][1].items()}
+    return faces('ptsans')
+
+
+def nearest(found, weight, italic):
+    """Of a family's faces, the one nearest in weight with this slant, else upright; the heavier where two are as near."""
+    slant = [f for f in found if f[1] == italic] or [f for f in found if not f[1]] or list(found)
+    return min(slant, key=lambda f: (abs(f[0] - weight), -f[0]))
+
+
+def font(key, weight=400, italic=False, own=None):
+    """ReportLab's name for family `key` in the face nearest to `weight` and `italic`, registered on first use, with its
+    family: **bold** in it is the face of 700, or of 900 where it is heavy already, as near as the family has them."""
+    found = faces(key, own)
+    pick = lambda w, i: found[nearest(found, w, i)][0]  # noqa: E731
+    heavy = 700 if weight < 600 else 900
+    names = {'normal': pick(weight, False), 'bold': pick(heavy, False), 'italic': pick(weight, True), 'boldItalic': pick(heavy, True)}
+    files = {name: path for name, path in found.values()}
+    for name in names.values():
         if name not in pdfmetrics.getRegisteredFontNames():
-            pdfmetrics.registerFont(TTFont(name, files[face]))
-    registerFontFamily(faces['regular'], normal=faces['regular'], bold=faces['bold'], italic=faces['italic'], boldItalic=faces['bolditalic'])
-    return faces
-
-
-def font(key, bold=False, italic=False, own=None):
-    return registered(key, own)[('bold' if bold else '') + ('italic' if italic else '') or 'regular']
+            pdfmetrics.registerFont(TTFont(name, files[name]))
+    registerFontFamily(names['normal'], **names)
+    addMapping(names['normal'], 0, 0, names['normal'])  # the face itself stays the family's upright one, whatever stood in for others
+    return pick(weight, italic)
 
 
 # ---- uploads -------------------------------------------------------------------------------------------------------
 
-def accept(upload, kind):
-    """An uploaded picture or font face, checked: (file to keep, width, height); else ValidationError. A picture is
-    drawn anew from its pixels, PNG or JPEG, so nothing it carried besides them is kept; a font must be TrueType that
-    ReportLab reads and may embed."""
-    if upload.size > 5 * 1024 * 1024:
-        raise ValidationError('Größer als 5 MB.')
-    data = upload.read()
-    if kind == Artwork.Kind.FONT:
-        if data[:4] == b'OTTO':
-            raise ValidationError('Eine OpenType-Schrift mit CFF-Umrissen; nötig ist TrueType (.ttf).')
-        if data[:4] not in (b'\x00\x01\x00\x00', b'true'):
-            raise ValidationError('Keine TrueType-Schrift (.ttf).')
+def opened(data):
+    """A font file as fontTools reads it: TrueType, OpenType or WOFF; else ValidationError, saying what it is instead."""
+    head = data[:4]
+    if head == b'wOF2':
+        raise ValidationError('WOFF2 lässt sich nicht lesen; bitte dieselbe Schrift als TTF oder OTF.')
+    if head == b'ttcf':
+        raise ValidationError('Eine Sammlung mehrerer Schriften (.ttc); bitte die einzelnen Dateien.')
+    if head not in (b'\x00\x01\x00\x00', b'true', b'OTTO', b'wOFF'):
+        raise ValidationError('Keine Schriftdatei: TTF, OTF oder WOFF.')
+    if head == b'wOFF' and int.from_bytes(data[16:20], 'big') > 40 * 1024 * 1024:  # what it says it unpacks to
+        raise ValidationError('Größer als 40 MB, entpackt.')
+    try:
+        font = Tools(BytesIO(data), lazy=False)
+        font.flavor = None  # saved as plain TrueType, not WOFF
+        return font
+    except Exception:  # a malformed file raises struct, index, value and fontTools' own errors
+        raise ValidationError('Die Datei lässt sich nicht als Schrift lesen.') from None
+
+
+STYLE_WORDS = re.compile(r'\b(thin|hairline|extra ?light|ultra ?light|semi ?light|light|regular|normal|book|medium|semi ?bold|demi ?bold|extra ?bold|ultra ?bold|bold|black|heavy|italic|oblique)\b', re.I)
+
+
+def statics(font):
+    """A font's faces as static fonts: [(font, weight to the hundred, italic, what sets its family apart)]. A static font
+    as it is, its weight and slant as it states them. A variable one by the styles it names (as many as 36): those
+    of another width or the like, as Condensed, a family of their own; of two that round to the same weight, the one
+    nearer to it, as Regular before SemiLight. At most 24 styles, as making each takes about a second."""
+    def rounded(weight):
+        return min(900, max(100, int(weight / 100 + 0.5) * 100))
+    if 'fvar' not in font:
+        upright = not (('OS/2' in font and font['OS/2'].fsSelection & 1) or font['post'].italicAngle)
+        return [(font, rounded(font['OS/2'].usWeightClass if 'OS/2' in font else 400), not upright, '')]
+    axes = {a.axisTag: a.defaultValue for a in font['fvar'].axes}
+    styles = [(dict(i.coordinates), font['name'].getDebugName(i.subfamilyNameID) or '') for i in font['fvar'].instances[:24]] or [(axes, '')]  # each takes a second
+    chosen = {}
+    for where, name in styles:
+        weight = where.get('wght', 400)
+        italic = where.get('ital', 0) >= 0.5 or where.get('slnt', 0) != 0 or 'italic' in name.lower()
+        other = tuple(sorted((tag, value) for tag, value in where.items() if tag not in ('wght', 'ital', 'slnt') and value != axes.get(tag)))
+        apart = ' '.join(STYLE_WORDS.sub('', name).split()) if other else ''
+        key = (other, rounded(weight), italic)
+        if key not in chosen or abs(weight - rounded(weight)) < abs(chosen[key][0].get('wght', 400) - rounded(weight)):
+            chosen[key] = (where, apart)
+    groups = {}  # a family apart takes its name from its upright style nearest to Regular
+    for (other, weight, italic), (where, apart) in sorted(chosen.items(), key=lambda kv: (abs(kv[0][1] - 400), kv[0][2])):
+        groups.setdefault(other, apart)
+    return [(instancer.instantiateVariableFont(font, where), weight, italic, groups[other]) for (other, weight, italic), (where, _) in chosen.items()]
+
+
+def quadratic(font):
+    """A font with PostScript (CFF) outlines redrawn as TrueType ones, the only ones ReportLab embeds: each curve as
+    quadratic ones within a unit of the em, as fontTools' otf2ttf does it."""
+    order, drawn = font.getGlyphOrder(), {}
+    shapes = font.getGlyphSet()
+    for name in order:
+        pen = TTGlyphPen(shapes)
+        shapes[name].draw(Cu2QuPen(pen, 1.0, reverse_direction=True))
+        drawn[name] = pen.glyph()
+    font['loca'] = newTable('loca')
+    font['glyf'] = glyf = newTable('glyf')
+    glyf.glyphOrder, glyf.glyphs = order, drawn
+    for tag in ('CFF ', 'CFF2', 'VORG'):
+        if tag in font:
+            del font[tag]
+    glyf.compile(font)
+    for name, glyph in glyf.glyphs.items():
+        if hasattr(glyph, 'xMin'):
+            font['hmtx'][name] = (font['hmtx'][name][0], glyph.xMin)
+    font['maxp'] = maxp = newTable('maxp')
+    maxp.tableVersion, maxp.maxZones = 0x00010000, 1
+    for field in ('maxTwilightPoints', 'maxStorage', 'maxFunctionDefs', 'maxInstructionDefs', 'maxStackElements', 'maxSizeOfInstructions'):
+        setattr(maxp, field, 0)
+    maxp.maxComponentElements = max((len(getattr(g, 'components', [])) for g in drawn.values()), default=0)
+    maxp.compile(font)
+    post = font['post']
+    post.formatType, post.extraNames, post.mapping, post.glyphOrder = 2.0, [], {}, order
+    try:
+        post.compile(font)
+    except OverflowError:
+        post.formatType = 3
+    font.sfntVersion = '\x00\x01\x00\x00'
+
+
+def accept_font(upload):
+    """The faces in an uploaded font file, each checked and made TrueType that may be embedded:
+    [(file to keep, family, weight, italic)]; else ValidationError. A variable font gives one face per named style.
+    Family, weight and slant are read from the font."""
+    if upload.size > 10 * 1024 * 1024:
+        raise ValidationError('Größer als 10 MB.')
+    font, found = opened(upload.read()), []
+    family = (font['name'].getDebugName(16) or font['name'].getDebugName(1) or Path(upload.name).stem).strip()[:80]
+    if 'OS/2' in font and font['OS/2'].fsType & 0x0002 and not font['OS/2'].fsType & 0x000C:
+        raise ValidationError('Ihre Lizenz verbietet, sie in Dokumente einzubetten (fsType „Restricted License“).')
+    for static, weight, italic, apart in statics(font):
+        if 'glyf' not in static:
+            quadratic(static)
+        # a PostScript name of its own: ReportLab takes a face for any other of the same name, as a variable font's
+        # styles all have, or a face replaced has with the one before it (pdfmetrics.registerFont, _dynFaceNames)
+        own = f'{re.sub(r"[^A-Za-z0-9]", "", family)[:40] or "Schrift"}-{weight}{"Italic" if italic else ""}-{secrets.token_hex(4)}'
+        static['name'].removeNames(nameID=6)
+        static['name'].setName(own, 6, 3, 1, 0x409)
+        static['name'].setName(own, 6, 1, 0, 0)
+        out = BytesIO()
+        static.save(out)
+        data = out.getvalue()
         try:
             probe = TTFont('probe', BytesIO(data))
             probe.face.makeSubset(list(range(32, 127)))  # as a PDF embeds it: refused where the font forbids it
-        except Exception as error:  # a malformed file raises more than TTFError: struct, index and value errors
-            raise ValidationError(f'Diese Schrift lässt sich nicht einbetten: {error}') from None
-        return ContentFile(data, f'{slugify(Path(upload.name).stem) or "schrift"}.ttf'), None, None
+        except Exception as error:  # ReportLab's TTFError, and struct and index errors of what it cannot read
+            raise ValidationError(f'Diese Schrift lässt sich nicht in PDF-Dokumente einbetten: {error}') from None
+        name = f'{family} {apart}'.strip()[:80]
+        found.append((ContentFile(data, f'{slugify(name) or "schrift"}-{weight}{"i" if italic else ""}.ttf'), name, weight, italic))
+    return found
+
+
+def accept(upload):
+    """An uploaded picture, checked and drawn anew from its pixels, PNG or JPEG, so nothing it carried besides them is
+    kept: (file to keep, width, height); else ValidationError."""
+    if upload.size > 5 * 1024 * 1024:
+        raise ValidationError('Größer als 5 MB.')
+    data = upload.read()
     Image.MAX_IMAGE_PIXELS = 40_000_000  # a picture larger than any letterhead needs is refused, not decoded
     try:
         with Image.open(BytesIO(data)) as probe:
@@ -280,7 +415,8 @@ def clean(design, letter=False):
                 'text': words, 'size': number(el.get('size'), 4, 72, 'Schriftgröße'), 'leading': number(el.get('leading', LEADING), 0.8, 3, 'Zeilenabstand'),
                 'font': el.get('font') if el.get('font') in fonts else '', 'colour': colour_of(el.get('colour', 'ink')),
                 'align': el.get('align') if el.get('align') in ('left', 'center', 'right') else 'left',
-                **{flag: bool(el.get(flag)) for flag in ('bold', 'italic', 'underline', 'caps')},
+                'weight': el['weight'] if el.get('weight') in WEIGHTS else 700 if el.get('bold') else 400,
+                **{flag: bool(el.get(flag)) for flag in ('italic', 'underline', 'caps')},
             }
         elif kind == 'wordmark':
             clean_el |= {'size': number(el.get('size'), 6, 60, 'Schriftgröße'), 'align': el.get('align') if el.get('align') in ('left', 'center', 'right') else 'left'}
@@ -317,11 +453,12 @@ def values(institution, meta):
     """What each placeholder says on this document's pages, the page numbers aside (Sheet.paged)."""
     i, words = institution, meta['words']
     return {
-        'name': i.name, 'kurzname': i.short_name or i.name, 'anschrift': i.address.strip(),
-        'anschrift_zeile': ' · '.join(line.strip() for line in i.address.splitlines() if line.strip()),
-        'ort': i.place, 'email': i.email, 'website': named(i.website) if i.website else '',
-        'empfaenger': (i.payee if i.payee and i.payee != i.name else words['bank']) if i.iban else '', 'iban': i.iban, 'bic': i.bic,
-        'amt': '\n'.join(meta['office']), 'titel': meta['title'], 'aktenzeichen': meta.get('reference', ''), 'datum': meta.get('date', ''),
+        'hochschule': i.name, 'hochschule_kurz': i.short_name or i.name, 'hochschule_anschrift': i.address.strip(),
+        'hochschule_anschrift_zeile': ' · '.join(line.strip() for line in i.address.splitlines() if line.strip()),
+        'hochschule_ort': i.place, 'hochschule_email': i.email, 'hochschule_website': named(i.website) if i.website else '',
+        'hochschule_bank': (i.payee if i.payee and i.payee != i.name else words['bank']) if i.iban else '', 'hochschule_iban': i.iban, 'hochschule_bic': i.bic,
+        'person_name': meta.get('person', ''), 'person_matrikelnummer': meta.get('matrikel', ''),
+        'dokument_titel': meta['title'], 'dokument_amt': '\n'.join(meta['office']), 'dokument_aktenzeichen': meta.get('reference', ''), 'dokument_datum': meta.get('date', ''),
     }
 
 
@@ -385,7 +522,7 @@ class Sheet:
             c.translate(WIDTH / 2, HEIGHT / 2)
             c.rotate(55)
             c.setFillColor(INK, alpha=0.05)
-            c.setFont(font(self.style['heading'], bold=True, own=self.own), 96)
+            c.setFont(font(self.style['heading'], 700, own=self.own), 96)
             c.drawCentredString(0, -32, self.meta['words']['copy'])
             c.restoreState()
 
@@ -410,7 +547,7 @@ class Sheet:
             if el.get('underline'):
                 markup = f'<u>{markup}</u>'
             style = ParagraphStyle(
-                'el', fontName=font(el.get('font') or self.style['font'], el.get('bold'), el.get('italic'), self.own), fontSize=el['size'],
+                'el', fontName=font(el.get('font') or self.style['font'], el.get('weight', 400), el.get('italic'), self.own), fontSize=el['size'],
                 leading=el['size'] * el.get('leading', LEADING), textColor=colour(el['colour'], self.accent),
                 alignment={'center': TA_CENTER, 'right': TA_RIGHT}.get(el.get('align'), 0),
             )
@@ -438,7 +575,7 @@ class Sheet:
         elif kind == 'info':
             size, y = el['size'], top
             for n, line in enumerate(self.meta.get('office', [])):
-                c.setFont(font(self.style['font'], bold=n == 0, own=self.own), size)
+                c.setFont(font(self.style['font'], 700 if n == 0 else 400, own=self.own), size)
                 c.setFillColor(INK if n == 0 else MUTED)
                 c.drawString(x, y - size, line)
                 y -= size * 1.33
@@ -456,7 +593,7 @@ class Sheet:
     def lines(self, c, rows, x, top, leading):
         y = top
         for words, size, ink, bold in rows:
-            c.setFont(font(self.style['font'], bold=bold, own=self.own), size)
+            c.setFont(font(self.style['font'], 700 if bold else 400, own=self.own), size)
             c.setFillColor(ink)
             c.drawString(x, y - size, words)
             y -= leading
@@ -567,8 +704,8 @@ class Look:
         self.accent, self.link, self.centred = HexColor(accent), accent, style['align'] == 'center'
         size, align = style['size'], TA_CENTER if style['align'] == 'center' else 0
         self.size, self.bar = size, style['bar']
-        regular, bold = font(style['font'], own=own), font(style['font'], bold=True, own=own)
-        heading = font(style['heading'], bold=True, own=own)
+        regular, bold = font(style['font'], own=own), font(style['font'], 700, own=own)
+        heading = font(style['heading'], 700, own=own)
         self.regular, self.bold = regular, bold
         base = ParagraphStyle('body', fontName=regular, fontSize=size, leading=size * 1.45, spaceAfter=size * 0.7, alignment=align, textColor=INK)
         self.body = base
@@ -878,6 +1015,7 @@ def pdf(page, title='', design=None):
         meta = {
             'office': office, 'title': next((plain(h) for h in el.iter('h1', 'h2')), title), 'copy': 'copy' in kind,
             'words': ENGLISH if el.get('lang') == 'en' else GERMAN, 'date': date_format(timezone.localdate(), 'j. F Y'),
+            'person': el.get('data-person', ''), 'matrikel': el.get('data-matrikel', ''),
         }
         address, dated = next(iter(el.find_class('address')), None), next(iter(el.find_class('dated')), None)
         if address is not None:

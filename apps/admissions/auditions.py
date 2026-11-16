@@ -149,5 +149,5 @@ def invite(p):
     start, _, room = held(p)
     p.study.notify(
         'einladung_eignungspruefung', reverse('admissions:mine'), pruefung=p.course.title, termin=date_format(timezone.localtime(start), 'l, j. F Y, H:i'),
-        raum=room.place(linked=True) if room else 'wird mitgeteilt', programm=p.note or '–', danach='\n'.join(f'– {line}' for line in after(p.course)) or '–',
+        raum=room.place(linked=True) if room else 'wird mitgeteilt', programm=p.note, danach='\n'.join(f'– {line}' for line in after(p.course)),  # empty: their paragraph goes
     )
