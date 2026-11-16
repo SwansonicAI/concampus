@@ -8,6 +8,6 @@
 </head>
 <body class="framed">
 {% if errors %}<p class="flash error">Keine Vorschau: {{ errors|join:" " }}</p>
-{% else %}{% if subject %}<h1>{{ subject }}</h1>{% endif %}<div class="document">{{ body|linebreaks }}</div>{% endif %}
+{% else %}{% if subject %}<h1>{{ subject }}</h1>{% endif %}<div class="document">{{ body }}</div>{% endif %}
 </body>
 </html>

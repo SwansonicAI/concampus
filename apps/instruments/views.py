@@ -140,7 +140,7 @@ def agreement(request, pk):
     if not (loan.person == request.user or request.user.may('manage_instruments', loan)):
         raise PermissionDenied
     return paper.answer(
-        request, 'instruments/agreement.html', {'loan': loan, 'terms': texts.block('leihbedingungen'), 'sender': texts.block('absender_leihe')},
+        request, 'instruments/agreement.html', {'loan': loan, 'today': timezone.localdate()},
         f'Leihvertrag {loan.instrument.name} {loan.person.name}',
     )
 

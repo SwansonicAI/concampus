@@ -5,6 +5,7 @@ from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -78,15 +79,16 @@ def issue(request, pk):
 
 
 def certificate(request, pk):
-    """The Urkunde conferring the degree, once the Zeugnis is issued."""
+    """The Urkunde conferring the degree, once the Zeugnis is issued: always as its PDF, which its Briefbogen may set from
+    its placeholders and Textfelder alone (core.paper.SET), so no page could say otherwise."""
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject'), pk=pk, issued__isnull=False)
     office = request.user.may('decide_results', study)
     if not (office or study.person == request.user):
         raise PermissionDenied
-    return paper.answer(request, 'exams/certificate.html', {
-        'study': study, 'completed': achievements(study)['completed'], 'copy': not office,
-        'signature': texts.block('unterschrift_urkunden'), 'sender': texts.block('absender_leistungen'),
-    }, f'Urkunde {study.person.name}')
+    name = f'Urkunde {study.person.name}'
+    return paper.respond(paper.pdf(render_to_string('exams/certificate.html', {
+        'study': study, 'completed': achievements(study)['completed'], 'copy': not office, 'signature': texts.block('unterschrift_urkunden'),
+    }, request), name), name)
 
 
 def supplement(request, pk):

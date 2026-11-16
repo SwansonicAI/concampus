@@ -1,4 +1,5 @@
 {% extends base %}
+{% load static %}
 {% block title %}{{ document.title }}{% endblock %}
 {% block content %}
 <p class="eyebrow"><a href="{{ back }}">{{ trail.0.0 }}</a></p>
@@ -11,26 +12,33 @@
     <div class="paper-choice">
       <label for="briefbogen">Briefbogen</label>
       <div><select name="briefbogen" id="briefbogen">{% for key, name in layouts.items %}<option value="{{ key }}"{% if key == layout %} selected{% endif %}>{{ name }}</option>{% endfor %}</select><a href="{% url 'documents:paper' layout %}" data-paper-link="{% url 'documents:paper' 'KEY' %}">Gestalten</a></div>
-      {% if document.letter %}<small class="muted">Nur Briefbögen mit Anschriftfeld.</small>{% endif %}
+      {% if document.letter %}<small class="muted">Nur Briefbögen mit Anschriftfeld.</small>{% elif not settable %}<small class="muted">Nur Briefbögen mit Textbereich: sein Inhalt fließt.</small>{% endif %}
     </div>
     {% elif document.paper %}<p class="muted">Auf dem Briefbogen <a href="{% url 'documents:papers' %}">{{ paper_name }}</a></p>{% endif %}
-    {% for key, spec, form, shared, fields in texts %}
-    {% if forloop.first and document.kind != 'bescheinigungen' %}<div class="worded">{% else %}<details class="worded"{% if form.errors or document.kind == 'bescheinigungen' %} open{% endif %}><summary><b>{{ spec.title }}</b>{% if shared %} <span class="muted">· steht {{ shared }}</span>{% endif %}</summary>{% endif %}
+    {% if set and texts %}<p class="muted worded-set">Was hier zu formulieren ist, legt der Briefbogen fest: seine Textfelder.</p>{% endif %}
+    {% for w, form, shared, fields in texts %}
+    {% if forloop.first and document.kind != 'bescheinigungen' %}<div class="worded" data-mark="{{ w.key }}">{% else %}<details class="worded" data-mark="{{ w.key }}"{% if form.errors or document.kind == 'bescheinigungen' %} open{% endif %}><summary><b>{{ w.title }}</b>{% if shared %} <span class="muted">· steht {{ shared }}</span>{% endif %}</summary>{% endif %}
       <div class="worded-fields">
         {% if form.subject %}<div>{{ form.subject.as_field_group }}</div>{% endif %}
-        <div>{{ form.body.as_field_group }}</div>
-        <div class="chips" aria-label="Platzhalter einfügen">{% for name, example in fields %}<button type="button" class="chip" data-insert="{{ '{' }}{{ name }}{{ '}' }}" title="{{ example|default:'leer' }}">{{ name }}</button>{% endfor %}</div>
-        {% if form.instance.pk %}<p class="worded-own"><button class="link" name="standard" value="{{ key }}" formnovalidate>Auf Standard zurücksetzen</button> · <a href="{% url 'history' 'core.text' form.instance.pk %}">Verlauf</a></p>{% endif %}
+        <div>{% if w.slot %}{{ form.body.errors }}{{ form.body }}{% else %}{{ form.body.as_field_group }}{% endif %}</div>
+        <div class="chips" aria-label="Platzhalter einfügen">{% for name, label, example in fields %}<button type="button" class="chip" data-insert="{{ '{' }}{{ name }}{{ '}' }}" title="{{ '{' }}{{ name }}{{ '}' }}: {{ example|default:'leer' }}">{{ label }}</button>{% endfor %}</div>
+        {% if form.instance.pk %}<p class="worded-own"><button class="link" name="standard" value="{{ w.key }}" formnovalidate>Auf Standard zurücksetzen</button> · <a href="{% url 'history' 'core.text' form.instance.pk %}">Verlauf</a></p>{% endif %}
       </div>
     {% if forloop.first and document.kind != 'bescheinigungen' %}</div>{% else %}</details>{% endif %}
     {% empty %}
     {% if word and document.key == 'vordruck' %}<p class="muted">Den Wortlaut jedes Vordrucks setzt seine Unterlagenart, unter Aufnahme › Unterlagen.</p>{% endif %}
     {% endfor %}
-    {% if texts or design %}<div class="actions"><button class="btn">Speichern</button><a class="btn ghost" data-close href="{{ back }}">Abbrechen</a></div>{% endif %}
+    {% if composer %}
+    {# The content block by block (documents/static/documents/compose.js): every word the Hochschule's, the rest the person's data #}
+    <div class="composer" data-composer="compose-data"><input type="hidden" name="inhalt"></div>
+    <p class="worded-own">{% if own %}<button class="link" name="art" value="vorschlag" formnovalidate data-confirm="Eigenen Inhalt verwerfen?">Auf Vorschlag zurücksetzen</button> · <a href="{% url 'history' 'documents.content' own.pk %}">Verlauf</a> · {% endif %}<button type="button" class="link" data-compose-empty data-confirm="Alle Blöcke entfernen?">Leer beginnen</button></p>
+    {% endif %}
+    {% if texts or design or composer %}<div class="actions"><button class="btn">Speichern</button><a class="btn ghost" data-close href="{{ back }}">Abbrechen</a></div>{% endif %}
   </form>
   <div class="wording-preview">
     <iframe name="document-frame" src="{% url 'documents:document_preview' kind document.key %}{% if document.paper %}#toolbar=0&amp;navpanes=0&amp;view=FitH{% endif %}" title="So kommt es an"></iframe>
   </div>
 </div>
 <form method="post" id="document-preview" action="{% url 'documents:document_preview' kind document.key %}{% if document.paper %}#toolbar=0&amp;navpanes=0&amp;view=FitH{% endif %}" target="document-frame">{% csrf_token %}</form>
+{% if composer %}{{ composer|json_script:"compose-data" }}<script src="{% static 'documents/compose.js' %}" defer></script>{% endif %}
 {% endblock %}

@@ -1,8 +1,11 @@
 {% extends base %}
 {% block title %}Urkunde {{ study.person.name }}{% endblock %}
 {% block content %}
-<div class="document ceremony{% if copy %} copy{% endif %}" data-paper="urkunde" data-person="{{ study.person.legal_name }}" data-matrikel="{{ study.person.matriculation|default:'' }}">
-  <p class="no-print actions"><a class="btn" href="{% querystring pdf=1 %}" target="_blank">PDF</a><a class="more" href="{% url 'exams:transcript' study.pk %}">Zum Zeugnis</a></p>
+{# Only ever made into the PDF (exams.transcripts.certificate). What the Urkunde says of itself is in its placeholders (core.paper.FIELDS): on a Briefbogen set without a text area, it is all there is; the rest flows where it has one #}
+<div class="document ceremony{% if copy %} copy{% endif %}" data-paper="urkunde" data-person="{{ study.person.legal_name }}" data-matrikel="{{ study.person.matriculation|default:'' }}"
+     data-person_geburtsname="{{ study.person.birth_name }}" data-person_geburtsdatum="{{ study.person.birth_date|date:'j. F Y' }}" data-person_geburtsort="{{ study.person.birth_place }}"
+     data-studium_studiengang="{{ study.program.name }}" data-studium_hauptfach="{{ study.subject }}" data-studium_grad="{{ study.program.qualification|default:study.program.degree }}"
+     data-dokument_datum="{{ completed|default:study.issued|date:'j. F Y' }}">
   {% include "core/_letterhead.html" with plain=True %}
   <h1>Urkunde</h1>
   {% if copy %}<p class="muted"><small>Abschrift zur Information. Gültig ist die unterschriebene und gesiegelte Urkunde.</small></p>{% endif %}

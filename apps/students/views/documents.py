@@ -83,7 +83,7 @@ def periods(request, pk):
         return data(request, lambda: xhochschule.periods(study, rows, first_enrolment(person)), f'studienzeitbescheinigung-{person.matriculation}')
     return paper.answer(request, 'students/periods.html', {
         'study': study, 'person': person, 'studies': studies, 'rows': rows, 'count': len({row[0] for row in rows}),
-        'leave': len({term for term, _, registration, _ in rows if registration.leave}), 'today': today, 'sender': texts.block('absender_bescheinigungen'),
+        'leave': len({term for term, _, registration, _ in rows if registration.leave}), 'today': today,
     }, f'Studienzeitbescheinigung {person.name}')
 
 
@@ -95,7 +95,7 @@ def exmatriculation(request, pk):
     if 'xml' in request.GET:
         return data(request, lambda: xhochschule.exmatriculation(study, first_enrolment(study.person)), f'exmatrikulationsbescheinigung-{study.person.matriculation}')
     return paper.answer(request, 'students/exmatriculation.html', {
-        'study': study, 'today': timezone.localdate(), 'sender': texts.block('absender_bescheinigungen'),
+        'study': study, 'today': timezone.localdate(),
         'reason': study.exit_reason == '1' or request.GET.get('grund'),  # often handed on: the ground only where asked for
     }, f'Exmatrikulationsbescheinigung {study.person.name}')
 
@@ -118,7 +118,7 @@ def certificate(request, pk):
         )
     return paper.answer(request, 'students/certificate.html', {
         'study': study, 'term': term, 'registration': registration, 'today': timezone.localdate(), 'fs': fs, 'hs': study.university_semester + bool(ahead),
-        'bafoeg': 'bafoeg' in request.GET, 'first': first, 'sender': texts.block('absender_bescheinigungen'), 'code': code, 'check': check,
+        'bafoeg': 'bafoeg' in request.GET, 'first': first, 'code': code, 'check': check,
     }, f'Immatrikulationsbescheinigung {term} {study.person.name}')
 
 

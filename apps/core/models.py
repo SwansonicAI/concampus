@@ -901,11 +901,12 @@ class Holiday(Tracked, models.Model):
 
 
 class Text(Tracked, models.Model):
-    """A letter, message or text block as the Hochschule words it (core.texts); without one, the default applies."""
+    """A letter, message or text block as the Hochschule words it (core.texts), or a Briefbogen's Textfeld as a document
+    words it (core.paper.slot_key: the document, a dot, the field); without one, the default applies."""
 
     capabilities = ('word_texts',)
 
-    key = models.CharField('Text', max_length=40, unique=True)
+    key = models.CharField('Text', max_length=80, unique=True)
     subject = models.CharField('Betreff', max_length=200, blank=True)
     body = models.TextField('Text')
 
@@ -920,11 +921,13 @@ class Text(Tracked, models.Model):
         return TEXTS[self.key].title if self.key in TEXTS else self.key
 
     def clean(self):
+        from .paper import FIELDS
         from .texts import TEXTS, check
 
+        allowed = TEXTS[self.key].allowed if self.key in TEXTS else tuple(FIELDS)  # a Textfeld holds the Briefbogen's
         for field in ('subject', 'body'):
             try:
-                check(getattr(self, field), TEXTS[self.key].allowed)
+                check(getattr(self, field), allowed)
             except ValidationError as error:
                 raise ValidationError({field: error.messages})
 

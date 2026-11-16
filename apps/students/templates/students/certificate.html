@@ -1,30 +1,9 @@
 {% extends base %}
+{% load composed %}
 {% block title %}Immatrikulationsbescheinigung{% if bafoeg %} nach § 9 BAföG{% endif %}{% endblock %}
 {% block content %}
 <div class="document" data-paper="immatrikulation" data-person="{{ study.person.legal_name }}" data-matrikel="{{ study.person.matriculation|default:'' }}">
   <p class="no-print actions"><a class="btn" href="{% querystring pdf=1 %}" target="_blank">PDF</a><a class="btn ghost" href="{{ request.get_full_path }}{% if request.GET %}&amp;{% else %}?{% endif %}xml">Als XHochschule-Datei</a><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
-  {% include "core/_letterhead.html" with office=sender %}
-  <h1>Immatrikulations&shy;bescheinigung{% if bafoeg %} nach § 9 BAföG{% endif %}</h1>
-  <p>Hiermit wird bescheinigt, dass</p>
-  <dl class="facts">
-    <dt>Name</dt><dd><b>{{ study.person.legal_name }}</b>{% if study.person.birth_name %}, geb. {{ study.person.birth_name }}{% endif %}</dd>
-    <dt>Geboren</dt><dd>{{ study.person.birth_date|date:"j. F Y" }}{% if study.person.birth_place %} in {{ study.person.birth_place }}{% endif %}</dd>
-    <dt>Matrikelnummer</dt><dd>{{ study.person.matriculation }}</dd>
-  </dl>
-  <p style="margin-top: 24px">im {{ term }} ({% if study.start_term_id == term.pk and study.since > term.start %}immatrikuliert seit {{ study.since|date:"j.n.Y" }}{% else %}{{ term.start|date:"j.n.Y" }}{% endif %} bis {{ term.end|date:"j.n.Y" }}) an der {{ institution.name }} immatrikuliert ist{% if registration.leave %} und für dieses Semester beurlaubt ist{% endif %}:</p>
-  <dl class="facts">
-    <dt>Studiengang</dt><dd>{{ study.program.title }}</dd>
-    <dt>Hauptfach</dt><dd>{{ study.subject }}</dd>
-    <dt>Abschlussziel</dt><dd>{{ study.program.qualification|default:study.program.degree }}</dd>
-    <dt>Studienart</dt><dd>{{ study.studienart }}, {% if registration.part_time %}Teilzeitstudium{% else %}Vollzeitstudium{% endif %}</dd>
-    <dt>Fachsemester</dt><dd>{{ fs }}</dd>
-    <dt>Hochschulsemester</dt><dd>{{ hs }}</dd>
-    {% if bafoeg %}<dt>Beginn des Studiums</dt><dd>{{ study.start_term.lectures_start|date:"j. F Y" }} ({{ study.start_term }})</dd>
-    <dt>Ersteinschreibung</dt><dd>{{ first|default:"–" }}</dd>
-    <dt>Regelstudienzeit</dt><dd>{{ study.program.semesters }} Semester</dd>{% endif %}
-  </dl>
-  {% if bafoeg %}<p style="margin-top: 24px">Die Immatrikulation erfolgte nicht aufgrund vorläufiger Zulassung. Diese Bescheinigung gilt als Ersatz für das Formblatt 2 (Bescheinigung nach § 9 BAföG).</p>{% endif %}
-  <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ today|date:"j. F Y" }}</span><span>{{ sender }}</span></div>
-  <p class="muted" style="margin-top: 48px" data-qr="{{ check }}?code={{ code }}"><small>Diese Bescheinigung wurde maschinell erstellt und ist ohne Unterschrift gültig. Prüfcode {{ code }}, zu prüfen unter {{ check }}</small></p>
+  {% composed 'immatrikulation' %}
 </div>
 {% endblock %}

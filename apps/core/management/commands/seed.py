@@ -37,6 +37,8 @@ from admissions.auditions import invite
 from admissions.views.board import DECISIONS, grounds
 from core import destatis, history, keys, texts
 from core.models import Change, Entry, Holiday, Institute, Institution, Key, Membership, Message, Office, Person, Rating, Reveal, Term, Text
+from documents.compose import VORSCHLAG
+from documents.models import Content
 from courses import panel as sheets
 from courses.models import Appointment, Area, Assignment, Course, Ensemble, Format, Group, Obligation, Participation, Post, Rate, Recusal, Reduction, ReductionGround, Score, Signup
 from courses.panel import mean, rounding
@@ -475,10 +477,11 @@ DOCUMENTS = [  # key, name, condition, settings: what a complete application hol
 ]
 TEXTS = {  # where the HfM words things its own way (core.texts has the defaults)
     'absender_bescheide': 'Akademische und Studentische Angelegenheiten',
-    'absender_bescheinigungen': 'Akademische und Studentische Angelegenheiten',
     'absender_leistungen': 'Prüfungsamt',
     'unterschrift_zeugnisse': 'Die Präsidentin\nDie Dekanin der Fakultät',  # RPSO 2026 § 23 Abs. 1: the head of the Hochschule and the dean
     'unterschrift_urkunden': 'Die Präsidentin\nDie Dekanin der Fakultät',
+    'urkunde.unterschrift-links': 'Die Präsidentin',  # the Urkunde's Textfelder (core.paper.slot_key)
+    'urkunde.unterschrift-rechts': 'Die Dekanin der Fakultät',
     'einladung': (
         'Ihr Termin: {termin} Uhr, {raum}.\n\nBitte erscheinen Sie 30 Minuten vorher; Einspielräume stehen bereit. Bringen Sie einen '
         'Lichtbildausweis mit, und wenn Sie mit Korrepetition spielen, die Noten für die Begleitung.'
@@ -1050,7 +1053,10 @@ class Command(BaseCommand):
             credit_hours=30,  # RPSO 2026 § 5 Abs. 3
             audition_fee=Decimal('50'),
         )
-        Text.objects.bulk_create(Text(key=key, subject=texts.TEXTS[key].subject, body=body) for key, body in TEXTS.items())
+        Text.objects.bulk_create(Text(key=key, subject=texts.TEXTS[key].subject if key in texts.TEXTS else '', body=body) for key, body in TEXTS.items())
+        Content.objects.bulk_create(  # the student office issues the Bescheinigungen: the Vorschlag, from it
+            Content(key=doc, content=VORSCHLAG[doc] | {'office': 'Akademische und Studentische Angelegenheiten'}) for doc in ('immatrikulation', 'studienzeiten', 'exmatrikulation')
+        )
         RoomFunction.objects.bulk_create(RoomFunction(key=key, name=name, central=central, order=n) for n, (key, name, central) in enumerate(FUNCTIONS))
         BookingCategory.objects.bulk_create(
             BookingCategory(key=key, name=name, tone=tone, order=n, **settings) for n, (key, name, tone, settings) in enumerate(CATEGORIES)

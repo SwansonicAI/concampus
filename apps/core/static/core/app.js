@@ -47,7 +47,19 @@ function worded(form) {
     }
     preview.submit();
   };
-  form.addEventListener('focusin', ({target}) => { if (target.matches('input[name$=subject], textarea')) field = target; });
+  // The text being worded is marked in the preview where it stands: its passages on a tint, while it has the focus.
+  let marked = '';
+  const mark = () => {
+    const now = document.activeElement?.closest('[data-mark]')?.dataset.mark || '';
+    if (now === marked) return;
+    marked = now;
+    preview.querySelector('[name=markiert]')?.remove();
+    if (marked) preview.append(Object.assign(document.createElement('input'), {type: 'hidden', name: 'markiert', value: marked}));
+    clearTimeout(pause);
+    pause = setTimeout(show, 150);
+  };
+  form.addEventListener('focusin', ({target}) => { if (target.matches('input[name$=subject], input[data-words], textarea')) field = target; mark(); });
+  form.addEventListener('focusout', () => setTimeout(mark));  // once the focus has gone where it goes
   form.addEventListener('input', ({target}) => {
     if (link && target.name === 'briefbogen') link.href = link.dataset.paperLink.replace('KEY', target.value);
     clearTimeout(pause);
@@ -56,7 +68,7 @@ function worded(form) {
   form.addEventListener('click', ({target}) => {
     const chip = target.closest('[data-insert]'), own = chip?.closest('.worded');
     if (!chip) return;
-    const into = own && !own.contains(field) ? own.querySelector('textarea') : field;
+    const into = own && !own.contains(field) ? own.querySelector('textarea, input[data-words]') : field;
     into.setRangeText(chip.dataset.insert, into.selectionStart, into.selectionEnd, 'end');
     into.focus();
     into.dispatchEvent(new Event('input', {bubbles: true}));

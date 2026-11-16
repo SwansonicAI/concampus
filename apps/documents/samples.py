@@ -42,16 +42,19 @@ def modules():
     ]
 
 
-def sample(doc, request):
-    """The page of the document `doc` (core.paper.DOCUMENTS) for the made-up person."""
+def made_up(request):
+    """What the documents' views give their templates, for the made-up person: ({document: (template, context)}, what
+    they all share, the Zeugnis's results, the person)."""
     terms = semesters()
     person = Made(
         first_name='Erika', last_name='Mustermann', given_names='Erika Maria', name='Erika Mustermann', legal_name='Erika Maria Mustermann',
         birth_name='', birth_date=date(2001, 4, 1), birth_place='Musterstadt', matriculation='100123', address='Musterstraße 1\n12345 Musterstadt', external_terms=0,
     )
+    for n, term in enumerate(terms, 1):
+        term.pk = n
     study = Made(
-        pk=0, person=person, subject=Named('Violine', english='Violin'), start_term=terms[0], since=terms[-1].end, status='graduated',
-        issued=date(2026, 3, 20), focus=None, studienart='Erststudium', exit_reason='', get_absolute_url='#',
+        pk=0, person=person, subject=Named('Violine', english='Violin'), start_term=terms[0], start_term_id=1, since=terms[-1].end, status='graduated',
+        issued=date(2026, 3, 20), focus=None, studienart='Erststudium', exit_reason='', get_exit_reason_display=lambda: '', get_absolute_url='#',
         program=Made(
             name='Musik', title='Bachelor Musik', english='Music', qualification='Bachelor of Music', degree='B.Mus.', semesters=8, version='2023',
             rounding='cut', level='bachelor', postgraduate=False, honours=1.3, outcomes='Graduates perform at a professional level, as soloists and in ensembles.',
@@ -61,14 +64,13 @@ def sample(doc, request):
     staff = [Named('Prof. Anna Berger', last_name='Berger'), Named('Prof. Jonas Wendt', last_name='Wendt')]
     pages = {
         'immatrikulation': ('students/certificate.html', {
-            'term': terms[-1], 'registration': Made(leave=False, part_time=False), 'fs': 8, 'hs': 8, 'bafoeg': False,
-            'sender': block('absender_bescheinigungen'), 'code': 'K7Q2-9XW4', 'check': request.build_absolute_uri('/'),
+            'term': terms[-1], 'registration': Made(leave=False, part_time=False), 'fs': 8, 'hs': 8, 'bafoeg': False, 'first': terms[0],
+            'code': 'K7Q2-9XW4', 'check': request.build_absolute_uri('/pruefen/'),
         }),
         'studienzeiten': ('students/periods.html', {
             'person': person, 'studies': [study], 'rows': [(term, study, Made(leave=False), n) for n, term in enumerate(terms, 1)], 'count': 8, 'leave': 0,
-            'sender': block('absender_bescheinigungen'),
         }),
-        'exmatrikulation': ('students/exmatriculation.html', {'sender': block('absender_bescheinigungen'), 'reason': False}),
+        'exmatrikulation': ('students/exmatriculation.html', {'reason': False}),
         'leistungen': ('exams/transcript.html', finished | {
             'complete': True, 'average': '1,3', 'verbal': 'sehr gut', 'thesis': 'Bachs Sonaten und Partiten in historischer Aufführungspraxis',
             'signature': block('unterschrift_zeugnisse'), 'sender': block('absender_leistungen'),
@@ -85,12 +87,18 @@ def sample(doc, request):
         'leihvertrag': ('instruments/agreement.html', {
             'loan': Made(
                 instrument=Made(name='Viola Nr. 12', number='INV-0412', maker='Werkstatt Mittenwald, 1987'), instrument_id=0, person=person,
-                start=date(2025, 10, 1), due=date(2026, 3, 31), condition='gut, Bogen neu behaart', note='Etui, Bogen, Kolophonium', returned=None,
+                start=date(2025, 10, 1), due=date(2026, 3, 31), condition='gut, Bogen neu behaart', note='Etui, Bogen, Kolophonium', returned=None, returned_condition='',
             ),
-            'terms': block('leihbedingungen'), 'sender': block('absender_leihe'),
         }),
     }
-    common = {'base': 'core/panel.html', 'today': date.today(), 'study': study}
+    return pages, {'today': date.today(), 'study': study}, finished, person
+
+
+def sample(doc, request, **more):
+    """The page of the document `doc` (core.paper.DOCUMENTS) for the made-up person; `more`: what else its template is
+    given, a composition's draft and the block marked in it (templatetags.composed)."""
+    pages, common, finished, person = made_up(request)
+    study, common = common['study'], {'base': 'core/panel.html'} | common | more
     if doc == 'supplement':  # in English and in German, as it is issued
         context = common | finished | {
             'average': 1.3, 'grades': [(1.5, 'sehr gut', 'very good'), (2.5, 'gut', 'good'), (3.5, 'befriedigend', 'satisfactory'), (4.0, 'ausreichend', 'sufficient')],

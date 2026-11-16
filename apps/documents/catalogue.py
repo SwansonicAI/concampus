@@ -29,6 +29,13 @@ class Document:
     def letter(self):
         return self.kind == 'bescheide'
 
+    @property
+    def composed(self):
+        """Whether the Hochschule composes its content, block by block (compose)."""
+        from .compose import VORSCHLAG
+
+        return self.kind == 'bescheinigungen' and self.key in VORSCHLAG
+
 
 def documents():
     """{(kind, key): Document}, in the order of KINDS."""

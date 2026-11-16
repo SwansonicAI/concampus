@@ -28,7 +28,7 @@
   const GRIPS = ['nw', 'ne', 'sw', 'se'].map(c => `<i class="paper-grip" data-corner="${c}"></i>`).join('');
 
   let design = data.design, name = data.name, variant = 'first', picked = null, k = 1;
-  let content = {title: '', html: ''};  // the document shown in the text area: its title, the rest as HTML
+  let content = {title: '', html: '', slots: {}};  // the document shown: its title, the rest as HTML, its Textfelder as it words them
   let zoom = localStorage.getItem('paper-zoom') || 'width';
   let undos = [], redos = [], was = JSON.stringify([design, name]), typed = null, note = null;  // note: {text, error} over the panel
 
@@ -40,7 +40,9 @@
   const colour = v => COLOURS[v]?.[1] || v;
   const family = key => `'paper-${data.fonts[key] ? key : 'ptsans'}', sans-serif`;  // single quotes: it stands in a style="" attribute
   const uid = () => Math.random().toString(36).slice(2, 8);
-  const named = el => el.type !== 'box' ? NAMES[el.type] : Math.min(el.w, el.h) <= 1 ? 'Linie' : el.fill ? 'Fläche' : 'Rahmen';
+  const named = el => el.slot ? 'Textfeld' : el.type !== 'box' ? NAMES[el.type] : Math.min(el.w, el.h) <= 1 ? 'Linie' : el.fill ? 'Fläche' : 'Rahmen';
+  const slug = s => String(s).normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/[-\s]+/g, '-');  // as Django's slugify
+  const words = el => el.slot ? content.slots?.[slug(el.slot)] ?? el.text : el.text;  // a Textfeld as the document shown words it, else as the design does
   const shown = el => el.pages === 'all' || el.pages === variant;
   const byId = id => design.elements.find(el => el.id === id);
   const nodeOf = id => sheet.querySelector(`.paper-el[data-id="${CSS.escape(id)}"]`);
@@ -273,8 +275,8 @@
     const st = design.style, font = el.font || st.font;
     let inner = '', css = place(el);
     if (el.type === 'text') {
-      const lines = filled(el.text, data.values);
-      inner = `<div class="paper-lines">${!lines.some(l => l.trim()) ? `<span class="paper-raw">${esc(el.text)}</span>` : markup(lines.join('\n'), el.caps)}</div>`;
+      const lines = filled(words(el), data.values);
+      inner = `<div class="paper-lines">${!lines.some(l => l.trim()) ? `<span class="paper-raw">${esc(words(el))}</span>` : markup(lines.join('\n'), el.caps)}</div>`;
       css += `;font-family:${family(font)};font-size:${px(el.size)}px;line-height:${el.leading || LEADING};color:${colour(el.colour)};text-align:${el.align || 'left'};` +
         `font-weight:${weightOf(el)};font-style:${el.italic ? 'italic' : 'normal'};text-decoration:${el.underline ? 'underline' : 'none'}`;
     } else if (el.type === 'wordmark') {
@@ -449,6 +451,7 @@
   // ---- adding, doubling, removing, layering
   const NEW = {
     text: () => ({type: 'text', w: 80, h: 8, text: 'Neuer Text', size: 10, leading: LEADING, colour: 'ink', align: 'left', font: '', weight: 400, italic: false, underline: false, caps: false}),
+    slot: () => ({...NEW.text(), slot: fresh('Textfeld'), text: 'Was hier steht, formuliert jedes Dokument selbst'}),
     wordmark: () => ({type: 'wordmark', w: 100, h: 17, size: 15, align: 'left'}),
     picture: () => ({type: 'picture', w: 40, h: 40}),
     box: () => ({type: 'box', w: 60, h: 30, colour: 'accent', fill: true, line: 0.5}),
@@ -456,6 +459,11 @@
     address: () => ({type: 'address', x: 25, y: 63.5, w: 80, h: 26.5, size: 10, pages: 'first'}),
     info: () => ({type: 'info', x: 125, y: 47, w: 65, h: 40, size: 8.5, pages: 'first'}),
   };
+  function fresh(name) {  // a Textfeld's name no other has
+    let n = 1;
+    while (design.elements.some(el => el.slot && slug(el.slot) === slug(`${name} ${n}`))) n++;
+    return `${name} ${n}`;
+  }
   function add(kind, extra = {}) {
     const el = {id: uid(), x: 25, pages: variant, ...NEW[kind](), ...extra};
     if (el.y == null) {  // in the middle of what of the page shows
@@ -468,6 +476,7 @@
     draw();
     pick(el.id);
     if (kind === 'text') panel.querySelector('textarea')?.select();
+    if (kind === 'slot') panel.querySelector('input[data-key="slot"]')?.select();
   }
   root.querySelector('.paper-add').addEventListener('click', e => {
     const kind = e.target.closest('[data-add]')?.dataset.add;
@@ -674,7 +683,10 @@
   function elementPanel(el) {
     let html = `<p class="paper-crumb"><button type="button" class="link" data-act="none"><i class="arrow left"></i> Briefbogen</button></p><h3>${named(el)}</h3>`;
     if (el.type === 'text') {
-      html += field('Text', `<textarea data-key="text" rows="4" spellcheck="false">${esc(el.text)}</textarea>`) +
+      const own = el.slot && content.slots?.[slug(el.slot)];
+      html += (el.slot ? field('Name', `<input data-key="slot" value="${esc(el.slot)}" maxlength="40">`) +
+        `<p class="muted paper-hint"><small>Jedes Dokument auf diesem Briefbogen formuliert es unter Dokumente selbst; hier steht, was gilt, bis es das tut.${own ? ` Gezeigt, „${esc(content.title)}“: „${esc(own)}“.` : ''}</small></p>` : '') +
+        field(el.slot ? 'Wortlaut, bis ein Dokument seinen hat' : 'Text', `<textarea data-key="text" rows="4" spellcheck="false">${esc(el.text)}</textarea>`) +
         placeholders() +
         '<p class="muted paper-hint"><small>Einsetzen, wo die Schreibmarke steht · **fett** · eine Zeile ohne Werte entfällt</small></p>' +
         section('Schrift', field('Schrift', fontPick('font', el.font || '', true)) +
@@ -721,7 +733,7 @@
   }
   // What an element shows, in a few words, as it prints: its text with the values filled in, else what it is.
   function summary(el) {
-    if (el.type === 'text') return filled(el.text, data.values).join(' ').replace(/\d*||\*\*/g, '').trim() || el.text;
+    if (el.type === 'text') return filled(words(el), data.values).join(' ').replace(/\d*||\*\*/g, '').trim() || words(el);
     if (el.type === 'picture') return data.pictures.find(p => p.pk === el.artwork)?.name || 'Bild fehlt';
     if (el.type === 'box') return `${mm(el.w)} × ${mm(el.h)} mm`;
     return {wordmark: data.logo ? 'Logo der Hochschule' : data.wordmark.join(' '), address: 'Name und Anschrift der Empfänger:in',
@@ -737,10 +749,17 @@
     return `<h3>Briefbogen</h3>` + field('Name', `<input data-key="name" value="${esc(name)}" maxlength="80">`) +
       `<p class="paper-used"><small title="${esc(data.used.join(', '))}">Gilt für ${used}</small></p>` +
       section('Text des Dokuments', `<div class="row">${field('Schrift', fontPick('style.font', st.font))}${field('Überschriften', fontPick('style.heading', st.heading))}</div>` +
-        `<div class="row">${field('Größe (pt)', number('style.size', st.size, 0.5, 7, 16), true)}${field('Titel (pt)', number('style.title', st.title, 1, 10, 48), true)}</div>` +
-        `<div class="paper-checks">${check('style.bar', 'Balken über dem Titel', st.bar)}${check('style.center', 'Zentriert', st.align === 'center')}` +
-        `${check('style.middle', 'Senkrecht in der Mitte', st.middle)}${check('style.marks', 'Falz- und Lochmarken', st.marks)}</div>`, fontsLink) +
+        (flowing() ? `<div class="row">${field('Größe (pt)', number('style.size', st.size, 0.5, 7, 16), true)}${field('Titel (pt)', number('style.title', st.title, 1, 10, 48), true)}</div>` : '') +
+        `<div class="paper-checks">${flowCheck()}${flowing() ? check('style.bar', 'Balken über dem Titel', st.bar) + check('style.center', 'Zentriert', st.align === 'center') +
+        check('style.middle', 'Senkrecht in der Mitte', st.middle) : ''}${check('style.marks', 'Falz- und Lochmarken', st.marks)}</div>`, fontsLink) +
       (variant === 'pdf' ? '' : section(variant === 'first' ? 'Auf der ersten Seite' : 'Auf den Folgeseiten', `<ul class="paper-list">${list}</ul>`));
+  }
+  // With a text area the document's content flows into it, over as many pages as it takes; without, the page holds only what
+  // its elements say, the content in placeholders and Textfelder: an Urkunde. Kept where a document on it needs to flow.
+  const flowing = () => design.elements.some(el => el.type === 'body');  // what only flowing content uses shows only then
+  function flowCheck() {
+    const on = flowing(), held = on && data.flowing;
+    return `<label class="option"${held ? ' title="Dokumente auf diesem Briefbogen brauchen ihn: ihr Inhalt fließt"' : ''}><input type="checkbox" data-key="flow"${on ? ' checked' : ''}${held ? ' disabled' : ''}> Textbereich, in den der Inhalt fließt</label>`;
   }
   // The visible fields follow what was dragged or nudged.
   function fields() {
@@ -751,6 +770,11 @@
     const el = picked && byId(picked);
     if (key === 'name') name = value.slice(0, 80);
     else if (key === 'style.center') design.style.align = value ? 'center' : 'left';
+    else if (key === 'flow') {
+      design.elements = value ? [...design.elements, {id: uid(), type: 'body', x: 25, y: 50, w: 160, h: 210, pages: 'first'}, {id: uid(), type: 'body', x: 25, y: 30, w: 160, h: 237, pages: 'later'}]
+        : design.elements.filter(o => o.type !== 'body');
+      if (picked && !byId(picked)) picked = null;
+    }
     else if (key.startsWith('style.')) design.style[key.slice(6)] = value;
     else if (!el) return;
     else if (key === 'fill') el.fill = value === '1';
@@ -829,6 +853,7 @@
     content = await response.json();
     Object.assign(data.values, content.values);  // the page's own values, its title and office, as this document has them
     if (variant !== 'pdf') draw();
+    inspect();  // the list says what each element prints, now for this document
   }
   load();
 

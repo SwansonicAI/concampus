@@ -942,11 +942,33 @@ kbd { padding: 0 5px; border: 1px solid var(--line); border-radius: var(--radius
 .wording { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 40px; align-items: start; }
 .worded-fields { display: grid; gap: 14px; }
 .worded-fields > div:not(.chips) { display: grid; gap: 6px; }
-.worded-fields .chips { margin-top: -4px; }
+.worded-fields textarea { min-height: 0; }  /* as many lines as the text has (views.text_forms), not a form's least */
+.worded-fields .chips { display: none; margin-top: -4px; }
+.worded:focus-within .worded-fields .chips { display: flex; }  /* the placeholders under the text being worded only */
 details.worded { padding-top: 14px; border-top: 1px solid var(--line); }
 details.worded > summary { cursor: pointer; }
 details.worded[open] > summary { margin-bottom: 14px; }
 .worded-own { margin: 0; font-size: 14px; }
+/* the content block by block (documents/static/documents/compose.js): a card each, its placeholders while it is worded */
+.composer { display: grid; gap: 14px; }
+.compose-office { display: grid; gap: 6px; }
+.compose-office label { font-weight: 600; }
+.compose-blocks { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.compose-block { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
+.compose-block:focus-within { border-color: var(--accent); }
+.compose-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.compose-act { width: 26px; height: 26px; padding: 0; border: 0; border-radius: var(--radius); background: none; color: var(--muted); font-size: 15px; cursor: pointer; }
+.compose-act:hover { background: var(--soft); color: var(--ink); }
+.compose-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; gap: 6px; align-items: center; }
+.compose-row.table { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto auto; }
+.compose-row + .compose-row { margin-top: -8px; }
+.compose-list { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.compose-block .worded-fields > .compose-more { display: none; gap: 16px; color: var(--muted); font-size: 13px; }
+.compose-block:focus-within .worded-fields > .compose-more { display: flex; }  /* the rarer settings, while the block is worded */
+.compose-more select { padding: 2px 24px 2px 6px; font-size: 13px; }
+.compose-add { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.compose-add .muted { margin-right: 4px; font-size: 14px; }
+.compose-hint { margin: 0; }
 .paper-choice > div { display: flex; align-items: center; gap: 14px; }
 .paper-choice select { flex: 1; }
 button.chip { padding: 2px 8px; background: #fff; font: inherit; font-size: 13px; cursor: pointer; }
@@ -1044,7 +1066,7 @@ body:has(#paper) > .foot { display: none; }
 .paper-menu > div > :is(a, button) { display: block; padding: 8px 12px; border: 0; border-radius: var(--radius); background: none; color: var(--ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
 .paper-menu > div > :is(a, button):hover { background: var(--soft); text-decoration: none; }
 .paper-menu .danger { color: var(--red); }
-.paper-add { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; padding: 10px 24px; border-bottom: 1px solid var(--line); }  /* one slim row: what is added is less often needed than what is edited */
+.paper-add { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; padding: 10px 24px; border-bottom: 1px solid var(--line); }  /* one slim row: what is added is less often needed than what is edited */
 .paper-add button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0 4px; border: 1px solid transparent; border-radius: var(--radius); background: none; color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; }
 .paper-add button:hover { border-color: var(--accent); color: var(--accent); }
 .paper-add button:disabled { opacity: 0.35; pointer-events: none; }
@@ -1054,6 +1076,8 @@ body:has(#paper) > .foot { display: none; }
 .paper-icon-box::before { width: 18px; height: 12px; border-radius: 2px; background: currentColor; opacity: 0.55; }
 .paper-icon-rule::before { width: 20px; height: 2px; background: currentColor; }
 .paper-icon-address::before { width: 18px; height: 12px; border: 1.5px dashed currentColor; }
+.paper-add b.paper-icon-slot { padding: 0 3px; border: 1.5px dashed currentColor; font-size: 12px; line-height: 14px; height: 18px; }  /* a T in a box: a text each document fills */
+.paper-add b.paper-icon-slot::before { content: none; }
 .paper-icon-info::before { width: 16px; height: 12px; background: linear-gradient(currentColor 0 0) 0 0 / 100% 2px no-repeat, linear-gradient(currentColor 0 0) 0 5px / 70% 1.5px no-repeat, linear-gradient(currentColor 0 0) 0 10px / 70% 1.5px no-repeat; }
 .paper-el img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .paper-el b { font-weight: 700; }

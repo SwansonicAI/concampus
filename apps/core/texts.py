@@ -402,16 +402,11 @@ TEXTS = {
         'Bitte teilen Sie der Ausländerbehörde innerhalb von zwei Wochen mit, dass Ihr Studium hier beendet ist (§ 82 Abs. 6 Aufenthaltsgesetz).', on=('brief',),
     ),
     'absender_bescheide': Spec(BAUSTEIN, 'Absender der Bescheide', '', '{hochschule}', on=('brief',)),
-    'absender_bescheinigungen': Spec(BAUSTEIN, 'Absender der Bescheinigungen', '', '{hochschule}', on=('immatrikulation', 'studienzeiten', 'exmatrikulation')),
+    'brief_anrede': Spec(BAUSTEIN, 'Anrede in Briefen', '', 'Guten Tag {vorname} {nachname},', on=('brief',)),  # core/_letter.html
+    'brief_gruss': Spec(BAUSTEIN, 'Gruß in Briefen', '', 'Mit freundlichen Grüßen', on=('brief',)),
+    'brief_hinweis': Spec(BAUSTEIN, 'Hinweis unter Briefen', '', 'Dieses Schreiben wurde maschinell erstellt und ist ohne Unterschrift gültig.', on=('brief',)),
     'absender_leistungen': Spec(BAUSTEIN, 'Absender der Leistungsübersichten und Zeugnisse', '', '{hochschule}', on=('leistungen', 'notenliste')),
     'unterschrift_zeugnisse': Spec(BAUSTEIN, 'Unterschriften auf Zeugnissen', '', 'Vorsitz Prüfungsausschuss', on=('leistungen', 'supplement')),  # one per line
-    'leihbedingungen': Spec(
-        BAUSTEIN, 'Bedingungen für Leihinstrumente', '',
-        'Das Instrument bleibt Eigentum der Hochschule und dient dem Studium. Es ist pfleglich zu behandeln, nicht weiterzugeben und bis zum '
-        'vereinbarten Tag mit dem Zubehör zurückzugeben. Schäden und Verlust sind sofort zu melden; für Schäden, die über die übliche Abnutzung '
-        'hinausgehen, haftet, wer es ausgeliehen hat. Solange es überfällig ist, ist keine Rückmeldung möglich.', on=('leihvertrag',),
-    ),
-    'absender_leihe': Spec(BAUSTEIN, 'Absender der Leihverträge', '', '{hochschule}', on=('leihvertrag',)),
     'unterschrift_urkunden': Spec(BAUSTEIN, 'Unterschriften auf Urkunden', '', 'Präsidentin oder Präsident\nVorsitz Prüfungsausschuss', on=('urkunde',)),
     'ds_hochschule': Spec(BAUSTEIN, 'Diploma Supplement: Hochschule und Status', '', '{hochschule}\nUniversity of Music, state institution', on=('supplement',)),
     'ds_hochschulsystem': Spec(  # KMK/HRK 2018
