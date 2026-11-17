@@ -4,18 +4,17 @@
 {% block content %}
 <p class="eyebrow"><a href="{{ back }}">{{ trail.0.0 }}</a></p>
 <h1>{{ document.title }}</h1>
-{# A message or a page's text as it arrives, written where it stands (core/static/core/words.js): the values in it an example for a made-up person; beside it, what can be put in #}
+{# A message or a page's text as it arrives, written where it stands (core/static/core/words.js): what ConCampus fills in a placeholder, by its name; beside it, a menu of those that can be put in #}
 <form method="post" class="wording" data-words-page="words-data">
   {% csrf_token %}
-  {% for key, spec, form, fields in texts %}
+  {% for key, spec, form in texts %}
   <div class="words-sheet">
     {% for errors in form.errors.values %}<p class="flash error">{{ errors|join:" " }}</p>{% endfor %}
     {% if form.subject %}<h2 class="words-subject" data-words="{{ form.subject.html_name }}" data-text="{{ key }}" data-one-line aria-label="Betreff"></h2>{{ form.subject.as_hidden }}{% endif %}
     <div class="words-body" data-words="{{ form.body.html_name }}" data-text="{{ key }}" aria-label="Text"></div>{{ form.body.as_hidden }}
   </div>
   <aside class="words-rail">
-    <h4>Werte einsetzen</h4>
-    <div class="flow-fields">{% for name, label, example in fields %}<button type="button" data-insert="{{ name }}" title="Einsetzen, wo die Schreibmarke steht"><span>{{ label }}</span><small>{{ example|default:'leer' }}</small></button>{% endfor %}</div>
+    <div class="paper-type"><button type="button" data-values title="Platzhalter einsetzen, wo die Schreibmarke steht; auch mit {"><b>{ }</b> Platzhalter</button></div>
     <div class="actions"><button class="btn">Speichern</button><a class="btn ghost" data-close href="{{ back }}">Abbrechen</a></div>
     {% if form.instance.pk %}<p class="worded-own"><button class="link" name="standard" value="{{ key }}" formnovalidate>Wie ConCampus es vorschlägt</button> · <a href="{% url 'history' 'core.text' form.instance.pk %}">Verlauf</a></p>{% endif %}
   </aside>

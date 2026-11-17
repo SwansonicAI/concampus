@@ -72,27 +72,27 @@ MARK, UNMARK, TINT = '', '', '#ffe98a'  # around text a preview shows wher
 LEADING = 1.25  # a text's lines, apart by its size times this, unless it sets its own; as the editor shows them (paper.js)
 
 HOCHSCHULE, BANK, PERSON, DOKUMENT, SEITE = 'Hochschule', 'Bankverbindung der Hochschule', 'Person, um die es geht', 'Dieses Dokument', 'Seite'
-FIELDS = {  # the placeholders a text on a Briefbogen may hold, by where their value comes from: (from, label, what it says).
+FIELDS = {  # the placeholders a text on a page may hold, by where their value comes from: (from, its name as it shows in the text, what it says).
     # The Hochschule's are its settings, the same on every document; a document's and a page's differ from one to the next.
-    'hochschule': (HOCHSCHULE, 'Name', 'Der Name der Hochschule'),
-    'hochschule_kurz': (HOCHSCHULE, 'Kurzname', 'Ihr Kurzname, sonst ihr Name'),
-    'hochschule_anschrift': (HOCHSCHULE, 'Anschrift', 'Ihre Anschrift, Zeile für Zeile'),
-    'hochschule_anschrift_zeile': (HOCHSCHULE, 'Anschrift in einer Zeile', 'Ihre Anschrift in einer Zeile, für die Rücksendeangabe'),
-    'hochschule_ort': (HOCHSCHULE, 'Ort', 'Ihr Ort'),
-    'hochschule_email': (HOCHSCHULE, 'E-Mail', 'Ihre E-Mail-Adresse'),
-    'hochschule_website': (HOCHSCHULE, 'Website', 'Ihre Website, ohne https://'),
-    'hochschule_bank': (BANK, 'Überschrift', 'Der Zahlungsempfänger, wo er anders heißt als die Hochschule, sonst „Bankverbindung“; leer ohne IBAN'),
+    'hochschule': (HOCHSCHULE, 'Name der Hochschule', 'Der Name der Hochschule'),
+    'hochschule_kurz': (HOCHSCHULE, 'Kurzname der Hochschule', 'Ihr Kurzname, sonst ihr Name'),
+    'hochschule_anschrift': (HOCHSCHULE, 'Anschrift der Hochschule', 'Ihre Anschrift, Zeile für Zeile'),
+    'hochschule_anschrift_zeile': (HOCHSCHULE, 'Anschrift der Hochschule, einzeilig', 'Ihre Anschrift in einer Zeile, für die Rücksendeangabe'),
+    'hochschule_ort': (HOCHSCHULE, 'Ort der Hochschule', 'Ihr Ort'),
+    'hochschule_email': (HOCHSCHULE, 'E-Mail der Hochschule', 'Ihre E-Mail-Adresse'),
+    'hochschule_website': (HOCHSCHULE, 'Website der Hochschule', 'Ihre Website, ohne https://'),
+    'hochschule_bank': (BANK, 'Zahlungsempfänger', 'Der Zahlungsempfänger, wo er anders heißt als die Hochschule, sonst „Bankverbindung“; leer ohne IBAN'),
     'hochschule_iban': (BANK, 'IBAN', 'Die IBAN, auf die Studierende den Semesterbeitrag überweisen'),
     'hochschule_bic': (BANK, 'BIC', 'Die BIC dazu'),
-    'person_name': (PERSON, 'Name', 'Wem es gilt oder wen es bescheinigt: Studierende, Bewerbende, Lehrende; leer auf Listen wie der Notenliste'),
+    'person_name': (PERSON, 'Name der Person', 'Wem es gilt oder wen es bescheinigt: Studierende, Bewerbende, Lehrende; leer auf Listen wie der Notenliste'),
     'person_matrikelnummer': (PERSON, 'Matrikelnummer', 'Ihre Matrikelnummer; leer, wo sie keine hat, wie Lehrende und Bewerbende'),
-    'dokument_titel': (DOKUMENT, 'Titel', 'Seine Überschrift, z. B. „Immatrikulationsbescheinigung“ oder der Betreff des Briefs'),
+    'dokument_titel': (DOKUMENT, 'Titel des Dokuments', 'Seine Überschrift, z. B. „Immatrikulationsbescheinigung“ oder der Betreff des Briefs'),
     'dokument_amt': (DOKUMENT, 'Amt', 'Das Amt, das es ausstellt, z. B. „Prüfungsamt“'),
     'dokument_aktenzeichen': (DOKUMENT, 'Aktenzeichen', 'Das Aktenzeichen eines Bescheids; leer bei anderen'),
     'dokument_datum': (DOKUMENT, 'Datum', 'Der Tag, an dem es ausgestellt ist'),
     'seitenzahl': (SEITE, 'Seite x von y', '„Seite 2 von 3“, englisch „Page 2 of 3“; leer, wo das Dokument eine Seite hat'),
-    'seite': (SEITE, 'Seite', 'Die Nummer dieser Seite'),
-    'seiten': (SEITE, 'Seiten', 'Wie viele Seiten das Dokument hat'),
+    'seite': (SEITE, 'Seitennummer', 'Die Nummer dieser Seite'),
+    'seiten': (SEITE, 'Anzahl der Seiten', 'Wie viele Seiten das Dokument hat'),
 }
 PAGED = {'seitenzahl', 'seite', 'seiten'}  # known once the document is set: drawn last (Numbered)
 

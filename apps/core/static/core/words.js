@@ -1,7 +1,7 @@
-// Words with values in them, written where they stand (flow.js, paper.js, documents/text.html): what is typed is the
-// Hochschule's; what ConCampus fills in shows as a tinted pill with its value, an example for a made-up person, never
-// as code. Words are kept as runs, {t: text} or {f: field, pre: what stands before it}, either {b: true} for bold; a
-// text of core.texts, or of a Briefbogen, as its notation, {field} and **bold**.
+// Words with placeholders in them, written where they stand (flow.js, paper.js, documents/document.html): what is typed
+// is the Hochschule's; what ConCampus fills in shows as a tinted pill with its name, never as code, and filled in only
+// in the preview. Words are kept as runs, {t: text} or {f: field, pre: what stands before it}, either {b: true} for
+// bold; a text of core.texts, or of a page, as its notation, {field} and **bold**.
 window.Words = (() => {
   const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
   const brs = s => esc(s).replace(/\n/g, '<br>');
@@ -27,15 +27,34 @@ window.Words = (() => {
     return bold ? `${out}**` : out;
   }
 
-  function pill(r, value, label) {
-    return `<span class="flow-pill${value ? '' : ' empty'}${r.b ? ' b' : ''}" contenteditable="false" data-f="${esc(r.f)}" data-pre="${esc(r.pre || '')}"` +
-      ` title="${esc(label)}${value ? '' : ' · leer: entfällt mit dem, was davor steht'}">${value ? inner(r.pre, value) : esc(label)}</span>`;
-  }
-  // a pill's words: what stands before the value as it prints, untinted, so „Musik, Prüfungsordnung“ shows no gap
-  const inner = (pre, value) => pre ? `<span class="flow-pre">${brs(pre)}</span><span class="flow-value">${brs(value)}</span>` : brs(value);
-  function shown(found, valueOf, labelOf, pillOf = null) {  // pillOf: a field shown otherwise, as a text in a text (flow.js)
-    const out = (found || []).map(r => 'f' in r ? pillOf?.(r) ?? pill(r, valueOf(r.f), labelOf(r.f)) : r.b ? `<b>${brs(r.t)}</b>` : brs(r.t)).join('');
+  // A placeholder where it is written: its name on a tint, what stands before it as it prints; its example on hover.
+  const name = (label, value) => `<span class="flow-name"${value ? ` title="z. B. ${esc(value)}"` : ''}>${esc(label)}</span>`;
+  const inner = (pre, label, value) => (pre ? `<span class="flow-pre">${brs(pre)}</span>` : '') + name(label, value);
+  const pill = (r, label, value) => `<span class="flow-pill${r.b ? ' b' : ''}" contenteditable="false" data-f="${esc(r.f)}" data-pre="${esc(r.pre || '')}">${inner(r.pre, label, value)}</span>`;
+  function shown(found, labelOf, valueOf, pillOf = null) {  // pillOf: a field shown otherwise, as a text in a text (flow.js)
+    const out = (found || []).map(r => 'f' in r ? pillOf?.(r) ?? pill(r, labelOf(r.f), valueOf(r.f)) : r.b ? `<b>${brs(r.t)}</b>` : brs(r.t)).join('');
     return out.endsWith('<br>') ? `${out}<br>` : out;  // a last empty line, as a browser shows one
+  }
+  // A placeholder offered in the menu: its name, an example of what it stands for; clicked, or dragged into the text.
+  const DRAG = 'application/x-platzhalter';
+  const row = (label, value, attr) => `<button type="button" draggable="true" ${attr}><span>${esc(label)}</span><small>${esc(value || '')}</small></button>`;
+  // Where a placeholder dragged from the menu may be dropped into `node`: drop(range, key), range where it was let go.
+  function dropping(node, drop) {
+    node.addEventListener('dragover', e => { if (e.dataTransfer.types.includes(DRAG)) e.preventDefault(); });
+    node.addEventListener('drop', e => {
+      const key = e.dataTransfer.getData(DRAG), range = document.caretRangeFromPoint?.(e.clientX, e.clientY);
+      if (!key || e.defaultPrevented) return;
+      e.preventDefault();
+      if (range) drop(edge(range), key, e);
+    });
+  }
+  function edge(range) {  // let go within a word: at its nearer end
+    const t = range.startContainer, at = range.startOffset;
+    if (t.nodeType !== Node.TEXT_NODE || !/\p{L}/u.test(t.data[at - 1] || '') || !/\p{L}/u.test(t.data[at] || '')) return range;
+    const start = t.data.slice(0, at).search(/\p{L}+$/u), end = at + t.data.slice(at).search(/[^\p{L}]|$/u);
+    range.setStart(t, at - start < end - at ? start : end);
+    range.collapse(true);
+    return range;
   }
   function read(el, exact = false) {  // what is written in `el`, as runs; `exact`: up to a point, its last line break too
     const out = [];
@@ -101,21 +120,22 @@ window.Words = (() => {
   // The values to put in where the cursor stands, under it: by whose they are, each with its value; typing narrows them,
   // arrows and Enter pick one, Escape or a click elsewhere closes. groups: [[title, [[key, label, value]]]].
   const fold = s => s.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase();
-  function menu(range, groups, pick) {
+  function menu(range, groups, pick, button = null) {  // button: opened from it, the menu beneath it, the text left free to drag into
     document.querySelector('.words-menu')?.remove();
     const box = Object.assign(document.createElement('div'), {className: 'words-menu'});
-    box.innerHTML = '<input type="search" placeholder="Wert suchen" aria-label="Wert suchen"><div></div>';
+    box.innerHTML = '<input type="search" placeholder="Platzhalter suchen" aria-label="Platzhalter suchen"><div></div>';
     document.body.append(box);
-    const input = box.firstChild, list = box.lastChild, rect = range.getBoundingClientRect();
-    Object.assign(box.style, {left: `${Math.max(8, Math.min(rect.left, innerWidth - 328))}px`, top: `${Math.min(rect.bottom + 6, innerHeight - 340)}px`});
+    const input = box.firstChild, list = box.lastChild, at = range.startContainer;
+    const rect = button?.getBoundingClientRect() || range.getClientRects()[0] || (at.nodeType === Node.ELEMENT_NODE ? at : at.parentElement).getBoundingClientRect();  // in an empty line the cursor has no place of its own: its line's
+    Object.assign(box.style, {left: `${Math.max(8, Math.min(button ? rect.right - 320 : rect.left, innerWidth - 328))}px`, top: `${Math.min(rect.bottom + 6, innerHeight - 340)}px`});
     let found = [], on = 0;
     const show = () => {
       const q = fold(input.value.trim());
       found = [];
       list.innerHTML = groups.map(([title, entries]) => {
         const hits = entries.filter(([key, label]) => !q || fold(`${label} ${key}`).includes(q));
-        return hits.length ? `<p><small>${esc(title)}</small></p>` + hits.map(([key, label, value]) => `<button type="button" data-n="${found.push(key) - 1}"><span>${esc(label)}</span><small>${esc(value || 'leer')}</small></button>`).join('') : '';
-      }).join('') || '<p class="muted"><small>Kein Wert heißt so.</small></p>';
+        return hits.length ? `<p><small>${esc(title)}</small></p>` + hits.map(([key, label, value]) => row(label, value, `data-n="${found.push(key) - 1}" title="Klicken: an der Schreibmarke einsetzen. Oder in den Text ziehen."`)).join('') : '';
+      }).join('') || '<p class="muted"><small>Kein Platzhalter heißt so.</small></p>';
       on = Math.min(on, Math.max(0, found.length - 1));
       list.querySelectorAll('button').forEach(b => b.classList.toggle('on', +b.dataset.n === on));
       list.querySelector('button.on')?.scrollIntoView({block: 'nearest'});
@@ -125,6 +145,16 @@ window.Words = (() => {
       document.removeEventListener('pointerdown', outside, true);
       pick(picked);
     };
+    list.addEventListener('dragstart', e => {  // dragged out: the menu out of the way, gone once let go
+      const b = e.target.closest('button');
+      e.dataTransfer.setData(DRAG, found[+b.dataset.n]);
+      e.dataTransfer.effectAllowed = 'copy';
+      requestAnimationFrame(() => { box.style.visibility = 'hidden'; });
+    });
+    list.addEventListener('dragend', () => {
+      box.remove();
+      document.removeEventListener('pointerdown', outside, true);
+    });
     const outside = e => { if (!box.contains(e.target)) close(null); };
     input.addEventListener('input', () => { on = 0; show(); });
     input.addEventListener('keydown', e => {
@@ -145,43 +175,45 @@ window.Words = (() => {
     let saved = null;
     form.querySelectorAll('[data-words]').forEach(el => {
       const input = form.elements[el.dataset.words], text = data[el.dataset.text];
-      el.innerHTML = shown(runs(input.value), f => text.values[f], f => text.labels[f] || f);
+      el.innerHTML = shown(runs(input.value), f => text.labels[f] || f, f => text.values[f]);
       el.contentEditable = 'true';
+      el.spellcheck = false;  // a browser checking German against English marks every word
       el.addEventListener('input', () => {
         input.value = notation(read(el));
         input.dispatchEvent(new Event('input', {bubbles: true}));  // unsaved: leaving asks first (app.js)
       });
     });
     typing(form, {oneLine: host => host.matches('[data-one-line]'), bold: () => false});
-    form.addEventListener('keydown', e => {  // { : a value, chosen from a menu where the cursor stands
-      const host = e.target.closest?.('[data-words]');
-      if (!host || e.key !== '{') return;
-      e.preventDefault();
-      const text = data[host.dataset.text], range = getSelection().getRangeAt(0).cloneRange();
-      menu(range, [['Werte', Object.entries(text.labels).map(([key, label]) => [key, label, text.values[key]])]], key => {
-        host.focus();
-        getSelection().removeAllRanges();
-        getSelection().addRange(range);
-        if (!key) return;
-        insert(range, pill({f: key}, text.values[key], text.labels[key] || key));
-        host.dispatchEvent(new Event('input'));
-      });
-    });
     document.addEventListener('selectionchange', () => {
       const s = getSelection();
       if (s.rangeCount && s.anchorNode && form.contains(s.anchorNode) && s.anchorNode.parentElement?.closest('[data-words]')) saved = s.getRangeAt(0).cloneRange();
     });
-    form.addEventListener('click', e => {
-      const b = e.target.closest('[data-insert]');
-      const host = saved && (saved.startContainer.nodeType === Node.ELEMENT_NODE ? saved.startContainer : saved.startContainer.parentElement).closest('[data-words]');
-      if (!b || !host) return;
-      const text = data[host.dataset.text], key = b.dataset.insert;
+    const hostOf = range => (range.startContainer.nodeType === Node.ELEMENT_NODE ? range.startContainer : range.startContainer.parentElement).closest('[data-words]');
+    function put(range, key) {
+      const host = hostOf(range), text = data[host.dataset.text];
       host.focus();
-      insert(saved, pill({f: key}, text.values[key], text.labels[key] || key));
+      getSelection().removeAllRanges();
+      getSelection().addRange(range);
+      if (!key || !(key in text.labels)) return;
+      insert(range, pill({f: key}, text.labels[key] || key, text.values[key]));
       host.dispatchEvent(new Event('input'));
+    }
+    const ask = (range, button) => { const text = data[hostOf(range).dataset.text]; menu(range, [['Platzhalter', Object.entries(text.labels).map(([key, label]) => [key, label, text.values[key]])]], key => put(range, key), button); };
+    form.addEventListener('keydown', e => {  // { : a menu of them where the cursor stands
+      if (!e.target.closest?.('[data-words]') || e.key !== '{') return;
+      e.preventDefault();
+      ask(getSelection().getRangeAt(0).cloneRange());
     });
+    form.addEventListener('mousedown', e => { if (e.target.closest('[data-values]')) e.preventDefault(); });  // the cursor stays where it is
+    form.addEventListener('click', e => {
+      const button = e.target.closest('[data-values]');
+      if (!button) return;
+      const range = saved || (() => { const r = document.createRange(); r.selectNodeContents(form.querySelector('.words-body')); r.collapse(false); return r; })();  // nowhere yet: at the text's end
+      ask(range, button);
+    });
+    dropping(form, (range, key) => { if (hostOf(range)) put(range, key); });
   }
   document.querySelectorAll('form[data-words-page]').forEach(page);
 
-  return {esc, brs, runs, notation, pill, inner, shown, read, typing, insert, menu};
+  return {esc, brs, runs, notation, pill, name, inner, shown, read, typing, insert, menu, dropping};
 })();

@@ -27,7 +27,7 @@ from core import paper
 from core.access import Refused, require
 from core.models import Artwork, Institution, Text
 from core.text import fold
-from core.texts import ALWAYS, NAMES, TEXTS, basics, examples, wording
+from core.texts import NAMES, TEXTS, basics, examples, wording
 from curriculum.models import Program
 
 from . import compose
@@ -74,11 +74,14 @@ def listing(request, kind):
     rows = []
     for p in found.values():
         what = OCCASIONS[p.occasion][0]
+        if p.key == 'brief':  # the blank letter beneath them all, not one to write: its head and foot are changed in any Bescheid
+            continue
         if what in mine and (all(w in said(p, found) for w in sought) if q else what == kind):
+            copy, others = p.key != p.occasion, len(followers(p.key, 'page', found))
             rows.append({
-                'url': reverse('documents:document', args=[what, p.key]), 'name': p.name, 'kind': what, 'changed': bool(p.pk),
-                'follows': found[p.follows].name if p.follows in found and (p.page is None or p.content is None) else '',
-                'programs': ', '.join(x.title for x in programs(p)), 'copy': p.key != p.occasion,
+                'url': reverse('documents:document', args=[what, p.key]), 'name': p.name, 'kind': what, 'changed': bool(p.pk), 'copy': copy,
+                'note': f'Kopie von „{found[p.follows].name}“' if copy and p.follows in found else f'Kopf und Fuß auch für {others} weitere' if others else '',
+                'programs': ', '.join(x.title for x in programs(p)),
             })
     for t in texts().values():
         spec = TEXTS[t.key]
@@ -88,6 +91,7 @@ def listing(request, kind):
                          'about': pills(text.subject, t.key)})
     return render(request, 'documents/list.html', {
         'kind': kind, 'title': KINDS[kind][0], 'lead': KINDS[kind][1], 'q': q, 'rows': rows, 'paper': kind not in WORDED,
+        'copies': any(row.get('copy') for row in rows),  # for whom: said only where a copy stands for some
         'sources': [(p.key, p.name) for p in found.values() if OCCASIONS[p.occasion][0] == kind],
     })
 
@@ -150,7 +154,7 @@ def document(request, kind, key):
     return render(request, 'documents/document.html', {
         'trail': [(KINDS[kind][0], back)], 'back': back, 'document': text,
         'words': {key: {'values': values, 'labels': {name: NAMES.get(name, name) for name in spec.allowed}}},
-        'texts': [(key, spec, form, [(name, NAMES.get(name, name), values.get(name, '')) for name in dict.fromkeys(spec.placeholders + ALWAYS)]) for key, spec, form in found],
+        'texts': found,
     })
 
 
@@ -187,8 +191,13 @@ def known(p, found, request):
         values, lists = compose.letter_values(occasion, examples(occasion)), {}
     fields, columns = compose.fields_of(occasion)
     values['amt'] = resolved(p.key, 'content', found)[0].get('office') or values.get('hochschule', '')
-    uses = lambda field: sum(1 for q in found.values() if any(r.get('f') == field for b in resolved(q.key, 'content', found)[0].get('blocks', [])
-                                                             for runs in compose.runs_of(b) for r in runs))
+    uses = lambda field: sum(1 for q in found.values() if q.occasion != 'brief' and any(r.get('f') == field for b in resolved(q.key, 'content', found)[0].get('blocks', [])
+                                                                                     for runs in compose.runs_of(b) for r in runs))
+    elsewhere = {}  # on the Brief: what each message brings, shown as where it goes, worded where the message is
+    if occasion == 'brief':
+        values |= {'betreff': fields['betreff'], 'text': fields['text']}
+        own = {'said': 'Jede Nachricht bringt ihren eigenen mit.', 'url': reverse('documents:nachrichten'), 'link': 'Zu den Nachrichten'}
+        elsewhere = {'betreff': own, 'text': own, 'absender': {'said': 'Das Amt, das die jeweilige Nachricht schickt; hier ein Beispiel.'}}
     return {
         'styles': compose.STYLES, 'values': values,
         'fields': [[name, label, compose.source(name, occasion)] for name, label in fields.items()],
@@ -196,7 +205,8 @@ def known(p, found, request):
         'worded': {field: {
             'text': text, 'title': TEXTS[text].title, 'body': wording(text)[1], 'uses': uses(field),
             'values': basics() | examples(text), 'labels': {name: NAMES.get(name, name) for name in TEXTS[text].allowed},
-        } for field, text in compose.WORDED.items() if field in fields},
+        } for field, text in compose.WORDED.items() if field in fields and occasion != 'brief'},  # the Brief's Absender is each message's own
+        'elsewhere': elsewhere,
     }
 
 
@@ -278,6 +288,7 @@ def editor(request, kind, key):
             'compose': known(p, found, request), 'shared': {'page': shared(key, 'page', found), 'content': shared(key, 'content', found)},
             'copy': key != p.occasion, 'programs': [[x.pk, x.title] for x in Program.objects.all()], 'chosen': [x.pk for x in programs(p)],
             'occasion': OCCASIONS[p.occasion][1],
+            'settings': reverse('setup:list', args=['hochschule']) if 'manage_institution' in request.user.roles else '',  # where the Hochschule's own values change
         },
     })
 

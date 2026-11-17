@@ -111,15 +111,20 @@ def fields_of(occasion):
     """({field: what it says}, {list: (what it is, {field: what it says})}) a document of the occasion knows."""
     if occasion in DATA:
         return DATA[occasion]
-    spec = TEXTS[occasion]
-    return {name: NAMES.get(name, name) for name in spec.allowed} | {'absender': 'Absender', 'rechtsbehelfsbelehrung': 'Rechtsbehelfsbelehrung'} | {
-        flag: f'{TEXTS[flag].title}: wo es zutrifft' for flag in FOLLOWING.get(occasion, ())}, {}
+    spec, following = TEXTS[occasion], FOLLOWING.get(occasion, ())
+    allowed = [*spec.allowed, *(name for flag in following for name in TEXTS[flag].allowed)]  # also what the paragraphs that follow hold
+    return {name: NAMES.get(name, name) for name in allowed} | {'absender': 'Absender', 'rechtsbehelfsbelehrung': 'Rechtsbehelfsbelehrung'} | {
+        flag: TEXTS[flag].title for flag in following}, {}
 
 
 def source(field, occasion):
     """Where a value comes from, in a word: whose it is."""
     if field == 'anschrift':
         return 'Hochschule' if occasion in TEXTS else 'Person'
+    if occasion == 'brief' and field in ('betreff', 'text', 'absender'):
+        return 'Nachricht'
+    if field in FOLLOWING.get(occasion, ()):
+        return ''  # whether a paragraph stands, not a value to put in
     return SOURCES.get(field, 'Dieser Fall')
 
 

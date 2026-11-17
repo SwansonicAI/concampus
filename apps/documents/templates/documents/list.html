@@ -8,7 +8,7 @@
     <summary class="btn">Neues Dokument</summary>
     <form method="post" action="{% url 'documents:copy' kind %}" class="form">
       {% csrf_token %}
-      <label>Wie<select name="von">{% for key, name in sources %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select></label>
+      <label>Kopie von<select name="von">{% for key, name in sources %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select></label>
       <label>Name<input name="name" maxlength="120" placeholder="z. B. {% if kind == 'bescheide' %}Zulassung{% else %}Zeugnis{% endif %} Lehramt"></label>
       <div class="actions"><button class="btn small">Anlegen</button></div>
     </form>
@@ -22,12 +22,12 @@
 </form>
 {% endif %}
 <table>
-  <thead><tr><th>Dokument</th>{% if paper and not q %}<th>Wie</th><th>Gilt für</th>{% else %}<th>Betreff</th>{% endif %}<th></th></tr></thead>
+  <thead><tr><th>Dokument</th>{% if paper and not q %}{% if copies %}<th>Gilt für</th>{% endif %}{% else %}<th>Betreff</th>{% endif %}<th></th></tr></thead>
   <tbody>
     {% for row in rows %}
     <tr>
-      <td><a href="{{ row.url }}"><b>{{ row.name }}</b></a></td>
-      {% if paper and not q %}<td class="muted">{{ row.follows }}</td><td class="muted">{% if row.copy %}{{ row.programs|default:"noch niemanden" }}{% else %}alle{% endif %}</td>
+      <td><a href="{{ row.url }}"><b>{{ row.name }}</b></a>{% if row.note %}<br><small class="muted">{{ row.note }}</small>{% endif %}</td>
+      {% if paper and not q %}{% if copies %}<td class="muted">{% if row.copy %}{{ row.programs|default:"noch niemanden" }}{% else %}alle übrigen{% endif %}</td>{% endif %}
       {% else %}<td class="muted">{{ row.about|default:"" }}</td>{% endif %}
       <td>{% if row.changed %}<span class="badge open">eigen</span>{% endif %}</td>
     </tr>

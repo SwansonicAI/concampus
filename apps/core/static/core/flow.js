@@ -1,23 +1,23 @@
 // A document's content, written where it prints (documents.compose; paper.js holds it in the text area). It reads as
-// the document does: paragraphs, each in a style, and tables of a list. What ConCampus fills in shows as a tinted pill,
-// its value for a made-up person. Enter, Backspace, Tab and Ctrl+B do what they do in a word processor; { puts in a
-// value; the toolbar sets a paragraph's style and adds a table. The rail says only what is picked: a value, whose it is;
-// a paragraph, when it shows; a table, its list and columns. Words are kept as runs (words.js).
-window.Flow = function Flow({data, get, texts, changed, editable, panel, toolbar, activated, undo}) {
+// the document does: paragraphs, each in a style, and tables of a list. What ConCampus fills in is a placeholder, a
+// tinted pill with its name; the preview fills it in. Enter, Backspace, Tab and Ctrl+B do what they do in a word
+// processor. The rail holds the tools: a paragraph's style, bold, a placeholder from a menu (also at {, or dragged from
+// it into the text), a table; of what is picked it says: a placeholder, what stands before it; a paragraph,
+// when it shows; a table, its list and columns. Words are kept as runs (words.js).
+window.Flow = function Flow({data, get, texts, changed, editable, panel, activated, undo}) {
   const W = window.Words, esc = W.esc;
   const PARTS = new Set(['fact', 'sign', 'signatures']), HEADS = new Set(['title', 'heading']);  // a Tab divides the lines of PARTS
   const fields = Object.fromEntries(data.fields.map(([key, label, group]) => [key, {label, group}]));
-  const node = Object.assign(document.createElement('div'), {className: 'flow', lang: 'de'});
-  let at = null, picked = null, saved = null, active = false, steps = 0;  // the block the cursor is in; the value picked; where the cursor was
+  const node = Object.assign(document.createElement('div'), {className: 'flow', lang: 'de', spellcheck: false});  // a browser checking German against English marks every word
+  let at = null, picked = null, saved = null, active = false, steps = 0;  // the block the cursor is in; the placeholder picked; where the cursor was
   const step = () => changed(`flow#${++steps}`);  // a change of its own to undo; typing in between is one
 
   const blocks = () => get().blocks;
   const listOf = n => blocks()[n]?.type === 'table' ? blocks()[n].list : null;
   const labelOf = (key, list) => data.lists[list]?.fields.find(f => f[0] === key)?.[1] || fields[key]?.label || key;
-  const valueOf = (key, row) => String((row && key in row ? row[key] : data.values[key]) ?? '');
-  const said = (runs, row) => (runs || []).map(r => 'f' in r ? valueOf(r.f, row) && (r.pre || '') + valueOf(r.f, row) : r.t).join('').replace(/\t/g, '').trim();
+  const valueOf = (key, list) => String((list && key in (data.lists[list].rows[0] || {}) ? data.lists[list].rows[0][key] : data.values[key]) ?? '');  // its example
   const option = (value, label, now) => `<option value="${esc(value)}"${value === now ? ' selected' : ''}>${esc(label)}</option>`;
-  const whenPick = b => `<div><label>Zeigen</label><select data-flow="when">${option('', 'immer', b.when || '')}${data.fields.map(([key, label]) => option(key, `nur, wo ${label} gegeben ist`, b.when || '')).join('')}</select></div>`;
+  const whenPick = b => `<div><label>Zeigen</label><select data-flow="when">${option('', 'immer', b.when || '')}${data.fields.map(([key, label]) => option(key, `nur mit ${label}`, b.when || '')).join('')}</select></div>`;
 
   // ---- runs as units, a character or a value each, to split, join and count as a word processor does
   const units = runs => runs.flatMap(r => 'f' in r ? [r] : [...r.t].map(t => r.b ? {t, b: true} : {t}));
@@ -33,23 +33,20 @@ window.Flow = function Flow({data, get, texts, changed, editable, panel, toolbar
     return out.map(compact);
   };
 
-  // ---- on the page
-  const shown = (runs, row, list) => W.shown(runs, key => valueOf(key, row), key => labelOf(key, list));
-  const condition = b => b.when ? ` data-when="${esc(b.when)}" data-if="${esc(`nur, wo ${labelOf(b.when)} gegeben ist`)}"` : '';
+  // ---- on the page; the Hochschule's own texts (data.worded) written where they stand, for every document they stand in
+  const shown = (runs, list) => W.shown(runs, key => labelOf(key, list), key => valueOf(key, list), r => data.worded?.[r.f] ? own(r) : null);
+  const ownWords = key => { const w = data.worded[key]; return W.shown(W.runs(texts()[w.text] ?? w.body), k => w.labels[k] || k, k => w.values[k]); };
+  const own = r => `<span class="flow-pill flow-own${r.b ? ' b' : ''}" contenteditable="false" data-f="${esc(r.f)}" data-pre="${esc(r.pre || '')}">` +
+    `${r.pre ? `<span class="flow-pre">${W.brs(r.pre)}</span>` : ''}<span class="flow-words" data-worded="${esc(r.f)}" contenteditable="${editable}">${ownWords(r.f)}</span></span>`;
+  const condition = b => b.when ? ` data-when="${esc(b.when)}" data-if title="${esc(`Nur mit ${labelOf(b.when)}`)}"` : '';  // marked in the margin, said on hover
   function paragraph(b, n) {
-    const inner = PARTS.has(b.style)
-      ? cells(b.runs).map(c => `<span class="flow-cell${b.style === 'signatures' && c.length && !said(c) ? ' off' : ''}">${shown(c) || '<br>'}</span>`).join('')
-      : shown(b.runs) || '<br>';
-    return `<p class="flow-p s-${b.style}${b.when && !valueOf(b.when) ? ' off' : ''}" data-n="${n}" data-style="${b.style}"${condition(b)}>${inner}</p>`;
+    const inner = PARTS.has(b.style) ? cells(b.runs).map(c => `<span class="flow-cell">${shown(c) || '<br>'}</span>`).join('') : shown(b.runs) || '<br>';
+    return `<p class="flow-p s-${b.style}" data-n="${n}" data-style="${b.style}"${condition(b)}>${inner}</p>`;
   }
-  function table(b, n) {
-    const rows = data.lists[b.list]?.rows.length ? data.lists[b.list].rows : [{}];
-    const cls = c => [c.right && 'num', c.head.length && !said(c.head) && 'off'].filter(Boolean).join(' ');  // a column whose heading says nothing falls away
-    const cell = (tag, c, i, part, row, r) => `<${tag} class="${cls(c)}"${r ? '' : ` data-cell="${n}.${i}.${part}"${editable ? ' contenteditable="true"' : ''}`}>` +
-      `${shown(c[part], row, b.list) || '<br>'}</${tag}>`;
-    return `<div class="flow-table${b.when && !valueOf(b.when) ? ' off' : ''}" contenteditable="false" data-n="${n}"${condition(b)}><table>` +
-      `<thead><tr>${b.columns.map((c, i) => cell('th', c, i, 'head', null, 0)).join('')}</tr></thead><tbody>` +
-      rows.map((row, r) => `<tr${r ? ' class="flow-sample"' : ''}>${b.columns.map((c, i) => cell('td', c, i, 'cell', row, r)).join('')}</tr>`).join('') + '</tbody></table></div>';
+  function table(b, n) {  // its headings and one row, as every row of the list is set; that more follow, hinted beneath
+    const cell = (tag, c, i, part) => `<${tag}${c.right ? ' class="num"' : ''} data-cell="${n}.${i}.${part}"${editable ? ' contenteditable="true"' : ''}>${shown(c[part], b.list) || '<br>'}</${tag}>`;
+    return `<div class="flow-table" contenteditable="false" data-n="${n}"${condition(b)}><table><thead><tr>${b.columns.map((c, i) => cell('th', c, i, 'head')).join('')}</tr></thead>` +
+      `<tbody><tr>${b.columns.map((c, i) => cell('td', c, i, 'cell')).join('')}</tr><tr class="flow-more"><td colspan="${b.columns.length}">⋮</td></tr></tbody></table></div>`;
   }
   const markup = () => blocks().map((b, n) => b.type === 'table' ? table(b, n) : paragraph(b, n)).join('');
   function render() {
@@ -164,7 +161,13 @@ window.Flow = function Flow({data, get, texts, changed, editable, panel, toolbar
 
   // ---- typing
   node.addEventListener('input', e => {
-    const cell = e.target.closest?.('[data-cell]');
+    const words = e.target.closest?.('[data-worded]'), cell = e.target.closest?.('[data-cell]');
+    if (words) {  // the Hochschule's own text: wherever else it stands here follows at once
+      const key = words.dataset.worded;
+      texts()[data.worded[key].text] = W.notation(W.read(words));
+      node.querySelectorAll(`[data-worded="${CSS.escape(key)}"]`).forEach(other => { if (other !== words) other.innerHTML = ownWords(key); });
+      return changed('texts');
+    }
     if (cell) {
       const [n, i, part] = cell.dataset.cell.split('.');
       blocks()[+n].columns[+i][part] = W.read(cell);
@@ -183,6 +186,13 @@ window.Flow = function Flow({data, get, texts, changed, editable, panel, toolbar
       node.focus({preventScroll: true});
       place(at, Math.max(0, size(at) - after));
       return activated();
+    }
+    const words = e.target.closest?.('[data-worded]');
+    if (words) {  // in the Hochschule's own text: its placeholders at {, a new line at Enter, no bold
+      if (key === '{' || key === 'Enter' || key === 'Tab' || mod && key.toLowerCase() === 'b') e.preventDefault();
+      if (key === '{') values();
+      if (key === 'Enter') document.execCommand('insertLineBreak');
+      return;
     }
     if (mod && key.toLowerCase() === 'b') {
       e.preventDefault();
@@ -263,7 +273,7 @@ window.Flow = function Flow({data, get, texts, changed, editable, panel, toolbar
   node.addEventListener('paste', e => {  // only the words; a blank line between them makes paragraphs
     e.preventDefault();
     const text = e.clipboardData.getData('text/plain').replace(/\r\n?/g, '\n');
-    if (e.target.closest?.('[data-cell]')) return document.execCommand('insertText', false, text.replace(/\n+/g, ' '));
+    if (e.target.closest?.('[data-cell], [data-worded]')) return document.execCommand('insertText', false, text.replace(/\n+/g, ' '));
     let w = where();
     if (!w) return;
     if (!w.collapsed) {
@@ -279,9 +289,21 @@ window.Flow = function Flow({data, get, texts, changed, editable, panel, toolbar
     last.runs = compact([...units(last.runs), ...rest]);
     redo(w.n + added.length, k);
   });
-  node.addEventListener('drop', e => e.preventDefault());  // nothing dragged in: what comes in comes typed or pasted
+  node.addEventListener('drop', e => { if (!e.dataTransfer.types.includes('application/x-platzhalter')) e.preventDefault(); });  // nothing else dragged in: what comes in comes typed or pasted
+  // A click beside the words, between two paragraphs or the parts of one: the cursor into the line nearest to it, as a
+  // word processor puts it; the browser would leave it between them, where nothing is written.
+  function nearest(x, y) {
+    const off = (r, at, a, b) => Math.max(r[a] - at, 0, at - r[b]);
+    const [r] = [...node.querySelectorAll(':scope > .flow-p > .flow-cell, :scope > .flow-p:not(:has(> .flow-cell))')].map(el => el.getBoundingClientRect())
+      .sort((p, q) => off(p, y, 'top', 'bottom') - off(q, y, 'top', 'bottom') || off(p, x, 'left', 'right') - off(q, x, 'left', 'right'));
+    const range = r && document.caretRangeFromPoint?.(Math.min(Math.max(x, r.left + 1), r.right - 1), Math.min(Math.max(y, r.top + 1), r.bottom - 1));
+    if (!range) return;
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+  }
   node.addEventListener('click', e => {
-    const p = e.target.closest('.flow-pill');
+    if (e.target === node || e.target.matches('.flow-p:has(> .flow-cell)')) nearest(e.clientX, e.clientY);
+    const p = e.target.closest('.flow-own') || e.target.closest('.flow-pill');  // in the Hochschule's own text: the text, not a value in it
     picked = p && editable ? p : null;
     if (picked) at = +[...node.children].find(c => c.contains(picked)).dataset.n;  // its block: the cursor moving within it keeps it picked
     node.querySelectorAll('.flow-pill.picked').forEach(el => el.classList.remove('picked'));
@@ -302,43 +324,50 @@ window.Flow = function Flow({data, get, texts, changed, editable, panel, toolbar
     activated();
   });
 
-  // ---- values: from a menu where the cursor stands, by whose they are
-  function values() {
+  // ---- placeholders: what may stand where the cursor is, by whose they are; put in from the rail, or a menu there
+  function offered() {
     const live = getSelection().rangeCount && getSelection().getRangeAt(0);
     const range = live && node.contains(live.startContainer) ? live.cloneRange() : saved;  // where the cursor is, else where it was before the toolbar took it
-    if (!range || !node.contains(range.startContainer)) return;
-    const cell = (range.startContainer.nodeType === Node.ELEMENT_NODE ? range.startContainer : range.startContainer.parentElement)?.closest('[data-cell]');
-    const list = cell ? listOf(+cell.dataset.cell.split('.')[0]) : null, row = list ? data.lists[list].rows[0] : null;
-    const groups = {};
-    if (list) groups[`Je Zeile: ${data.lists[list].label}`] = data.lists[list].fields.map(([key, label]) => [key, label, valueOf(key, row)]);
-    data.fields.forEach(([key, label, group]) => (groups[group] ||= []).push([key, label, valueOf(key)]));
-    W.menu(range, Object.entries(groups), key => {
-      const host = cell || node;
-      host.focus();
-      getSelection().removeAllRanges();
-      getSelection().addRange(range);
-      if (!key) return;
-      W.insert(range, W.pill({f: key, pre: ''}, valueOf(key, row), labelOf(key, list)));
-      host.dispatchEvent(new Event('input', {bubbles: true}));
-    });
+    if (!editable || !range || !node.contains(range.startContainer)) return null;
+    const there = range.startContainer.nodeType === Node.ELEMENT_NODE ? range.startContainer : range.startContainer.parentElement;
+    const words = there.closest('[data-worded]'), cell = there.closest('[data-cell]');
+    if (words) {  // in the Hochschule's own text: those it may hold
+      const w = data.worded[words.dataset.worded];
+      return {range, host: words, groups: [[w.title, Object.entries(w.labels).map(([k, label]) => [k, label, w.values[k]])]], pill: k => W.pill({f: k, pre: ''}, w.labels[k] || k, w.values[k])};
+    }
+    const list = cell ? listOf(+cell.dataset.cell.split('.')[0]) : null, groups = {};
+    if (list) groups[`Je Zeile: ${data.lists[list].label}`] = data.lists[list].fields.map(([key, label]) => [key, label, valueOf(key, list)]);
+    data.fields.forEach(([key, label, group]) => group && (groups[group] ||= []).push([key, label, valueOf(key)]));  // none: whether a paragraph stands
+    return {range, host: cell || node, groups: Object.entries(groups), pill: k => W.pill({f: k, pre: ''}, labelOf(k, list), valueOf(k, list))};
+  }
+  function put(o, key) {  // the cursor back where it was, the placeholder put in there
+    o.host.focus();
+    getSelection().removeAllRanges();
+    getSelection().addRange(o.range);
+    if (!key || !o.groups.some(([, entries]) => entries.some(([k]) => k === key))) return;
+    W.insert(o.range, o.pill(key));
+    o.host.dispatchEvent(new Event('input', {bubbles: true}));
+  }
+  function values(button) {
+    const o = offered();
+    if (o) W.menu(o.range, o.groups, key => put(o, key), button);
   }
 
-  // ---- the toolbar over the page, while the content is written
-  function tools() {  // always there, so nothing moves; usable while the content is written
-    if (!toolbar) return;
-    const b = blocks()[at], on = editable && active && b ? '' : ' disabled';
+  // ---- the rail, while the content is written: the tools at its top (the paragraph's style, bold, a placeholder, a
+  // table), then what is picked: a paragraph, when it shows; a table, its list and columns; a placeholder, its lead-in
+  const putting = '<button type="button" data-tool="value" title="Platzhalter einsetzen, wo die Schreibmarke steht; auch mit {"><b>{ }</b> Platzhalter</button>';
+  function tools(b) {
     const styles = Object.entries(data.styles).filter(([key]) => key !== 'qr' || 'pruefadresse' in fields);
-    toolbar.innerHTML = `<select data-tool="style" title="Stil des Absatzes"${b?.type === 'p' && !on ? '' : ' disabled'}>${styles.map(([key, [label]]) => option(key, label, b?.style || 'text')).join('')}</select>` +
-      `<button type="button" data-tool="bold" title="Fett (Strg+B)"${on}><b>B</b></button>` +
-      `<button type="button" data-tool="value" title="Wert einsetzen, wo die Schreibmarke steht; auch mit {"${on}><b>{ }</b> Wert</button>` +
-      (Object.keys(data.lists).length ? `<button type="button" data-tool="table" title="Eine Tabelle einer Liste darunter einfügen"${on}>Tabelle</button>` : '') +
-      `<span class="paper-format-hint">${on ? 'In den Inhalt klicken, um zu schreiben' : ''}</span>`;
+    return '<div class="paper-type">' + (b.type === 'p' ? `<select data-tool="style" title="Stil des Absatzes">${styles.map(([key, [label]]) => option(key, label, b.style)).join('')}</select>` : '') +
+      `<button type="button" data-tool="bold" title="Fett (Strg+B)"><b>B</b></button>${putting}` +
+      (Object.keys(data.lists).length ? '<button type="button" data-tool="table" title="Eine Tabelle einer Liste darunter einfügen">Tabelle</button>' : '') + '</div>';
   }
-  toolbar?.addEventListener('mousedown', e => { if (e.target.closest('button')) e.preventDefault(); });  // the cursor stays where it is
-  toolbar?.addEventListener('click', e => {
-    const tool = e.target.closest('[data-tool]')?.dataset.tool;
-    if (tool === 'bold') document.execCommand('bold');
-    if (tool === 'value') values();
+  panel.addEventListener('mousedown', e => { if (e.target.closest('button[data-tool]')) e.preventDefault(); });  // the cursor stays where it is
+  panel.addEventListener('click', e => {
+    const tool = active && e.target.closest('[data-tool]')?.dataset.tool;
+    const anchor = getSelection().anchorNode;
+    if (tool === 'bold' && !(anchor?.nodeType === Node.ELEMENT_NODE ? anchor : anchor?.parentElement)?.closest('[data-worded]')) document.execCommand('bold');  // the Hochschule's own texts are plain
+    if (tool === 'value') values(e.target.closest('[data-tool]'));
     if (tool === 'table') {
       const n = at == null ? blocks().length : at + 1, list = Object.keys(data.lists)[0];
       blocks().splice(n, 0, {type: 'table', list, columns: data.lists[list].fields.slice(0, 2).map(([key, label]) => ({head: [{t: label}], cell: [{f: key, pre: ''}], right: false}))});
@@ -348,7 +377,7 @@ window.Flow = function Flow({data, get, texts, changed, editable, panel, toolbar
       activated();
     }
   });
-  toolbar?.addEventListener('change', e => {
+  panel.addEventListener('change', e => {
     const b = blocks()[at];
     if (e.target.dataset.tool !== 'style' || b?.type !== 'p') return;
     const w = saved && where(saved);
@@ -356,44 +385,38 @@ window.Flow = function Flow({data, get, texts, changed, editable, panel, toolbar
     if (!PARTS.has(b.style)) b.runs = compact(units(b.runs).map(u => u.t === '\t' ? {...u, t: ' '} : u));  // a Tab only divides parts
     redo(at, w?.n === at ? w.k : 0);
   });
+  W.dropping(node, (range, key) => {  // a placeholder dragged in from the menu: where it was let go
+    getSelection().removeAllRanges();
+    getSelection().addRange(range);
+    const o = offered();
+    if (o) put(o, key);
+  });
 
-  // ---- the rail: what is picked
+  const section = html => `<section class="paper-section">${html}</section>`;
+  const drop = words => `<div class="actions"><button type="button" class="link" data-flow="drop">${words}</button></div>`;
   function panelHtml() {
     const b = blocks()[at];
     if (picked) return valuePanel(b);
     if (!b) return '';
     if (b.type === 'table') {
-      return `<h3>Tabelle</h3><div><label>Liste</label><select data-flow="list">${Object.entries(data.lists).map(([key, l]) => option(key, l.label, b.list)).join('')}</select></div>` +
-        `<ul class="flow-columns">${b.columns.map((c, i) => `<li><span>${esc(said(c.head) || c.head.map(r => r.t ?? labelOf(r.f, b.list)).join('') || `Spalte ${i + 1}`)}</span>` +
+      return `<h3>Tabelle</h3>${tools(b)}<div><label>Liste</label><select data-flow="list">${Object.entries(data.lists).map(([key, l]) => option(key, l.label, b.list)).join('')}</select></div>` +
+        `<ul class="flow-columns">${b.columns.map((c, i) => `<li><span>${esc(c.head.map(r => r.t ?? labelOf(r.f, b.list)).join('') || `Spalte ${i + 1}`)}</span>` +
           `<label class="option"><input type="checkbox" data-flow="right" data-i="${i}"${c.right ? ' checked' : ''}> rechtsbündig</label>` +
           `<button type="button" class="link" data-flow="uncolumn" data-i="${i}">entfernen</button></li>`).join('')}</ul>` +
         `<div class="actions"><button type="button" class="btn ghost small" data-flow="column">Spalte hinzufügen</button></div>${whenPick(b)}` +
         '<div class="actions"><button type="button" class="link" data-flow="remove">Tabelle entfernen</button></div>';
     }
-    const [label, about] = data.styles[b.style];
-    return `<h3>${esc(label)}</h3><p class="muted paper-hint"><small>${esc(about)}</small></p>${whenPick(b)}` +
-      '<p class="muted paper-hint"><small><b>{</b> setzt einen Wert ein · <b>Tab</b> teilt die Zeile · <b>Umschalt+Enter</b> eine neue Zeile im Absatz</small></p>';
+    return `<h3>Absatz</h3>${tools(b)}${whenPick(b)}`;
   }
   function valuePanel(b) {
-    const key = picked.dataset.f, list = b?.type === 'table' ? b.list : null, row = list ? data.lists[list].rows[0] : null;
-    const value = valueOf(key, row), worded = data.worded?.[key];
-    return `<p class="paper-crumb"><button type="button" class="link" data-flow="unpick"><i class="arrow left"></i> ${b?.type === 'table' ? 'Tabelle' : 'Absatz'}</button></p>` +
-      `<h3>${esc(labelOf(key, list))}</h3><dl class="flow-about"><dt>Aus</dt><dd>${esc(list ? `${data.lists[list].label}, je Zeile` : fields[key]?.group || '')}</dd>` +
-      (worded ? '' : `<dt>Hier</dt><dd>${value ? `<span class="flow-pill">${W.brs(value)}</span>` : 'leer: entfällt mit dem, was davor steht'}</dd>`) + '</dl>' +
-      (worded ? `<section class="paper-section"><h4>Wortlaut</h4><div class="flow-words" data-worded="${esc(key)}" contenteditable="true"></div>` +
-        `<p class="muted paper-hint"><small>Einmal formuliert, für alle ${worded.uses} Dokumente, in denen er steht.</small></p></section>` : '') +
-      `<section class="paper-section"><div><label>Davor, nur wenn gegeben</label><input data-flow="pre" value="${esc(picked.dataset.pre)}" placeholder="z. B. geb. "></div>` +
-      `<label class="option"><input type="checkbox" data-flow="bold"${picked.classList.contains('b') ? ' checked' : ''}> Fett</label>` +
-      '<div class="actions"><button type="button" class="link" data-flow="drop">Wert entfernen</button></div></section>';
+    const key = picked.dataset.f, list = b?.type === 'table' ? b.list : null, value = valueOf(key, list), worded = data.worded?.[key], there = data.elsewhere?.[key];
+    const head = `<h3>${esc(labelOf(key, list))}</h3>`;
+    if (worded) return head + (worded.uses > 1 ? `<p class="muted paper-hint">Ein Text für ${worded.uses} Dokumente</p>` : '') + `<div class="paper-type">${putting}</div>` + drop('Aus diesem Dokument entfernen');  // written where it stands
+    if (there) return `${head}<p class="paper-hint">${esc(there.said)}</p>${there.url ? `<p><a href="${esc(there.url)}">${esc(there.link)} <i class="arrow"></i></a></p>` : ''}`;  // worded elsewhere: where
+    return head + `<p class="muted paper-hint">${esc([list ? `Je Zeile: ${data.lists[list].label}` : fields[key]?.group, value && `z. B. ${value}`].filter(Boolean).join(' · '))}</p>` +
+      `<div><label>Text davor</label><input data-flow="pre" value="${esc(picked.dataset.pre)}" placeholder="z. B. geb. "><small class="muted">Entfällt, wo der Platzhalter leer bleibt.</small></div>` +
+      `<label class="option"><input type="checkbox" data-flow="bold"${picked.classList.contains('b') ? ' checked' : ''}> Fett</label>${drop('Entfernen')}`;
   }
-  function mounted() {  // the panel drawn: a Hochschule's text, to word where it stands
-    const box = panel.querySelector('[data-worded]');
-    if (!box) return;
-    const worded = data.worded[box.dataset.worded];
-    box.innerHTML = W.shown(W.runs(texts()[worded.text] ?? worded.body), k => worded.values[k], k => worded.labels[k] || k);
-  }
-  const fill = (body, found) => body.split('\n\n').filter(p => { const names = [...p.matchAll(/\{(\w+)\}/g)].map(m => m[1]); return !names.length || names.some(n => found[n]); })
-    .join('\n\n').replace(/\{(\w+)\}/g, (_, n) => found[n] ?? '');
   const hostOf = el => el.closest('[data-cell]') || el.closest('p[data-n]');
   function reread(host, typed = false) {  // `typed`: the lead-in, one step however much is typed
     if (host.dataset.cell) {
@@ -405,7 +428,6 @@ window.Flow = function Flow({data, get, texts, changed, editable, panel, toolbar
   panel.addEventListener('click', e => {
     const act = e.target.closest('[data-flow]')?.dataset.flow, b = blocks()[at];
     if (!act || e.target.matches('select, input')) return;
-    if (act === 'unpick') { picked = null; return activated(); }
     if (act === 'drop' && picked) {
       const host = hostOf(picked);
       picked.remove();
@@ -446,31 +468,19 @@ window.Flow = function Flow({data, get, texts, changed, editable, panel, toolbar
     if (t.dataset.flow === 'pre' && picked) {
       picked.dataset.pre = t.value;
       const host = hostOf(picked), list = host.dataset.cell ? listOf(+host.dataset.cell.split('.')[0]) : null;
-      const value = valueOf(picked.dataset.f, list ? data.lists[list].rows[0] : null);
-      if (value) picked.innerHTML = W.inner(t.value, value);
+      picked.innerHTML = W.inner(t.value, labelOf(picked.dataset.f, list), valueOf(picked.dataset.f, list));
       return reread(host, true);
     }
-    const box = t.closest?.('[data-worded]');
-    if (box) {  // the Hochschule's own text, for every document: its value here follows at once
-      const key = box.dataset.worded, worded = data.worded[key], body = W.notation(W.read(box));
-      texts()[worded.text] = body;
-      data.values[key] = fill(body, worded.values);
-      node.querySelectorAll(`.flow-pill[data-f="${CSS.escape(key)}"]`).forEach(p => { p.innerHTML = W.inner(p.dataset.pre, data.values[key]); });
-      changed('texts');
-    }
   });
-  W.typing(panel, {bold: () => false});
 
   render();
   return {
-    node, render, html, mounted, tools,
+    node, render, html,
     get active() { return active; },
     set active(on) {
       active = on;
       if (!on) { at = null; picked = null; node.querySelectorAll('.flow-pill.picked').forEach(el => el.classList.remove('picked')); }
-      tools();
     },
     panel: panelHtml,
-    title: () => said(blocks().find(b => b.type === 'p' && HEADS.has(b.style))?.runs),  // as the following pages name the document
   };
 };
