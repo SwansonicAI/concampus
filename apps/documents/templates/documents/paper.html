@@ -1,6 +1,6 @@
 {% extends base %}
 {% load static %}
-{% block title %}{{ name }} · Briefbogen{% endblock %}
+{% block title %}{{ name }} · Vorlage{% endblock %}
 {% block content %}
 <style>{% for key, family in editor.fonts.items %}{% for face in family.faces %}
 @font-face { font-family: "paper-{{ key }}"; src: url("{{ face.url }}") format("truetype"); font-weight: {{ face.w }}; font-style: {% if face.i %}italic{% else %}normal{% endif %}; }{% endfor %}{% endfor %}

@@ -39,6 +39,7 @@ FRAMED = csp_override(settings.SECURE_CSP | {'frame-ancestors': [CSP.SELF]})  # 
 WORDED = {'nachrichten', 'seiten'}  # kinds with nothing but wording: for whoever words texts only
 SET_BY_PAPER = {'no-print', 'letterhead', 'address', 'dated', 'actions'}  # what the template draws itself, or nobody prints (core.paper.blocks)
 PIXELS = re.compile(r'(\d+(?:\.\d+)?)px')
+PLACEHOLDER = re.compile(r'\{(\w+)\}')
 
 
 def index(request):
@@ -63,12 +64,18 @@ def listing(request, kind):
     for d in documents().values():
         if not (says(d, own, sought) if q else d.kind == kind) or d.kind not in kinds(request.user):
             continue
-        spec = TEXTS.get(d.key) if d.kind != 'bescheinigungen' else None
-        rows.append((d, d.key in templates if d.kind == 'bescheinigungen' else d.key in own, spec.subject if spec else ''))
+        subject = (own[d.key] if d.key in own else TEXTS[d.key]).subject if d.kind != 'bescheinigungen' else ''
+        rows.append((d, d.key in templates if d.kind == 'bescheinigungen' else d.key in own, pills(subject, d.key)))
     return render(request, 'documents/list.html', {
         'kind': kind, 'title': KINDS[kind][0], 'lead': KINDS[kind][1], 'q': q, 'rows': rows,
         'letter': kind == 'bescheide' and 'design_papers' in request.user.roles,
     })
+
+
+def pills(text, key):
+    """A text as the editor shows it (flow.js): each placeholder its example, on a tint, its name on pointing."""
+    found = examples(key)
+    return mark_safe(PLACEHOLDER.sub(lambda m: f'<span class="flow-pill" title="{m[1]}">{escape(found.get(m[1], m[1]))}</span>', escape(text)))
 
 
 def says(document, own, sought):
@@ -167,7 +174,8 @@ def document_preview(request, kind, key):
     texts = text_forms(document, request.POST) if word and request.method == 'POST' else []
     if not all(form.is_valid() for _, _, form in texts):
         return render(request, 'documents/frame.html', {'errors': [e for _, _, form in texts for errors in form.errors.values() for e in errors]})
-    shown = request.POST.get('markiert') if request.POST.get('markiert') in document.texts else None
+    marking = document.letter or len(document.texts) > 1  # a message of one text would be marked all over
+    shown = request.POST.get('markiert') if marking and request.POST.get('markiert') in document.texts else None
     with transaction.atomic():
         for _, _, form in texts:
             form.save()
@@ -181,7 +189,7 @@ def document_preview(request, kind, key):
         transaction.set_rollback(True)
     if not document.letter:
         subject, body = page
-        return render(request, 'documents/frame.html', {'subject': highlighted(subject), 'body': highlighted(linebreaks(escape(body)))})
+        return render(request, 'documents/frame.html', {'subject': highlighted(subject), 'body': highlighted(mark_safe(linebreaks(body, autoescape=True)))})
     return paper.respond(made, document.title)
 
 

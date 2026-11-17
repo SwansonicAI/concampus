@@ -921,24 +921,7 @@ kbd { padding: 0 5px; border: 1px solid var(--line); border-radius: var(--radius
 .key[aria-pressed="false"]::before { background: var(--line); }
 @media (max-width: 1100px) { .charts, .sections { grid-template-columns: 1fr; } }
 
-/* Dokumente (documents/): the Briefbögen as cards, each its sample at a glance, the card opening it; each document on its
-   Briefbogen, a grid as the Berechtigungen; a text worded beside the frame that shows it as it arrives, staying in view */
-.sheets { display: grid; grid-template-columns: repeat(auto-fill, 200px); gap: 24px; margin-bottom: 8px; }
-.sheet { position: relative; display: grid; align-content: start; gap: 4px; font-size: 14px; }
-.sheet .page { width: 200px; height: 283px; margin-bottom: 8px; overflow: hidden; outline: 1px solid var(--line); background: var(--soft); }
-.sheet iframe { display: block; width: 221px; height: 283px; border: 0; pointer-events: none; }  /* the first page across the card's width, the viewer's margin and scrollbar beyond it */
-.sheet a { color: var(--ink); font-size: 16px; }
-.sheet a::after { content: ''; position: absolute; inset: 0; }  /* the whole card */
-.sheet:hover .page { outline-color: var(--accent); }
-.sheet:hover a { color: var(--accent); text-decoration: none; }
-.sheet.new { height: 283px; padding: 16px; border: 1px dashed var(--accent); }
-.sheet.new summary { color: var(--accent); font-weight: 600; cursor: pointer; }
-.sheet.new .form { gap: 12px; margin-top: 12px; }
-.sheet.new label { display: grid; gap: 4px; font-weight: 600; }
-.sheet.new :is(input, select) { width: 100%; }
-.matrix th.layout { padding: 0 10px 10px; vertical-align: bottom; font-weight: 600; letter-spacing: 0; text-align: center; text-transform: none; }
-.matrix button:disabled { cursor: not-allowed; }
-.matrix button:disabled .check { visibility: hidden; }
+/* Dokumente (documents/): a text worded beside the frame that shows it as it arrives, staying in view */
 .wording { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 40px; align-items: start; }
 .worded-fields { display: grid; gap: 14px; }
 .worded-fields > div:not(.chips) { display: grid; gap: 6px; }
@@ -949,33 +932,12 @@ details.worded { padding-top: 14px; border-top: 1px solid var(--line); }
 details.worded > summary { cursor: pointer; }
 details.worded[open] > summary { margin-bottom: 14px; }
 .worded-own { margin: 0; font-size: 14px; }
-/* the content block by block (documents/static/documents/compose.js): a card each, its placeholders while it is worded */
-.composer { display: grid; gap: 14px; }
-.compose-office { display: grid; gap: 6px; }
-.compose-office label { font-weight: 600; }
-.compose-blocks { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-.compose-block { padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: #fff; }
-.compose-block:focus-within { border-color: var(--accent); }
-.compose-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.compose-act { width: 26px; height: 26px; padding: 0; border: 0; border-radius: var(--radius); background: none; color: var(--muted); font-size: 15px; cursor: pointer; }
-.compose-act:hover { background: var(--soft); color: var(--ink); }
-.compose-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto; gap: 6px; align-items: center; }
-.compose-row.table { grid-template-columns: minmax(0, 2fr) minmax(0, 3fr) auto auto; }
-.compose-row + .compose-row { margin-top: -8px; }
-.compose-list { display: flex; align-items: center; gap: 8px; font-size: 14px; }
-.compose-block .worded-fields > .compose-more { display: none; gap: 16px; color: var(--muted); font-size: 13px; }
-.compose-block:focus-within .worded-fields > .compose-more { display: flex; }  /* the rarer settings, while the block is worded */
-.compose-more select { padding: 2px 24px 2px 6px; font-size: 13px; }
-.compose-add { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.compose-add .muted { margin-right: 4px; font-size: 14px; }
-.compose-hint { margin: 0; }
-.paper-choice > div { display: flex; align-items: center; gap: 14px; }
-.paper-choice select { flex: 1; }
 button.chip { padding: 2px 8px; background: #fff; font: inherit; font-size: 13px; cursor: pointer; }
 button.chip:hover { border-color: var(--accent); color: var(--accent); }
 .wording-preview { position: sticky; top: 16px; }
 .wording-preview iframe { display: block; width: 100%; height: calc(100vh - 120px); border: 1px solid var(--line); background: var(--soft); }
 .wording-preview p { margin: 8px 0 0; font-size: 14px; }
+body.framed mark { background: #ffe98a; color: inherit; }  /* the text being worded, on the PDF's tint (core.paper.TINT) */
 body.framed { display: block; min-height: 0; padding: 24px 28px; background: #fff; }
 body.framed h1 { margin-top: 0; font-size: 24px; }
 @media (max-width: 1100px) { .wording { grid-template-columns: minmax(0, 1fr); } .wording-preview { position: static; } }
@@ -1106,6 +1068,7 @@ body:has(#paper) > .foot { display: none; }
 .flow-block:hover { box-shadow: 0 0 0 calc(4 * var(--px)) #f3f3f3; background: #f3f3f3; }
 .flow-block.on { box-shadow: 0 0 0 calc(4 * var(--px)) var(--accent-pale); background: var(--accent-pale); }
 .flow-block.off { opacity: 0.45; }  /* shown only where its field is given, here not */
+.flow-block :is(th, td, .signatures span).off { opacity: 0.3; }  /* a column or signature whose fields are empty here: left out */
 .flow-block :is(h1, h2, dl, table, .sign, .signatures) { margin-bottom: 0; }
 .flow [contenteditable] { outline: none; cursor: text; min-height: 1.2em; }
 .flow-text.small { color: #5f5f5f; font-size: 0.85em; }
@@ -1113,6 +1076,7 @@ body:has(#paper) > .foot { display: none; }
 .flow-sample { opacity: 0.55; }  /* the list's further rows, as they will print */
 .flow-pill { padding: 0 0.15em; border-radius: 0.2em; background: #e3eefb; color: #12407a; white-space: pre-wrap; cursor: pointer; }
 .flow-pill.b { font-weight: 700; }
+td .flow-pill { cursor: help; }  /* in a list, a placeholder to point at, not to pick */
 .flow-pill.empty { border: 1px dashed #9cb5d6; background: none; color: #6b84a8; font-size: 0.85em; }
 .flow-pill.picked { outline: calc(2 * var(--px)) solid var(--blue); }
 .flow-empty { color: #9a9a9a; font-style: italic; }

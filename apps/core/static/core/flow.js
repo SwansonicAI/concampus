@@ -59,6 +59,8 @@ window.Flow = function Flow({data, get, changed, editable, panel, activated}) {
   const at = path => path.split('.').slice(0, -1).reduce((o, k) => o[k === 'b' ? 'blocks' : k], flow());
   const set = (path, value) => { at(path)[path.split('.').pop()] = value; };
   const ed = path => `data-path="${path}"${editable ? ' contenteditable="true"' : ''}`;
+  const gone = runs => runs?.length && !said(runs);  // what the document leaves out, its fields all empty (compose.shown)
+  const cls = c => { const names = [c.right && 'num', gone(c.head) && 'off'].filter(Boolean); return names.length ? ` class="${names.join(' ')}"` : ''; };
 
   // ---- the blocks on the page
   function block(b, n) {
@@ -70,12 +72,12 @@ window.Flow = function Flow({data, get, changed, editable, panel, activated}) {
       paragraph: () => `<div class="flow-text${b.small ? ' small' : ''}" ${ed(`${p}.runs`)}>${shown(b.runs)}</div>`,
       qr: () => `<div class="flow-text small flow-qr" ${ed(`${p}.runs`)}>${shown(b.runs)}</div>`,
       facts: () => `<dl class="facts">${b.rows.map(([l, v], i) => `<dt ${ed(`${p}.rows.${i}.0`)}>${shown(l)}</dt><dd ${ed(`${p}.rows.${i}.1`)}>${shown(v)}</dd>`).join('')}</dl>`,
-      table: () => `<table><thead><tr>${b.columns.map((c, i) => `<th${c.right ? ' class="num"' : ''} ${ed(`${p}.columns.${i}.head`)}>${shown(c.head)}</th>`).join('')}</tr></thead><tbody>` +
+      table: () => `<table><thead><tr>${b.columns.map((c, i) => `<th${cls(c)} ${ed(`${p}.columns.${i}.head`)}>${shown(c.head)}</th>`).join('')}</tr></thead><tbody>` +
         (list?.rows.length ? list.rows : [{}]).map((row, r) => `<tr${r ? ' class="flow-sample"' : ''}>${b.columns.map((c, i) => r
-          ? `<td${c.right ? ' class="num"' : ''}>${shown(c.cell, row, b.list)}</td>`
-          : `<td${c.right ? ' class="num"' : ''} ${ed(`${p}.columns.${i}.cell`)}>${shown(c.cell, row, b.list)}</td>`).join('')}</tr>`).join('') + '</tbody></table>',
+          ? `<td${cls(c)}>${shown(c.cell, row, b.list)}</td>`
+          : `<td${cls(c)} ${ed(`${p}.columns.${i}.cell`)}>${shown(c.cell, row, b.list)}</td>`).join('')}</tr>`).join('') + '</tbody></table>',
       sign: () => `<div class="sign"><span ${ed(`${p}.left`)}>${shown(b.left)}</span><span ${ed(`${p}.right`)}>${shown(b.right)}</span></div>`,
-      signatures: () => `<div class="signatures">${b.names.map((name, i) => `<span ${ed(`${p}.names.${i}`)}>${shown(name)}</span>`).join('')}</div>`,
+      signatures: () => `<div class="signatures">${b.names.map((name, i) => `<span${gone(name) ? ' class="off" title="Leer: entfällt"' : ''} ${ed(`${p}.names.${i}`)}>${shown(name)}</span>`).join('')}</div>`,
     }[b.type]();
     const off = b.when && !valueOf(b.when);
     return `<div class="flow-block${n === current ? ' on' : ''}${off ? ' off' : ''}" data-n="${n}"${b.when ? ` title="Nur, wo ${esc(labelOf(b.when))} gegeben ist${off ? ': hier nicht' : ''}"` : ''}>${inner}</div>`;

@@ -113,7 +113,7 @@ DOCUMENTS = {  # key (data-paper on the template's .document): (what it is, its 
     'supplement_de': ('Diploma Supplement, deutsch', 'bescheinigung'),
     'notenliste': ('Notenliste', 'bescheinigung'),
     'leihvertrag': ('Leihvertrag', 'bescheinigung'),
-    'vordruck': ('Vordruck der Kommission', 'bescheinigung'),
+    'vordruck': ('Vordruck für Bewerbende', 'bescheinigung'),
 }
 LETTERS = {'brief'}  # documents with an address: on a template with an address window
 SET = {'urkunde'}  # documents whose content is all in placeholders: their template may do without a text area, set by its elements alone
