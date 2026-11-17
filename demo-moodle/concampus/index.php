@@ -6,6 +6,24 @@ require(__DIR__ . '/../../config.php');
 require_once($CFG->libdir . '/filelib.php');
 require_once($CFG->dirroot . '/login/lib.php');  // core_login_get_return_url(), once someone is chosen
 
+// Once (18.11.2026): the course of a trial run, deleted in ConCampus before ConCampus hid what it deletes there
+// (courses.moodle.withdraw), hidden and emptied likewise. To go once it has run.
+try {
+    $orphan = $DB->get_record('course', ['id' => 202, 'fullname' => 'Musikwissenschaftliche Recherche']);
+    if ($orphan && strpos($orphan->idnumber, 'campus-course-') === 0 && $orphan->visible) {
+        require_once($CFG->dirroot . '/course/lib.php');
+        $manual = enrol_get_plugin('manual');
+        foreach ($DB->get_records('enrol', ['courseid' => $orphan->id, 'enrol' => 'manual']) as $instance) {
+            foreach ($DB->get_fieldset_select('user_enrolments', 'userid', 'enrolid = ?', [$instance->id]) as $userid) {
+                $manual->unenrol_user($instance, $userid);
+            }
+        }
+        course_change_visibility($orphan->id, false);
+    }
+} catch (Throwable $e) {
+    debugging('auth_concampus: ' . $e->getMessage());
+}
+
 // A string cache left without this plugin's English (seen 18.11.2026, every text [[access]]) is renewed, not shown.
 if (!get_string_manager()->string_exists('access', 'auth_concampus')) {
     get_string_manager()->reset_caches();
