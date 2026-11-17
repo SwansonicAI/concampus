@@ -4,6 +4,7 @@
 // and says whom to offer, asked with the web service token, which both sides know.
 require(__DIR__ . '/../../config.php');
 require_once($CFG->libdir . '/filelib.php');
+require_once($CFG->dirroot . '/login/lib.php');  // core_login_get_return_url(), once someone is chosen
 
 // A string cache left without this plugin's English (seen 18.11.2026, every text [[access]]) is renewed, not shown.
 if (!get_string_manager()->string_exists('access', 'auth_concampus')) {
