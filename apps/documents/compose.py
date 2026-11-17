@@ -92,12 +92,12 @@ DATA = {  # a document on paper: (its fields {key: what it says}, its lists {lis
         'hochschule': 'Hochschule', 'datum': 'Datum', 'betreff': 'Betreff der Nachricht', 'text': 'Text der Nachricht', 'vorname': 'Vorname', 'nachname': 'Nachname',
         'absender': 'Absender',
     }, {}),
-    'frei': ({  # a letter the Hochschule writes itself, sent by hand to whom it chooses (catalogue.issue)
+    'frei': ({  # a document the Hochschule writes itself, a letter or not, sent by hand to whom it chooses (catalogue.issue)
         'vorname': 'Vorname', 'nachname': 'Nachname', 'matrikelnummer': 'Matrikelnummer', 'studiengang': 'Studiengang', 'hauptfach': 'Hauptfach',
         'hochschule': 'Hochschule', 'anschrift': 'Anschrift der Hochschule', 'ort': 'Ort der Hochschule', 'datum': 'Datum', 'absender': 'Absender',
     }, {}),
 }
-FREE = 'frei'  # the occasion of a letter of the Hochschule's own, which no event in ConCampus sends
+FREE = 'frei'  # the occasion of a document of the Hochschule's own, which no event in ConCampus sends
 WORDED = {'rechtsbehelfsbelehrung': 'rechtsbehelf', 'absender': 'absender_bescheide', 'begruendung': 'ablehnung_begruendung'}  # values the Hochschule words once (core.texts)
 FOLLOWING = {'exmatrikulation': ('erstattung', 'auslaenderbehoerde')}  # a Bescheid's paragraphs that stand only where its case says so
 SOURCES = {  # where a value comes from, as the editor says it
@@ -108,9 +108,9 @@ SOURCES = {  # where a value comes from, as the editor says it
 
 
 def letter(occasion):
-    """Whether the document is a letter: a Bescheid, a letter of the Hochschule's own, or any message printed as one; it
-    has an address."""
-    return occasion in ('brief', FREE) or occasion in TEXTS and TEXTS[occasion].group == BESCHEID
+    """Whether the document is a letter: a Bescheid, or any message printed as one; it has an address. One of the
+    Hochschule's own is whatever its Vorlage makes it."""
+    return occasion == 'brief' or occasion in TEXTS and TEXTS[occasion].group == BESCHEID
 
 
 def fields_of(occasion):
@@ -266,9 +266,12 @@ VORSCHLAG = {  # ConCampus's own wording and order, to start from
         heading('{betreff}'), p('Guten Tag {vorname} {nachname},'), p('{text}'), p('Mit freundlichen Grüßen\n{absender}'),
         small('Dieses Schreiben wurde maschinell erstellt und ist ohne Unterschrift gültig.'),
     ]},
-    'frei': {'office': '', 'blocks': [  # a start: each line is to be written over
+    'frei': {'office': '', 'blocks': [  # a start, each line to be written over: a letter, on a Vorlage with an address window
         heading('Betreff'), p('Guten Tag {vorname} {nachname},'), p('Ihr Text.'), p('Mit freundlichen Grüßen\n{absender}'),
         small('Dieses Schreiben wurde maschinell erstellt und ist ohne Unterschrift gültig.'),
+    ]},
+    'frei_seite': {'office': '', 'blocks': [  # on any other Vorlage: a Bescheinigung, an Urkunde
+        title('Titel'), p('Ihr Text über {vorname} {nachname}.'), p('{ort}, {datum}\t{absender}', 'sign'),
     ]},
     'supplement': {'office': '', 'blocks': [
         title('Diploma Supplement'),

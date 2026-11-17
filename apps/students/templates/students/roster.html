@@ -7,7 +7,9 @@
   <div class="actions">{% if 'manage_students' in user.roles %}<a class="btn ghost" href="{% url 'students:guest' %}">Gast- oder Zweithörende aufnehmen</a>{% endif %}<a class="btn ghost" href="{% querystring format='csv' %}">Als CSV exportieren</a></div>
 </div>
 <p class="lead">{{ count }} Studi{{ count|pluralize:"um,en" }}</p>
+{% if sending %}<p class="flash">„{{ sending.name }}“ verschicken: ankreuzen, an wen, dann „Nachricht schreiben“.</p>{% endif %}
 <form class="toolbar">
+  {% if sending %}<input type="hidden" name="dokument" value="{{ sending.key }}">{% endif %}
   <div class="inline">
     <label>Suche<input type="search" name="q" value="{{ q }}" placeholder="Name, E-Mail, Matrikelnummer"></label>
     <input type="hidden" name="sortierung" value="{{ sort }}">
@@ -22,6 +24,7 @@
 </form>
 <form>
   <input type="hidden" name="next" value="{{ request.get_full_path }}">
+  {% if sending %}<input type="hidden" name="dokument" value="{{ sending.key }}">{% endif %}
   <div class="actions picked">
     <small class="muted">Angekreuzte:</small>
     <button class="btn ghost small" formaction="{% url 'students:compose' %}">Nachricht schreiben</button>

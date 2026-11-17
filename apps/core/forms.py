@@ -20,9 +20,9 @@ class AskForm(forms.ModelForm):
 
 
 class ComposeForm(forms.Form):
-    """A message to the people chosen: written here, or `letters`, one of the Hochschule's own letters
+    """A message to the people chosen: written here, or `letters`, one of the Hochschule's own documents
     (documents.catalogue.issue), [(key, name)], filled in for each."""
-    letter = forms.ChoiceField(label='Brief', required=False, help_text='Einer der Briefe unter Dokumente → Briefe, für jede Person ausgefüllt.')
+    letter = forms.ChoiceField(label='Eigenes Dokument', required=False, help_text='Aus Dokumente → Eigene Dokumente, für jede Person ausgefüllt.')
     subject = forms.CharField(label='Betreff', max_length=200, required=False)
     body = forms.CharField(label='Text', widget=forms.Textarea, required=False, help_text='{vorname} und {nachname} werden für jede Person eingesetzt.')
 
@@ -38,7 +38,7 @@ class ComposeForm(forms.Form):
     def clean(self):
         data = super().clean()
         if not data.get('letter') and not (data.get('subject') and data.get('body')):
-            raise forms.ValidationError('Bitte Betreff und Text schreiben' + (', oder einen Brief wählen.' if 'letter' in self.fields else '.'))
+            raise forms.ValidationError('Bitte Betreff und Text schreiben' + (', oder ein eigenes Dokument wählen.' if 'letter' in self.fields else '.'))
         return data
 
     def send(self, people, sender, link='', studies=None):

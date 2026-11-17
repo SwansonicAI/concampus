@@ -19,6 +19,8 @@ from core.text import collated, matching
 from courses.lessons import untimed
 from courses.models import Participation
 from curriculum.models import Module, Program, Subject, preload
+from documents.compose import FREE
+from documents.models import Paper
 from ..models import Document, Study
 
 
@@ -163,6 +165,7 @@ def roster(request):
         'terms': Term.objects.filter(intake__isnull=False).distinct().order_by('-start'), 'semesters': range(1, 13),
         'classes': Person.objects.filter(class_studies__in=narrowed(scoped, request, 'program', 'subject')).distinct().order_by('last_name', 'first_name'),
         'cases': CASES,
+        'sending': 'message_students' in request.user.roles and Paper.objects.filter(key=request.GET.get('dokument', ''), occasion=FREE).first(),  # one of the Hochschule's own, to send (documents.views.editor)
         **{key: request.GET.get(key, '') for key in ['studiengang', 'fach', 'klasse', 'fs', 'beginn', 'stand']},
     })
 
@@ -186,10 +189,8 @@ def compose(request):
     back = request.POST.get('next') or request.GET.get('next', '')
     if not url_has_allowed_host_and_scheme(back, {request.get_host()}):
         back = ''
-    from documents.catalogue import FREE, papers
-
-    letters = [(p.key, p.name) for p in papers().values() if p.occasion == FREE]  # the Hochschule's own letters, to send instead
-    form = ComposeForm(request.POST or None, letters=letters)
+    letters = [(p.key, p.name) for p in Paper.objects.filter(occasion=FREE).order_by('name')]  # the Hochschule's own documents, to send instead
+    form = ComposeForm(request.POST or None, letters=letters, initial={'letter': request.GET.get('dokument', '')})
     sender = ', '.join(Office.objects.filter(user=request.user, permissions__codename='message_students').values_list('name', flat=True)) or str(request.user)
     if people and form.is_valid():
         form.send(people, sender, studies={s.person: s for s in studies})

@@ -335,11 +335,11 @@ class TextTest(Seeded):
     def test_a_letter_of_its_own_reaches_whom_it_is_sent_to(self):
         """A letter the Hochschule writes itself, chosen when writing to students, reaches each filled in for them."""
         asa = self.login('asa')
-        asa.post('/dokumente/briefe/neu/')
+        asa.post('/dokumente/eigene/neu/', {'vorlage': 'brief'})
         letter = Paper.objects.get(occasion='frei')
         content = letter.content
         content['blocks'][2]['runs'] = runs('Ihr Studiengang: {studiengang}.')
-        asa.post(f'/dokumente/briefe/{letter.key}/', self.edited(letter.key, content))
+        asa.post(f'/dokumente/eigene/{letter.key}/', self.edited(letter.key, content))
         study = Study.objects.filter(status='enrolled').select_related('person', 'program').first()
         asa.post('/studierende/nachricht/', {'study': study.pk, 'letter': letter.key})
         self.assertIn(f'Ihr Studiengang: {study.program.title}.', Message.objects.get(person=study.person, template=letter.key).body)

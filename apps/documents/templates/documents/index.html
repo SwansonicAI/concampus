@@ -1,7 +1,10 @@
 {% extends base %}
 {% block title %}Dokumente{% endblock %}
 {% block content %}
-<h1>Dokumente</h1>
+<div class="head">
+  <h1>Dokumente</h1>
+  {% if heads %}{% include 'documents/_new.html' %}{% endif %}
+</div>
 <p class="lead">Alles, was ConCampus schreibt, in der Reihenfolge, in der eine Hochschule es einrichtet. Was ConCampus vorschlägt, gilt, bis Sie es ändern.</p>
 {% if search %}
 <form class="toolbar" action="{% url 'documents:bescheide' %}">

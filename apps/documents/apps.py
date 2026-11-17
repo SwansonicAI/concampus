@@ -34,7 +34,7 @@ class DocumentsConfig(Tile, AppConfig):
         words = {
             'bescheide': 'dokumente texte wortlaut vorlagen briefe rechtsbehelfsbelehrung zulassung ablehnung',
             'bescheinigungen': 'dokumente immatrikulationsbescheinigung zeugnis urkunde diploma supplement leihvertrag notenliste unterschriften absender',
-            'briefe': 'dokumente brief briefe neuer brief serienbrief anschreiben eigene',
+            'eigene': 'dokumente eigene neu neues dokument brief briefe serienbrief anschreiben bescheinigung urkunde teilnahmebescheinigung',
             'nachrichten': 'dokumente texte wortlaut e-mail postfach',
             'seiten': 'dokumente texte anmeldeseite barrierefreiheit einwilligung datenschutz',
         }

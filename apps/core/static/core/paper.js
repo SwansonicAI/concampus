@@ -819,12 +819,13 @@
         `<small class="muted">Kopf, Fuß und Schrift${data.designs ? ` · <a href="${esc(head.url)}">„${esc(head.name)}“ gestalten <i class="arrow"></i></a>` : ', gestaltet für alle Dokumente darauf'}</small>`) : '') +
       (data.standing ? `<p class="muted paper-hint"><small>Gilt für ${data.standing.length === 1 ? 'ein Dokument' : `alle ${data.standing.length} Dokumente`} darauf. Die Vorschau zeigt „${esc(data.sample)}“ auf ihr.</small></p>` : '') +
       (data.copy ? `<p class="muted paper-hint"><small>Variante von „${esc(data.occasion)}“: gilt statt seiner für die Studiengänge, die Sie hier wählen.</small></p>` : '') +
-      (data.free ? section('Verschicken', '<p class="paper-hint"><small>Unter <b>Studierende</b> Personen ankreuzen, dann „Nachricht schreiben“ und diesen Brief wählen.</small></p>' +
-        (data.compose_url ? `<p><a href="${esc(data.compose_url)}">Zu den Studierenden <i class="arrow"></i></a></p>` : '')) : '') +
+      (data.free ? section('Verschicken', data.compose_url  // who may write to students, straight there, this chosen; anyone else, who does
+        ? `<div class="actions"><a class="btn small" href="${esc(data.compose_url)}">An Studierende schicken</a></div><p class="muted paper-hint"><small>Dort ankreuzen, an wen, dann „Nachricht schreiben“. Jede Person bekommt es ausgefüllt ins Postfach.</small></p>`
+        : '<p class="muted paper-hint"><small>Wer Studierenden schreiben darf, schickt es: unter Studierende Personen ankreuzen, „Nachricht schreiben“, dieses Dokument wählen.</small></p>') : '') +
       (data.copy && data.mayWord ? section('Gilt für', `<div class="paper-programs">${data.programs.map(([pk, title]) =>
         `<label class="option"><input type="checkbox" data-program="${pk}"${design.programs.includes(pk) ? ' checked' : ''}> ${esc(title)}</label>`).join('')}</div>` +
         (design.programs.length ? '' : '<p class="muted paper-hint"><small>Noch für niemanden: bis ein Studiengang gewählt ist, bekommt jeder das Dokument des Anlasses.</small></p>')) : '') +
-      (!data.letters && data.mayWord && issuer() ? officeField() : '') +
+      (!data.letters && !data.free && data.mayWord && issuer() ? officeField() : '') +  // one of the Hochschule's own: who sends it signs
       (data.mayDesign ? section('Schrift des Inhalts', `<div class="row">${field('Schrift', fontPick('style.font', st.font))}${field('Überschriften', fontPick('style.heading', st.heading))}</div>` +
         `<div class="row">${field('Größe (pt)', number('style.size', st.size, 0.5, 7, 16), true)}${field('Titel (pt)', number('style.title', st.title, 1, 10, 48), true)}</div>` +
         `<div class="paper-checks">${check('style.bar', 'Balken über dem Titel', st.bar)}${check('style.center', 'Zentriert', st.align === 'center')}` +

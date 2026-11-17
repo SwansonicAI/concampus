@@ -932,7 +932,11 @@ kbd { padding: 0 5px; border: 1px solid var(--line); border-radius: var(--radius
 .new-paper summary { list-style: none; color: #fff; }
 .new-paper .actions { margin: 0; }
 .new-paper summary::-webkit-details-marker { display: none; }
-.new-paper form { position: absolute; right: 0; z-index: 5; display: grid; gap: 10px; width: 320px; margin-top: 8px; padding: 16px; border: 1px solid var(--line); background: #fff; }
+.new-paper > div { position: absolute; right: 0; z-index: 5; display: grid; gap: 18px; width: 340px; margin-top: 8px; padding: 16px; border: 1px solid var(--line); background: #fff; box-shadow: 0 8px 24px rgb(0 0 0 / 0.12); }  /* what is new, each choice a form of its own, apart by a line */
+.new-paper > div > p { margin: 0; }
+.new-paper .new-or { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }  /* one choice or the other, a line either side */
+.new-paper .new-or::before, .new-paper .new-or::after { content: ""; flex: 1; border-top: 1px solid var(--line); }
+.new-paper form { display: grid; gap: 10px; }
 .new-paper label { display: grid; gap: 4px; font-weight: 600; }
 /* a message or a page's text written as it arrives (words.js), what can be put in beside it */
 .wording { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 40px; align-items: start; }

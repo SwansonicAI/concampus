@@ -19,7 +19,7 @@ from .models import Letterhead, Paper
 KINDS = {  # URL segment: (the list's title, what it holds)
     'bescheide': ('Bescheide', 'Was die Hochschule entscheidet: ein Brief im Postfach, als PDF in der Akte. ConCampus schickt jeden, wenn es so weit ist.'),
     'bescheinigungen': ('Bescheinigungen und Urkunden', 'Gesetzt aus den Daten der Person, wenn sie gebraucht werden.'),
-    'briefe': ('Briefe', 'Briefe, die die Hochschule selbst schreibt und von Hand an ausgewählte Studierende schickt.'),
+    'eigene': ('Eigene Dokumente', 'Was die Hochschule selbst schreibt, als Brief, Bescheinigung oder Urkunde, und von Hand an ausgewählte Studierende schickt.'),
     'nachrichten': ('Nachrichten', 'Was ins Postfach und per E-Mail geht und nichts entscheidet. ConCampus schickt jede, wenn es so weit ist.'),
     'seiten': ('Auf Seiten', 'Was ConCampus auf seinen eigenen Seiten sagt.'),
 }
@@ -27,7 +27,7 @@ OCCASIONS = {  # key: (kind, title): when ConCampus issues a document on paper
     'brief': ('bescheide', 'Brief'),  # any message, printed as a letter
     **{key: ('bescheide', spec.title) for key, spec in TEXTS.items() if spec.group == BESCHEID},
     **{key: ('bescheinigungen', title) for key, (title, _) in paper.DOCUMENTS.items() if key != 'brief'},
-    FREE: ('briefe', 'Brief'),  # one of the Hochschule's own, as many as it writes, none of ConCampus's
+    FREE: ('eigene', 'Eigenes Dokument'),  # the Hochschule's own, as many as it writes, none of ConCampus's
 }
 assert len(OCCASIONS) == 2 + sum(s.group == BESCHEID for s in TEXTS.values()) + len(paper.DOCUMENTS) - 1, 'one key for two occasions'
 WHEN = {  # when ConCampus sends or makes each document, as the lists say it
@@ -142,7 +142,7 @@ def letterheads():
 
 def standard(occasion):
     """The Vorlage an occasion's documents stand on unless they choose another: a letter on the Brief."""
-    return 'brief' if OCCASIONS[occasion][0] in ('bescheide', 'briefe') else paper.DOCUMENTS[occasion][1]
+    return 'brief' if OCCASIONS[occasion][0] in ('bescheide', 'eigene') else paper.DOCUMENTS[occasion][1]
 
 
 def variant(p):

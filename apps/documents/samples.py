@@ -10,6 +10,7 @@ from django.template.loader import render_to_string
 from core.models import Institution
 from core.texts import TEXTS, examples, render
 
+from .compose import FREE
 from .compose import letter as letter_kind
 
 
@@ -134,7 +135,7 @@ def sample(occasion, request, **more):
     editor's preview the document worked on and its draft (templatetags.composed)."""
     pages, common, finished, person = made_up(request)
     study, common = common['study'], {'base': 'core/panel.html'} | common | more
-    if letter_kind(occasion):
+    if letter_kind(occasion) or occasion == FREE:  # one of the Hochschule's own goes out as a letter goes, whatever its Vorlage
         return render_to_string('core/_letter.html', common | {'letter': letter(occasion, more.get('shown'), more.get('draft')), 'institution': Institution.get()})
     template, context = pages[occasion]
     return render_to_string(template, common | context, request)

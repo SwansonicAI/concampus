@@ -62,7 +62,7 @@ def index(request):
             listed = [p for p in found.values() if OCCASIONS[p.occasion][0] == kind and p.key != 'brief']
             count, mine = len(listed), sum(1 for p in listed if p.pk)
         steps.append({'title': KINDS[kind][0], 'url': reverse(f'documents:{kind}'), 'about': KINDS[kind][1], 'count': count, 'own': mine})
-    return render(request, 'documents/index.html', {'steps': steps, 'search': 'word_texts' in roles})
+    return render(request, 'documents/index.html', {'steps': steps, 'search': 'word_texts' in roles} | (new(request, '', found) if 'word_texts' in roles else {}))
 
 
 def kinds(person):
@@ -109,8 +109,18 @@ def listing(request, kind):
     return render(request, 'documents/list.html', {
         'kind': kind, 'title': KINDS[kind][0], 'lead': KINDS[kind][1], 'q': q, 'rows': rows, 'paper': kind not in WORDED,
         'copies': any(row.get('copy') for row in rows),  # for whom: said only where a variant stands for some
-        'when': {'seiten': 'Wo', 'bescheinigungen': 'Wann ConCampus es ausstellt'}.get(kind, 'Wann ConCampus es schickt'), 'letters': kind == 'briefe',
-    })
+        'when': {'seiten': 'Wo', 'bescheinigungen': 'Wann ConCampus es ausstellt'}.get(kind, 'Wann ConCampus es schickt'), 'own': kind == 'eigene',
+    } | new(request, kind, found))
+
+
+def new(request, kind, found):
+    """What „Neues Dokument“ offers on a list: one of the Hochschule's own, on any Vorlage; a variant of one of
+    ConCampus's documents of the list; for messages, the way to write to students."""
+    return {
+        'heads': [(key, h.name) for key, h in letterheads().items()], 'head': 'bescheinigung' if kind == 'bescheinigungen' else 'brief',  # the one the list's own mostly stand on
+        'sources': [(p.key, p.name) for p in found.values() if OCCASIONS[p.occasion][0] == kind and p.key == p.occasion and p.key != 'brief'],
+        'compose_url': reverse('students:list') if kind == 'nachrichten' and 'message_students' in request.user.roles else '',
+    }
 
 
 class TextForm(forms.ModelForm):
@@ -299,7 +309,7 @@ def editor(request, kind, key):
             'gone': f'„{p.name}“ löschen?' if p.pk and key != p.occasion else '',  # a variant, a letter of the Hochschule's own
             'reset': bool(p.pk and key == p.occasion),
             'kept': 'Nicht zu löschen: ConCampus schickt es von selbst, wenn es so weit ist.' if key == p.occasion else '',  # ConCampus's: it belongs to an event
-            'compose_url': reverse('students:list') if free and 'message_students' in request.user.roles else '',
+            'compose_url': f'{reverse("students:list")}?dokument={key}' if free and p.pk and 'message_students' in request.user.roles else '',  # the students to tick, this chosen to send
             'settings': reverse('setup:list', args=['hochschule']) if 'manage_institution' in request.user.roles else '',  # where the Hochschule's own values change
         },
     })
@@ -311,8 +321,13 @@ def copy(request, kind):
     """A new document: a letter of the Hochschule's own, blank to write on; or a copy of another (`von`), for the same
     occasion, on the same Vorlage, a variant for some Studiengänge where it is ConCampus's."""
     name = request.POST.get('name', '').strip()[:120]
-    if kind == 'briefe' and not request.POST.get('von'):
-        made = Paper.objects.create(key=free_key(name or 'Neuer Brief'), occasion=FREE, name=name or 'Neuer Brief', content=deepcopy(compose.vorschlag(FREE)))
+    if kind == 'eigene' and not request.POST.get('von'):  # on the Vorlage chosen, begun as a letter where it has an address window
+        heads = letterheads()
+        head = heads.get(request.POST.get('vorlage')) or heads['brief']
+        letter = any(el['type'] == 'address' for el in head.page['elements'])
+        name = name or ('Neuer Brief' if letter else {'bescheinigung': 'Neue Bescheinigung', 'urkunde': 'Neue Urkunde'}.get(head.key, 'Neues Dokument'))
+        made = Paper.objects.create(key=free_key(name), occasion=FREE, name=name, letterhead='' if head.key == 'brief' else head.key,
+                                    content=deepcopy(compose.vorschlag(FREE if letter else 'frei_seite')))
         messages.success(request, f'„{made.name}“ angelegt. In den Text klicken und schreiben.')
         return redirect('documents:document', kind, made.key)
     p, _ = edited(request, request.POST.get('von', ''))

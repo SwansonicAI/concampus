@@ -1,0 +1,25 @@
+{# „Neues Dokument“, on every list of documents and Dokumente's start (views.new): one of three, each on its own: one of the Hochschule's own on a Vorlage; a variant of one of ConCampus's for some Studiengänge; for messages, the way to write to students #}
+<details class="new-paper">
+  <summary class="btn">Neues Dokument</summary>
+  <div>
+    <form method="post" action="{% url 'documents:copy' 'eigene' %}" class="form">
+      {% csrf_token %}
+      <b>Eigenes Dokument</b>
+      <small class="muted">Leer, auf der Vorlage Ihrer Wahl. Sie schicken es von Hand.</small>
+      <label>Vorlage<select name="vorlage">{% for key, name in heads %}<option value="{{ key }}"{% if key == head %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></label>
+      <div class="actions"><button class="btn small">Anlegen und schreiben</button></div>
+    </form>
+    {% if sources %}
+    <p class="new-or">oder</p>
+    <form method="post" action="{% url 'documents:copy' kind %}" class="form">
+      {% csrf_token %}
+      <b>Variante für bestimmte Studiengänge</b>
+      <small class="muted">Eine Kopie mit Text und Vorlage. Sie gilt statt des Originals für die Studiengänge, die Sie darin ankreuzen.</small>
+      <label>Kopie von<select name="von">{% for key, name in sources %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select></label>
+      <div class="actions"><button class="btn small">Anlegen</button></div>
+    </form>
+    {% endif %}
+    {% if compose_url %}<p class="new-or">oder</p><p><b>Nachricht an Studierende</b><br><a href="{{ compose_url }}">Unter Studierende ankreuzen und schreiben <i class="arrow"></i></a></p>{% endif %}
+    <p class="muted"><small>Wann ConCampus selbst etwas schickt, ist fest.</small></p>
+  </div>
+</details>
