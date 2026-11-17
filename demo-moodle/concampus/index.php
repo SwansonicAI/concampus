@@ -5,6 +5,11 @@
 require(__DIR__ . '/../../config.php');
 require_once($CFG->libdir . '/filelib.php');
 
+// A string cache left without this plugin's English (seen 18.11.2026, every text [[access]]) is renewed, not shown.
+if (!get_string_manager()->string_exists('access', 'auth_concampus')) {
+    get_string_manager()->reset_caches();
+}
+
 $url = new moodle_url('/auth/concampus/index.php');
 $PAGE->set_url($url);
 $PAGE->set_context(context_system::instance());
