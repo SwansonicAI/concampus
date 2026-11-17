@@ -1,0 +1,21 @@
+{% extends base %}
+{% block title %}Dokumente{% endblock %}
+{% block content %}
+<h1>Dokumente</h1>
+<p class="lead">Alles, was ConCampus schreibt, in der Reihenfolge, in der eine Hochschule es einrichtet. Was ConCampus vorschlägt, gilt, bis Sie es ändern.</p>
+{% if search %}
+<form class="toolbar" action="{% url 'documents:bescheide' %}">
+  <div class="inline"><label>Suche in allen Dokumenten<input type="search" name="q" placeholder="Name oder Wortlaut"></label></div>
+</form>
+{% endif %}
+{# the steps, numbered: each list, what it holds, how many and how many made the Hochschule's own #}
+<ol class="setting-up">
+  {% for step in steps %}
+  <li>
+    <a href="{{ step.url }}"><b>{{ step.title }}</b></a>
+    <small class="muted">{{ step.about }}</small>
+    <span>{% if step.count is not None %}<b>{{ step.count }}</b>{% if step.own %} <small class="muted">· {{ step.own }} eigen</small>{% endif %}{% endif %}</span>
+  </li>
+  {% endfor %}
+</ol>
+{% endblock %}

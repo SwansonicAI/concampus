@@ -92,7 +92,12 @@ DATA = {  # a document on paper: (its fields {key: what it says}, its lists {lis
         'hochschule': 'Hochschule', 'datum': 'Datum', 'betreff': 'Betreff der Nachricht', 'text': 'Text der Nachricht', 'vorname': 'Vorname', 'nachname': 'Nachname',
         'absender': 'Absender',
     }, {}),
+    'frei': ({  # a letter the Hochschule writes itself, sent by hand to whom it chooses (catalogue.issue)
+        'vorname': 'Vorname', 'nachname': 'Nachname', 'matrikelnummer': 'Matrikelnummer', 'studiengang': 'Studiengang', 'hauptfach': 'Hauptfach',
+        'hochschule': 'Hochschule', 'anschrift': 'Anschrift der Hochschule', 'ort': 'Ort der Hochschule', 'datum': 'Datum', 'absender': 'Absender',
+    }, {}),
 }
+FREE = 'frei'  # the occasion of a letter of the Hochschule's own, which no event in ConCampus sends
 WORDED = {'rechtsbehelfsbelehrung': 'rechtsbehelf', 'absender': 'absender_bescheide', 'begruendung': 'ablehnung_begruendung'}  # values the Hochschule words once (core.texts)
 FOLLOWING = {'exmatrikulation': ('erstattung', 'auslaenderbehoerde')}  # a Bescheid's paragraphs that stand only where its case says so
 SOURCES = {  # where a value comes from, as the editor says it
@@ -103,8 +108,9 @@ SOURCES = {  # where a value comes from, as the editor says it
 
 
 def letter(occasion):
-    """Whether the document is a letter: a Bescheid, or any message printed as one; it has an address."""
-    return occasion == 'brief' or occasion in TEXTS and TEXTS[occasion].group == BESCHEID
+    """Whether the document is a letter: a Bescheid, a letter of the Hochschule's own, or any message printed as one; it
+    has an address."""
+    return occasion in ('brief', FREE) or occasion in TEXTS and TEXTS[occasion].group == BESCHEID
 
 
 def fields_of(occasion):
@@ -120,7 +126,7 @@ def fields_of(occasion):
 def source(field, occasion):
     """Where a value comes from, in a word: whose it is."""
     if field == 'anschrift':
-        return 'Hochschule' if occasion in TEXTS else 'Person'
+        return 'Hochschule' if occasion in TEXTS or occasion == FREE else 'Person'
     if occasion == 'brief' and field in ('betreff', 'text', 'absender'):
         return 'Nachricht'
     if field in FOLLOWING.get(occasion, ()):
@@ -258,6 +264,10 @@ VORSCHLAG = {  # ConCampus's own wording and order, to start from
     ]},
     'brief': {'office': '', 'blocks': [
         heading('{betreff}'), p('Guten Tag {vorname} {nachname},'), p('{text}'), p('Mit freundlichen Grüßen\n{absender}'),
+        small('Dieses Schreiben wurde maschinell erstellt und ist ohne Unterschrift gültig.'),
+    ]},
+    'frei': {'office': '', 'blocks': [  # a start: each line is to be written over
+        heading('Betreff'), p('Guten Tag {vorname} {nachname},'), p('Ihr Text.'), p('Mit freundlichen Grüßen\n{absender}'),
         small('Dieses Schreiben wurde maschinell erstellt und ist ohne Unterschrift gültig.'),
     ]},
     'supplement': {'office': '', 'blocks': [
@@ -673,11 +683,11 @@ def compose(occasion, c, draft=None, key=None):
     (core.paper.document_of). `draft`: content not saved, as the editor shows it; `key`: that document."""
     from django.template.loader import render_to_string
 
-    from .catalogue import chosen, papers, resolved
+    from .catalogue import chosen, papers
 
     found = papers()
     paper = found[key] if key in found else chosen(occasion, getattr(c.get('study'), 'program', None), found)
-    content = draft or resolved(paper.key, 'content', found)[0]
+    content = draft or paper.content
     values, lists = data(occasion, c)
     values['amt'] = content.get('office') or values['hochschule']
     head = '' if letter(occasion) else render_to_string('core/_letterhead.html', {'institution': Institution.get(), 'office': values['amt']})

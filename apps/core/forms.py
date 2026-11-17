@@ -20,11 +20,37 @@ class AskForm(forms.ModelForm):
 
 
 class ComposeForm(forms.Form):
-    subject = forms.CharField(label='Betreff', max_length=200)
-    body = forms.CharField(label='Text', widget=forms.Textarea, help_text='{vorname} und {nachname} werden für jede Person eingesetzt.')
+    """A message to the people chosen: written here, or `letters`, one of the Hochschule's own letters
+    (documents.catalogue.issue), [(key, name)], filled in for each."""
+    letter = forms.ChoiceField(label='Brief', required=False, help_text='Einer der Briefe unter Dokumente → Briefe, für jede Person ausgefüllt.')
+    subject = forms.CharField(label='Betreff', max_length=200, required=False)
+    body = forms.CharField(label='Text', widget=forms.Textarea, required=False, help_text='{vorname} und {nachname} werden für jede Person eingesetzt.')
 
-    def send(self, people, sender, link=''):
-        """The message to each person, by name, into their Postfach and by e-mail."""
+    def __init__(self, *args, letters=(), **kwargs):
+        super().__init__(*args, **kwargs)
+        if not letters:
+            del self.fields['letter']
+            return
+        self.fields['letter'].choices = [('', 'Keiner: Betreff und Text hier schreiben'), *letters]
+        for name in ('subject', 'body'):
+            self.fields[name].widget.attrs['data-for'] = 'letter:'  # written here only without a letter
+
+    def clean(self):
+        data = super().clean()
+        if not data.get('letter') and not (data.get('subject') and data.get('body')):
+            raise forms.ValidationError('Bitte Betreff und Text schreiben' + (', oder einen Brief wählen.' if 'letter' in self.fields else '.'))
+        return data
+
+    def send(self, people, sender, link='', studies=None):
+        """The message to each person, by name, into their Postfach and by e-mail; a letter, with what `studies`
+        ({person: study}) says of them."""
+        if key := self.cleaned_data.get('letter'):
+            from documents.catalogue import issue, papers
+
+            letter = papers()[key]
+            for person in people:
+                issue(letter, person, sender, (studies or {}).get(person))
+            return
         for person in people:
             subject, body = self.cleaned_data['subject'], self.cleaned_data['body']
             for placeholder, value in {'{vorname}': person.first_name, '{nachname}': person.last_name}.items():

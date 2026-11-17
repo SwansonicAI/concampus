@@ -1,0 +1,2 @@
+{# a row's „löschen“, small as a table's others, asked once more on its line (app.js data-confirm), sent to the document's or Vorlage's own page (views.editor, views.letterhead) #}
+<form method="post" action="{{ row.url }}" class="gone">{% csrf_token %}<button class="link" name="art" value="loeschen" data-confirm="Wirklich löschen?"><small>löschen</small></button></form>

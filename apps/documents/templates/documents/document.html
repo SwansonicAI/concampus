@@ -14,6 +14,7 @@
     <div class="words-body" data-words="{{ form.body.html_name }}" data-text="{{ key }}" aria-label="Text"></div>{{ form.body.as_hidden }}
   </div>
   <aside class="words-rail">
+    <p class="paper-hint"><small class="muted">{% if document.kind == 'seiten' %}Wo{% else %}Wann ConCampus es schickt{% endif %}</small><br>{{ when }}{% if where %}<br><a href="{{ where.url }}"><small>{{ where.name }} <i class="arrow"></i></small></a>{% endif %}</p>
     <div class="paper-type"><button type="button" data-values title="Platzhalter einsetzen, wo die Schreibmarke steht; auch mit {"><b>{ }</b> Platzhalter</button></div>
     <div class="actions"><button class="btn">Speichern</button><a class="btn ghost" data-close href="{{ back }}">Abbrechen</a></div>
     {% if form.instance.pk %}<p class="worded-own"><button class="link" name="standard" value="{{ key }}" formnovalidate>Wie ConCampus es vorschlägt</button> · <a href="{% url 'history' 'core.text' form.instance.pk %}">Verlauf</a></p>{% endif %}

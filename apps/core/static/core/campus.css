@@ -923,6 +923,11 @@ kbd { padding: 0 5px; border: 1px solid var(--line); border-radius: var(--radius
 @media (max-width: 1100px) { .charts, .sections { grid-template-columns: 1fr; } }
 
 /* Dokumente (documents/): a new document as another, in a panel under its button */
+/* Dokumente's start: the lists in the order they are set up, numbered, each a row as a table's */
+.setting-up { margin: 0; padding: 0; list-style: none; counter-reset: step; border-top: 2px solid var(--ink); }
+.setting-up li { display: grid; grid-template-columns: 32px 240px minmax(0, 1fr) auto; gap: 16px; align-items: baseline; padding: 14px 10px; border-bottom: 1px solid var(--line); counter-increment: step; }
+.setting-up li::before { content: counter(step); color: var(--muted); font-weight: 700; }
+.gone { display: flex; align-items: baseline; justify-content: flex-end; white-space: nowrap; }  /* a row's „löschen“, its question and „Abbrechen“ on one line */
 .new-paper { position: relative; margin-bottom: 24px; }
 .new-paper summary { list-style: none; color: #fff; }
 .new-paper .actions { margin: 0; }
@@ -948,7 +953,7 @@ body.framed { display: block; min-height: 0; padding: 24px 28px; background: #ff
 body.framed h1 { margin-top: 0; font-size: 24px; }
 @media (max-width: 1100px) { .wording { grid-template-columns: minmax(0, 1fr); } .wording-preview { position: static; } }
 
-/* Briefbogen editor (setup/paper.html, paper.js): a workspace the window's size. The page on grey under rulers that
+/* Vorlage editor (setup/paper.html, paper.js): a workspace the window's size. The page on grey under rulers that
    stay in view, the rail docked at the window's right edge; what is picked outlined in the accent, guides in blue */
 body:has(#paper) { --rail: 460px; }
 body:has(#paper) > .wrap { max-width: none; padding: 0 var(--rail) 0 0; }  /* the grey reaches the window's edge and the rail; only the head is set in */
@@ -1010,8 +1015,16 @@ body:has(#paper) > .foot { display: none; }
 .paper-el:not(.paper-body):hover::before, .paper-el.on::before { content: attr(data-name); position: absolute; bottom: 100%; left: 0; z-index: 4; padding: 0 calc(5 * var(--px)); background: #9a9a9a; color: #fff; font: 600 calc(11 * var(--px)) / calc(17 * var(--px)) system-ui, sans-serif; font-style: normal; text-decoration: none; text-transform: none; white-space: nowrap; pointer-events: none; }
 .paper-el.on::before { background: var(--accent) !important; pointer-events: auto; cursor: move; }  /* what is picked is moved by its name too: a text while it is written, the text area */
 .paper.may-design .paper-text { cursor: text; }  /* a click writes it, a drag moves it */
-.paper:not(.may-design) .paper-el { outline: none; cursor: default; }  /* who only words: the page as it prints, nothing on it to pick */
+.paper:not(.may-design) .paper-el { outline: none; cursor: default; }  /* a document: its Vorlage as it prints, nothing on it to pick */
 .paper:not(.may-design) .paper-el::before { content: none; }
+.paper:not(.may-design) :is(.paper-el:not(.paper-body), .paper-mark) { opacity: 0.4; pointer-events: none; }  /* the Vorlage's, around a document: there to see, faded, nothing to click; the text the only thing in hand */
+.paper:not(.may-design) .paper-el:not(.paper-body) .flow-name { padding: 0; background: none; }  /* its placeholders plain: none of them to put in or pick here */
+.paper:not(.may-design) .paper-window { display: none; }  /* the envelope's window: a guide for laying out the Vorlage */
+.paper:not(.may-design) :is(.paper-ruler, .paper-corner) { visibility: hidden; }  /* nothing to place: no rulers, the page where the preview's stands */
+.paper:not(.may-word) .paper-flow .flow { cursor: inherit; user-select: none; }  /* on a Vorlage, a document shown, not written */
+.paper-start { margin: 0; padding: 8px 12px; border-left: 4px solid var(--accent); background: var(--soft); font-size: 14px; }  /* a document: where to begin, as the question over the page is set */
+.paper-standing { display: grid; gap: 4px; margin: 8px 0 0; padding: 0; list-style: none; }  /* the documents on a Vorlage, folded away */
+.paper-section summary { color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; cursor: pointer; }  /* as .paper-section h4 */
 .paper-size { position: absolute; z-index: 5; margin-top: calc(6 * var(--px)); padding: calc(2 * var(--px)) calc(7 * var(--px)); border-radius: calc(3 * var(--px)); background: var(--ink); color: #fff; font: calc(11 * var(--px)) / 1.4 system-ui, sans-serif; white-space: pre; pointer-events: none; }
 .paper-rail { position: fixed; top: 64px; right: 0; bottom: 0; z-index: 5; display: flex; flex-direction: column; width: var(--rail); border-left: 1px solid var(--line); background: #fff; }
 .paper-divider { width: 1px; height: 24px; margin: 0 6px; background: var(--line); }  /* viewing to its left, saving to its right */
@@ -1026,6 +1039,7 @@ body:has(#paper) > .foot { display: none; }
 .paper-menu > div { position: absolute; top: calc(100% + 6px); right: 0; z-index: 10; display: grid; min-width: 230px; padding: 6px; border: 1px solid var(--line); border-radius: 8px; background: #fff; box-shadow: 0 8px 24px rgb(0 0 0 / 0.12); }
 .paper-menu > div > :is(a, button) { display: block; padding: 8px 12px; border: 0; border-radius: var(--radius); background: none; color: var(--ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
 .paper-menu > div > :is(a, button):hover { background: var(--soft); text-decoration: none; }
+.paper-menu-note { padding: 8px 12px; color: var(--muted); font-size: 13px; }  /* in the „…“: why there is no „Löschen“ */
 .paper-menu .danger { color: var(--red); }
 .paper-take { display: grid; gap: 6px; margin-top: 4px; padding: 10px 12px 6px; border-top: 1px solid var(--line); font-size: 14px; }  /* another document's look, this one's content */
 .paper-take label { display: grid; gap: 4px; }
@@ -1052,6 +1066,10 @@ body:has(#paper) > .foot { display: none; }
 .paper-info dt { color: var(--muted); font-size: 0.82em; line-height: 1.85; }
 .paper-info dd { margin: 0; font-size: 1.06em; line-height: 1.45; }
 .paper-body { outline: var(--px) dashed #b5b5b5; }
+/* on a Vorlage, the text area: where each document's content goes, striped, said in its middle; no document's words */
+.paper-area { display: grid; place-content: center; gap: calc(4 * var(--px)); height: 100%; background: repeating-linear-gradient(-45deg, #f2f2f2 0 calc(8 * var(--px)), #fff 0 calc(16 * var(--px))); color: var(--muted); font: calc(15 * var(--px)) / 1.3 system-ui, sans-serif; text-align: center; }
+.paper-area b { color: var(--ink); font-weight: 600; }
+.paper-area small { font-size: calc(12 * var(--px)); }
 .paper-flow { height: 100%; overflow: hidden; opacity: 0.35; line-height: 1.45; }
 /* the content written on the page (flow.js): paragraph by paragraph in their styles, as core/paper.py sets them, what
    ConCampus fills in a placeholder, its name on a tint; one shown only where a value is given says so in the margin.

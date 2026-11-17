@@ -186,10 +186,13 @@ def compose(request):
     back = request.POST.get('next') or request.GET.get('next', '')
     if not url_has_allowed_host_and_scheme(back, {request.get_host()}):
         back = ''
-    form = ComposeForm(request.POST or None)
+    from documents.catalogue import FREE, papers
+
+    letters = [(p.key, p.name) for p in papers().values() if p.occasion == FREE]  # the Hochschule's own letters, to send instead
+    form = ComposeForm(request.POST or None, letters=letters)
     sender = ', '.join(Office.objects.filter(user=request.user, permissions__codename='message_students').values_list('name', flat=True)) or str(request.user)
     if people and form.is_valid():
-        form.send(people, sender)
+        form.send(people, sender, studies={s.person: s for s in studies})
         messages.success(request, f'Nachricht an {plural(len(people), "Person", "Personen")} gesendet.')
         return redirect(back or 'students:list')
     return render(request, 'students/compose.html', {'form': form, 'people': people, 'studies': studies, 'back': back, 'sender': sender})

@@ -49,14 +49,14 @@ def letter(occasion, key=None, draft=None):
     its draft; any other message, here the receipt of an application, as the Brief sets it."""
     from core.models import Message, Person
 
-    from .catalogue import papers, resolved
+    from .catalogue import papers
     from .compose import html, letter_values, subject, text
 
     values = examples(occasion if occasion in TEXTS else 'bewerbung')
     person = Person(first_name=values['vorname'], last_name=values['nachname'], address='Musterstraße 1\n12345 Musterstadt', matriculation=values['matrikelnummer'])
     if occasion == 'brief':
         return Message(pk=1234, person=person, subject=render('bewerbung', **values)[0], body=render('bewerbung', **values)[1])
-    content, values = draft or resolved(key or occasion, 'content', papers())[0], letter_values(occasion, values)
+    content, values = draft or papers()[key or occasion].content, letter_values(occasion, values)
     return Message(pk=1234, person=person, subject=subject(content, values), body=text(content, values), sender=values['absender'],
                    template=key or occasion, content=html(content, values, {}))
 

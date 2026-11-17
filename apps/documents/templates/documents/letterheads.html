@@ -1,0 +1,30 @@
+{% extends base %}
+{% block title %}Vorlagen{% endblock %}
+{% block content %}
+<div class="head">
+  <h1>Vorlagen</h1>
+  {# a new Vorlage: a copy of another (views.letterhead_copy) #}
+  <details class="new-paper">
+    <summary class="btn">Neue Vorlage</summary>
+    <form method="post" action="{% url 'documents:letterhead_copy' %}" class="form">
+      {% csrf_token %}
+      <label>Kopie von<select name="von">{% for key, name in sources %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select></label>
+      <label>Name<input name="name" maxlength="120" placeholder="z. B. Bescheinigung mit Siegel"></label>
+      <div class="actions"><button class="btn small">Anlegen</button></div>
+    </form>
+  </details>
+</div>
+<p class="lead">Kopf, Fuß und Schrift, einmal gestaltet für alle Dokumente, die darauf stehen.</p>
+<table>
+  <thead><tr><th>Vorlage</th><th>Dokumente darauf</th><th></th></tr></thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td><a href="{{ row.url }}"><b>{{ row.name }}</b></a></td>
+      <td class="muted"><b>{{ row.documents|length }}</b>{% if row.documents %} · <small>{{ row.documents|join:", " }}</small>{% endif %}</td>
+      <td>{% if row.gone %}{% include 'documents/_gone.html' %}{% elif row.changed %}<span class="badge open">eigen</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

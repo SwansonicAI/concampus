@@ -929,7 +929,7 @@ class Text(Tracked, models.Model):
 
 
 class Artwork(Tracked, models.Model):
-    """A picture or a font face for the Briefbögen: checked on upload, a picture drawn anew, a font made TrueType that
+    """A picture or a font face for the Vorlagen: checked on upload, a picture drawn anew, a font made TrueType that
     may be embedded (core.paper.accept, core.paper.faces); a face's family, weight and slant read from the font itself."""
 
     capabilities = ('design_papers',)

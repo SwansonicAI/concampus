@@ -790,7 +790,7 @@ def basics():
 
 def filled(template, values):
     """A text with its placeholders filled in; a paragraph whose placeholders are all empty left out, as „Wenn Sie
-    bestehen, folgen:“ with nothing to follow, the rule of the Briefbögen (core.paper.filled)."""
+    bestehen, folgen:“ with nothing to follow, the rule of the Vorlagen (core.paper.filled)."""
     def kept(paragraph):
         names = [name for _, name, _, _ in Formatter().parse(paragraph) if name]
         return not names or any(str(values[name]).strip() for name in names)

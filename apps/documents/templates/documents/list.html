@@ -3,36 +3,30 @@
 {% block content %}
 <div class="head">
   <h1>{{ title }}</h1>
-  {% if paper %}{# a new document: as another, until it is changed (views.copy) #}
-  <details class="new-paper">
-    <summary class="btn">Neues Dokument</summary>
-    <form method="post" action="{% url 'documents:copy' kind %}" class="form">
-      {% csrf_token %}
-      <label>Kopie von<select name="von">{% for key, name in sources %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select></label>
-      <label>Name<input name="name" maxlength="120" placeholder="z. B. {% if kind == 'bescheide' %}Zulassung{% else %}Zeugnis{% endif %} Lehramt"></label>
-      <div class="actions"><button class="btn small">Anlegen</button></div>
-    </form>
-  </details>
+  {% if letters %}{# a letter of the Hochschule's own, blank to write on at once, named there (views.copy) #}
+  <form method="post" action="{% url 'documents:copy' kind %}">{% csrf_token %}<button class="btn">Neuer Brief</button></form>
   {% endif %}
 </div>
 <p class="lead">{{ lead }}</p>
-{% if 'word_texts' in user.roles %}
 <form class="toolbar">
   <div class="inline"><label>Suche in allen Dokumenten<input type="search" name="q" value="{{ q }}" placeholder="Name oder Wortlaut"></label></div>
 </form>
-{% endif %}
-<table>
-  <thead><tr><th>Dokument</th>{% if paper and not q %}{% if copies %}<th>Gilt für</th>{% endif %}{% else %}<th>Betreff</th>{% endif %}<th></th></tr></thead>
+<table data-fixed>
+  <thead><tr><th>Dokument</th>{% if not q %}{% if not letters %}<th>{{ when }}</th>{% endif %}{% if paper %}<th>Vorlage</th>{% if copies %}<th>Gilt für</th>{% endif %}{% else %}<th>Betreff</th>{% endif %}{% endif %}<th></th></tr></thead>
   <tbody>
     {% for row in rows %}
     <tr>
       <td><a href="{{ row.url }}"><b>{{ row.name }}</b></a>{% if row.note %}<br><small class="muted">{{ row.note }}</small>{% endif %}</td>
-      {% if paper and not q %}{% if copies %}<td class="muted">{% if row.copy %}{{ row.programs|default:"noch niemanden" }}{% else %}alle übrigen{% endif %}</td>{% endif %}
+      {% if not q %}
+      {% if not letters %}<td class="muted">{{ row.when }}{% if row.where %}<br><a href="{{ row.where.url }}"><small>{{ row.where.name }} <i class="arrow"></i></small></a>{% endif %}</td>{% endif %}
+      {% if paper %}<td class="muted">{{ row.head }}</td>
+      {% if copies %}<td class="muted nowrap">{% if row.copy %}{{ row.programs|default:"noch niemanden" }}{% else %}alle übrigen{% endif %}</td>{% endif %}
       {% else %}<td class="muted">{{ row.about|default:"" }}</td>{% endif %}
-      <td>{% if row.changed %}<span class="badge open">eigen</span>{% endif %}</td>
+      {% endif %}
+      <td>{% if row.changed %}<span class="badge open">eigen</span>{% endif %}{% if row.gone %}{% include 'documents/_gone.html' %}{% endif %}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="4" class="empty">Kein Dokument sagt „{{ q }}“.</td></tr>
+    <tr><td colspan="5" class="empty">{% if q %}Kein Dokument sagt „{{ q }}“.{% elif letters %}Noch keine. „Neuer Brief“ legt einen an.{% endif %}</td></tr>
     {% endfor %}
   </tbody>
 </table>

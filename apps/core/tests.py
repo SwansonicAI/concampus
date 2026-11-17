@@ -23,7 +23,7 @@ from onelogin.saml2.utils import OneLogin_Saml2_Utils as Utils
 
 from courses.models import Course, Score
 from curriculum.models import Program
-from documents.catalogue import papers, resolved
+from documents.catalogue import letterheads, page, papers
 from documents.compose import runs
 from documents.models import Paper
 from rooms.models import Booking, Room
@@ -279,9 +279,8 @@ class TextTest(Seeded):
                 self.assertNotIn('[', subject + body)
 
     def edited(self, key, content=None, **more):
-        """What a document's editor sends: its page and content as they stand, or `content` as written, and `more`."""
-        found = papers()
-        return {'design': json.dumps({'page': resolved(key, 'page', found)[0], 'content': content or resolved(key, 'content', found)[0]} | more)}
+        """What a document's editor sends: its content as it stands, or `content` as written, and `more`."""
+        return {'design': json.dumps({'content': content or papers()[key].content} | more)}
 
     def test_preview_shows_a_draft_unsaved(self):
         content = {'office': '', 'blocks': [{'type': 'p', 'style': 'heading', 'runs': runs('Ihre Zulassung')}, {'type': 'p', 'style': 'text', 'runs': runs('Willkommen, {vorname}.')}]}
@@ -304,7 +303,7 @@ class TextTest(Seeded):
         campus = self.login('campus')
         old = Message.objects.filter(subject='Bescheid über die Eignungsprüfung: Studienplatzangebot').first()
         before = old.content
-        content = resolved('zulassung', 'content', papers())[0]
+        content = papers()['zulassung'].content
         content['blocks'][0]['runs'], content['blocks'][2]['runs'] = runs('Ihre Zulassung'), runs('Willkommen, {vorname}, zum {semester}.')
         campus.post('/dokumente/bescheide/zulassung/', self.edited('zulassung', content))
         study = Study.objects.filter(status='applied', participations=None).exclude(person__username='bewerbung').select_related('person').first()
@@ -318,23 +317,41 @@ class TextTest(Seeded):
         campus.post('/dokumente/bescheide/zulassung/', {'art': 'standard'})
         self.assertFalse(Paper.objects.filter(key='zulassung').exists())
 
-    def test_a_copy_follows_until_changed_then_stands_for_its_programme(self):
-        """A copy takes its original's page and content; changed for all, both change; changed for one alone, the other
-        keeps its own. A copy for a Studiengang is what its students get."""
+    def test_a_copy_is_its_own_and_stands_for_its_programme(self):
+        """A copy changes alone, its original as it was; for a Studiengang it is what its students get."""
         campus = self.login('campus')
         campus.post('/dokumente/bescheinigungen/neu/', {'von': 'immatrikulationsbescheinigung', 'name': 'Lehramt'})
         copy = Paper.objects.get(name='Lehramt')
-        content = resolved('immatrikulationsbescheinigung', 'content', papers())[0]
-        content['blocks'][1]['runs'] = runs('Für alle bescheinigt:')
-        campus.post(f'/dokumente/bescheinigungen/{copy.key}/', self.edited(copy.key, content, scope={'content': 'alle'}))
-        said = lambda key: resolved(key, 'content', papers())[0]['blocks'][1]['runs'][0]['t']
-        self.assertEqual((said('immatrikulationsbescheinigung'), said(copy.key)), ('Für alle bescheinigt:', 'Für alle bescheinigt:'))
+        content = papers()[copy.key].content
         content['blocks'][1]['runs'] = runs('Nur hier bescheinigt:')
         program = Program.objects.filter(studies__status='enrolled').first()
-        campus.post(f'/dokumente/bescheinigungen/{copy.key}/', self.edited(copy.key, content, scope={'content': 'hier'}, programs=[program.pk]))
-        self.assertEqual((said('immatrikulationsbescheinigung'), said(copy.key)), ('Für alle bescheinigt:', 'Nur hier bescheinigt:'))
+        campus.post(f'/dokumente/bescheinigungen/{copy.key}/', self.edited(copy.key, content, programs=[program.pk]))
+        said = lambda key: papers()[key].content['blocks'][1]['runs'][0]['t']
+        self.assertNotEqual(said('immatrikulationsbescheinigung'), 'Nur hier bescheinigt:')
+        self.assertEqual(said(copy.key), 'Nur hier bescheinigt:')
         mine = Study.objects.filter(status='enrolled', program=program).first()
         self.assertContains(self.login('asa').get(f'/studierende/{mine.pk}/bescheinigung/'), 'Nur hier bescheinigt:')
+
+    def test_a_letter_of_its_own_reaches_whom_it_is_sent_to(self):
+        """A letter the Hochschule writes itself, chosen when writing to students, reaches each filled in for them."""
+        asa = self.login('asa')
+        asa.post('/dokumente/briefe/neu/')
+        letter = Paper.objects.get(occasion='frei')
+        content = letter.content
+        content['blocks'][2]['runs'] = runs('Ihr Studiengang: {studiengang}.')
+        asa.post(f'/dokumente/briefe/{letter.key}/', self.edited(letter.key, content))
+        study = Study.objects.filter(status='enrolled').select_related('person', 'program').first()
+        asa.post('/studierende/nachricht/', {'study': study.pk, 'letter': letter.key})
+        self.assertIn(f'Ihr Studiengang: {study.program.title}.', Message.objects.get(person=study.person, template=letter.key).body)
+
+    def test_a_letterhead_changes_every_document_on_it(self):
+        """A Vorlage saved is the page of every document on it; a document set on another takes that one's."""
+        campus, head = self.login('campus'), letterheads()['bescheinigung']
+        head.page['elements'].append({'id': 'neu', 'type': 'text', 'x': 25, 'y': 5, 'w': 80, 'h': 5, 'pages': 'all', 'text': 'Neu', 'size': 9})
+        campus.post('/dokumente/vorlagen/bescheinigung/', {'design': json.dumps({'page': head.page, 'name': 'Bescheinigung'})})
+        self.assertIn('Neu', [el.get('text') for el in page('zeugnis')['elements']])
+        campus.post('/dokumente/bescheinigungen/zeugnis/', self.edited('zeugnis', letterhead='urkunde'))
+        self.assertEqual(page('zeugnis'), letterheads()['urkunde'].page)
 
     def test_mail_goes_out_once_saved(self):
         mei = Person.objects.get(username='student')

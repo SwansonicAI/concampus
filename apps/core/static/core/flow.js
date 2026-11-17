@@ -302,6 +302,11 @@ window.Flow = function Flow({data, get, texts, changed, editable, panel, activat
     getSelection().addRange(range);
   }
   node.addEventListener('click', e => {
+    if (!editable) return;  // shown on a Vorlage, not written there
+    if (e.detail === 3) {  // three clicks: the paragraph, or the part of it, and no further, so typing over it keeps the next
+      const part = e.target.closest('.flow-cell, [data-cell], .flow-words') || e.target.closest('[data-n]');
+      if (part && node.contains(part)) getSelection().selectAllChildren(part);
+    }
     if (e.target === node || e.target.matches('.flow-p:has(> .flow-cell)')) nearest(e.clientX, e.clientY);
     const p = e.target.closest('.flow-own') || e.target.closest('.flow-pill');  // in the Hochschule's own text: the text, not a value in it
     picked = p && editable ? p : null;

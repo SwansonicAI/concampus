@@ -948,8 +948,9 @@ document.addEventListener('click', event => {
   else if (cancel && !cancel.closest('.drawer')) document.querySelectorAll('form[data-dirty]').forEach(form => delete form.dataset.dirty);
 });
 
-// The account menu and a list of boxes close on Escape or a click elsewhere.
-const folded = () => document.querySelectorAll('details.menu[open], details.choices[open]');
+// What folds open over the page closes on Escape or a click elsewhere: the account menu, a list of boxes, the
+// editor's „…“, the form for something new.
+const folded = () => document.querySelectorAll(':is(details.menu, details.choices, details.paper-menu, details.new-paper)[open]');
 document.addEventListener('click', event => folded().forEach(open => open.contains(event.target) || open.removeAttribute('open')));
 document.addEventListener('keydown', event => event.key === 'Escape' && folded().forEach(open => open.removeAttribute('open')));
 document.addEventListener('toggle', ({target}) => {

@@ -24,16 +24,20 @@ class DocumentsConfig(Tile, AppConfig):
         from .catalogue import KINDS
         from .views import kinds
 
-        return [page(KINDS[kind][0], f'documents:{kind}') for kind in kinds(person)]
+        return ([page('Vorlagen', 'documents:letterheads')] if 'design_papers' in person.roles else []) + [
+            page(KINDS[kind][0], f'documents:{kind}') for kind in kinds(person)]  # as Dokumente's start sets them up
 
     def features(self, person):
         from .catalogue import KINDS
         from .views import kinds
 
         words = {
-            'bescheide': 'dokumente texte wortlaut vorlagen briefe briefkopf briefbogen rechtsbehelfsbelehrung zulassung ablehnung',
-            'bescheinigungen': 'dokumente immatrikulationsbescheinigung zeugnis urkunde diploma supplement leihvertrag notenliste unterschriften absender gestaltung',
+            'bescheide': 'dokumente texte wortlaut vorlagen briefe rechtsbehelfsbelehrung zulassung ablehnung',
+            'bescheinigungen': 'dokumente immatrikulationsbescheinigung zeugnis urkunde diploma supplement leihvertrag notenliste unterschriften absender',
+            'briefe': 'dokumente brief briefe neuer brief serienbrief anschreiben eigene',
             'nachrichten': 'dokumente texte wortlaut e-mail postfach',
             'seiten': 'dokumente texte anmeldeseite barrierefreiheit einwilligung datenschutz',
         }
-        return [feature(KINDS[kind][0], reverse(f'documents:{kind}'), words[kind]) for kind in kinds(person)]
+        return [feature(KINDS[kind][0], reverse(f'documents:{kind}'), words[kind]) for kind in kinds(person)] + (
+            [feature('Vorlagen', reverse('documents:letterheads'), 'dokumente vorlage vorlagen briefbogen briefkopf kopf fuß logo schrift gestaltung layout')]
+            if 'design_papers' in person.roles else [])

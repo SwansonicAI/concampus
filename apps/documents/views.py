@@ -1,7 +1,8 @@
-"""Dokumente: every document ConCampus makes (catalogue). One on paper is edited as it prints (core/static/core/paper.js,
-flow.js): its page by whoever designs, its content by whoever words texts. A copy takes page and content from the
-document it was copied from until it gets its own; whoever changes what others share says whether for all of them or
-for this one alone. Messages and the texts of ConCampus's pages are written as they arrive (core/static/core/words.js)."""
+"""Dokumente: every document ConCampus makes (catalogue). One on paper is written as it prints (core/static/core/paper.js,
+flow.js), by whoever words texts, on the Vorlage it stands on; the Vorlagen, a handful for all documents, are laid
+out by whoever designs, in the same editor. Messages and the texts of ConCampus's pages are written as they arrive
+(core/static/core/words.js)."""
+from copy import deepcopy
 import json
 import re
 
@@ -24,15 +25,15 @@ from django.views.decorators.csp import csp_override
 from django.views.decorators.http import require_POST
 
 from core import paper
-from core.access import Refused, require
+from core.access import require
 from core.models import Artwork, Institution, Text
 from core.text import fold
 from core.texts import NAMES, TEXTS, basics, examples, wording
 from curriculum.models import Program
 
 from . import compose
-from .catalogue import KINDS, OCCASIONS, followers, free_key, papers, programs, resolved, texts
-from .models import Paper
+from .catalogue import FREE, KINDS, OCCASIONS, SENT, WHEN, free_key, letterhead_of, letterheads, on, papers, programs, standard, texts, variant, where
+from .models import Letterhead, Paper
 from .samples import made_up, sample
 
 CONTENT = {'.png': 'image/png', '.jpg': 'image/jpeg', '.ttf': 'font/ttf'}
@@ -41,14 +42,32 @@ WORDED = {'nachrichten', 'seiten'}  # kinds with nothing but wording: for whoeve
 PLACEHOLDER = re.compile(r'\{(\w+)\}')
 
 
+@require('word_texts', 'design_papers')
 def index(request):
-    return redirect('documents:bescheide')
+    """Where documents begin: in the order a Hochschule sets them up, the Hochschule's own data, the Vorlagen, then
+    each list, how many it holds and how many the Hochschule has made its own."""
+    roles, found, own = request.user.roles, papers(), set(Text.objects.values_list('key', flat=True))
+    steps = []
+    if 'manage_institution' in roles:
+        steps.append({'title': 'Hochschule', 'url': reverse('setup:list', args=['hochschule']), 'about': 'Name, Logo oder Schriftzug, Anschrift und Bankverbindung, für Kopf und Fuß aller Dokumente', 'count': None})
+    if 'design_papers' in roles:
+        heads = letterheads()
+        steps.append({'title': 'Vorlagen', 'url': reverse('documents:letterheads'), 'about': 'Kopf, Fuß und Schrift, einmal für alle Dokumente darauf',
+                      'count': len(heads), 'own': sum(1 for h in heads.values() if h.pk)})
+    for kind in kinds(request.user):
+        if kind in WORDED:
+            keys = [t.key for t in texts().values() if t.kind == kind]
+            count, mine = len(keys), sum(1 for key in keys if key in own)
+        else:
+            listed = [p for p in found.values() if OCCASIONS[p.occasion][0] == kind and p.key != 'brief']
+            count, mine = len(listed), sum(1 for p in listed if p.pk)
+        steps.append({'title': KINDS[kind][0], 'url': reverse(f'documents:{kind}'), 'about': KINDS[kind][1], 'count': count, 'own': mine})
+    return render(request, 'documents/index.html', {'steps': steps, 'search': 'word_texts' in roles})
 
 
 def kinds(person):
-    """The lists a person sees: whoever only designs, those of documents on paper; whoever does neither, none."""
-    roles = person.roles
-    return [kind for kind in KINDS if 'word_texts' in roles or 'design_papers' in roles and kind not in WORDED]
+    """The lists of documents a person sees: all for whoever words texts, none for anyone else."""
+    return list(KINDS) if 'word_texts' in person.roles else []
 
 
 def pills(text, key):
@@ -57,42 +76,40 @@ def pills(text, key):
     return mark_safe(PLACEHOLDER.sub(lambda m: f'<span class="flow-pill" title="{m[1]}">{escape(found.get(m[1], m[1]))}</span>', escape(text)))
 
 
-def said(p, found):
+def said(p):
     """All a document on paper says, folded, for a search: its name and its words."""
-    content = resolved(p.key, 'content', found)[0]
-    return fold(' '.join([p.name] + [r.get('t', '') for b in content.get('blocks', []) for runs in compose.runs_of(b) for r in runs]))
+    return fold(' '.join([p.name] + [r.get('t', '') for b in p.content.get('blocks', []) for runs in compose.runs_of(b) for r in runs]))
 
 
-@require('word_texts', 'design_papers')
+@require('word_texts')
 def listing(request, kind):
-    """The documents of a kind. On paper, each with what it takes from another and for whom it stands; a message or a
-    page's text with what it says. A search finds documents of every kind by their name or anything written on them."""
-    if kind not in kinds(request.user):
-        raise Refused(['word_texts'])
+    """The documents of a kind. On paper, each with its Vorlage and for whom it stands; a message or a page's text
+    with what it says. A search finds documents of every kind by their name or anything written on them."""
     q, mine = request.GET.get('q', '').strip(), kinds(request.user)
-    sought, found, own = fold(q).split(), papers(), {t.key: t for t in Text.objects.all()}
+    sought, found, heads, own = fold(q).split(), papers(), letterheads(), {t.key: t for t in Text.objects.all()}
     rows = []
     for p in found.values():
         what = OCCASIONS[p.occasion][0]
-        if p.key == 'brief':  # the blank letter beneath them all, not one to write: its head and foot are changed in any Bescheid
+        if p.key == 'brief':  # the blank letter beneath them all, each message's own words on the Brief
             continue
-        if what in mine and (all(w in said(p, found) for w in sought) if q else what == kind):
-            copy, others = p.key != p.occasion, len(followers(p.key, 'page', found))
+        if all(w in said(p) for w in sought) if q else what == kind:
+            head = letterhead_of(p, heads)
             rows.append({
-                'url': reverse('documents:document', args=[what, p.key]), 'name': p.name, 'kind': what, 'changed': bool(p.pk), 'copy': copy,
-                'note': f'Kopie von „{found[p.follows].name}“' if copy and p.follows in found else f'Kopf und Fuß auch für {others} weitere' if others else '',
-                'programs': ', '.join(x.title for x in programs(p)),
+                'url': reverse('documents:document', args=[what, p.key]), 'name': p.name, 'kind': what, 'changed': bool(p.pk) and p.key == p.occasion, 'copy': variant(p),  # „eigen“: ConCampus's, as the Hochschule changed it
+                'note': f'Variante von „{found[p.occasion].name}“' if variant(p) else '', 'programs': ', '.join(x.title for x in programs(p)),
+                'head': head.name,
+                'when': WHEN.get(p.occasion, ''), 'where': where(p.occasion, request.user), 'gone': bool(p.pk) and p.key != p.occasion,  # a variant, a letter of the Hochschule's own
             })
     for t in texts().values():
         spec = TEXTS[t.key]
         text = own.get(t.key) or spec
         if t.kind in mine and (all(w in fold(f'{t.title} {text.subject} {text.body}') for w in sought) if q else t.kind == kind):
             rows.append({'url': reverse('documents:document', args=[t.kind, t.key]), 'name': t.title, 'kind': t.kind, 'changed': t.key in own,
-                         'about': pills(text.subject, t.key)})
+                         'about': pills(text.subject, t.key), 'when': SENT[t.key], 'where': where(t.key, request.user)})
     return render(request, 'documents/list.html', {
         'kind': kind, 'title': KINDS[kind][0], 'lead': KINDS[kind][1], 'q': q, 'rows': rows, 'paper': kind not in WORDED,
-        'copies': any(row.get('copy') for row in rows),  # for whom: said only where a copy stands for some
-        'sources': [(p.key, p.name) for p in found.values() if OCCASIONS[p.occasion][0] == kind],
+        'copies': any(row.get('copy') for row in rows),  # for whom: said only where a variant stands for some
+        'when': {'seiten': 'Wo', 'bescheinigungen': 'Wann ConCampus es ausstellt'}.get(kind, 'Wann ConCampus es schickt'), 'letters': kind == 'briefe',
     })
 
 
@@ -128,12 +145,12 @@ def keep(key, spec, form):
         form.save()
 
 
-@require('word_texts', 'design_papers')
+@require('word_texts')
 def document(request, kind, key):
-    """One document. On paper: edited as it prints (editor). A message or a page's text: written as it arrives, saved
+    """One document. On paper: written as it prints (editor). A message or a page's text: written as it arrives, saved
     where it changed, back to its standard on asking."""
-    if kind not in kinds(request.user):
-        raise Refused(['word_texts'])
+    if kind not in KINDS:
+        raise Http404
     if kind not in WORDED:
         return editor(request, kind, key)
     text = texts().get((kind, key))
@@ -152,7 +169,7 @@ def document(request, kind, key):
         return redirect(back)
     spec, values = TEXTS[key], basics() | examples(key)
     return render(request, 'documents/document.html', {
-        'trail': [(KINDS[kind][0], back)], 'back': back, 'document': text,
+        'trail': [(KINDS[kind][0], back)], 'back': back, 'document': text, 'when': SENT[key], 'where': where(key, request.user),
         'words': {key: {'values': values, 'labels': {name: NAMES.get(name, name) for name in spec.allowed}}},
         'texts': found,
     })
@@ -168,19 +185,14 @@ def edited(request, key):
     return found[key], found
 
 
-def freeze(key, part, value, found):
-    """Whatever takes `part` from this document keeps it as it is, as its own: before it changes or goes."""
-    for p in followers(key, part, found):
-        setattr(p, part, value)
-        p.save()
-
-
 def known(p, found, request):
     """What the editor writes a document's content with (flow.js): each value with what it says, whose it is and its value
     for the made-up person; each list with its fields and rows; the styles; the Hochschule's own texts among the values,
     to word where they are used."""
     occasion = p.occasion
-    if occasion in compose.DATA and occasion != 'brief':
+    if occasion == FREE:
+        values, lists = compose.letter_values(occasion, examples('bewerbung')), {}
+    elif occasion in compose.DATA and occasion != 'brief':
         pages, common, *_ = made_up(request)
         values, lists = compose.data(occasion, common | pages[occasion][1])
     elif occasion == 'brief':
@@ -190,8 +202,8 @@ def known(p, found, request):
     else:
         values, lists = compose.letter_values(occasion, examples(occasion)), {}
     fields, columns = compose.fields_of(occasion)
-    values['amt'] = resolved(p.key, 'content', found)[0].get('office') or values.get('hochschule', '')
-    uses = lambda field: sum(1 for q in found.values() if q.occasion != 'brief' and any(r.get('f') == field for b in resolved(q.key, 'content', found)[0].get('blocks', [])
+    values['amt'] = p.content.get('office') or values.get('hochschule', '')
+    uses = lambda field: sum(1 for q in found.values() if q.occasion != 'brief' and any(r.get('f') == field for b in q.content.get('blocks', [])
                                                                                      for runs in compose.runs_of(b) for r in runs))
     elsewhere = {}  # on the Brief: what each message brings, shown as where it goes, worded where the message is
     if occasion == 'brief':
@@ -210,100 +222,189 @@ def known(p, found, request):
     }
 
 
-def shared(key, part, found):
-    """What the editor says of a part: whose it is, and how many others have it."""
-    owner = resolved(key, part, found)[1]
-    return {'own': owner.key == key, 'from': owner.name, 'count': len(followers(owner.key, part, found))}  # the others: its followers, or the one it takes it from and its other followers
+def fitting(p, heads):
+    """The Vorlagen a document may stand on: a letter only on one with an address window."""
+    letter = compose.letter(p.occasion)
+    return {key: h for key, h in heads.items() if not letter or any(el['type'] == 'address' for el in h.page['elements'])}
 
 
-@require('word_texts', 'design_papers')
+def posted_texts(posted):
+    """The forms of the Hochschule's own texts the editor sends, worded where they stand; ValidationError where one is wrong."""
+    sent = posted.get('texts') or {}
+    found = text_forms([t for t in sent if t in compose.WORDED.values()], {f'{t}-body': body for t, body in sent.items()})
+    for _, _, form in found:
+        if not form.is_valid():
+            raise ValidationError([e for errors in form.errors.values() for e in errors])
+    return found
+
+
+UNREAD = (KeyError, TypeError, ValueError, ValidationError, AttributeError)  # what a page or content the editor sends may fail with
+
+
+def refused(request, error):
+    messages.error(request, 'Nicht gespeichert: ' + ' '.join(getattr(error, 'messages', ['Das ließ sich nicht lesen.'])))
+    return redirect(request.path)
+
+
+@require('word_texts')
 def editor(request, kind, key):
-    """A document on paper, edited as it prints: whoever designs, its page; whoever words texts, its content and the
-    Hochschule's texts in it. Saved together; what others take from it, or it from another, changed for all of them or
-    for this one alone, as asked. Copied, deleted where it is a copy, or set back to ConCampus's own."""
+    """A document on paper, written as it prints on its Vorlage: its content and the Hochschule's texts in it, which
+    Vorlage it stands on, for whom a variant stands. Copied; deleted where it is a variant or a letter of the
+    Hochschule's own; set back to ConCampus's own where it is ConCampus's, which belongs to an event and stays."""
     p, found = edited(request, key)
     if OCCASIONS[p.occasion][0] != kind:
         raise Http404
-    roles = request.user.roles
-    may_design, may_word = 'design_papers' in roles, 'word_texts' in roles
-    page, content = resolved(key, 'page', found)[0], resolved(key, 'content', found)[0]
+    heads = fitting(p, letterheads())
     act = request.POST.get('art')
-    if act == 'standard' and p.pk and key == p.occasion and may_design and may_word:
+    if act == 'standard' and p.pk and key == p.occasion:
         p.delete()
         messages.success(request, f'„{p.name}“ steht wieder, wie ConCampus es vorschlägt.')
         return redirect(request.path)
-    if act == 'loeschen' and p.pk and key != p.occasion and may_design and may_word:
-        with transaction.atomic():
-            freeze(key, 'page', page, found)
-            freeze(key, 'content', content, found)
-            p.delete()
+    if act == 'loeschen' and p.pk and key != p.occasion:
+        p.delete()
         messages.success(request, f'„{p.name}“ gelöscht.')
         return redirect('documents:' + kind)
     if request.method == 'POST':
         try:
             posted = json.loads(request.POST.get('design', ''))
-            scope = posted.get('scope') or {}
-            new_page = paper.clean(posted['page'], letter=compose.letter(p.occasion)) if may_design else page
-            new_content = compose.clean(p.occasion, posted['content']) if may_word else content
-            worded = text_forms([t for t in (posted.get('texts') or {}) if t in compose.WORDED.values()], {
-                f'{t}-body': body for t, body in (posted.get('texts') or {}).items()}) if may_word else []
-            for _, _, form in worded:
-                if not form.is_valid():
-                    raise ValidationError([e for errors in form.errors.values() for e in errors])
-        except (KeyError, TypeError, ValueError, ValidationError, AttributeError) as error:
-            messages.error(request, 'Nicht gespeichert: ' + ' '.join(getattr(error, 'messages', ['Das Dokument ließ sich nicht lesen.'])))
-            return redirect(request.path)
-        name, chosen = str(posted.get('name') or p.name)[:120], posted.get('programs')
+            content, worded = compose.clean(p.occasion, posted['content']), posted_texts(posted)
+        except UNREAD as error:
+            return refused(request, error)
+        head = posted.get('letterhead') if posted.get('letterhead') in heads else letterhead_of(p, heads).key
+        new = (str(posted.get('name') or p.name)[:120], content, '' if head == standard(p.occasion) else head)
         with transaction.atomic():
-            changed = name != p.name
-            was = {'page': paper.clean(page, letter=compose.letter(p.occasion)) if may_design else page,  # as the editor sends it back untouched
-                   'content': compose.clean(p.occasion, content) if may_word else content}
-            for part, new, old in (('page', new_page, page), ('content', new_content, content)):
-                if new == was[part]:
-                    continue
-                owner = resolved(key, part, found)[1]
-                if owner.key != key and scope.get(part) == 'alle':  # what it takes from another, changed there, for all
-                    setattr(owner, part, new)
-                    owner.save()
-                    continue
-                if owner.key == key and scope.get(part) != 'alle':  # its own, changed for it alone: the others keep it as it was
-                    freeze(key, part, old, found)
-                setattr(p, part, new)
-                changed = True
-            p.name = name
-            if changed:
+            if new != (p.name, compose.clean(p.occasion, p.content), p.letterhead):  # as the editor sends it back untouched: nothing to keep
+                p.name, p.content, p.letterhead = new
                 p.save()
-            if p.pk and key != p.occasion and may_word and isinstance(chosen, list):
+            if p.pk and variant(p) and isinstance(chosen := posted.get('programs'), list):
                 p.programs.set(Program.objects.filter(pk__in=[x for x in chosen if isinstance(x, int)]))
             for item in worded:
                 keep(*item)
         messages.success(request, f'„{p.name}“ gespeichert.')
         return redirect(request.path)
+    head, free = letterhead_of(p, heads), p.occasion == FREE
     return render(request, 'documents/paper.html', {
         'menu': None,  # the window's width for the page and the rail (documents/paper.html)
-        'key': key, 'kind': kind, 'name': p.name, 'record': p if p.pk else None, 'back': reverse('documents:' + kind),
-        'reset': p.pk and key == p.occasion and may_design and may_word, 'copy': key != p.occasion and p.pk and may_design and may_word,
-        'editor': editor_data(page, p.name) | {
-            'letters': compose.letter(p.occasion), 'unsaved': False, 'mayDesign': may_design, 'mayWord': may_word, 'flow': content,
-            'compose': known(p, found, request), 'shared': {'page': shared(key, 'page', found), 'content': shared(key, 'content', found)},
-            'copy': key != p.occasion, 'programs': [[x.pk, x.title] for x in Program.objects.all()], 'chosen': [x.pk for x in programs(p)],
-            'occasion': OCCASIONS[p.occasion][1],
+        'name': p.name, 'back': reverse('documents:' + kind), 'tabs': [('first', 'Dokument'), ('pdf', 'Vorschau')],
+        'preview': reverse('documents:preview', args=[kind, key]), 'copy': reverse('documents:copy', args=[kind]), 'key': key,
+        'copying': '' if key == 'brief' else 'Kopie anlegen' if free else 'Variante für Studiengänge anlegen',  # the blank letter beneath every message: none
+        'history': reverse('history', args=['documents.paper', p.pk]) if p.pk else '',
+        'editor': editor_data(head.page, p.name) | {
+            'letters': compose.letter(p.occasion), 'unsaved': False, 'mayDesign': False, 'mayWord': True, 'flow': p.content,
+            'compose': known(p, found, request), 'letterhead': head.key,
+            'letterheads': {k: {'name': h.name, 'page': h.page, 'url': reverse('documents:letterhead', args=[k])} for k, h in heads.items()},
+            'designs': 'design_papers' in request.user.roles,
+            'copy': variant(p), 'programs': [[x.pk, x.title] for x in Program.objects.all()], 'chosen': [x.pk for x in programs(p)],
+            'occasion': found[p.occasion].name if variant(p) else '', 'when': '' if free else WHEN.get(p.occasion, ''), 'where': where(p.occasion, request.user), 'free': free,
+            'gone': f'„{p.name}“ löschen?' if p.pk and key != p.occasion else '',  # a variant, a letter of the Hochschule's own
+            'reset': bool(p.pk and key == p.occasion),
+            'kept': 'Nicht zu löschen: ConCampus schickt es von selbst, wenn es so weit ist.' if key == p.occasion else '',  # ConCampus's: it belongs to an event
+            'compose_url': reverse('students:list') if free and 'message_students' in request.user.roles else '',
             'settings': reverse('setup:list', args=['hochschule']) if 'manage_institution' in request.user.roles else '',  # where the Hochschule's own values change
         },
     })
 
 
-@require('word_texts', 'design_papers')
+@require('word_texts')
 @require_POST
 def copy(request, kind):
-    """A new document, as another (`von`) until it is changed: for the same occasion, under its own name."""
+    """A new document: a letter of the Hochschule's own, blank to write on; or a copy of another (`von`), for the same
+    occasion, on the same Vorlage, a variant for some Studiengänge where it is ConCampus's."""
+    name = request.POST.get('name', '').strip()[:120]
+    if kind == 'briefe' and not request.POST.get('von'):
+        made = Paper.objects.create(key=free_key(name or 'Neuer Brief'), occasion=FREE, name=name or 'Neuer Brief', content=deepcopy(compose.vorschlag(FREE)))
+        messages.success(request, f'„{made.name}“ angelegt. In den Text klicken und schreiben.')
+        return redirect('documents:document', kind, made.key)
     p, _ = edited(request, request.POST.get('von', ''))
-    if kind not in kinds(request.user) or OCCASIONS[p.occasion][0] != kind:
+    if OCCASIONS[p.occasion][0] != kind or p.key == 'brief':
         raise Http404
-    name = (request.POST.get('name', '').strip() or f'{p.name}, Kopie')[:120]
-    made = Paper.objects.create(key=free_key(name), occasion=p.occasion, name=name, follows=p.key)
-    messages.success(request, f'„{made.name}“ angelegt: wie „{p.name}“, bis Sie es ändern.')
+    name = name or f'{p.name}, {"Kopie" if p.occasion == FREE else "Variante"}'
+    made = Paper.objects.create(key=free_key(name), occasion=p.occasion, name=name, letterhead=p.letterhead, content=deepcopy(p.content))
+    messages.success(request, f'„{made.name}“ angelegt, als Kopie von „{p.name}“.' if p.occasion == FREE else
+                     f'„{made.name}“ angelegt. Unter „Gilt für“ die Studiengänge wählen, für die es statt „{p.name}“ gilt.')
     return redirect('documents:document', kind, made.key)
+
+
+# ---- Vorlagen -----------------------------------------------------------------------------------------------------
+
+def head_of(key):
+    """The Vorlage asked for, all there are, and all documents."""
+    heads = letterheads()
+    if key not in heads:
+        raise Http404
+    return heads[key], heads, papers()
+
+
+def shown_on(h, found, heads):
+    """The document a Vorlage's preview shows on it: the first of ConCampus's own that stands on it, a Bescheid before
+    the blank letter; none on it yet, the first Bescheinigung."""
+    standing = sorted(on(h, found, heads), key=lambda p: (p.occasion == 'brief', p.key != p.occasion))  # ConCampus's own before a variant or letter of the Hochschule's
+    return standing[0] if standing else found['immatrikulationsbescheinigung']
+
+
+@require('design_papers')
+def letterheads_list(request):
+    """The Vorlagen, each with the documents that stand on it."""
+    heads, found = letterheads(), papers()
+    rows = [{'url': reverse('documents:letterhead', args=[key]), 'name': h.name, 'changed': bool(h.pk), 'gone': bool(h.pk) and key not in paper.STANDARD,
+             'documents': [p.name for p in on(h, found, heads) if p.key != 'brief']} for key, h in heads.items()]
+    return render(request, 'documents/letterheads.html', {'rows': rows, 'sources': [(key, h.name) for key, h in heads.items()]})
+
+
+@require('design_papers')
+def letterhead(request, key):
+    """A Vorlage, laid out as it prints, shown with a document on it: head and foot, text areas and type, for every
+    document that stands on it. Copied, deleted where the Hochschule made it, or set back to ConCampus's own."""
+    h, heads, found = head_of(key)
+    standing = [p for p in on(h, found, heads) if p.key != 'brief']
+    letter = any(compose.letter(p.occasion) for p in on(h, found, heads))  # a letter stands on it: it keeps its address window
+    act = request.POST.get('art')
+    if act == 'standard' and h.pk and key in paper.STANDARD:
+        h.delete()
+        messages.success(request, f'„{h.name}“ steht wieder, wie ConCampus es vorschlägt.')
+        return redirect(request.path)
+    if act == 'loeschen' and h.pk and key not in paper.STANDARD:
+        h.delete()
+        messages.success(request, f'„{h.name}“ gelöscht.')
+        return redirect('documents:letterheads')
+    if request.method == 'POST':
+        try:
+            posted = json.loads(request.POST.get('design', ''))
+            page = paper.clean(posted['page'], letter=letter)
+        except UNREAD as error:
+            return refused(request, error)
+        name = str(posted.get('name') or h.name)[:120]
+        if (name, page) != (h.name, paper.clean(h.page, letter=letter)):
+            h.name, h.page = name, page
+            h.save()
+        messages.success(request, f'„{h.name}“ gespeichert.')
+        return redirect(request.path)
+    sample = shown_on(h, found, heads)
+    return render(request, 'documents/paper.html', {
+        'menu': None, 'name': h.name, 'back': reverse('documents:letterheads'),
+        'tabs': [('first', 'Erste Seite'), ('later', 'Folgeseiten'), ('pdf', 'Vorschau')],
+        'preview': reverse('documents:letterhead_preview', args=[key]), 'copy': reverse('documents:letterhead_copy'), 'key': key, 'copying': 'Kopie anlegen',
+        'history': reverse('history', args=['documents.letterhead', h.pk]) if h.pk else '',
+        'editor': editor_data(h.page, h.name) | {
+            'letters': letter, 'unsaved': False, 'mayDesign': True, 'mayWord': False, 'flow': sample.content,
+            'compose': known(sample, found, request), 'sample': sample.name,
+            'gone': h.pk and key not in paper.STANDARD and f'„{h.name}“ löschen?{" Was darauf steht, kommt auf die Vorlage seines Anlasses." if standing else ""}',
+            'reset': bool(h.pk and key in paper.STANDARD), 'kept': 'Nicht zu löschen: eine Vorlage von ConCampus.' if key in paper.STANDARD else '',
+            'standing': [[p.name, reverse('documents:document', args=[OCCASIONS[p.occasion][0], p.key])] for p in standing],
+            'settings': reverse('setup:list', args=['hochschule']) if 'manage_institution' in request.user.roles else '',
+        },
+    })
+
+
+@require('design_papers')
+@require_POST
+def letterhead_copy(request):
+    """A new Vorlage, a copy of another (`von`), under its own name."""
+    h, *_ = head_of(request.POST.get('von', ''))
+    name = (request.POST.get('name', '').strip() or f'{h.name}, Kopie')[:120]
+    made = Letterhead.objects.create(key=free_key(name, Letterhead, paper.STANDARD), name=name, page=deepcopy(h.page))
+    messages.success(request, f'„{made.name}“ angelegt, als Kopie von „{h.name}“.')
+    return redirect('documents:letterhead', made.key)
 
 
 def editor_data(design, name):
@@ -329,28 +430,47 @@ def editor_data(design, name):
     }
 
 
-@require('word_texts', 'design_papers')
+@require('word_texts')
 @xframe_options_sameorigin
 @FRAMED
 def preview(request, kind, key):
-    """A document as its PDF, for the made-up person: as posted from the editor, unsaved, the Hochschule's texts in it as
-    drafted too, saved within a transaction undone at once; else as kept."""
+    """A document as its PDF, for the made-up person: as posted from the editor, unsaved, on the Vorlage chosen there,
+    the Hochschule's texts in it as drafted too, saved within a transaction undone at once; else as kept."""
     p, found = edited(request, key)
-    design, draft = resolved(key, 'page', found)[0], None
+    heads = fitting(p, letterheads())
+    design, draft = letterhead_of(p, heads).page, None
     with transaction.atomic():
         if request.method == 'POST':
             try:
                 posted = json.loads(request.POST.get('design', ''))
-                design, draft = paper.clean(posted['page'], letter=compose.letter(p.occasion)), compose.clean(p.occasion, posted['content'])
-                for _, _, form in text_forms([t for t in (posted.get('texts') or {}) if t in compose.WORDED.values()], {
-                        f'{t}-body': body for t, body in (posted.get('texts') or {}).items()}):
-                    if form.is_valid():
-                        form.save()
-            except (KeyError, TypeError, ValueError, ValidationError, AttributeError) as error:
-                return render(request, 'documents/frame.html', {'errors': getattr(error, 'messages', ['Das Dokument ließ sich nicht lesen.'])}, status=400)
+                draft = compose.clean(p.occasion, posted['content'])
+                design = heads[posted['letterhead']].page if posted.get('letterhead') in heads else design
+                for _, _, form in posted_texts(posted):
+                    form.save()
+            except UNREAD as error:
+                return framed_errors(request, error)
         made = paper.pdf(sample(p.occasion, request, shown=key, draft=draft), p.name, design=design)
         transaction.set_rollback(True)
     return paper.respond(made, p.name)
+
+
+@require('design_papers')
+@xframe_options_sameorigin
+@FRAMED
+def letterhead_preview(request, key):
+    """A Vorlage as a PDF, with the document its editor shows on it, for the made-up person: as posted, unsaved."""
+    h, heads, found = head_of(key)
+    p, design = shown_on(h, found, heads), h.page
+    if request.method == 'POST':
+        try:
+            design = paper.clean(json.loads(request.POST.get('design', ''))['page'], letter=any(compose.letter(q.occasion) for q in on(h, found, heads)))
+        except UNREAD as error:
+            return framed_errors(request, error)
+    return paper.respond(paper.pdf(sample(p.occasion, request, shown=p.key), h.name, design=design), h.name)
+
+
+def framed_errors(request, error):
+    return render(request, 'documents/frame.html', {'errors': getattr(error, 'messages', ['Das ließ sich nicht lesen.'])}, status=400)
 
 
 def face(art):
@@ -408,14 +528,14 @@ def artwork(request, pk):
 @require('design_papers')
 @require_POST
 def artwork_delete(request, pk):
-    """A picture or font face gone, unless a document's page sets it."""
+    """A picture or font face gone, unless a Vorlage sets it."""
     art = get_object_or_404(Artwork, pk=pk)
     family = paper.OWN + slugify(art.name)
-    for p in Paper.objects.exclude(page=None):
-        style = p.page.get('style', {})
-        if any(el.get('artwork') == art.pk for el in p.page.get('elements', [])) if art.kind == Artwork.Kind.PICTURE else (
-            family in (style.get('font'), style.get('heading')) or any(el.get('font') == family for el in p.page.get('elements', []))
+    for h in Letterhead.objects.all():
+        style = h.page.get('style', {})
+        if any(el.get('artwork') == art.pk for el in h.page.get('elements', [])) if art.kind == Artwork.Kind.PICTURE else (
+            family in (style.get('font'), style.get('heading')) or any(el.get('font') == family for el in h.page.get('elements', []))
         ):
-            return JsonResponse({'error': f'„{p.name}“ verwendet es noch.'}, status=400)
+            return JsonResponse({'error': f'„{h.name}“ verwendet es noch.'}, status=400)
     art.delete()
     return JsonResponse({'ok': True})

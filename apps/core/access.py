@@ -53,7 +53,7 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
         ('manage_terms', 'Semester anlegen und pflegen'),
         ('manage_institution', 'Hochschuldaten, Institute und Gebühren pflegen'),
         ('word_texts', 'Texte formulieren: Bescheide mit Rechtsbehelfsbelehrung, Nachrichten und den Inhalt der Bescheinigungen'),
-        ('design_papers', 'Briefbögen gestalten: Kopf, Fuß und Schrift jedes Dokuments, mit eigenen Schriften und Bildern'),
+        ('design_papers', 'Vorlagen gestalten: Kopf, Fuß und Schrift jedes Dokuments, mit eigenen Schriften und Bildern'),
         ('manage_accounts', 'Ämter, Berechtigungen und Konten verwalten'),
         ('view_statistics', 'Auswertungen aller Bereiche einsehen (Zahlen; Namen nur mit der Berechtigung des Bereichs)'),
         ('report_statistics', 'Amtliche Statistik der Studierenden und Prüfungen prüfen und liefern'),
@@ -79,7 +79,7 @@ SHORT = {  # each right in a few words under its area, to take in at a glance; C
     'book_any_room': 'Alle Räume buchen', 'view_bookings': 'Alle Buchungen sehen', 'manage_bookings': 'Buchungen anderer ändern',
     'manage_rooms': 'Räume pflegen', 'manage_instruments': 'Leihinstrumente',
     'manage_mobility': 'Partner und Auslandsaufenthalte',
-    'manage_terms': 'Semester pflegen', 'manage_institution': 'Hochschuldaten pflegen', 'word_texts': 'Texte formulieren', 'design_papers': 'Briefbögen gestalten', 'manage_accounts': 'Ämter, Berechtigungen und Konten',
+    'manage_terms': 'Semester pflegen', 'manage_institution': 'Hochschuldaten pflegen', 'word_texts': 'Texte formulieren', 'design_papers': 'Vorlagen gestalten', 'manage_accounts': 'Ämter, Berechtigungen und Konten',
     'view_statistics': 'Auswertungen', 'report_statistics': 'Amtliche Statistik',
     'assess_files': 'Akten bewerten',
 }

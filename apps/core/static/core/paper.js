@@ -1,6 +1,8 @@
-// A document, edited as it prints (documents/paper.html): an A4 page in mm from the top left, as core/paper.py sets
-// it, under rulers; or the preview, the PDF it makes for a made-up person. Its content is written in its text area
-// (flow.js); a text on the page is written where it is clicked. Drag an element to move it, a corner to size it; it
+// A document or a Vorlage, edited as it prints (documents/paper.html): an A4 page in mm from the top left, as
+// core/paper.py sets it; or the preview, the PDF it makes for a made-up person. A document (mayWord) is written in its
+// text area (flow.js), its Vorlage around it as it stands, changed only where the Vorlage is. A Vorlage
+// (mayDesign) is laid out under rulers, a document shown on it; a text on it is written where it is clicked. Drag an
+// element to move it, a corner to size it; it
 // snaps to half millimetres and to the page's middle and the edges of the others (Alt: freely), its place and size
 // showing as it goes. Arrow keys nudge (Shift: 5 mm), Delete removes, Ctrl+D doubles, Ctrl+Z and Ctrl+Y undo and redo,
 // Escape lets go. What is held fast („Festhalten“) lets clicks through to what lies beneath; the list of elements
@@ -11,7 +13,8 @@
   const root = document.getElementById('paper');
   if (!root) return;
   const data = JSON.parse(document.getElementById('paper-data').textContent);
-  root.classList.toggle('may-design', data.mayDesign);  // who lays the page out: its elements picked, moved and written
+  root.classList.toggle('may-design', data.mayDesign);  // a Vorlage: its elements picked, moved and written
+  root.classList.toggle('may-word', data.mayWord);  // a document: its content written
   const desk = root.querySelector('.paper-desk'), board = root.querySelector('.paper-board'), sheet = root.querySelector('.paper-sheet');
   const panel = root.querySelector('.paper-panel'), frame = root.querySelector('.paper-frame');
   const rulers = {top: root.querySelector('.paper-ruler.top'), left: root.querySelector('.paper-ruler.left')};
@@ -29,10 +32,9 @@
   const GRIPS = ['nw', 'ne', 'sw', 'se'].map(c => `<i class="paper-grip" data-corner="${c}"></i>`).join('');
 
   let design = data.design, name = data.name, variant = 'first', picked = null, k = 1, writing = null, clicked = null;  // writing: the text on the page being written; clicked: a placeholder clicked in it
-  // The content, written on the page (flow.js), the Hochschule's texts worded in it, and for whom a copy stands: kept and
-  // undone with the page
-  Object.assign(design, {flow: data.flow, texts: {}, programs: data.chosen});
-  const scope = {};  // a part others share, once changed: for all of them ('alle') or this one alone ('hier')
+  // The content, written on the page (flow.js), the Hochschule's texts worded in it, for whom a copy stands and the
+  // Vorlage it stands on: kept and undone with the page
+  Object.assign(design, {flow: data.flow, texts: {}, programs: data.chosen, letterhead: data.letterhead});
   let zoom = localStorage.getItem('paper-zoom') || 'width';
   let undos = [], redos = [], was = JSON.stringify([design, name]), typed = null, note = null;  // note: {text, error} over the panel
 
@@ -58,13 +60,10 @@
     undo: again => again ? restore(redos, undos) : restore(undos, redos),
   });
 
-  // ---- changes: each one an undo step; typing into one field is one step. The first change of what others share asks
-  // whether for all of them or this one alone.
+  // ---- changes: each one an undo step; typing into one field is one step
   function changed(field = null) {
     const now = JSON.stringify([design, name]);
     if (now === was) return;
-    const part = field?.startsWith('flow') ? 'content' : ['texts', 'name', 'programs'].includes(field) ? null : 'page';
-    if (part) ask(part);
     if (field === 'texts') asked();
     if (!field || field !== typed) {
       undos.push(was);
@@ -90,29 +89,12 @@
     e.preventDefault();
     if ('dirty' in saveForm.dataset) saveForm.requestSubmit(saveButton);
   });
+  // Over the page: a text of the Hochschule's changed here, in how many documents it changes
   const asking = root.querySelector('.paper-ask');
-  function ask(part) {
-    if (!data.shared[part].count || scope[part]) return;
-    scope[part] = 'offen';
-    asked();
-  }
-  function asked() {  // each part changed and not yet said for whom, the page and the content both if both; and a text of the Hochschule's changed, for how many
-    const open = Object.keys(scope).filter(part => scope[part] === 'offen');
-    asking.innerHTML = open.map(part => {
-      const s = data.shared[part], who = s.own ? (s.count > 1 ? `${s.count} weitere Dokumente haben` : 'Ein weiteres Dokument hat') : `„${esc(s.from)}“${s.count > 1 ? ` und ${s.count - 1} weitere haben` : ' hat'}`;
-      return `<div><p>${who} ${part === 'page' ? 'dieselbe Seite' : 'denselben Inhalt'}.</p>` +
-        `<button type="button" class="btn small" data-scope="${part}" data-value="alle">Für alle ${s.count + 1} ändern</button>` +
-        `<button type="button" class="btn ghost small" data-scope="${part}" data-value="hier">Nur für dieses</button></div>`;
-    }).join('') + Object.values(data.compose.worded).filter(w => w.text in design.texts && w.uses > 1).map(w => `<div><p>„${esc(w.title)}“ ändert sich in allen ${w.uses} Dokumenten.</p></div>`).join('');
+  function asked() {
+    asking.innerHTML = Object.values(data.compose.worded).filter(w => w.text in design.texts && w.uses > 1).map(w => `<div><p>„${esc(w.title)}“ ändert sich in allen ${w.uses} Dokumenten.</p></div>`).join('');
     asking.hidden = !asking.innerHTML;
-    if (!open.length) asking.classList.remove('urgent');
   }
-  asking.addEventListener('click', e => {
-    const b = e.target.closest('[data-scope]');
-    if (!b) return;
-    scope[b.dataset.scope] = b.dataset.value;
-    asked();
-  });
   function restore(from, to) {
     if (!from.length) return;
     to.push(was);
@@ -121,7 +103,6 @@
     typed = null;
     flowEd?.render();
     if (picked && !byId(picked)) picked = null;
-    if (was === saved) Object.keys(scope).forEach(part => delete scope[part]);  // all taken back: nothing to ask for whom
     saveShown();
     asked();
     draw();
@@ -326,7 +307,9 @@
       const holds = key => Words.name(label(key), data.values[key]);
       inner = `<div><b>${holds('dokument_amt')}</b></div><dl><dt>Aktenzeichen</dt><dd>${holds('dokument_aktenzeichen')}</dd><dt>Datum</dt><dd>${holds('dokument_datum')}</dd></dl>`;
       css += `;font-family:${family(st.font)};font-size:${px(el.size)}px`;
-    } else if (el.type === 'body') {  // the content, written here on the first page; on the following ones, as it goes on from where the first one's area ends
+    } else if (el.type === 'body' && data.mayDesign) {  // on a Vorlage: only where each document's content goes, nothing of any one document
+      inner = `<div class="paper-area"><b>Inhalt des Dokuments</b><small>${el.pages === 'later' ? 'Fortsetzung auf den Folgeseiten' : 'Wird in jedem Dokument geschrieben'}</small></div>`;
+    } else if (el.type === 'body') {  // a document's content, written here on the first page; on the following ones, as it goes on from where the first one's area ends
       const first = design.elements.find(e => e.type === 'body' && e.pages !== 'later');
       const rest = variant === 'later' && first ? ` style="margin-top:-${first.h * S}px"` : '';
       const look = `text-align:${st.align};font-family:${family(st.font)};font-size:${px(st.size)}px;--em:${px(st.size)}px;--pt:${px(1)}px;--heading:${family(st.heading)};--title:${px(st.title)}px;--accent:${data.accent}`;
@@ -383,7 +366,8 @@
     Object.assign(badge.style, {left: `${el.x * S}px`, top: `${(el.y + el.h) * S}px`});
   }
   sheet.addEventListener('pointerdown', e => {
-    if (e.button !== 0 || e.target.closest('.flow, [data-writing]') || !data.mayDesign) return;  // in what is written the cursor goes where it is put; the rest is for who designs
+    if (e.button !== 0 || e.target.closest('[data-writing]') || data.mayWord && e.target.closest('.flow')) return;  // in what is written the cursor goes where it is put
+    if (!data.mayDesign) return;  // a document: only its text is in hand, the Vorlage around it is not
     const node = e.target.closest('.paper-el');
     sheet.focus({preventScroll: true});
     if (!node) return picked && pick(null);
@@ -767,13 +751,14 @@
 
   function inspect() {
     const el = picked && byId(picked), open = new Set([...panel.querySelectorAll('details[open] > summary')].map(s => s.firstChild.textContent));
-    const content = data.mayWord && flowEd.active && flowEd.panel();  // the rail for the content while it is written
-    panel.innerHTML = (note ? `<p class="flash${note.error ? ' error' : ''}">${esc(note.text)}</p>` : '') + (content || (el ? elementPanel(el) : documentPanel()));
+    const content = data.mayWord && flowEd.active && flowEd.panel();  // the rail for the content while it is written, the way back to the document over it
+    panel.innerHTML = (note ? `<p class="flash${note.error ? ' error' : ''}">${esc(note.text)}</p>` : '') +
+      (content ? `<p class="paper-crumb"><button type="button" class="link" data-act="none"><i class="arrow left"></i> Dokument</button></p>${content}` : el ? elementPanel(el) : documentPanel());
     panel.querySelectorAll('details > summary').forEach(s => { if (open.has(s.firstChild.textContent)) s.parentElement.open = true; });  // what was open stays so
   }
   const officeField = () => field('Ausgestellt von', `<input data-key="office" value="${esc(design.flow.office)}" placeholder="${esc(data.compose.values.hochschule)}" maxlength="120">`);
   function elementPanel(el) {
-    let html = `<p class="paper-crumb"><button type="button" class="link" data-act="none"><i class="arrow left"></i> Dokument</button></p><h3>${named(el)}</h3>`;
+    let html = `<p class="paper-crumb"><button type="button" class="link" data-act="none"><i class="arrow left"></i> Vorlage</button></p><h3>${named(el)}</h3>`;  // only a Vorlage's elements are picked
     if (el.type === 'text') {
       const f = writing === el.id && FIELDS[clicked], issued = clicked === 'dokument_amt' && !data.letters && data.mayWord;  // a placeholder clicked in it: what it is, and where it is changed
       html += '<div class="paper-type"><button type="button" data-tool="value" title="Platzhalter einsetzen, wo die Schreibmarke steht; auch mit {"><b>{ }</b> Platzhalter</button></div>' + (f ? `<p class="paper-hint"><b>${esc(f.label)}</b>${data.values[f.key] ? ` · ${f.example ? 'z. B. ' : ''}${esc(data.values[f.key])}` : ''}</p>` + (issued ? officeField() : f.example ? '' : settings) : '') +
@@ -798,7 +783,7 @@
       html += `<p class="muted"><small>${el.type === 'address' ? 'Name und Anschrift der Empfänger:in, aus ihrem Konto. Im Fenster des Umschlags: links 20, oben 45 mm, 85 × 45 mm nach DIN 5008.' : 'Das Amt, das den Brief schickt, sein Aktenzeichen und sein Datum.'}</small></p>` +
         `<div class="row">${field('Größe (pt)', number('size', el.size, 0.5, 6, 14), true)}</div>`;
     } else if (el.type === 'body') {
-      html += `<p class="muted"><small>Hier fließt der Text des Dokuments, ${el.pages === 'first' ? 'auf der ersten Seite' : 'auf jeder weiteren'}. Schrift und Größe stehen beim Dokument.</small></p>`;
+      html += `<p class="muted"><small>Hier steht der Inhalt jedes Dokuments auf dieser Vorlage, ${el.pages === 'first' ? 'auf der ersten Seite' : 'auf jeder weiteren'}. Wie er aussieht: unter „Vorlage“, „Schrift des Inhalts“; wie er sich liest: in der Vorschau.</small></p>`;
     }
     html += section('Lage und Größe in mm', `<div class="row">${['x', 'y', 'w', 'h'].map(a =>
       field({x: 'Links', y: 'Oben', w: 'Breite', h: 'Höhe'}[a], number(a, el[a], 0.5, a === 'w' || a === 'h' ? 0.1 : -5, a === 'x' || a === 'w' ? W : H), true)).join('')}</div>` +
@@ -815,18 +800,27 @@
     if (el.type === 'picture') return data.pictures.find(p => p.pk === el.artwork)?.name || 'Bild fehlt';
     if (el.type === 'box') return `${mm(el.w)} × ${mm(el.h)} mm`;
     return {wordmark: data.logo ? 'Logo der Hochschule' : data.wordmark.join(' '), address: 'Name und Anschrift der Empfänger:in',
-            info: 'Amt, Aktenzeichen und Datum', body: 'Hier fließt der Text des Dokuments'}[el.type];
+            info: 'Amt, Aktenzeichen und Datum', body: 'Inhalt des Dokuments'}[el.type];
   }
   const LOCK = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 11h12v10H6zM8 11V7a4 4 0 0 1 8 0v4"/></svg>';  // core/access.py LOCK
-  // Nothing picked: the document itself. Its name, a copy's occasion and for whom it stands, who issues it; its type;
-  // what its pages hold.
+  // Nothing picked: a document itself, its name, the Vorlage it stands on, for whom a copy stands, who issues it; or
+  // a Vorlage itself, its name, the documents on it, its type and what its pages hold.
   function documentPanel() {
     const st = design.style;
     const list = design.elements.filter(shown).reverse().map(el => `<li data-hint="${esc(el.id)}"><button type="button" data-pick="${esc(el.id)}">` +
       `<small>${named(el)}</small><span>${esc(summary(el))}</span></button>` +
       `<button type="button" class="paper-lock${el.locked ? ' on' : ''}" data-lock="${esc(el.id)}" title="${el.locked ? 'Festgehalten: lösen' : 'Festhalten: nicht verschieben, Klicks gehen hindurch'}" aria-pressed="${!!el.locked}">${LOCK}</button></li>`).join('');
-    return field('Name', `<input data-key="name" value="${esc(name)}" maxlength="120">`) +
-      (data.copy ? `<p class="muted paper-hint"><small>Anlass: ${esc(data.occasion)}</small></p>` : '') +
+    const head = data.mayWord && data.letterheads[design.letterhead];
+    return (data.mayWord ? '<p class="paper-start">Zum Ändern in den Text klicken und schreiben.</p>' : '') +
+      field('Name', `<input data-key="name" value="${esc(name)}" maxlength="120">`) +
+      (data.when ? `<p class="paper-hint"><small class="muted">Wann ConCampus es ${data.letters ? 'schickt' : 'ausstellt'}</small><br>${esc(data.when)}` +
+        (data.where ? `<br><a href="${esc(data.where.url)}"><small>${esc(data.where.name)} <i class="arrow"></i></small></a>` : '') + '</p>' : '') +
+      (head ? field('Vorlage',`<select data-key="letterhead">${options(Object.entries(data.letterheads).map(([k, h]) => [k, h.name]), design.letterhead)}</select>` +
+        `<small class="muted">Kopf, Fuß und Schrift${data.designs ? ` · <a href="${esc(head.url)}">„${esc(head.name)}“ gestalten <i class="arrow"></i></a>` : ', gestaltet für alle Dokumente darauf'}</small>`) : '') +
+      (data.standing ? `<p class="muted paper-hint"><small>Gilt für ${data.standing.length === 1 ? 'ein Dokument' : `alle ${data.standing.length} Dokumente`} darauf. Die Vorschau zeigt „${esc(data.sample)}“ auf ihr.</small></p>` : '') +
+      (data.copy ? `<p class="muted paper-hint"><small>Variante von „${esc(data.occasion)}“: gilt statt seiner für die Studiengänge, die Sie hier wählen.</small></p>` : '') +
+      (data.free ? section('Verschicken', '<p class="paper-hint"><small>Unter <b>Studierende</b> Personen ankreuzen, dann „Nachricht schreiben“ und diesen Brief wählen.</small></p>' +
+        (data.compose_url ? `<p><a href="${esc(data.compose_url)}">Zu den Studierenden <i class="arrow"></i></a></p>` : '')) : '') +
       (data.copy && data.mayWord ? section('Gilt für', `<div class="paper-programs">${data.programs.map(([pk, title]) =>
         `<label class="option"><input type="checkbox" data-program="${pk}"${design.programs.includes(pk) ? ' checked' : ''}> ${esc(title)}</label>`).join('')}</div>` +
         (design.programs.length ? '' : '<p class="muted paper-hint"><small>Noch für niemanden: bis ein Studiengang gewählt ist, bekommt jeder das Dokument des Anlasses.</small></p>')) : '') +
@@ -835,7 +829,9 @@
         `<div class="row">${field('Größe (pt)', number('style.size', st.size, 0.5, 7, 16), true)}${field('Titel (pt)', number('style.title', st.title, 1, 10, 48), true)}</div>` +
         `<div class="paper-checks">${check('style.bar', 'Balken über dem Titel', st.bar)}${check('style.center', 'Zentriert', st.align === 'center')}` +
         `${check('style.middle', 'Senkrecht in der Mitte', st.middle)}${check('style.marks', 'Falz- und Lochmarken', st.marks)}</div>`, fontsLink) : '') +
-      (variant === 'pdf' || !data.mayDesign ? '' : section(variant === 'first' ? 'Auf der ersten Seite' : 'Auf den Folgeseiten', `<ul class="paper-list">${list}</ul>`));
+      (variant === 'pdf' || !data.mayDesign ? '' : section(variant === 'first' ? 'Auf der ersten Seite' : 'Auf den Folgeseiten', `<ul class="paper-list">${list}</ul>`)) +
+      (data.standing?.length ? `<section class="paper-section"><details><summary>Die Dokumente darauf</summary><ul class="paper-standing">` +
+        `${data.standing.map(([n, url]) => `<li><a href="${esc(url)}">${esc(n)}</a></li>`).join('')}</ul></details></section>` : '');
   }
   // The visible fields follow what was dragged or nudged.
   function fields() {
@@ -851,6 +847,12 @@
     if (key === 'office') {  // who issues it, part of its content
       design.flow.office = value.slice(0, 120);
       return changed('flow');
+    }
+    if (key === 'letterhead') {  // another Vorlage: the document on it as it prints there
+      Object.assign(design, structuredClone(data.letterheads[value].page), {letterhead: value});
+      changed();
+      draw();
+      return inspect();
     }
     if (key === 'style.center') design.style.align = value ? 'center' : 'left';
     else if (key.startsWith('style.')) design.style[key.slice(6)] = value;
@@ -899,7 +901,10 @@
     }
     if (b.dataset.open === 'fonts') return openDialog({kind: 'fonts'});
     if (b.dataset.open === 'pictures') return openDialog({kind: 'pictures', mode: 'swap'});
-    if (b.dataset.act === 'none') return pick(null);
+    if (b.dataset.act === 'none') {  // back to the document or Vorlage itself
+      flowEd.active = false;
+      return pick(null);
+    }
     if (!el) return;
     if (b.dataset.act === 'front' || b.dataset.act === 'back') return layer(el, b.dataset.act === 'front');
     if (b.dataset.act === 'copy') return duplicate(el);
@@ -911,10 +916,10 @@
   panel.addEventListener('mouseout', e => hint(e, false));
 
   // ---- the page shown: the first, the following ones, or the PDF the sample makes on it as it stands. What is sent:
-  // the page, the content, the Hochschule's texts worded in it, for whom it stands, and what was answered to sharing.
+  // a document's content, the Hochschule's texts worded in it, for whom it stands and its Vorlage; a Vorlage's page.
   const posted = () => {
-    const {flow, texts, programs, ...page} = design;
-    return JSON.stringify({page, content: flow, texts, programs, name, scope});
+    const {flow, texts, programs, letterhead, ...page} = design;
+    return JSON.stringify(data.mayWord ? {content: flow, texts, programs, letterhead, name} : {page, name});
   };
   let previewing = 0, seen = 0;  // seen: how far down the page was looked at when the preview was opened
   function preview(wait) {  // the page alone, where and as large as it was written, and as far down; a change beside it shown once it has settled
@@ -939,15 +944,7 @@
     if (back) desk.scrollTop = seen;  // and the page again as it was left
     inspect();
   });
-  saveForm.addEventListener('submit', e => {
-    if (Object.values(scope).includes('offen')) {  // not before it is said for whom
-      e.preventDefault();
-      e.stopPropagation();  // not sent, so still unsaved (app.js would take it for sent)
-      asking.classList.add('urgent');
-      return;
-    }
-    saveForm.elements.design.value = posted();
-  });
+  saveForm.addEventListener('submit', () => { saveForm.elements.design.value = posted(); });
 
   saveShown();
   draw();

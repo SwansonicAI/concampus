@@ -128,7 +128,7 @@ def text(key, x, y, w, h, words, size, pages='all', **fields):
     return element('text', key, x, y, w, h, pages, text=words, size=size, **{'colour': 'muted'} | fields)
 
 
-LATER = [  # every Briefbogen's following pages: what it is and whom it is about, over a hairline, so no page goes astray
+LATER = [  # every Vorlage's following pages: what it is and whom it is about, over a hairline, so no page goes astray
     text('k1', 25, 11.4, 100, 4, '{dokument_titel}', 7.5, 'later'),
     text('k2', 125, 11.4, 65, 4, '{person_name}', 7.5, 'later', align='right'),
     element('box', 'k3', 25, 16, 165, 0.18, 'later', colour='line', fill=True, line=0),
@@ -141,7 +141,7 @@ FOOTER = [  # name and address, how to reach the Hochschule, where to pay: three
     text('f5', 125, 263.5, 65, 4, '{seitenzahl}', 7.5, align='right'),
 ]
 SANS = {'font': 'ptsans', 'heading': 'ptsans', 'size': 10, 'title': 19, 'bar': True, 'align': 'left', 'middle': False, 'marks': False}
-STANDARD = {  # key: (name, design): ConCampus's own Briefbögen, until the Hochschule keeps its own under the key
+STANDARD = {  # key: (name, design): ConCampus's own Vorlagen, until the Hochschule keeps its own under the key
     'brief': ('Brief', {'style': SANS | {'marks': True}, 'elements': [
         element('wordmark', 'm', 25, 14, 100, 17, 'first', size=15, align='left'),
         text('r', 25, 57.4, 85, 3, '{hochschule_kurz} · {hochschule_anschrift_zeile}', 6.5, 'first', underline=True),
@@ -179,7 +179,7 @@ def own_fonts():
 
 
 def families():
-    """Every family a Briefbogen may set: {key: name}, ConCampus's first."""
+    """Every family a Vorlage may set: {key: name}, ConCampus's first."""
     return {key: name for key, (name, _) in FAMILIES.items()} | {key: name for key, (name, _) in own_fonts().items()}
 
 
@@ -380,7 +380,7 @@ def clean(design, letter=False):
     cannot be set. It needs its text areas, for the first page and the following; `letter`: a letter's needs its
     address window too."""
     if not isinstance(design, dict) or not isinstance(design.get('style'), dict) or not isinstance(design.get('elements'), list):
-        raise ValidationError('Kein Briefbogen.')
+        raise ValidationError('Keine Vorlage.')
     fonts, style = families(), design['style']
     if style.get('font') not in fonts or style.get('heading') not in fonts:
         raise ValidationError('Eine Schrift gibt es nicht.')
@@ -473,7 +473,7 @@ def colour(value, accent):
 
 
 class Sheet:
-    """The pages of one document around its text, as its Briefbogen places them."""
+    """The pages of one document around its text, as its Vorlage places them."""
 
     def __init__(self, institution, design, meta, accent, own):
         self.i, self.design, self.meta, self.accent, self.own = institution, design, meta, accent, own
@@ -488,7 +488,7 @@ class Sheet:
         return [el for el in self.design['elements'] if el['pages'] in ('all', variant)]
 
     def frame(self, variant, ident):
-        """Where the text flows: the text area, or on a Briefbogen without one the page, which then holds nothing."""
+        """Where the text flows: the text area, or on a Vorlage without one the page, which then holds nothing."""
         body = next((el for el in self.on(variant) if el['type'] == 'body'), {'x': 0, 'y': 0, 'w': PAGE[0], 'h': PAGE[1]})
         return Frame(body['x'] * mm, HEIGHT - (body['y'] + body['h']) * mm, body['w'] * mm, body['h'] * mm, 0, 0, 0, 0, id=ident)
 
@@ -694,7 +694,7 @@ def px(el, name):
 
 
 class Look:
-    """Type and colour of a document's text, as its Briefbogen sets them (its `style`)."""
+    """Type and colour of a document's text, as its Vorlage sets them (its `style`)."""
 
     def __init__(self, style, accent, own=None):
         self.accent, self.link, self.centred = HexColor(accent), accent, style['align'] == 'center'
