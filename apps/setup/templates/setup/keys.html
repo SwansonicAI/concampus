@@ -14,7 +14,7 @@
 </table>
 
 {% if gave %}
-<section>
+<section id="gebietsaenderungen">
   <h2>Gebietsänderungen zu prüfen{% if count %} · {{ count }}{% endif %}</h2>
   <p class="lead">{% for code, kreis, towns in gave %}{% for t in towns %}{{ t.name }} gehört seit {{ t.left|date:"j.n.Y" }} nicht mehr zu {{ kreis.name|default:code }}.{% endfor %} {% endfor %}Wer dort mit Gemeinde gemeldet ist, wurde umgestellt. Wer nur mit dem Kreis gemeldet ist, kann in der abgegebenen Gemeinde wohnen: bitte die Anschrift prüfen und die Gemeinde eintragen.</p>
   {% if people is not None %}

@@ -5,6 +5,7 @@ from string import Formatter
 
 from django.core.exceptions import ValidationError
 from django.utils import timezone
+from django.utils.formats import date_format
 
 from .models import Institution, Message, Text
 
@@ -784,7 +785,7 @@ def basics():
     institution = Institution.get()
     return {
         'hochschule': institution.name, 'anschrift': ', '.join(institution.address.splitlines()), 'ort': institution.place,
-        'datum': f'{timezone.localdate():%d.%m.%Y}',
+        'datum': date_format(timezone.localdate(), 'j. F Y'),  # as every document writes it (documents.compose.day)
     }
 
 

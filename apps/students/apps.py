@@ -135,7 +135,7 @@ class StudentsConfig(Tile, AppConfig):
             from core.keys import review
 
             if n := review()[0].count():
-                found.append(task(f'Gebietsänderung: {plural(n, "Wohnsitz", "Wohnsitze")} prüfen', reverse('setup:keys')))
+                found.append(task(f'Gebietsänderung: {plural(n, "Wohnsitz", "Wohnsitze")} prüfen', reverse('setup:keys') + '#gebietsaenderungen'))
         if person.everywhere('manage_students'):
             reports, State = InsuranceReport.objects.all(), InsuranceReport.State
             if n := reports.filter(state=State.OPEN, reason__in=InsuranceReport.INCOMING).count():

@@ -4,7 +4,7 @@ from collections import defaultdict
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied
 from django.db.models import Count, F, Q
-from django.http import HttpResponse, JsonResponse
+from django.http import HttpResponse, JsonResponse, QueryDict
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
@@ -194,6 +194,12 @@ def compose(request):
     sender = ', '.join(Office.objects.filter(user=request.user, permissions__codename='message_students').values_list('name', flat=True)) or str(request.user)
     if people and form.is_valid():
         form.send(people, sender, studies={s.person: s for s in studies})
-        messages.success(request, f'Nachricht an {plural(len(people), "Person", "Personen")} gesendet.')
+        letter = dict(letters).get(form.cleaned_data.get('letter'))
+        if letter:  # sent: the list no longer says it is sending it
+            path, _, query = back.partition('?')
+            kept = QueryDict(query, mutable=True)
+            kept.pop('dokument', None)
+            back = f'{path}?{kept.urlencode()}' if kept else path
+        messages.success(request, f'{f"„{letter}“" if letter else "Nachricht"} an {plural(len(people), "Person", "Personen")} gesendet.')
         return redirect(back or 'students:list')
     return render(request, 'students/compose.html', {'form': form, 'people': people, 'studies': studies, 'back': back, 'sender': sender})
