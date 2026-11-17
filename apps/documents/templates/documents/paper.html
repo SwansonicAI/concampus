@@ -9,13 +9,10 @@
 <div class="paper" id="paper">
   <div class="paper-main">
     <div class="paper-tools">
-      <a class="paper-back" href="{% url 'documents:papers' %}" title="Zurück zu allen Briefbögen"><i class="arrow left"></i>Briefbögen</a>
+      <a class="paper-back" href="{{ back }}" title="Zurück zur Liste"><i class="arrow left"></i>Zurück</a>
       <h1>{{ name }}</h1>
-      <div class="filters paper-variants"><button type="button" class="on" data-variant="first">Erste Seite</button><button type="button" data-variant="later">Folgeseiten</button><button type="button" data-variant="pdf" title="Das Muster als PDF, wie dieser Briefbogen es setzt, auch ungespeichert">Vorschau</button></div>
-      <label class="paper-shown">Zeigen mit <select name="dokument" form="paper-preview" class="paper-sample">
-        {% if on %}<optgroup label="Auf diesem Briefbogen">{% for d in on %}<option value="{{ d.kind }}/{{ d.key }}"{% if shown == d.kind|add:'/'|add:d.key %} selected{% endif %}>{{ d.title }}</option>{% endfor %}</optgroup>{% endif %}
-        <optgroup label="{% if on %}Andere Dokumente{% else %}Dokumente{% endif %}">{% for d in others %}<option value="{{ d.kind }}/{{ d.key }}"{% if shown == d.kind|add:'/'|add:d.key %} selected{% endif %}>{{ d.title }}</option>{% endfor %}</optgroup>
-      </select></label>
+      <div class="filters paper-variants"><button type="button" class="on" data-variant="first">Erste Seite</button><button type="button" data-variant="later">Folgeseiten</button><button type="button" data-variant="pdf" title="Das Dokument als PDF, wie es gedruckt wird, auch ungespeichert">PDF</button></div>
+      {% if others %}<label class="paper-shown">Zeigen mit <select name="dokument" form="paper-preview" class="paper-sample">{% for d in others %}<option value="{{ d.key }}"{% if d.key == shown %} selected{% endif %}>{{ d.title }}</option>{% endfor %}</select></label>{% endif %}
       <div class="paper-view">
         <div class="paper-zoom" title="Strg und Mausrad: größer und kleiner, wo der Zeiger steht. Verschieben: auf dem Grau ziehen, oder mit gedrückter Leertaste">
           <button type="button" data-step="-1" aria-label="Kleiner">−</button>
@@ -28,11 +25,12 @@
         <form method="post" id="paper-save" class="paper-saving">
           {% csrf_token %}<input type="hidden" name="design"><input type="hidden" name="name">
           <button class="btn paper-save" title="Speichern (Strg+S)">Speichern</button>
-          {% if standard and own or not standard or record %}<details class="paper-menu"><summary title="Weitere" aria-label="Weitere"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="13" cy="8" r="1.4"/></svg></summary>
+          {% if record or may_design and sources %}<details class="paper-menu"><summary title="Weitere" aria-label="Weitere"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="3" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="13" cy="8" r="1.4"/></svg></summary>
             <div>
               {% if record %}<a href="{% url 'history' 'core.layout' record.pk %}">Verlauf</a>{% endif %}
-              {% if standard and own %}<button name="art" value="standard" data-confirm="Eigene Gestaltung verwerfen?">Auf Standard zurücksetzen</button>{% endif %}
-              {% if not standard %}<button name="art" value="loeschen" class="danger" data-confirm="Briefbogen wirklich löschen?">Briefbogen löschen</button>{% endif %}
+              {% if reset %}<button name="art" value="standard" data-confirm="Eigene Fassung verwerfen?">Wie ConCampus es vorschlägt</button>{% endif %}
+              {% if may_design and sources %}<div class="paper-take"><label>Gestaltung übernehmen aus<select name="von">{% for k, t in sources %}<option value="{{ k }}">{{ t }}</option>{% endfor %}</select></label>
+                <button name="art" value="uebernehmen" data-confirm="Kopf, Fuß und Schrift ersetzen? Der Inhalt bleibt.">Übernehmen</button></div>{% endif %}
             </div>
           </details>{% endif %}
         </form>
@@ -46,22 +44,22 @@
       <iframe name="paper-frame" class="paper-frame" title="Vorschau als PDF" hidden></iframe>
     </div>
   </div>
-  <aside class="paper-rail" aria-label="Briefbogen bearbeiten">
-    <div class="paper-add" aria-label="Hinzufügen">
-      <button type="button" data-add="text" title="Text hinzufügen, mit Platzhaltern: auf jedem Dokument derselbe"><b>T</b>Text</button>
-      <button type="button" data-add="slot" title="Textfeld hinzufügen: jedes Dokument auf diesem Briefbogen formuliert es unter Dokumente selbst"><b class="paper-icon-slot">T</b>Textfeld</button>
+  <aside class="paper-rail" aria-label="Vorlage bearbeiten">
+    {% if editor.mayDesign %}<div class="paper-add" aria-label="Auf die Seite setzen">
+      <button type="button" data-add="text" title="Text auf der Seite hinzufügen, frei gesetzt, mit Platzhaltern"><b>T</b>Text</button>
       <button type="button" data-add="wordmark" title="Schriftzug oder Logo der Hochschule hinzufügen"><b>Aa</b>Logo</button>
       <button type="button" data-add="picture" title="Bild hinzufügen: Siegel, Unterschrift, Ornament"><b class="paper-icon-picture"></b>Bild</button>
       <button type="button" data-add="box" title="Farbige Fläche hinzufügen"><b class="paper-icon-box"></b>Fläche</button>
       <button type="button" data-add="rule" title="Linie hinzufügen, auch als Rahmen"><b class="paper-icon-rule"></b>Linie</button>
       <button type="button" data-add="address" title="Anschriftfeld hinzufügen: wem ein Brief gilt, im Fenster des Umschlags"><b class="paper-icon-address"></b>Anschrift</button>
       <button type="button" data-add="info" title="Infoblock hinzufügen: Amt, Aktenzeichen und Datum eines Briefs"><b class="paper-icon-info"></b>Info</button>
-    </div>
+    </div>{% endif %}
     <div class="paper-panel form" aria-label="Eigenschaften"></div>
   </aside>
   <dialog class="paper-dialog" aria-labelledby="paper-dialog-title"></dialog>
 </div>
 <form method="post" id="paper-preview" action="{% url 'documents:paper_preview' key %}" target="paper-frame">{% csrf_token %}<input type="hidden" name="design"></form>
 {{ editor|json_script:"paper-data" }}
+<script src="{% static 'core/flow.js' %}" defer></script>
 <script src="{% static 'core/paper.js' %}" defer></script>
 {% endblock %}

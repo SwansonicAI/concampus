@@ -52,8 +52,8 @@ CAPABILITIES = [  # what an office may do; every Hochschule names its own office
     ('Verwaltung', [
         ('manage_terms', 'Semester anlegen und pflegen'),
         ('manage_institution', 'Hochschuldaten, Institute und Gebühren pflegen'),
-        ('word_texts', 'Texte formulieren: Bescheide mit Rechtsbehelfsbelehrung, Nachrichten und die Bausteine der Dokumente'),
-        ('design_papers', 'Briefbögen gestalten, mit Schriften und Bildern, und festlegen, welches Dokument auf welchem steht'),
+        ('word_texts', 'Texte formulieren: Bescheide mit Rechtsbehelfsbelehrung, Nachrichten und den Inhalt der Bescheinigungen'),
+        ('design_papers', 'Briefbögen gestalten: Kopf, Fuß und Schrift jedes Dokuments, mit eigenen Schriften und Bildern'),
         ('manage_accounts', 'Ämter, Berechtigungen und Konten verwalten'),
         ('view_statistics', 'Auswertungen aller Bereiche einsehen (Zahlen; Namen nur mit der Berechtigung des Bereichs)'),
         ('report_statistics', 'Amtliche Statistik der Studierenden und Prüfungen prüfen und liefern'),

@@ -24,7 +24,7 @@ class DocumentsConfig(Tile, AppConfig):
         from .catalogue import KINDS
         from .views import kinds
 
-        return [page(KINDS[kind][0], f'documents:{kind}') for kind in kinds(person)] + [page('Briefbögen', 'documents:papers', 'paper')]
+        return [page(KINDS[kind][0], f'documents:{kind}') for kind in kinds(person)]
 
     def features(self, person):
         from .catalogue import KINDS
@@ -37,5 +37,5 @@ class DocumentsConfig(Tile, AppConfig):
             'seiten': 'dokumente texte anmeldeseite barrierefreiheit einwilligung datenschutz',
         }
         return [feature(KINDS[kind][0], reverse(f'documents:{kind}'), words[kind]) for kind in kinds(person)] + [
-            feature('Briefbögen', reverse('documents:papers'), 'dokumente briefkopf logo schrift gestaltung layout vorlage'),
-        ]
+            feature('Briefvorlage', reverse('documents:paper', args=['brief']), 'dokumente brief briefkopf briefbogen logo schrift gestaltung layout vorlage'),
+        ] * ('design_papers' in person.roles)

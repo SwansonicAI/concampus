@@ -901,8 +901,7 @@ class Holiday(Tracked, models.Model):
 
 
 class Text(Tracked, models.Model):
-    """A letter, message or text block as the Hochschule words it (core.texts), or a Briefbogen's Textfeld as a document
-    words it (core.paper.slot_key: the document, a dot, the field); without one, the default applies."""
+    """A letter, message or text block as the Hochschule words it (core.texts); without one, the default applies."""
 
     capabilities = ('word_texts',)
 
@@ -921,13 +920,11 @@ class Text(Tracked, models.Model):
         return TEXTS[self.key].title if self.key in TEXTS else self.key
 
     def clean(self):
-        from .paper import FIELDS
         from .texts import TEXTS, check
 
-        allowed = TEXTS[self.key].allowed if self.key in TEXTS else tuple(FIELDS)  # a Textfeld holds the Briefbogen's
         for field in ('subject', 'body'):
             try:
-                check(getattr(self, field), allowed)
+                check(getattr(self, field), TEXTS[self.key].allowed)
             except ValidationError as error:
                 raise ValidationError({field: error.messages})
 
@@ -989,7 +986,7 @@ class Message(models.Model):
     created = models.DateTimeField('Gesendet', default=timezone.now)
     read = models.DateTimeField('Gelesen', null=True, blank=True)
     sender = models.CharField('Absender', max_length=200, blank=True, help_text='Bei Bescheiden: wer sie erlassen hat, wie es im Brief steht.')
-    template = models.CharField('Vorlage', max_length=40, blank=True, help_text='Bei einem Bescheid: der Text, aus dem er entstand; sein Briefbogen (core.paper.chosen).')
+    template = models.CharField('Vorlage', max_length=40, blank=True, help_text='Bei einem Bescheid: der Text, aus dem er entstand.')
 
     class Meta:
         ordering = ['-created']

@@ -335,7 +335,7 @@ def roster(request, pk):
         raise Http404
     return paper.answer(request, 'exams/roster.html', {
         'trail': [('Prüfungen', reverse('exams:index')), (course.title, course.get_absolute_url())], 'course': course, 'staff': staff, 'rows': sorted(rows, key=lambda p: p.study.person.matriculation or '') if notice else rows,
-        'notice': notice, 'bookings': course.bookings.select_related('room'), 'today': timezone.localdate(), 'sender': texts.block('absender_leistungen'),
+        'notice': notice, 'bookings': course.bookings.select_related('room'), 'today': timezone.localdate(),
     }, f'{"Aushang" if notice else "Notenliste"} {course.title} {course.term}')
 
 

@@ -1066,7 +1066,10 @@ body:has(#paper) > .foot { display: none; }
 .paper-menu > div > :is(a, button) { display: block; padding: 8px 12px; border: 0; border-radius: var(--radius); background: none; color: var(--ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
 .paper-menu > div > :is(a, button):hover { background: var(--soft); text-decoration: none; }
 .paper-menu .danger { color: var(--red); }
-.paper-add { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 4px; padding: 10px 24px; border-bottom: 1px solid var(--line); }  /* one slim row: what is added is less often needed than what is edited */
+.paper-take { display: grid; gap: 6px; margin-top: 4px; padding: 10px 12px 6px; border-top: 1px solid var(--line); font-size: 14px; }  /* another document's look, this one's content */
+.paper-take label { display: grid; gap: 4px; }
+.paper-take button { justify-self: start; padding: 4px 10px; border: 1px solid #8a8a8a; border-radius: var(--radius); background: none; font: inherit; cursor: pointer; }
+.paper-add { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; padding: 10px 24px; border-bottom: 1px solid var(--line); }  /* one slim row: what is added is less often needed than what is edited */
 .paper-add button { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 0 4px; border: 1px solid transparent; border-radius: var(--radius); background: none; color: var(--ink); font: inherit; font-size: 12px; cursor: pointer; }
 .paper-add button:hover { border-color: var(--accent); color: var(--accent); }
 .paper-add button:disabled { opacity: 0.35; pointer-events: none; }
@@ -1076,8 +1079,6 @@ body:has(#paper) > .foot { display: none; }
 .paper-icon-box::before { width: 18px; height: 12px; border-radius: 2px; background: currentColor; opacity: 0.55; }
 .paper-icon-rule::before { width: 20px; height: 2px; background: currentColor; }
 .paper-icon-address::before { width: 18px; height: 12px; border: 1.5px dashed currentColor; }
-.paper-add b.paper-icon-slot { padding: 0 3px; border: 1.5px dashed currentColor; font-size: 12px; line-height: 14px; height: 18px; }  /* a T in a box: a text each document fills */
-.paper-add b.paper-icon-slot::before { content: none; }
 .paper-icon-info::before { width: 16px; height: 12px; background: linear-gradient(currentColor 0 0) 0 0 / 100% 2px no-repeat, linear-gradient(currentColor 0 0) 0 5px / 70% 1.5px no-repeat, linear-gradient(currentColor 0 0) 0 10px / 70% 1.5px no-repeat; }
 .paper-el img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
 .paper-el b { font-weight: 700; }
@@ -1093,6 +1094,40 @@ body:has(#paper) > .foot { display: none; }
 .paper-label { position: absolute; top: 0; right: 0; padding: 0 calc(6 * var(--px)); background: #b5b5b5; color: #fff; font: 600 calc(11 * var(--px)) / calc(18 * var(--px)) system-ui, sans-serif; }
 .paper-el.on .paper-label { background: var(--accent); }
 .paper-flow { height: 100%; overflow: hidden; opacity: 0.35; line-height: 1.45; }
+/* the content written on the page (flow.js): as it prints, what ConCampus fills in a tinted pill, the block written in
+   marked; it goes on below the text area where it is longer, to write in as it goes on */
+.paper-flow.live { height: auto; min-height: 100%; overflow: visible; opacity: 1; }
+.paper-flow.live .flow { min-height: 100%; user-select: text; cursor: text; }
+.paper-sheet:has(.paper-flow.live) { overflow: visible; }  /* content longer than the page goes on below it, still to write in */
+.paper-el:has(> .paper-flow.live)::after { content: none; }  /* nothing over the content: a click there puts the cursor in it */
+.paper-flow.live h1 { margin: 0 0 0.5em; font-family: var(--heading); font-size: var(--title); font-weight: 700; line-height: 1.2; }
+.paper-flow.live h2 { font-family: var(--heading); font-weight: 700; }
+.flow-block { position: relative; margin: 0 0 0.7em; border-radius: calc(2 * var(--px)); }
+.flow-block:hover { box-shadow: 0 0 0 calc(4 * var(--px)) #f3f3f3; background: #f3f3f3; }
+.flow-block.on { box-shadow: 0 0 0 calc(4 * var(--px)) var(--accent-pale); background: var(--accent-pale); }
+.flow-block.off { opacity: 0.45; }  /* shown only where its field is given, here not */
+.flow-block :is(h1, h2, dl, table, .sign, .signatures) { margin-bottom: 0; }
+.flow [contenteditable] { outline: none; cursor: text; min-height: 1.2em; }
+.flow-text.small { color: #5f5f5f; font-size: 0.85em; }
+.flow-qr::before { content: ""; float: right; width: 3.2em; height: 3.2em; margin-left: 1em; background: repeating-conic-gradient(#000 0 25%, #fff 0 50%) 0 0 / 0.8em 0.8em; opacity: 0.6; }  /* where the QR code stands */
+.flow-sample { opacity: 0.55; }  /* the list's further rows, as they will print */
+.flow-pill { padding: 0 0.15em; border-radius: 0.2em; background: #e3eefb; color: #12407a; white-space: pre-wrap; cursor: pointer; }
+.flow-pill.b { font-weight: 700; }
+.flow-pill.empty { border: 1px dashed #9cb5d6; background: none; color: #6b84a8; font-size: 0.85em; }
+.flow-pill.picked { outline: calc(2 * var(--px)) solid var(--blue); }
+.flow-empty { color: #9a9a9a; font-style: italic; }
+.flow-office { display: grid; gap: 6px; margin-bottom: 4px; }
+.flow-office label { font-weight: 600; font-size: 14px; }
+.flow-line { padding: 6px 10px; border: 1px solid #8a8a8a; border-radius: var(--radius); min-height: 34px; }
+.flow-line:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.flow-group { margin: 8px 0 4px; color: var(--muted); }
+.flow-fields { display: grid; gap: 2px; }
+.flow-fields button { display: flex; justify-content: space-between; gap: 12px; padding: 5px 8px; border: 0; border-radius: var(--radius); background: none; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.flow-fields button:hover { background: #e3eefb; }
+.flow-fields small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
+.flow-acts, .flow-new { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.flow-column { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.flow-column span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .paper-flow.middle { display: flex; flex-direction: column; justify-content: center; }
 .paper-flow p { margin: 0 0 0.7em; }
 .paper-bar { display: inline-block; width: 240px; max-width: 40%; height: 7.3px; margin-bottom: 8px; }  /* 30 mm, 2.6 pt, as core/paper.py Bar */

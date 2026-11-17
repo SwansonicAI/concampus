@@ -1,9 +1,9 @@
-"""Dokumente: every document ConCampus makes (catalogue), each on a page of its own: as it is printed or arrives, beside
-what can be worded on it and the Briefbogen it is set on. Two rights for two kinds of people: whoever words texts
-(core.texts), whoever designs Briefbögen (core.paper, core/static/core/paper.js), each seeing what the other keeps."""
+"""Dokumente: every document ConCampus makes (catalogue), each with a template of its own (core.paper.template), edited
+as it prints: what stands around its content, and the content itself, written on the page (core/static/core/paper.js,
+core/static/core/flow.js). Bescheide, messages and the texts of ConCampus's pages are worded on a page of their own,
+beside them as they arrive. Two rights: whoever words texts writes the content, whoever designs the rest of the page."""
 import json
 import re
-from collections import namedtuple
 
 from django import forms
 from django.conf import settings
@@ -26,21 +26,19 @@ from lxml import html as lxml_html
 
 from core import paper
 from core.access import Refused, require
-from core.models import Artwork, Institution, Layout, Message, Person, Text
+from core.models import Artwork, Institution, Layout, Text
 from core.text import fold
-from core.texts import ALWAYS, TEXTS, Values, basics, block, examples, render as worded
+from core.texts import ALWAYS, TEXTS, Values, basics, examples, render as worded
 
 from . import compose
-from .catalogue import FOLLOWING, KINDS, WITHIN, documents, shared
-from .models import Content
-from .samples import made_up, sample
+from .catalogue import KINDS, documents, shared
+from .samples import letter, made_up, sample
 
 CONTENT = {'.png': 'image/png', '.jpg': 'image/jpeg', '.ttf': 'font/ttf'}
 FRAMED = csp_override(settings.SECURE_CSP | {'frame-ancestors': [CSP.SELF]})  # a preview, shown in a frame of its page and nowhere else
 WORDED = {'nachrichten', 'seiten'}  # kinds with nothing but wording: for whoever words texts only
-SET_BY_PAPER = {'no-print', 'letterhead', 'address', 'dated', 'actions'}  # what the Briefbogen draws itself, or nobody prints (core.paper.blocks)
+SET_BY_PAPER = {'no-print', 'letterhead', 'address', 'dated', 'actions'}  # what the template draws itself, or nobody prints (core.paper.blocks)
 PIXELS = re.compile(r'(\d+(?:\.\d+)?)px')
-SAID = {'hochschule': 'Hochschule', 'hochschule_ort': 'Ort der Hochschule'}  # of the Hochschule's placeholders, those a Textfeld's wording takes
 
 
 def index(request):
@@ -48,67 +46,41 @@ def index(request):
 
 
 def kinds(person):
-    """The lists a person sees: whoever only designs, those of documents on paper."""
-    return [kind for kind in KINDS if 'word_texts' in person.roles or kind not in WORDED]
+    """The lists a person sees: whoever only designs, those of documents on paper; whoever does neither, none."""
+    roles = person.roles
+    return [kind for kind in KINDS if 'word_texts' in roles or 'design_papers' in roles and kind not in WORDED]
 
 
 @require('word_texts', 'design_papers')
 def listing(request, kind):
-    """The documents of a kind, each with what it says, its Briefbogen, and whether the Hochschule words it its own way. A
-    search finds documents of every kind by their title or anything worded on them."""
+    """The documents of a kind, each with what it says and whether the Hochschule has made it its own. A search finds
+    documents of every kind by their title or anything written on them."""
     if kind not in kinds(request.user):
         raise Refused(['word_texts'])
     q = request.GET.get('q', '').strip() if 'word_texts' in request.user.roles else ''
-    own, sought, found = {t.key: t for t in Text.objects.all()}, fold(q).split(), paper.layouts()
-    chosen = paper.chosen(found=found)
-    rows, composed = [], set(Content.objects.values_list('key', flat=True))
+    own, sought, templates = {t.key: t for t in Text.objects.all()}, fold(q).split(), set(Layout.objects.values_list('key', flat=True))
+    rows = []
     for d in documents().values():
-        wording = worded_on(d, found[paper_of(d, chosen)][1] if d.paper else None)
-        if not (says(d, wording, own, sought) if q else d.kind == kind) or d.kind not in kinds(request.user):
+        if not (says(d, own, sought) if q else d.kind == kind) or d.kind not in kinds(request.user):
             continue
         spec = TEXTS.get(d.key) if d.kind != 'bescheinigungen' else None
-        rows.append((
-            d, d.key in composed if d.composed else d.key in own if d.letter else any(w.key in own for w in wording),
-            spec.subject if spec else 'der ganze Inhalt, Block für Block' if d.composed else ', '.join(w.title for w in wording) or 'Wortlaut je Unterlagenart',
-            found[paper_of(d, chosen)][0] if d.paper else '',
-        ))
+        rows.append((d, d.key in templates if d.kind == 'bescheinigungen' else d.key in own, spec.subject if spec else ''))
     return render(request, 'documents/list.html', {
-        'kind': kind, 'title': KINDS[kind][0], 'lead': KINDS[kind][1], 'q': q, 'rows': rows, 'printed': kind not in WORDED,
+        'kind': kind, 'title': KINDS[kind][0], 'lead': KINDS[kind][1], 'q': q, 'rows': rows,
+        'letter': kind == 'bescheide' and 'design_papers' in request.user.roles,
     })
 
 
-def says(document, wording, own, sought):
-    """Whether every word sought, folded, is in a document's title or anything worded on it, as the Hochschule words it."""
+def says(document, own, sought):
+    """Whether every word sought, folded, is in a document's title or anything written on it, as the Hochschule writes it."""
     said = [document.title]
-    for w in wording:
-        said += [own[w.key].subject, own[w.key].body] if w.key in own else [w.subject, w.body]
+    for key in document.texts:
+        said += [own[key].subject, own[key].body] if key in own else [TEXTS[key].subject, TEXTS[key].body]
+    if document.composed:
+        content = compose.flow(document.key)
+        said += [r.get('t', '') for b in content['blocks'] for found in compose.runs_of(b) for r in found]
     said = fold(' '.join(said))
     return all(word in said for word in sought)
-
-
-def paper_of(document, chosen):
-    """The Briefbogen a document is set on."""
-    return paper.letter_paper(chosen, document.key) if document.letter else chosen[document.paper]
-
-
-def addressed(design):
-    """Whether a Briefbogen has the address window a letter needs."""
-    return any(el['type'] == 'address' for el in design['elements'])
-
-
-def fits(document, design):
-    """Whether a document may stand on a Briefbogen: a letter needs an address window; content that flows, a text area."""
-    return (not document.letter or addressed(design)) and (paper.flows(design) or not document.letter and document.key in paper.SET)
-
-
-Worded = namedtuple('Worded', 'key title subject body allowed slot')  # a text worded on a document, its standard subject and body; slot: a Textfeld
-
-
-def worded_on(document, design=None):
-    """What is worded on a document: the texts its content holds, where it flows into its Briefbogen's text area, and
-    the Briefbogen's Textfelder, worded for this document (core.paper.slot_key)."""
-    found = [Worded(k, TEXTS[k].title, TEXTS[k].subject, TEXTS[k].body, TEXTS[k].allowed, False) for k in document.texts] if design is None or paper.flows(design) else []
-    return found + [Worded(paper.slot_key(document.paper, el), el['slot'], '', el['text'], tuple(paper.FIELDS), True) for el in paper.slots(design or {'elements': []})]
 
 
 class TextForm(forms.ModelForm):
@@ -122,38 +94,26 @@ class TextForm(forms.ModelForm):
         return {name: value.replace('\r\n', '\n') for name, value in super().clean().items()}
 
 
-def text_forms(wording, data=None):
-    """[(Worded, its form)], each by its key; a subject only where the text has one."""
-    held = {t.key: t for t in Text.objects.filter(key__in=[w.key for w in wording])}
+def text_forms(document, data=None):
+    """[(key, Spec, its form)] for each text worded on the document; a subject only where the text has one."""
+    held = {t.key: t for t in Text.objects.filter(key__in=document.texts)}
     found = []
-    for w in wording:
-        form = TextForm(data, prefix=w.key, instance=held.get(w.key) or Text(key=w.key, subject=w.subject, body=w.body))
-        if not w.subject:
+    for key in document.texts:
+        spec = TEXTS[key]
+        form = TextForm(data, prefix=key, instance=held.get(key) or Text(key=key, subject=spec.subject, body=spec.body))
+        if not spec.subject:
             del form.fields['subject']
-        if w.slot:  # a line or two, named by its heading
-            form.fields['body'].widget.attrs |= {'rows': max(2, w.body.count('\n') + 2), 'aria-label': w.title}
-        found.append((w, form))
+        found.append((key, spec, form))
     return found
 
 
-def keep(w, form):
+def keep(key, spec, form):
     """A text saved where it changed; back on its standard, its record gone, where it says what the standard says."""
-    if (form.cleaned_data.get('subject', w.subject), form.cleaned_data['body']) == (w.subject, w.body):
+    if (form.cleaned_data.get('subject', spec.subject), form.cleaned_data['body']) == (spec.subject, spec.body):
         if form.instance.pk:
             form.instance.delete()
     elif form.has_changed() or not form.instance.pk:
         form.save()
-
-
-def chips(w, values):
-    """The placeholders a text may hold, to insert: (placeholder, label, its example here). A Textfeld's are a Briefbogen's,
-    by name, those the document fills."""
-    if not w.slot:
-        return [(name, name, values.get(name, '')) for name in dict.fromkeys(TEXTS[w.key].placeholders + ALWAYS)]
-    return [
-        (name, SAID.get(name, label), values[name]) for name, (group, label, _) in paper.FIELDS.items()
-        if values.get(name) and (name in SAID or group in (paper.PERSON, paper.STUDIUM, paper.DOKUMENT))
-    ]
 
 
 def opened(request, kind, key):
@@ -168,134 +128,58 @@ def opened(request, kind, key):
 
 @require('word_texts', 'design_papers')
 def document(request, kind, key):
-    """One document: as it is printed or arrives, beside what can be worded on it, each text marked where other documents
-    carry it too, and the Briefbogen it is set on. Saved together, a text only where it changed; back to its standard on asking."""
+    """One document. A Bescheinigung or Urkunde: its template, edited as it prints (editor). A Bescheid, a message or a
+    page's text: worded beside it as it arrives, each text marked where other documents carry it too; saved together, a
+    text only where it changed, back to its standard on asking."""
     document, word = opened(request, kind, key)
-    design, back = 'design_papers' in request.user.roles and bool(document.paper), reverse(f'documents:{kind}')
-    found = paper.layouts()
-    chosen = paper.chosen(found=found)
-    current = paper_of(document, chosen) if document.paper else ''
-    fitting = {k: name for k, (name, layout, _) in found.items() if fits(document, layout)}
-    wording = worded_on(document, found[current][1] if current else None)
-    texts = text_forms(wording, request.POST or None) if word else []
-    reset = next((w for w in wording if w.key == request.POST.get('standard')), None) if word else None
+    if kind == 'bescheinigungen':
+        return editor(request, key)
+    back = reverse(f'documents:{kind}')
+    texts = text_forms(document, request.POST or None) if word else []
+    reset = next(((k, spec) for k, spec, _ in texts if k == request.POST.get('standard')), None)
     if reset:
-        Text.objects.filter(key=reset.key).delete()
-        messages.success(request, f'„{reset.title}“ steht wieder auf dem Standard.')
+        Text.objects.filter(key=reset[0]).delete()
+        messages.success(request, f'„{reset[1].title}“ steht wieder auf dem Standard.')
         return redirect(request.path)
-    own = Content.objects.filter(key=key).first() if document.composed and word else None
-    if own and request.POST.get('art') == 'vorschlag':
-        own.delete()
-        messages.success(request, f'„{document.title}“ steht wieder auf dem Vorschlag.')
-        return redirect(request.path)
-    layout = request.POST.get('briefbogen') if design else None
-    composition, refused = None, ''
-    if request.method == 'POST' and document.composed and word:
-        try:
-            composition = compose.clean(key, json.loads(request.POST.get('inhalt', '')))
-        except (ValueError, ValidationError) as error:
-            refused = ' '.join(getattr(error, 'messages', ['Der Inhalt ließ sich nicht lesen.']))
-    if request.method == 'POST' and not refused and all(form.is_valid() for _, form in texts) and (layout is None or layout in fitting):
+    if request.method == 'POST' and all(form.is_valid() for _, _, form in texts):
         with transaction.atomic():
             for text in texts:
                 keep(*text)
-            if composition is not None:
-                kept(key, composition, own)
-            if layout is not None:
-                set_on(document, layout, chosen)
         messages.success(request, f'„{document.title}“ gespeichert.')
         return redirect(back)
-    if refused:
-        messages.error(request, f'Nicht gespeichert: {refused}')
-    counts, values = shared(), filled_in(document, request)
+    counts, values = shared(), basics()
     return render(request, 'documents/document.html', {
-        'trail': [(KINDS[kind][0], back)], 'back': back, 'document': document, 'kind': kind, 'word': word, 'design': design,
-        'layouts': fitting, 'layout': current, 'paper_name': current and found[current][0], 'set': current and not paper.flows(found[current][1]),
-        'settable': not document.letter and document.key in paper.SET, 'own': own,
-        'texts': [(w, form, counts.get(w.key, ''), chips(w, values if w.slot else values | examples(w.key))) for w, form in texts],
-        'composer': composer(document, request, json.loads(request.POST['inhalt']) if refused else None) if document.composed and word else None,
+        'trail': [(KINDS[kind][0], back)], 'back': back, 'document': document, 'kind': kind,
+        'letter': document.letter and 'design_papers' in request.user.roles,
+        'texts': [(key, spec, form, counts.get(key, ''), [(name, (values | examples(key)).get(name, '')) for name in dict.fromkeys(spec.placeholders + ALWAYS)])
+                  for key, spec, form in texts],
     })
-
-
-def kept(key, composition, record):
-    """A composition saved; gone, back on the Vorschlag, where it is the Vorschlag."""
-    if composition == compose.VORSCHLAG[key]:
-        if record:
-            record.delete()
-    elif record is None or record.content != composition:
-        record = record or Content(key=key)
-        record.content = composition
-        record.save()
-
-
-def composer(document, request, posted=None):
-    """What the block editor needs (documents/static/documents/compose.js): the composition, each block's kind, and what
-    the document knows, each placeholder with its value for the made-up person, each list with its columns'."""
-    pages, common, *_ = made_up(request)
-    values, lists = compose.data(document.key, common | pages[document.key][1])
-    fields, columns = compose.DATA[document.key]
-    found = posted or compose.composition(document.key)
-    values['amt'] = compose.plain(found.get('office', ''), values)
-    return {
-        'composition': found, 'blocks': compose.BLOCKS,
-        'fields': [[name, label, values.get(name, '')] for name, label in fields.items()],
-        'lists': {name: [label, [[col, what, (lists.get(name) or [{}])[0].get(col, '')] for col, what in cols.items()]] for name, (label, cols) in columns.items()},
-    }
-
-
-def filled_in(document, request):
-    """What the placeholders say on the made-up document: the Hochschule's, today's, and those of its kind (core.paper.FIELDS)."""
-    if not document.paper:
-        return basics()
-    el = lxml_html.document_fromstring(page_of(document, request)).find_class('document')[0]
-    return basics() | paper.values(Institution.get(), paper.meta_of(el, Institution.get()))
-
-
-def set_on(document, layout, chosen):
-    """The document onto a Briefbogen: kept where it differs from where it stands without a choice, a letter on that of all
-    letters, any other on its standard."""
-    institution = Institution.get()
-    papers = {slot: k for slot, k in (institution.papers or {}).items() if slot != document.paper}
-    if layout != (chosen['brief'] if document.letter else paper.DOCUMENTS[document.paper][1]):
-        papers[document.paper] = layout
-    institution.papers = papers
-    institution.save(update_fields=['papers'])
 
 
 @require('word_texts', 'design_papers')
 @xframe_options_sameorigin
 @FRAMED
 def document_preview(request, kind, key):
-    """The document as it is printed or arrives, with what is typed in, unsaved: on paper, as the PDF made from it, on the
-    Briefbogen chosen; a message or a page's text as the Postfach shows it. The drafts are saved within a transaction undone
-    at once, so it reads exactly as it would once saved; with nothing posted, as saved."""
+    """A Bescheid, a message or a page's text as it arrives, with what is typed in, unsaved: a Bescheid as the PDF its
+    recipient gets, the rest as the Postfach shows it; the text being worded marked where it stands. The drafts are saved
+    within a transaction undone at once, so it reads exactly as it would once saved; with nothing posted, as saved."""
     document, word = opened(request, kind, key)
-    found = paper.layouts()
-    current = paper_of(document, paper.chosen(found=found)) if document.paper else ''
-    layout = request.POST.get('briefbogen') if request.POST.get('briefbogen') in found else current
-    texts = text_forms(worded_on(document, found[current][1] if current else None), request.POST) if word and request.method == 'POST' else []
-    if not all(form.is_valid() for _, form in texts):
-        return render(request, 'documents/frame.html', {'errors': [e for _, form in texts for errors in form.errors.values() for e in errors]})
-    shown = next((w for w in worded_on(document, found[current][1] if current else None) if w.key == request.POST.get('markiert')), None)
-    more = {}
-    if document.composed and word and 'inhalt' in request.POST:
-        try:
-            more['draft'] = compose.clean(key, json.loads(request.POST['inhalt']))
-        except (ValueError, ValidationError) as error:
-            return render(request, 'documents/frame.html', {'errors': getattr(error, 'messages', ['Der Inhalt ließ sich nicht lesen.'])})
-        block_ = request.POST.get('markiert', '').removeprefix('block:')
-        more['marked'] = int(block_) if block_.isdigit() else None
+    texts = text_forms(document, request.POST) if word and request.method == 'POST' else []
+    if not all(form.is_valid() for _, _, form in texts):
+        return render(request, 'documents/frame.html', {'errors': [e for _, _, form in texts for errors in form.errors.values() for e in errors]})
+    shown = request.POST.get('markiert') if request.POST.get('markiert') in document.texts else None
     with transaction.atomic():
-        for _, form in texts:
+        for _, _, form in texts:
             form.save()
-        if shown and not shown.slot:  # the text being worded, marked wherever it stands (core.paper.marked)
-            record = Text.objects.filter(key=shown.key).first() or Text(key=shown.key, subject=shown.subject, body=shown.body)
+        if shown:  # the text being worded, marked wherever it stands (core.paper.marked)
+            spec = TEXTS[shown]
+            record = Text.objects.filter(key=shown).first() or Text(key=shown, subject=spec.subject, body=spec.body)
             record.subject, record.body = paper.marked(record.subject), paper.marked(record.body)
             record.save()
-        page = page_of(document, request, **more)
-        made = paper.pdf(page, document.title, design=found[layout][1], marked=shown.title if shown and shown.slot else '') if document.paper else None  # a Textfeld's drafts are read as it is set
+        page = letter_of(document.key) if document.letter else worded(document.key, **Values(examples(document.key)))
+        made = paper.pdf(page, document.title) if document.letter else None
         transaction.set_rollback(True)
-    if not document.paper:
+    if not document.letter:
         subject, body = page
         return render(request, 'documents/frame.html', {'subject': highlighted(subject), 'body': highlighted(linebreaks(escape(body)))})
     return paper.respond(made, document.title)
@@ -306,25 +190,15 @@ def highlighted(html):
     return mark_safe(conditional_escape(html).replace(paper.MARK, '<mark>').replace(paper.UNMARK, '</mark>'))
 
 
-def page_of(document, request, **more):
-    """The document for the made-up person, as the texts now say: a Bescheid as its letter, with what follows it where it
-    applies; a Bescheinigung from its own template (samples), `more` given to it; a message or a page's text as (subject, body)."""
-    values = Values(examples(document.key))
-    if not document.paper:
-        return worded(document.key, **values)
-    if not document.letter:
-        return sample(document.key, request, **more)
-    for name, key in WITHIN.get(document.key, {}).items():
-        values[name] = block(key, **values)
-    subject, body = worded(document.key, *FOLLOWING.get(document.key, ()), **values)
-    person = Person(first_name=values['vorname'], last_name=values['nachname'], address='Musterstraße 1\n12345 Musterstadt', matriculation=values['matrikelnummer'])
-    letter = Message(pk=1234, person=person, subject=subject, body=body, sender=block('absender_bescheide'), template=document.key)
-    return render_to_string('core/_letter.html', {'letter': letter, 'institution': Institution.get()})
+def letter_of(key, **more):
+    """A Bescheid, by its text's key, as the letter the made-up person gets (samples.letter); `more`: what else its
+    template is given, the letter template's draft."""
+    return render_to_string('core/_letter.html', {'letter': letter(key), 'institution': Institution.get()} | more)
 
 
 def content(page):
-    """A document's own part, as a Briefbogen's text area holds it: (its title, the rest as HTML, what its placeholders
-    say), without what the Briefbogen draws itself or nobody prints."""
+    """A document's own part, as a template's text area holds it where its content is not yet the Hochschule's to write:
+    (its title, the rest as HTML, what its placeholders say), without what the template draws itself or nobody prints."""
     root = lxml_html.document_fromstring(page).find_class('document')[0]
     institution = Institution.get()
     values = paper.values(institution, paper.meta_of(root, institution))
@@ -340,100 +214,84 @@ def content(page):
     return title, (root.text or '') + ''.join(lxml_html.tostring(el, encoding='unicode') for el in root), values
 
 
-def printed(chosen):
-    """[(Document, the Briefbogen it is set on)], of every document on paper."""
-    return [(d, paper_of(d, chosen)) for d in documents().values() if d.paper]
+def known(key, request):
+    """What the editor writes a document's content with (flow.js): each field with its value for the made-up person, each
+    list with its fields and rows, the kinds of block."""
+    pages, common, *_ = made_up(request)
+    values, lists = compose.data(key, common | pages[key][1])
+    values['amt'] = compose.plain(compose.flow(key).get('office', []), values)
+    fields, columns = compose.DATA[key]
+    return {
+        'blocks': compose.BLOCKS, 'values': values,
+        'fields': [[name, label] for name, label in fields.items()],
+        'lists': {name: {'label': label, 'fields': [[col, what] for col, what in cols.items()], 'rows': lists.get(name, [])} for name, (label, cols) in columns.items()},
+    }
 
 
-def shown_on(key, chosen, design):
-    """The document a Briefbogen is best shown with: the first set on it, else a Bescheid where it has an address window,
-    an Urkunde where its text stands in the middle, else a Bescheinigung."""
-    on = next((d for d, k in printed(chosen) if k == key), None)
-    if on:
-        return f'{on.kind}/{on.key}'
-    return 'bescheide/zulassung' if addressed(design) else 'bescheinigungen/urkunde' if design['style'].get('middle') else 'bescheinigungen/immatrikulation'
+def back_from(key):
+    return reverse('documents:bescheide' if key in paper.LETTERS else 'documents:bescheinigungen')
 
 
 @require('word_texts', 'design_papers')
-def papers(request):
-    """The Briefbögen, each as the first document set on it shows it, to open and lay out; and a new one from any."""
-    found, design = paper.layouts(), 'design_papers' in request.user.roles
-    if request.method == 'POST' and not design:
-        raise Refused(['design_papers'])
-    if request.method == 'POST':
-        name, base = request.POST.get('name', '').strip()[:80], request.POST.get('vorlage')
-        if not name or base not in found:
-            messages.error(request, 'Bitte einen Namen und eine Vorlage angeben.')
-            return redirect('documents:papers')
-        key, n = slugify(name)[:36] or 'briefbogen', 1
-        while key in found or key in paper.STANDARD or key == 'dateien':  # the uploads' address (urls.py)
-            n += 1
-            key = f'{slugify(name)[:33] or "briefbogen"}-{n}'
-        Layout.objects.create(key=key, name=name, design=found[base][1])
-        return redirect('documents:paper', key)
-    chosen, changed = paper.chosen(found=found), set(Layout.objects.filter(key__in=paper.STANDARD).values_list('key', flat=True))
-    on = printed(chosen)
-    return render(request, 'documents/papers.html', {
-        'layouts': [
-            (key, name, 'eigener' if not standard else 'geändert' if key in changed else '', [d.title for d, k in on if k == key], shown_on(key, chosen, layout))
-            for key, (name, layout, standard) in found.items()
-        ],
-        'choices': [(key, name) for key, (name, _, _) in found.items()], 'design': design,
-    })
-
-
-@require('design_papers')
 def editor(request, key):
-    """One Briefbogen, laid out on the page: saved, set back to its standard, or deleted."""
-    found = paper.layouts()
-    if key not in found:
+    """A document's template, edited as it prints: whoever designs, what stands around its content; whoever words texts,
+    the content itself, written on the page where it is the Hochschule's (compose); saved together, set back to
+    ConCampus's own on asking."""
+    if key not in paper.DOCUMENTS:
         raise Http404
-    name, design, standard = found[key]
-    record = Layout.objects.filter(key=key).first()
-    chosen = paper.chosen(found=found)
-    on = [d for d, k in printed(chosen) if k == key]
-    letters, flowing = any(d.letter for d in on), any(d.letter or d.key not in paper.SET for d in on)
-    if request.POST.get('art') == 'standard' and standard:
-        if record:
-            record.delete()
-        messages.success(request, f'„{paper.STANDARD[key][0]}“ steht wieder auf dem Standard.')
-        return redirect('documents:paper', key)
-    if request.POST.get('art') == 'loeschen' and record and not standard:
-        institution = Institution.get()
-        institution.papers = {slot: k for slot, k in (institution.papers or {}).items() if k != key}
-        institution.save(update_fields=['papers'])
+    roles, record = request.user.roles, Layout.objects.filter(key=key).first()
+    may_design, may_word, composed = 'design_papers' in roles, 'word_texts' in roles, key in compose.VORSCHLAG
+    title, stored = paper.DOCUMENTS[key][0], paper.template(key)
+    frame, flow = {k: v for k, v in stored.items() if k != 'flow'}, compose.flow(key) if composed else None
+    if request.POST.get('art') == 'standard' and record and may_design and may_word:
         record.delete()
-        messages.success(request, f'„{record.name}“ gelöscht; was darauf stand, steht wieder auf seinem Standard.')
-        return redirect('documents:papers')
-    if request.method == 'POST':
-        posted, name = request.POST.get('design', ''), request.POST.get('name', '').strip()[:80] or name
+        messages.success(request, f'„{title}“ steht wieder, wie ConCampus es vorschlägt.')
+        return redirect(request.path)
+    source = request.POST.get('von')
+    if request.POST.get('art') == 'uebernehmen' and may_design and source in paper.DOCUMENTS and source != key:  # another's look, its own content kept
+        record = record or Layout(key=key, name=title)
+        record.design = {k: v for k, v in paper.template(source).items() if k != 'flow'} | ({'flow': flow} if composed else {})
         try:
-            design = json.loads(posted)
-            cleaned = paper.clean(design, letter=letters, flowing=flowing)
-        except (ValueError, ValidationError) as error:
-            messages.error(request, 'Nicht gespeichert: ' + ' '.join(getattr(error, 'messages', ['Der Briefbogen ließ sich nicht lesen.'])))
-            if not (isinstance(design, dict) and isinstance(design.get('style'), dict) and isinstance(design.get('elements'), list)):
-                design = found[key][1]
+            paper.clean(record.design, letter=key in paper.LETTERS, flowing=key not in paper.SET)
+        except ValidationError as error:
+            messages.error(request, f'Nicht übernommen: {" ".join(error.messages)}')
+            return redirect(request.path)
+        record.save()
+        messages.success(request, f'Die Gestaltung von „{paper.DOCUMENTS[source][0]}“ übernommen; der Inhalt ist geblieben.')
+        return redirect(request.path)
+    if request.method == 'POST':
+        try:
+            posted = json.loads(request.POST.get('design', ''))
+            if may_design:
+                frame = paper.clean(posted, letter=key in paper.LETTERS, flowing=key not in paper.SET)
+            if composed and may_word:
+                flow = compose.clean(key, posted.get('flow'))
+        except (ValueError, ValidationError, AttributeError) as error:
+            messages.error(request, 'Nicht gespeichert: ' + ' '.join(getattr(error, 'messages', ['Die Vorlage ließ sich nicht lesen.'])))
+            if isinstance(posted, dict) and isinstance(posted.get('style'), dict) and isinstance(posted.get('elements'), list):
+                frame, flow = posted, posted.get('flow', flow)
         else:
-            record = record or Layout(key=key)
-            record.name, record.design = name, cleaned
+            record = record or Layout(key=key, name=title)
+            record.design = frame | ({'flow': flow} if composed else {})
             record.save()
-            messages.success(request, f'„{name}“ gespeichert.')
-            return redirect('documents:paper', key)
-    others = [(d, k) for d, k in printed(chosen) if k != key]
+            messages.success(request, f'„{title}“ gespeichert.')
+            return redirect(request.path)
+    others = [d for d in documents().values() if d.letter] if key in paper.LETTERS else []
     return render(request, 'documents/paper.html', {
         'menu': None,  # the window's width for the page and the rail (documents/paper.html)
-        'key': key, 'name': name, 'standard': standard, 'own': bool(record), 'record': record,
-        'shown': shown_on(key, chosen, design), 'on': on, 'others': [d for d, _ in others],
-        'editor': editor_data(design, name) | {
-            'letters': letters, 'flowing': flowing, 'used': [d.title for d in on], 'content': reverse('documents:paper_content', args=[key]),
-            'unsaved': request.method == 'POST',  # a save refused: what was sent stands, still to be saved
+        'key': key, 'name': title, 'record': record, 'back': back_from(key), 'others': others, 'shown': 'zulassung' if others else '',
+        'reset': record and may_design and may_word, 'may_design': may_design,
+        'sources': [(k, t) for k, (t, _) in paper.DOCUMENTS.items() if k != key and (k in paper.LETTERS) == (key in paper.LETTERS)],
+        'editor': editor_data(frame, title) | {
+            'letters': key in paper.LETTERS, 'flowing': key not in paper.SET, 'used': [title],
+            'content': reverse('documents:paper_content', args=[key]), 'unsaved': request.method == 'POST',
+            'mayDesign': may_design, 'mayWord': may_word, 'flow': flow, 'compose': known(key, request) if composed else None,
         },
     })
 
 
 def editor_data(design, name):
-    """What the page in the browser needs to lay the Briefbogen out as the PDF will (paper.js)."""
+    """What the page in the browser needs to lay the template out as the PDF will (paper.js)."""
     institution = Institution.get()
     own = paper.own_fonts()
     fonts = {key: {'name': title, 'faces': [{'w': w, 'i': i, 'url': static(f'core/fonts/{stem}-{suffix}.ttf')} for (w, i), suffix in paper.FACES.items()]}
@@ -441,14 +299,14 @@ def editor_data(design, name):
     fonts |= {key: {'name': title, 'own': True, 'faces': [face(art) for art in arts.values()]} for key, (title, arts) in own.items()}
     pictures = [{'pk': a.pk, 'name': a.name, 'url': reverse('documents:artwork', args=[a.pk]), 'w': a.width, 'h': a.height} for a in Artwork.objects.filter(kind=Artwork.Kind.PICTURE)]
     logo = institution.logo
-    sample = paper.values(institution, {  # the Hochschule's own values; for a document, its person and its pages, an example
+    sample_values = paper.values(institution, {  # the Hochschule's own values; for a document, its person and its pages, an example
         'words': paper.GERMAN, 'office': ['Akademische und Studentische Angelegenheiten'], 'title': 'Zulassung zum Studium', 'reference': '2026-1234',
         'date': '16. November 2026', 'person': 'Erika Mustermann', 'matrikel': '100123', 'fields': {
             'person_geburtsdatum': '1. April 2001', 'person_geburtsort': 'Musterstadt', 'studium_studiengang': 'Musik', 'studium_hauptfach': 'Violine', 'studium_grad': 'Bachelor of Music',
         },
     }) | {'seitenzahl': 'Seite 1 von 2', 'seite': '1', 'seiten': '2'}
     return {
-        'design': design, 'name': name, 'fonts': fonts, 'pictures': pictures, 'values': sample,
+        'design': design, 'name': name, 'fonts': fonts, 'pictures': pictures, 'values': sample_values,
         'fields': [{'key': key, 'group': group, 'label': label, 'about': about, 'example': group not in (paper.HOCHSCHULE, paper.BANK)}
                    for key, (group, label, about) in paper.FIELDS.items()],
         'accent': institution.accent or '#008a00', 'wordmark': institution.lines,
@@ -457,41 +315,41 @@ def editor_data(design, name):
     }
 
 
-def chosen_document(request):
-    """The document a Briefbogen is shown with (?dokument=kind/key), of those on paper."""
-    kind, _, key = (request.POST.get('dokument') or request.GET.get('dokument', '')).partition('/')
-    document = documents().get((kind, key))
-    if document is None or not document.paper:
-        raise Http404
-    return document
+def shown_page(key, request, **more):
+    """The page a template is shown with: a letter with the Bescheid asked for (?dokument=), any other its own document."""
+    if key in paper.LETTERS:
+        chosen = request.POST.get('dokument') or request.GET.get('dokument')
+        return letter_of(chosen if chosen in TEXTS and TEXTS[chosen].group == 'Bescheide' else 'zulassung', **more)
+    return sample(key, request, **more)
 
 
-@require('design_papers')
+@require('word_texts', 'design_papers')
 def paper_content(request, key):
-    """The content of a document as the editor's text area shows it, in place of words standing for it (paper.js)."""
-    document = chosen_document(request)
-    title, body, values = content(page_of(document, request))
-    slots = {t.key.partition('.')[2]: t.body for t in Text.objects.filter(key__startswith=f'{document.paper}.')}  # its Textfelder as it words them
-    return JsonResponse({'title': title, 'html': body, 'values': values, 'slots': slots})
+    """The content of a document whose content is not the Hochschule's to write, as the editor's text area shows it (paper.js)."""
+    if key not in paper.DOCUMENTS:
+        raise Http404
+    title, body, values = content(shown_page(key, request))
+    return JsonResponse({'title': title, 'html': body, 'values': values})
 
 
 @require('word_texts', 'design_papers')
 @xframe_options_sameorigin
 @FRAMED
 def preview(request, key):
-    """A document (chosen_document) on a Briefbogen, as the PDF: as posted from the editor, unsaved, or as kept."""
-    document = chosen_document(request)
+    """A document on its template, as the PDF: as posted from the editor, unsaved, or as kept."""
+    if key not in paper.DOCUMENTS:
+        raise Http404
+    design, more = paper.template(key), {}
     if request.method == 'POST':
         try:
-            design = paper.clean(json.loads(request.POST.get('design', '')))
-        except (ValueError, ValidationError) as error:
-            return render(request, 'documents/frame.html', {'errors': getattr(error, 'messages', ['Der Briefbogen ließ sich nicht lesen.'])}, status=400)
-    else:
-        found = paper.layouts()
-        if key not in found:
-            raise Http404
-        design = found[key][1]
-    return paper.respond(paper.pdf(page_of(document, request), document.title, design=design), document.title)
+            posted = json.loads(request.POST.get('design', ''))
+            design = paper.clean(posted)
+            if key in compose.VORSCHLAG and posted.get('flow'):
+                more['draft'] = compose.clean(key, posted['flow'])
+        except (ValueError, ValidationError, AttributeError) as error:
+            return render(request, 'documents/frame.html', {'errors': getattr(error, 'messages', ['Die Vorlage ließ sich nicht lesen.'])}, status=400)
+    title = paper.DOCUMENTS[key][0]
+    return paper.respond(paper.pdf(shown_page(key, request, **more), title, design=design), title)
 
 
 def face(art):
@@ -549,14 +407,14 @@ def artwork(request, pk):
 @require('design_papers')
 @require_POST
 def artwork_delete(request, pk):
-    """A picture or font face gone, unless a Briefbogen sets it."""
+    """A picture or font face gone, unless a template sets it."""
     art = get_object_or_404(Artwork, pk=pk)
     family = paper.OWN + slugify(art.name)
-    for name, design, _ in paper.layouts().values():
-        style = design.get('style', {})
+    for layout in Layout.objects.all():
+        design, style = layout.design, layout.design.get('style', {})
         if any(el.get('artwork') == art.pk for el in design.get('elements', [])) if art.kind == Artwork.Kind.PICTURE else (
             family in (style.get('font'), style.get('heading')) or any(el.get('font') == family for el in design.get('elements', []))
         ):
-            return JsonResponse({'error': f'„{name}“ verwendet es noch.'}, status=400)
+            return JsonResponse({'error': f'„{layout.name}“ verwendet es noch.'}, status=400)
     art.delete()
     return JsonResponse({'ok': True})

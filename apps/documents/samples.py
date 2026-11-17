@@ -42,6 +42,21 @@ def modules():
     ]
 
 
+def letter(key):
+    """A Bescheid, by its text's key, as the made-up person gets it: its words, with what follows it where it applies."""
+    from core.models import Message, Person
+    from core.texts import Values, examples, render
+
+    from .catalogue import FOLLOWING, WITHIN
+
+    values = Values(examples(key))
+    for name, part in WITHIN.get(key, {}).items():
+        values[name] = block(part, **values)
+    subject, body = render(key, *FOLLOWING.get(key, ()), **values)
+    person = Person(first_name=values['vorname'], last_name=values['nachname'], address='Musterstraße 1\n12345 Musterstadt', matriculation=values['matrikelnummer'])
+    return Message(pk=1234, person=person, subject=subject, body=body, sender=block('absender_bescheide'), template=key)
+
+
 def made_up(request):
     """What the documents' views give their templates, for the made-up person: ({document: (template, context)}, what
     they all share, the Zeugnis's results, the person)."""
@@ -72,13 +87,17 @@ def made_up(request):
         }),
         'exmatrikulation': ('students/exmatriculation.html', {'reason': False}),
         'leistungen': ('exams/transcript.html', finished | {
-            'complete': True, 'average': '1,3', 'verbal': 'sehr gut', 'thesis': 'Bachs Sonaten und Partiten in historischer Aufführungspraxis',
-            'signature': block('unterschrift_zeugnisse'), 'sender': block('absender_leistungen'),
+            'complete': True, 'average': '1,3', 'verbal': 'sehr gut', 'thesis': 'Bachs Sonaten und Partiten in historischer Aufführungspraxis', 'covered': 100,
         }),
+        **{doc: ('exams/supplement.html', finished | {  # in English, and in German
+            'average': 1.3, 'finished': True, 'distribution': None, 'reference': 4, 'dated': finished['completed'], 'lang': lang, 'de': lang == 'de',
+            'verbal': 'sehr gut' if lang == 'de' else 'very good',
+            'grades': [(1.5, 'sehr gut', 'very good'), (2.5, 'gut', 'good'), (3.5, 'befriedigend', 'satisfactory'), (4.0, 'ausreichend', 'sufficient')],
+        }) for doc, lang in (('supplement', 'en'), ('supplement_de', 'de'))},
+        'brief': ('core/_letter.html', {'letter': letter('zulassung'), 'institution': Institution.get()}),
         'urkunde': ('exams/certificate.html', {'completed': finished['completed'], 'signature': block('unterschrift_urkunden')}),
         'notenliste': ('exams/roster.html', {
             'course': Made(title='Hauptfachprüfung Violine', term=terms[-1], points=False), 'notice': False, 'bookings': [], 'staff': staff,
-            'sender': block('absender_leistungen'),
             'rows': [
                 Made(study=Made(person=Made(matriculation=f'10012{n}', name=name), subject='Violine', program=Made(degree='B.Mus.')), attempt=1, marks=[(e, grade) for e in staff], grade=grade, passed=True, remark='')
                 for n, (name, grade) in enumerate([('Erika Mustermann', 1.0), ('Max Muster', 1.7), ('Lena Beispiel', 2.3)], 3)
@@ -99,14 +118,6 @@ def sample(doc, request, **more):
     given, a composition's draft and the block marked in it (templatetags.composed)."""
     pages, common, finished, person = made_up(request)
     study, common = common['study'], {'base': 'core/panel.html'} | common | more
-    if doc == 'supplement':  # in English and in German, as it is issued
-        context = common | finished | {
-            'average': 1.3, 'grades': [(1.5, 'sehr gut', 'very good'), (2.5, 'gut', 'good'), (3.5, 'befriedigend', 'satisfactory'), (4.0, 'ausreichend', 'sufficient')],
-            'finished': True, 'distribution': None, 'reference': 4, 'awarding': block('ds_hochschule'), 'dated': finished['completed'], 'signature': block('unterschrift_zeugnisse'),
-        }
-        return ''.join(render_to_string('exams/supplement.html', context | {
-            'lang': lang, 'de': lang == 'de', 'verbal': 'sehr gut' if lang == 'de' else 'very good', 'system': block('ds_hochschulsystem_de' if lang == 'de' else 'ds_hochschulsystem'),
-        }, request) for lang in ('en', 'de'))
     if doc == 'vordruck':  # its wording is the Unterlagenart's: the first that has one
         from students.models import DocumentType
 

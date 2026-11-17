@@ -1,7 +1,10 @@
 {% extends base %}
 {% block title %}{{ title }}{% endblock %}
 {% block content %}
-<h1>{{ title }}</h1>
+<div class="head">
+  <h1>{{ title }}</h1>
+  {% if letter %}<div class="actions"><a class="btn ghost" href="{% url 'documents:paper' 'brief' %}">Briefvorlage gestalten</a></div>{% endif %}
+</div>
 <p class="lead">{{ lead }}</p>
 {% if 'word_texts' in user.roles %}
 <form class="toolbar">
@@ -9,18 +12,17 @@
 </form>
 {% endif %}
 <table>
-  <thead><tr><th>Dokument</th><th>{% if q %}Betreff oder Wortlaut{% elif kind == 'bescheinigungen' %}Zu formulieren{% elif kind == 'seiten' %}{% else %}Betreff{% endif %}</th>{% if q %}<th>Art</th>{% endif %}{% if printed or q %}<th>Briefbogen</th>{% endif %}<th>Wortlaut</th></tr></thead>
+  <thead><tr><th>Dokument</th>{% if kind != 'bescheinigungen' and kind != 'seiten' or q %}<th>Betreff</th>{% endif %}{% if q %}<th>Art</th>{% endif %}<th></th></tr></thead>
   <tbody>
-    {% for d, changed, what, layout in rows %}
+    {% for d, changed, subject in rows %}
     <tr>
       <td><a href="{% url 'documents:document' d.kind d.key %}"><b>{{ d.title }}</b></a></td>
-      <td class="muted">{% if kind != 'seiten' or q %}{{ what }}{% endif %}</td>
+      {% if kind != 'bescheinigungen' and kind != 'seiten' or q %}<td class="muted">{{ subject }}</td>{% endif %}
       {% if q %}<td>{% if d.kind == 'bescheide' %}Bescheid{% elif d.kind == 'bescheinigungen' %}Bescheinigung{% elif d.kind == 'nachrichten' %}Nachricht{% else %}Seite{% endif %}</td>{% endif %}
-      {% if printed or q %}<td>{{ layout }}</td>{% endif %}
       <td>{% if changed %}<span class="badge open">geändert</span>{% endif %}</td>
     </tr>
     {% empty %}
-    <tr><td colspan="5" class="empty">Kein Dokument sagt „{{ q }}“.</td></tr>
+    <tr><td colspan="4" class="empty">Kein Dokument sagt „{{ q }}“.</td></tr>
     {% endfor %}
   </tbody>
 </table>

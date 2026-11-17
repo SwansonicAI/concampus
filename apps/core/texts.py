@@ -402,13 +402,7 @@ TEXTS = {
         'Bitte teilen Sie der Ausländerbehörde innerhalb von zwei Wochen mit, dass Ihr Studium hier beendet ist (§ 82 Abs. 6 Aufenthaltsgesetz).', on=('brief',),
     ),
     'absender_bescheide': Spec(BAUSTEIN, 'Absender der Bescheide', '', '{hochschule}', on=('brief',)),
-    'brief_anrede': Spec(BAUSTEIN, 'Anrede in Briefen', '', 'Guten Tag {vorname} {nachname},', on=('brief',)),  # core/_letter.html
-    'brief_gruss': Spec(BAUSTEIN, 'Gruß in Briefen', '', 'Mit freundlichen Grüßen', on=('brief',)),
-    'brief_hinweis': Spec(BAUSTEIN, 'Hinweis unter Briefen', '', 'Dieses Schreiben wurde maschinell erstellt und ist ohne Unterschrift gültig.', on=('brief',)),
-    'absender_leistungen': Spec(BAUSTEIN, 'Absender der Leistungsübersichten und Zeugnisse', '', '{hochschule}', on=('leistungen', 'notenliste')),
-    'unterschrift_zeugnisse': Spec(BAUSTEIN, 'Unterschriften auf Zeugnissen', '', 'Vorsitz Prüfungsausschuss', on=('leistungen', 'supplement')),  # one per line
     'unterschrift_urkunden': Spec(BAUSTEIN, 'Unterschriften auf Urkunden', '', 'Präsidentin oder Präsident\nVorsitz Prüfungsausschuss', on=('urkunde',)),
-    'ds_hochschule': Spec(BAUSTEIN, 'Diploma Supplement: Hochschule und Status', '', '{hochschule}\nUniversity of Music, state institution', on=('supplement',)),
     'ds_hochschulsystem': Spec(  # KMK/HRK 2018
         BAUSTEIN, 'Diploma Supplement: Hochschulsystem (Abschnitt 8)', '',
         'The information on the national higher education system on the following pages provides a context '

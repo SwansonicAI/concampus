@@ -1,5 +1,5 @@
 """Documents as PDF, set from the templates that show them on screen: each `.document` of a rendered page becomes one, on
-the Briefbogen chosen for its kind (Institution.papers, else DOCUMENTS). A Briefbogen (Layout, else STANDARD) places
+the template of its kind (template()). A template (Layout under the document's key, else STANDARD) places
 its elements on the page in mm from the top left: the text area each page's text flows into, texts with placeholders,
 the wordmark, pictures, areas and rules, a letter's address window and information block; and sets the text's type.
 Only the markup the templates use is read (blocks(), inline()), every text is escaped, nothing is fetched; a design is
@@ -47,7 +47,7 @@ from reportlab.platypus import (
     PageTemplate, Paragraph, Spacer, Table, TableStyle,
 )
 
-from .models import Artwork, Institution, Layout, Text
+from .models import Artwork, Institution, Layout
 
 FONTS = Path(__file__).parent / 'static' / 'core' / 'fonts'
 FAMILIES = {  # key: (name, file stem), the fonts that come with ConCampus, each in four faces
@@ -110,30 +110,25 @@ DOCUMENTS = {  # key (data-paper on the template's .document): (what it is, its 
     'leistungen': ('Leistungsübersicht und Zeugnis', 'bescheinigung'),
     'urkunde': ('Urkunde', 'urkunde'),
     'supplement': ('Diploma Supplement', 'bescheinigung'),
+    'supplement_de': ('Diploma Supplement, deutsch', 'bescheinigung'),
     'notenliste': ('Notenliste', 'bescheinigung'),
     'leihvertrag': ('Leihvertrag', 'bescheinigung'),
     'vordruck': ('Vordruck der Kommission', 'bescheinigung'),
 }
-LETTERS = {'brief'}  # documents with an address: on a Briefbogen with an address window
-OWN_LETTER = 'bescheid:'  # in Institution.papers, with a text's key: a Bescheid on a Briefbogen of its own, not that of all letters
-SET = {'urkunde'}  # documents whose content is all in placeholders: they may stand on a Briefbogen without a text area, set by its elements alone
+LETTERS = {'brief'}  # documents with an address: on a template with an address window
+SET = {'urkunde'}  # documents whose content is all in placeholders: their template may do without a text area, set by its elements alone
 
 
 def flows(design):
-    """Whether a Briefbogen has a text area its documents' content flows into; else its elements are all there is."""
+    """Whether a template has a text area its document's content flows into; else its elements are all there is."""
     return any(el['type'] == 'body' for el in design['elements'])
 
 
-def slots(design):
-    """A Briefbogen's Textfelder, top to bottom: texts worded on each document set on it (slot_key), the design's own the
-    words they say until then."""
-    return sorted((el for el in design['elements'] if el['type'] == 'text' and el.get('slot')), key=lambda el: (el['y'], el['x']))
-
-
-def slot_key(document, el):
-    """The key of a Textfeld's wording for a document (Text.key): the document's slot in Institution.papers, a dot, the
-    Textfeld's name as a slug, so it holds for the document on any Briefbogen with a Textfeld of that name."""
-    return f'{document}.{slugify(el["slot"])}'
+def template(doc):
+    """A document's template: as the Hochschule keeps it (Layout under the document's key), else ConCampus's standard
+    for its kind (STANDARD)."""
+    record = Layout.objects.filter(key=doc).first()
+    return record.design if record else STANDARD[DOCUMENTS[doc][1]][1]
 
 
 def element(kind, key, x, y, w, h, pages='all', **fields):
@@ -181,16 +176,16 @@ STANDARD = {  # key: (name, design): ConCampus's own Briefbögen, until the Hoch
         # set without a text area (SET): each line where it stands, the sentences Textfelder worded on the Urkunde's page
         element('box', 'bar', 90, 88, 30, 0.9, colour='accent', fill=True, line=0.5),
         text('t', 25, 92, 160, 14, '{dokument_titel}', 30, colour='ink', align='center', weight=700),
-        text('f1', 25, 116, 160, 8, 'Die {hochschule} verleiht', 12, colour='ink', align='center', slot='Verleihung'),
+        text('f1', 25, 116, 160, 8, 'Die {hochschule} verleiht', 12, colour='ink', align='center'),
         text('n', 25, 127, 160, 9, '{person_name}\ngeb. {person_geburtsname}', 16.5, colour='ink', align='center', weight=700, leading=1.2),
-        text('f2', 25, 141, 160, 8, 'geboren am {person_geburtsdatum} in {person_geburtsort},', 12, colour='ink', align='center', slot='Geburt'),
-        text('f3', 25, 152, 160, 14, 'nach bestandener Prüfung im Studiengang {studium_studiengang},\nHauptfach {studium_hauptfach}, den akademischen Grad', 12, colour='ink', align='center', leading=1.4, slot='Studium'),
+        text('f2', 25, 141, 160, 8, 'geboren am {person_geburtsdatum} in {person_geburtsort},', 12, colour='ink', align='center'),
+        text('f3', 25, 152, 160, 14, 'nach bestandener Prüfung im Studiengang {studium_studiengang},\nHauptfach {studium_hauptfach}, den akademischen Grad', 12, colour='ink', align='center', leading=1.4),
         text('g', 25, 171, 160, 9, '{studium_grad}', 16.5, colour='ink', align='center', weight=700),
         text('d', 25, 192, 160, 7, '{hochschule_ort}, {dokument_datum}', 11, align='center'),
         element('box', 'l1', 30, 236, 62, 0.3, colour='ink', fill=True, line=0.5),
         element('box', 'l2', 118, 236, 62, 0.3, colour='ink', fill=True, line=0.5),
-        text('u1', 30, 238, 62, 10, 'Präsidentin oder Präsident', 10, align='center', slot='Unterschrift links'),
-        text('u2', 118, 238, 62, 10, 'Vorsitz Prüfungsausschuss', 10, align='center', slot='Unterschrift rechts'),
+        text('u1', 30, 238, 62, 10, 'Präsidentin oder Präsident', 10, align='center'),
+        text('u2', 118, 238, 62, 10, 'Vorsitz Prüfungsausschuss', 10, align='center'),
     ]}),
 }
 
@@ -386,26 +381,6 @@ def accept(upload):
 
 # ---- designs -------------------------------------------------------------------------------------------------------
 
-def layouts():
-    """Every Briefbogen: {key: (name, design, standard)}; the standard ones first, as the Hochschule keeps them where it does."""
-    own = {layout.key: layout for layout in Layout.objects.all()}
-    found = {key: (own[key].name if key in own else name, own[key].design if key in own else design, True) for key, (name, design) in STANDARD.items()}
-    return found | {key: (layout.name, layout.design, False) for key, layout in own.items() if key not in STANDARD}
-
-
-def chosen(institution=None, found=None):
-    """The Briefbogen of each document: {document: key}; a Bescheid on one of its own also under OWN_LETTER and its text."""
-    papers = (institution or Institution.get()).papers or {}
-    found = found if found is not None else layouts()
-    every = {doc: papers[doc] if papers.get(doc) in found else standard for doc, (_, standard) in DOCUMENTS.items()}
-    return every | {slot: key for slot, key in papers.items() if slot.startswith(OWN_LETTER) and key in found}
-
-
-def letter_paper(chosen, template):
-    """The Briefbogen of a letter from the text `template`: its own, else that of all letters."""
-    return chosen.get(OWN_LETTER + template, chosen['brief'])
-
-
 def number(value, low, high, name):
     try:
         value = float(value)
@@ -454,12 +429,6 @@ def clean(design, letter=False, flowing=False):
             words = str(el.get('text', ''))[:1000]
             if unknown := set(FIELD.findall(words)) - set(FIELDS):
                 raise ValidationError(f'Platzhalter gibt es nicht: {", ".join("{" + u + "}" for u in sorted(unknown))}.')
-            if slot := ' '.join(str(el.get('slot') or '').split())[:40]:  # a Textfeld, worded on each document
-                if not slugify(slot):
-                    raise ValidationError(f'Ein Textfeld braucht einen Namen aus Buchstaben oder Ziffern, nicht „{slot}“.')
-                if slugify(slot) in {slugify(o['slot']) for o in out['elements'] if o.get('slot')}:
-                    raise ValidationError(f'Zwei Textfelder heißen „{slot}“.')
-                clean_el['slot'] = slot
             clean_el |= {
                 'text': words, 'size': number(el.get('size'), 4, 72, 'Schriftgröße'), 'leading': number(el.get('leading', LEADING), 0.8, 3, 'Zeilenabstand'),
                 'font': el.get('font') if el.get('font') in fonts else '', 'colour': colour_of(el.get('colour', 'ink')),
@@ -590,7 +559,7 @@ class Sheet:
         x, top, w, h = el['x'] * mm, HEIGHT - el['y'] * mm, el['w'] * mm, el['h'] * mm
         kind = el['type']
         if kind == 'text':
-            lines = filled(self.meta.get('slots', {}).get(slugify(el['slot']), el['text']) if el.get('slot') else el['text'], found)
+            lines = filled(el['text'], found)
             if not any(line.strip() for line in lines):
                 return
             words = '\n'.join(lines)  # bold over a placeholder of many lines holds for each of them
@@ -604,9 +573,6 @@ class Sheet:
             )
             p = Paragraph(markup, style)
             _, height = p.wrapOn(c, w, HEIGHT)
-            if el.get('slot') and slugify(el['slot']) == slugify(self.meta.get('marked', '')):  # the Textfeld being worded, in a preview
-                c.setFillColor(HexColor(TINT))
-                c.rect(x - 1 * mm, top - height - 1 * mm, w + 2 * mm, height + 2 * mm, stroke=0, fill=1)
             p.drawOn(c, x, top - height)
         elif kind == 'box':
             ink = colour(el['colour'], self.accent)
@@ -1082,25 +1048,18 @@ def meta_of(el, institution, title=''):
     return meta
 
 
-def pdf(page, title='', design=None, marked=''):
-    """The `.document`s of a rendered page as one PDF, each from a new page on its Briefbogen, with its own page
-    numbers; `design`: every one on this one instead, to try it (documents.views.preview); `marked`: the Textfeld of that
-    name on a tint, being worded (documents.views.document_preview)."""
+def pdf(page, title='', design=None):
+    """The `.document`s of a rendered page as one PDF, each from a new page on its template, with its own page numbers;
+    `design`: every one on this one instead, to try it (documents.views.preview)."""
     institution = Institution.get()
     accent, own = institution.accent or '#008a00', own_fonts()
-    found = layouts() if design is None else {}
-    papers = chosen(institution, found) if design is None else {}
     root = lxml_html.document_fromstring(page)
     story, templates = [], []
     for index, el in enumerate(root.find_class('document')):
         kind = classes(el)
-        doc = document_of(el)
-        slot = OWN_LETTER + el.get('data-template', '') if doc in LETTERS else doc  # the document's, in Institution.papers and its Textfelder' keys
-        layout = design or found[letter_paper(papers, el.get('data-template', '')) if doc in LETTERS else papers[doc]][1]
+        layout = design or template(document_of(el))
         look = Look(layout['style'], accent, own)
-        meta = meta_of(el, institution, title) | {
-            'copy': 'copy' in kind, 'marked': marked, 'slots': {t.key.partition('.')[2]: t.body for t in Text.objects.filter(key__startswith=f'{slot}.')} if slots(layout) else {},
-        }
+        meta = meta_of(el, institution, title) | {'copy': 'copy' in kind}
         sheet = Sheet(institution, layout, meta, accent, own)
         meta['sheet'] = sheet
         templates += [

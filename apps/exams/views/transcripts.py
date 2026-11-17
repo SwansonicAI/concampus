@@ -41,7 +41,7 @@ def transcript(request, pk):
         'complete': found['finished'] and (office or copy), 'copy': copy, 'supplement': (office or copy) and study.program.level,
         'issue': office and found['finished'] and study.issued is None and study.status == Study.Status.ENROLLED,
         'still': [item for item in leaving(study) if not item[0].startswith('Zeugnis')] if office and found['finished'] and study.issued is None else [],
-        'verbal': verbal(found['average']) if found['average'] else '', 'sender': texts.block('absender_leistungen'),
+        'verbal': verbal(found['average']) if found['average'] else '',
         'late': late, 'reminded': late and reminded(study), 'issuer': late and Office.holding('decide_results', program=study.program, linked=True),
     }, f'{"Zeugnis" if found["finished"] and (office or copy) else "Leistungsübersicht"} {study.person.name}')
 
@@ -107,7 +107,6 @@ def supplement(request, pk):
     return paper.answer(request, 'exams/supplement.html', found | {
         'copy': not office, 'de': de, 'lang': 'de' if de else 'en',
         'verbal': verbal(found['average'], english=not de) if found['average'] else '', 'grades': GRADES,
-        'awarding': texts.block('ds_hochschule'), 'system': texts.block('ds_hochschulsystem_de' if de else 'ds_hochschulsystem'),
         'distribution': bands, 'reference': reference,
         'dated': found['completed'] if found['finished'] and found['completed'] else found['today'],  # the date of the Zeugnis
     }, f'Diploma Supplement {study.person.name}')

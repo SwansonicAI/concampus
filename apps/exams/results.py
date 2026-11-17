@@ -6,7 +6,6 @@ from django.db.models import Count, F, Max, OuterRef, Subquery, Sum
 from django.urls import reverse
 from django.utils import timezone
 
-from core import texts
 from core.dates import months_before, working
 from core.models import Institution, Message
 from courses.models import Course, Participation
@@ -63,7 +62,7 @@ def achievements(study):
         'covered': coverage(tree, set(study.program.foci()) - {study.focus_id} if study.focus_id else ())[0],
         'completed': last and timezone.localdate(last),  # the Zeugnis is dated by the last result
         'thesis': thesis and thesis.course.title,
-        'honours': None not in (average, honours) and average <= honours, 'today': timezone.localdate(), 'signature': texts.block('unterschrift_zeugnisse'),
+        'honours': None not in (average, honours) and average <= honours, 'today': timezone.localdate(),
     }
 
 

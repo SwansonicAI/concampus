@@ -23,7 +23,6 @@ class Document:
     key: str
     title: str
     texts: tuple  # what is worded on it, its own first
-    paper: str = ''  # its Briefbogen's slot in Institution.papers; none: it is not printed
 
     @property
     def letter(self):
@@ -43,10 +42,10 @@ def documents():
     for key, spec in TEXTS.items():
         if spec.group == BESCHEID:
             texts = (key, *WITHIN.get(key, {}).values(), *FOLLOWING.get(key, ()), *('rechtsbehelf',) * spec.appealable, 'absender_bescheide')
-            found.append(Document('bescheide', key, spec.title, texts, paper.OWN_LETTER + key))
+            found.append(Document('bescheide', key, spec.title, texts))
     for doc, (title, _) in paper.DOCUMENTS.items():
         if doc not in paper.LETTERS:
-            found.append(Document('bescheinigungen', doc, title, tuple(key for key, spec in TEXTS.items() if doc in spec.on), doc))
+            found.append(Document('bescheinigungen', doc, title, tuple(key for key, spec in TEXTS.items() if doc in spec.on)))
     found += [Document('nachrichten', key, spec.title, (key,)) for key, spec in TEXTS.items() if spec.group == NACHRICHT]
     found += [Document('seiten', key, spec.title, (key,)) for key, spec in TEXTS.items() if spec.group == BAUSTEIN and not spec.on]
     return {(d.kind, d.key): d for d in found}

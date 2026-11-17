@@ -28,7 +28,8 @@
   const GRIPS = ['nw', 'ne', 'sw', 'se'].map(c => `<i class="paper-grip" data-corner="${c}"></i>`).join('');
 
   let design = data.design, name = data.name, variant = 'first', picked = null, k = 1;
-  let content = {title: '', html: '', slots: {}};  // the document shown: its title, the rest as HTML, its Textfelder as it words them
+  if (data.compose) design.flow = data.flow;  // the content, written on the page (flow.js), kept and undone with the rest
+  let content = {title: '', html: ''};  // a document not written here, as its text area shows it: its title, the rest as HTML
   let zoom = localStorage.getItem('paper-zoom') || 'width';
   let undos = [], redos = [], was = JSON.stringify([design, name]), typed = null, note = null;  // note: {text, error} over the panel
 
@@ -40,14 +41,19 @@
   const colour = v => COLOURS[v]?.[1] || v;
   const family = key => `'paper-${data.fonts[key] ? key : 'ptsans'}', sans-serif`;  // single quotes: it stands in a style="" attribute
   const uid = () => Math.random().toString(36).slice(2, 8);
-  const named = el => el.slot ? 'Textfeld' : el.type !== 'box' ? NAMES[el.type] : Math.min(el.w, el.h) <= 1 ? 'Linie' : el.fill ? 'Fläche' : 'Rahmen';
-  const slug = s => String(s).normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^\w\s-]/g, '').trim().replace(/[-\s]+/g, '-');  // as Django's slugify
-  const words = el => el.slot ? content.slots?.[slug(el.slot)] ?? el.text : el.text;  // a Textfeld as the document shown words it, else as the design does
+  const named = el => el.type !== 'box' ? NAMES[el.type] : Math.min(el.w, el.h) <= 1 ? 'Linie' : el.fill ? 'Fläche' : 'Rahmen';
+  const words = el => el.text;
   const shown = el => el.pages === 'all' || el.pages === variant;
   const byId = id => design.elements.find(el => el.id === id);
   const nodeOf = id => sheet.querySelector(`.paper-el[data-id="${CSS.escape(id)}"]`);
   const px = pt => pt * PT * S;  // points on paper, pixels on the page as laid out
-  const typing = () => document.activeElement?.matches('input, textarea, select');
+  const typing = () => document.activeElement?.matches('input, textarea, select') || document.activeElement?.isContentEditable;
+  const flowEd = data.compose && window.Flow({  // the content where the Hochschule writes it: in the text area, on the page
+    data: data.compose, get: () => design.flow, editable: data.mayWord, panel,
+    changed: () => { Object.assign(data.values, {dokument_amt: flowEd.office(), dokument_titel: flowEd.title()}); changed('flow'); },
+    activated: () => pick(null),
+  });
+  if (flowEd) Object.assign(data.values, {dokument_amt: flowEd.office(), dokument_titel: flowEd.title()});
 
   // ---- changes: each one an undo step; typing into one field is one step
   function changed(field = null) {
@@ -83,6 +89,7 @@
     was = from.pop();
     [design, name] = JSON.parse(was);
     typed = null;
+    flowEd?.render();
     if (picked && !byId(picked)) picked = null;
     saveShown();
     draw();
@@ -268,6 +275,7 @@
       (first && design.style.marks ? [105, 148.5, 210].map((y, n) => `<i class="paper-mark" style="left:${4 * S}px;top:${y * S}px;width:${(n === 1 ? 6 : 3.5) * S}px"></i>`).join('') : '');
     sheet.innerHTML = `<div class="paper-page" style="width:${W * S}px;height:${H * S}px;transform:scale(${k / S});--fit:${k / S}">` + guides +
       design.elements.filter(shown).map(element).join('') + '<i class="paper-guide v" hidden></i><i class="paper-guide h" hidden></i><span class="paper-size" hidden></span></div>';
+    sheet.querySelector('[data-flow-host]')?.replaceWith(flowEd.node);  // the same, as it was: the cursor stays where it is
     marked();
   }
   const place = el => `left:${el.x * S}px;top:${el.y * S}px;width:${el.w * S}px;height:${el.h * S}px`;
@@ -301,7 +309,10 @@
       const first = design.elements.find(e => e.type === 'body' && e.pages !== 'later');
       const title = `${st.bar ? `<i class="paper-bar" style="background:${data.accent}"></i>` : ''}<div class="paper-title" style="font-family:${family(st.heading)};font-size:${px(st.title)}px">${esc(content.title)}</div>`;
       const rest = variant === 'later' && first ? ` style="margin-top:-${first.h * S}px"` : '';
-      inner = `<span class="paper-label">Textbereich</span><div class="paper-flow${st.middle && variant === 'first' ? ' middle' : ''}${st.align === 'center' ? ' centred' : ''}" style="text-align:${st.align};font-family:${family(st.font)};font-size:${px(st.size)}px;--pt:${px(1)}px"><div${rest}>${title}${content.html}</div></div>`;
+      const look = `text-align:${st.align};font-family:${family(st.font)};font-size:${px(st.size)}px;--pt:${px(1)}px;--heading:${family(st.heading)};--title:${px(st.title)}px`;
+      inner = flowEd  // written here: on the first page to write in, on the following ones as it goes on
+        ? `<span class="paper-label">Inhalt</span><div class="paper-flow live${st.align === 'center' ? ' centred' : ''}" style="${look}">${variant === 'first' ? '<div data-flow-host></div>' : `<div class="flow"${rest}>${flowEd.html()}</div>`}</div>`
+        : `<span class="paper-label">Textbereich</span><div class="paper-flow${st.middle && variant === 'first' ? ' middle' : ''}${st.align === 'center' ? ' centred' : ''}" style="${look}"><div${rest}>${title}${content.html}</div></div>`;
     }
     const kind = `paper-el paper-${el.type}${el.type === 'box' && !el.fill ? ' frame' : ''}${el.id === picked ? ' on' : ''}${el.locked ? ' locked' : ''}`;
     return `<div class="${kind}" data-id="${esc(el.id)}" data-name="${named(el)}" style="${css}">${inner}${el.id === picked && !el.locked ? GRIPS : ''}</div>`;
@@ -309,6 +320,7 @@
 
   function pick(id) {
     if (id !== picked) panel.scrollTop = 0;  // what is picked anew shows from its top
+    if (id && flowEd) flowEd.active = false;
     picked = id;
     sheet.querySelectorAll('.paper-el').forEach(node => {
       const on = node.dataset.id === id;
@@ -352,7 +364,7 @@
     Object.assign(badge.style, {left: `${el.x * S}px`, top: `${(el.y + el.h) * S}px`});
   }
   sheet.addEventListener('pointerdown', e => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || e.target.closest('.flow') || !data.mayDesign) return;  // in the content the cursor goes where it is put; the rest is for who designs
     const node = e.target.closest('.paper-el');
     sheet.focus({preventScroll: true});
     if (!node) return picked && pick(null);
@@ -451,7 +463,6 @@
   // ---- adding, doubling, removing, layering
   const NEW = {
     text: () => ({type: 'text', w: 80, h: 8, text: 'Neuer Text', size: 10, leading: LEADING, colour: 'ink', align: 'left', font: '', weight: 400, italic: false, underline: false, caps: false}),
-    slot: () => ({...NEW.text(), slot: fresh('Textfeld'), text: 'Was hier steht, formuliert jedes Dokument selbst'}),
     wordmark: () => ({type: 'wordmark', w: 100, h: 17, size: 15, align: 'left'}),
     picture: () => ({type: 'picture', w: 40, h: 40}),
     box: () => ({type: 'box', w: 60, h: 30, colour: 'accent', fill: true, line: 0.5}),
@@ -459,11 +470,6 @@
     address: () => ({type: 'address', x: 25, y: 63.5, w: 80, h: 26.5, size: 10, pages: 'first'}),
     info: () => ({type: 'info', x: 125, y: 47, w: 65, h: 40, size: 8.5, pages: 'first'}),
   };
-  function fresh(name) {  // a Textfeld's name no other has
-    let n = 1;
-    while (design.elements.some(el => el.slot && slug(el.slot) === slug(`${name} ${n}`))) n++;
-    return `${name} ${n}`;
-  }
   function add(kind, extra = {}) {
     const el = {id: uid(), x: 25, pages: variant, ...NEW[kind](), ...extra};
     if (el.y == null) {  // in the middle of what of the page shows
@@ -476,9 +482,8 @@
     draw();
     pick(el.id);
     if (kind === 'text') panel.querySelector('textarea')?.select();
-    if (kind === 'slot') panel.querySelector('input[data-key="slot"]')?.select();
   }
-  root.querySelector('.paper-add').addEventListener('click', e => {
+  root.querySelector('.paper-add')?.addEventListener('click', e => {
     const kind = e.target.closest('[data-add]')?.dataset.add;
     if (!kind) return;
     if (kind !== 'picture') return add(kind);
@@ -677,16 +682,14 @@
 
   function inspect() {
     const el = picked && byId(picked), open = new Set([...panel.querySelectorAll('details[open] > summary')].map(s => s.firstChild.textContent));
-    panel.innerHTML = (note ? `<p class="flash${note.error ? ' error' : ''}">${esc(note.text)}</p>` : '') + (el ? elementPanel(el) : layoutPanel());
+    const writing = flowEd && data.mayWord && (flowEd.active || !data.mayDesign);  // the rail for the content while it is written, and for whoever only writes it
+    panel.innerHTML = (note ? `<p class="flash${note.error ? ' error' : ''}">${esc(note.text)}</p>` : '') + (writing ? flowEd.panel() : el ? elementPanel(el) : layoutPanel());
     panel.querySelectorAll('details > summary').forEach(s => { if (open.has(s.firstChild.textContent)) s.parentElement.open = true; });  // what was open stays so
   }
   function elementPanel(el) {
-    let html = `<p class="paper-crumb"><button type="button" class="link" data-act="none"><i class="arrow left"></i> Briefbogen</button></p><h3>${named(el)}</h3>`;
+    let html = `<p class="paper-crumb"><button type="button" class="link" data-act="none"><i class="arrow left"></i> Vorlage</button></p><h3>${named(el)}</h3>`;
     if (el.type === 'text') {
-      const own = el.slot && content.slots?.[slug(el.slot)];
-      html += (el.slot ? field('Name', `<input data-key="slot" value="${esc(el.slot)}" maxlength="40">`) +
-        `<p class="muted paper-hint"><small>Jedes Dokument auf diesem Briefbogen formuliert es unter Dokumente selbst; hier steht, was gilt, bis es das tut.${own ? ` Gezeigt, „${esc(content.title)}“: „${esc(own)}“.` : ''}</small></p>` : '') +
-        field(el.slot ? 'Wortlaut, bis ein Dokument seinen hat' : 'Text', `<textarea data-key="text" rows="4" spellcheck="false">${esc(el.text)}</textarea>`) +
+      html += field('Text', `<textarea data-key="text" rows="4" spellcheck="false">${esc(el.text)}</textarea>`) +
         placeholders() +
         '<p class="muted paper-hint"><small>Einsetzen, wo die Schreibmarke steht · **fett** · eine Zeile ohne Werte entfällt</small></p>' +
         section('Schrift', field('Schrift', fontPick('font', el.font || '', true)) +
@@ -745,9 +748,7 @@
     const list = design.elements.filter(shown).reverse().map(el => `<li data-hint="${esc(el.id)}"><button type="button" data-pick="${esc(el.id)}">` +
       `<small>${named(el)}</small><span>${esc(summary(el))}</span></button>` +
       `<button type="button" class="paper-lock${el.locked ? ' on' : ''}" data-lock="${esc(el.id)}" title="${el.locked ? 'Festgehalten: lösen' : 'Festhalten: nicht verschieben, Klicks gehen hindurch'}" aria-pressed="${!!el.locked}">${LOCK}</button></li>`).join('');
-    const used = data.used.length ? `${esc(data.used[0])}${data.used.length > 1 ? ` und ${data.used.length - 1} weitere` : ''}` : 'kein Dokument';
-    return `<h3>Briefbogen</h3>` + field('Name', `<input data-key="name" value="${esc(name)}" maxlength="80">`) +
-      `<p class="paper-used"><small title="${esc(data.used.join(', '))}">Gilt für ${used}</small></p>` +
+    return `<h3>Vorlage</h3>` + (flowEd ? '<p class="muted paper-hint"><small>Den Inhalt schreiben Sie direkt auf die Seite.</small></p>' : '') +
       section('Text des Dokuments', `<div class="row">${field('Schrift', fontPick('style.font', st.font))}${field('Überschriften', fontPick('style.heading', st.heading))}</div>` +
         (flowing() ? `<div class="row">${field('Größe (pt)', number('style.size', st.size, 0.5, 7, 16), true)}${field('Titel (pt)', number('style.title', st.title, 1, 10, 48), true)}</div>` : '') +
         `<div class="paper-checks">${flowCheck()}${flowing() ? check('style.bar', 'Balken über dem Titel', st.bar) + check('style.center', 'Zentriert', st.align === 'center') +
@@ -755,7 +756,7 @@
       (variant === 'pdf' ? '' : section(variant === 'first' ? 'Auf der ersten Seite' : 'Auf den Folgeseiten', `<ul class="paper-list">${list}</ul>`));
   }
   // With a text area the document's content flows into it, over as many pages as it takes; without, the page holds only what
-  // its elements say, the content in placeholders and Textfelder: an Urkunde. Kept where a document on it needs to flow.
+  // its elements say, the content in placeholders: an Urkunde. Kept where a document on it needs to flow.
   const flowing = () => design.elements.some(el => el.type === 'body');  // what only flowing content uses shows only then
   function flowCheck() {
     const on = flowing(), held = on && data.flowing;
@@ -846,9 +847,10 @@
     draw();
     inspect();
   });
-  sample.addEventListener('change', () => { load(); if (variant === 'pdf') preview(); });
-  async function load() {  // the document chosen to show, into the text area (views.paper_content)
-    const response = await fetch(`${data.content}?dokument=${encodeURIComponent(sample.value)}`);
+  sample?.addEventListener('change', () => { load(); if (variant === 'pdf') preview(); });
+  async function load() {  // a document not written here, into the text area as it is (views.paper_content)
+    if (flowEd) return;
+    const response = await fetch(`${data.content}${sample ? `?dokument=${encodeURIComponent(sample.value)}` : ''}`);
     if (!response.ok) return;
     content = await response.json();
     Object.assign(data.values, content.values);  // the page's own values, its title and office, as this document has them

@@ -11,6 +11,7 @@ import re
 import time
 import uuid
 from collections import Counter, defaultdict
+from copy import deepcopy
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from functools import cached_property
@@ -36,9 +37,9 @@ from core.text import handle, untimed
 from admissions.auditions import invite
 from admissions.views.board import DECISIONS, grounds
 from core import destatis, history, keys, texts
-from core.models import Change, Entry, Holiday, Institute, Institution, Key, Membership, Message, Office, Person, Rating, Reveal, Term, Text
-from documents.compose import VORSCHLAG
-from documents.models import Content
+from core.models import Change, Entry, Holiday, Institute, Institution, Key, Layout, Membership, Message, Office, Person, Rating, Reveal, Term, Text
+from core.paper import DOCUMENTS as PAPERS, STANDARD
+from documents.compose import VORSCHLAG, runs
 from courses import panel as sheets
 from courses.models import Appointment, Area, Assignment, Course, Ensemble, Format, Group, Obligation, Participation, Post, Rate, Recusal, Reduction, ReductionGround, Score, Signup
 from courses.panel import mean, rounding
@@ -475,13 +476,30 @@ DOCUMENTS = [  # key, name, condition, settings: what a complete application hol
     ('notice', 'Bescheid', 'never', {}),
     ('other', 'Sonstiges', 'never', {}),
 ]
+def own_templates():
+    """The HfM's own templates (core.paper.template): its student office issues the Bescheinigungen, its president and
+    the dean sign the Urkunde (RPSO 2026 § 23 Abs. 1)."""
+    offices = {'immatrikulation': 'Akademische und Studentische Angelegenheiten', 'studienzeiten': 'Akademische und Studentische Angelegenheiten',
+               'exmatrikulation': 'Akademische und Studentische Angelegenheiten', 'leistungen': 'Prüfungsamt', 'notenliste': 'Prüfungsamt'}
+    signing = [runs('Die Präsidentin'), runs('Die Dekanin der Fakultät')]  # RPSO 2026 § 23 Abs. 1: the head of the Hochschule and the dean
+    found = []
+    for doc in (*offices, 'supplement', 'supplement_de'):
+        flow = deepcopy(VORSCHLAG[doc]) | ({'office': runs(offices[doc])} if doc in offices else {})
+        for block in flow['blocks']:
+            if block['type'] == 'signatures' and doc != 'notenliste':
+                block['names'] = signing
+        found.append(Layout(key=doc, name=PAPERS[doc][0], design=deepcopy(STANDARD['bescheinigung'][1]) | {'flow': flow}))
+    urkunde = deepcopy(STANDARD['urkunde'][1])
+    signed = {'u1': 'Die Präsidentin', 'u2': 'Die Dekanin der Fakultät'}
+    for el in urkunde['elements']:
+        if el['id'] in signed:
+            el['text'] = signed[el['id']]
+    return found + [Layout(key='urkunde', name='Urkunde', design=urkunde)]
+
+
 TEXTS = {  # where the HfM words things its own way (core.texts has the defaults)
     'absender_bescheide': 'Akademische und Studentische Angelegenheiten',
-    'absender_leistungen': 'Prüfungsamt',
-    'unterschrift_zeugnisse': 'Die Präsidentin\nDie Dekanin der Fakultät',  # RPSO 2026 § 23 Abs. 1: the head of the Hochschule and the dean
     'unterschrift_urkunden': 'Die Präsidentin\nDie Dekanin der Fakultät',
-    'urkunde.unterschrift-links': 'Die Präsidentin',  # the Urkunde's Textfelder (core.paper.slot_key)
-    'urkunde.unterschrift-rechts': 'Die Dekanin der Fakultät',
     'einladung': (
         'Ihr Termin: {termin} Uhr, {raum}.\n\nBitte erscheinen Sie 30 Minuten vorher; Einspielräume stehen bereit. Bringen Sie einen '
         'Lichtbildausweis mit, und wenn Sie mit Korrepetition spielen, die Noten für die Begleitung.'
@@ -556,7 +574,10 @@ OFFICES = {  # the HfM's offices and what each may do (core.access.CAPABILITIES)
         'word_texts',  # the Bescheide it issues, in its own words
     ],
     'Hochschularchiv': ['assess_files'],
-    'Prüfungsamt': ['view_students', 'view_files', 'manage_exams', 'decide_results', 'view_curriculum', 'book_any_room', 'view_bookings'],
+    'Prüfungsamt': [
+        'view_students', 'view_files', 'manage_exams', 'decide_results', 'view_curriculum', 'book_any_room', 'view_bookings',
+        'word_texts',  # its Zeugnisse, Notenlisten and Diploma Supplements, in its own words
+    ],
     'Dekanat': ['view_teaching_load', 'manage_teaching_load', 'grant_assignments', 'publish_term', 'view_curriculum', 'view_statistics'],  # the dean approves; the Referat does the work
     'Personalabteilung': ['manage_staff', 'view_teaching_load'],  # takes teachers on and enters their Lehrverpflichtung; pay stays in MACH
     'Dekanatsreferat': ['manage_courses', 'plan_teaching', 'view_teaching_load', 'roll_over', 'view_curriculum', 'edit_curriculum', 'book_any_room', 'view_bookings'],
@@ -1054,9 +1075,7 @@ class Command(BaseCommand):
             audition_fee=Decimal('50'),
         )
         Text.objects.bulk_create(Text(key=key, subject=texts.TEXTS[key].subject if key in texts.TEXTS else '', body=body) for key, body in TEXTS.items())
-        Content.objects.bulk_create(  # the student office issues the Bescheinigungen: the Vorschlag, from it
-            Content(key=doc, content=VORSCHLAG[doc] | {'office': 'Akademische und Studentische Angelegenheiten'}) for doc in ('immatrikulation', 'studienzeiten', 'exmatrikulation')
-        )
+        Layout.objects.bulk_create(own_templates())
         RoomFunction.objects.bulk_create(RoomFunction(key=key, name=name, central=central, order=n) for n, (key, name, central) in enumerate(FUNCTIONS))
         BookingCategory.objects.bulk_create(
             BookingCategory(key=key, name=name, tone=tone, order=n, **settings) for n, (key, name, tone, settings) in enumerate(CATEGORIES)

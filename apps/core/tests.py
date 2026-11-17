@@ -454,7 +454,7 @@ class FreshInstallTest(Empty):
         '/lehre/meine/', '/lehre/stundenplan/', '/lehre/deputat/', '/lehre/semesterwechsel/', '/lehre/neu/', '/pruefungen/', '/pruefungen/neu/',
         '/pruefungen/anerkennung/', '/aufnahme/bewerbungen/', '/aufnahme/kommissionen/', '/aufnahme/meine/', '/aufnahme/bewerben/',
         '/raeume/', '/raeume/?von=10:00&personen=4', '/raeume/buchen/', '/raeume/meine/', '/raeume/veranstaltungen/', '/einstellungen/',
-        '/dokumente/bescheide/', '/dokumente/bescheinigungen/urkunde/', '/dokumente/briefboegen/', '/einstellungen/semester/', '/einstellungen/semester/neu/', '/einstellungen/eignungspruefungen/neu/',
+        '/dokumente/bescheide/', '/dokumente/bescheinigungen/urkunde/', '/dokumente/vorlagen/brief/', '/dokumente/bescheinigungen/leistungen/','/einstellungen/semester/', '/einstellungen/semester/neu/', '/einstellungen/eignungspruefungen/neu/',
         '/auswertungen/', '/auswertungen/abfrage/', '/auswertungen/abfrage/?was=bewerbungen&nach=studienjahr', '/auswertungen/datensaetze/',
     ]
 
