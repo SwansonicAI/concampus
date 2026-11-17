@@ -103,6 +103,16 @@ def place(course):
     return '', 'mit der Veröffentlichung des Semesters' if course.term.planning else 'in wenigen Minuten'
 
 
+def withdraw(course, call=call):
+    """A course deleted in ConCampus (views.catalogue.remove): its Moodle course hidden and whom ConCampus enrolled taken
+    out, so that nobody finds it there, or the one made again in its place twice; what is in it stays for Moodle's admins."""
+    if not (settings.MOODLE['url'] and (mirror := MoodleCourse.objects.filter(course=course).first())):
+        return
+    call('core_course_update_courses', courses=[{'id': mirror.moodle_id, 'visible': 0}])
+    if mirror.people:
+        call('enrol_manual_unenrol_users', enrolments=[{'userid': user, 'courseid': mirror.moodle_id} for user in mirror.people])
+
+
 def summary(course, slot):
     """A course's summary in Moodle, laid out as the Kursinfo teachers write there by hand: who teaches, when and where,
     the places, the modules it counts for, the registration, then its description."""

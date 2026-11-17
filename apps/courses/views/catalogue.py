@@ -304,6 +304,11 @@ def remove(request, pk):
     if course.participations.exists() or course.signups.exists() or course.ensembles.exists():
         messages.error(request, 'Hier hat sich schon jemand angemeldet: bitte absagen statt löschen, damit alle davon erfahren.')
         return redirect(course)
+    try:
+        moodle.withdraw(course)
+    except (moodle.MoodleError, OSError):  # kept until Moodle has it too, never left there on its own
+        messages.error(request, 'Moodle ist gerade nicht zu erreichen. Bitte gleich noch einmal löschen.')
+        return redirect(course)
     course.delete()
     messages.success(request, f'„{course.title}“ gelöscht, mit den Terminen.')
     return redirect(f"{reverse('courses:catalogue')}?semester={course.term_id}")

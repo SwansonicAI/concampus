@@ -95,6 +95,14 @@ foreach (['enrol/manual:enrol', 'enrol/manual:unenrol', 'enrol/manual:manage'] a
     unassign_capability($capability, $teacher, $system->id);
 }
 set_config('defaultenrol', 0, 'enrol_self');
+// Whoever opens a course they are not in is told where that changes, not Moodle's „You cannot enrol yourself“.
+foreach ([
+    'en' => 'You are not in this course (yet). ConCampus enrols its participants and teachers: whoever signs up for the course there, or teaches it, is in here a minute or two later.',
+    'de' => 'Sie sind (noch) nicht in diesem Kurs. Teilnehmende und Lehrende trägt ConCampus ein: Wer sich dort zur Lehrveranstaltung anmeldet oder sie unterrichtet, ist hier ein bis zwei Minuten später dabei.',
+] as $lang => $text) {
+    check_dir_exists("$CFG->langlocalroot/{$lang}_local");
+    file_put_contents("$CFG->langlocalroot/{$lang}_local/enrol.php", "<?php\n\$string['notenrollable'] = " . var_export($text, true) . ";\n");
+}
 
 $functions = ['core_course_get_categories', 'core_course_create_categories', 'core_course_get_courses_by_field',
     'core_course_create_courses', 'core_course_update_courses', 'core_user_get_users_by_field', 'core_user_create_users',

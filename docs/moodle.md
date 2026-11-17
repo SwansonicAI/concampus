@@ -12,7 +12,8 @@ changed. Off without `MOODLE_URL` and `MOODLE_TOKEN`. ConCampus is the record, M
   finds it again should its own link be lost. Its summary is laid out as HfM's „Kursinfo“, which teachers there write
   by hand: who teaches, the weekly date and room, the Lehrform, the places, the modules it counts for, the
   Anmeldeschluss, a link to its page in ConCampus, then the description. A course called off or unticked is hidden, its
-  people kept. ConCampus keeps a checksum of what it last sent (`MoodleCourse.state`), so that each minute only what
+  people kept; one deleted in ConCampus (only while nobody is in it) is hidden at once and whom ConCampus enrolled taken
+  out, its content left to Moodle's admins. ConCampus keeps a checksum of what it last sent (`MoodleCourse.state`), so that each minute only what
   changed goes.
 - **Material**: a course taken over in the Semesterwechsel gets, once, when its Moodle course is made, the material of
   the one it was taken over from (`core_course_import_course`, as Moodle's „Import“: sections, activities and files,
@@ -67,7 +68,9 @@ code is right, from the visitor's address, which waits after too many wrong as a
 it keeps the ticket ConCampus gives for the code a month, until the code changes. ConCampus's own sign-in stays as it
 is, so one browser can be an office in ConCampus and a student in Moodle. Signing out of Moodle goes back to the choice; the admin signs in at `/login/index.php?noredirect=1`.
 ConCampus's account `campus-sync` is a site administrator; in production a role with only the functions above.
-Teachers there can neither enrol nor remove, and new courses have no self-enrolment (`setup.php`). A course's page in
+Teachers there can neither enrol nor remove, and new courses have no self-enrolment (`setup.php`); whoever opens a
+course they are not in reads, instead of Moodle's „You cannot enrol yourself in this course“, that ConCampus enrols them
+a minute or two after they sign up there. A course's page in
 ConCampus, „Meine Lehre“ and „Meine Lehrveranstaltungen“ link to its Moodle course.
 
 Set up once, on the server:
