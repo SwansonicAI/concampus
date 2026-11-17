@@ -2,8 +2,8 @@
 {% load composed %}
 {% block title %}Exmatrikulationsbescheinigung{% endblock %}
 {% block content %}
-<div class="document" data-paper="exmatrikulation" data-person="{{ study.person.legal_name }}" data-matrikel="{{ study.person.matriculation|default:'' }}">
+<div class="document" data-paper="exmatrikulationsbescheinigung"data-person="{{ study.person.legal_name }}" data-matrikel="{{ study.person.matriculation|default:'' }}">
   <p class="no-print actions"><a class="btn" href="{% querystring pdf=1 %}" target="_blank">PDF</a>{% if study.exit_reason and study.exit_reason != '1' %}<a class="btn ghost" href="?{% if not reason %}grund=1{% endif %}">{% if reason %}Ohne Grund{% else %}Mit Grund{% endif %}</a>{% endif %}<a class="btn ghost" href="?xml">Als XHochschule-Datei</a><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
-  {% composed 'exmatrikulation' %}
+  {% composed 'exmatrikulationsbescheinigung' %}
 </div>
 {% endblock %}

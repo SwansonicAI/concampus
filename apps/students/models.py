@@ -157,17 +157,30 @@ class Study(Tracked, models.Model):
         """The status as one reads it: a study ended by an Exmatrikulation says so, one left for another subject does not."""
         return 'Exmatrikuliert' if self.status == self.Status.LEFT and self.exit_reason else self.get_status_display()
 
-    def wording(self, key, *after, **values):
-        """(subject, body) of a text about this study, its placeholders filled in, the text blocks `after` following (core.texts)."""
-        return texts.render(key, *after, **{
+    def facts(self, **values):
+        """What every text about this study may say of it."""
+        return {
             'vorname': self.person.first_name, 'nachname': self.person.last_name, 'studiengang': self.program.title,
             'hauptfach': self.subject, 'semester': self.start_term, 'matrikelnummer': self.person.matriculation or '', **values,
-        })
+        }
+
+    def bescheid(self, key, after=(), **values):
+        """A Bescheid about this study, as its document has it for its Studiengang (documents.catalogue.bescheid): (document,
+        subject, body, content); the paragraphs that follow only where they apply, where `after` names them."""
+        from documents.catalogue import bescheid
+
+        return bescheid(key, self.facts(**values), after, self.program)
+
+    def wording(self, key, after=(), **values):
+        """(subject, body) of a Bescheid or a message about this study, to read before it is sent."""
+        if texts.TEXTS[key].group == texts.BESCHEID:
+            return self.bescheid(key, after, **values)[1:3]
+        return texts.render(key, **self.facts(**values))
 
     def notify(self, key, link='', after=(), **values):
         """Issue a Bescheid: it goes to the Postfach and stays in the student file as the PDF it was issued as."""
-        subject, body = self.wording(key, *after, **values)
-        message = Message.send(self.person, subject, body, link, sender=texts.block('absender_bescheide'), template=key)
+        template, subject, body, content = self.bescheid(key, after, **values)
+        message = Message.send(self.person, subject, body, link, sender=texts.block('absender_bescheide'), template=template, content=content)
         Document.objects.create(
             person=self.person, study=self, kind=DocumentType.system('notice'), title=subject, message=message, template=key,
             file=ContentFile(paper.letter(message), 'bescheid.pdf'),

@@ -220,11 +220,12 @@ def blank(request, pk, kind):
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject'), pk=pk, person=request.user)
     kind = get_object_or_404(DocumentType.objects.exclude(template=''), key=kind)
     person = study.person
-    body = kind.template.format_map(defaultdict(str, {
+    values = {
         'name': person.legal_name, 'geburtsdatum': date_format(person.birth_date, 'j. F Y') if person.birth_date else '________',
         'studiengang': study.program.title, 'hauptfach': study.subject, 'hochschule': Institution.get().name,
-    }))
-    return paper.answer(request, 'admissions/blank.html', {'kind': kind, 'body': body}, f'{kind.name} {person.name}')
+    }
+    body = kind.template.format_map(defaultdict(str, values))
+    return paper.answer(request, 'admissions/blank.html', {'kind': kind, 'body': body, 'values': values, 'study': study}, f'{kind.name} {person.name}')
 
 
 def application(request, pk):

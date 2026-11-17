@@ -2,8 +2,8 @@
 {% load composed %}
 {% block title %}Immatrikulationsbescheinigung{% if bafoeg %} nach § 9 BAföG{% endif %}{% endblock %}
 {% block content %}
-<div class="document" data-paper="immatrikulation" data-person="{{ study.person.legal_name }}" data-matrikel="{{ study.person.matriculation|default:'' }}">
+<div class="document" data-paper="immatrikulationsbescheinigung"data-person="{{ study.person.legal_name }}" data-matrikel="{{ study.person.matriculation|default:'' }}">
   <p class="no-print actions"><a class="btn" href="{% querystring pdf=1 %}" target="_blank">PDF</a><a class="btn ghost" href="{{ request.get_full_path }}{% if request.GET %}&amp;{% else %}?{% endif %}xml">Als XHochschule-Datei</a><a class="more" href="{{ study.get_absolute_url }}">Zur Studienakte</a></p>
-  {% composed 'immatrikulation' %}
+  {% composed 'immatrikulationsbescheinigung' %}
 </div>
 {% endblock %}

@@ -921,16 +921,22 @@ kbd { padding: 0 5px; border: 1px solid var(--line); border-radius: var(--radius
 .key[aria-pressed="false"]::before { background: var(--line); }
 @media (max-width: 1100px) { .charts, .sections { grid-template-columns: 1fr; } }
 
-/* Dokumente (documents/): a text worded beside the frame that shows it as it arrives, staying in view */
-.wording { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 3fr); gap: 40px; align-items: start; }
-.worded-fields { display: grid; gap: 14px; }
-.worded-fields > div:not(.chips) { display: grid; gap: 6px; }
-.worded-fields textarea { min-height: 0; }  /* as many lines as the text has (views.text_forms), not a form's least */
-.worded-fields .chips { display: none; margin-top: -4px; }
-.worded:focus-within .worded-fields .chips { display: flex; }  /* the placeholders under the text being worded only */
-details.worded { padding-top: 14px; border-top: 1px solid var(--line); }
-details.worded > summary { cursor: pointer; }
-details.worded[open] > summary { margin-bottom: 14px; }
+/* Dokumente (documents/): a new document as another, in a panel under its button */
+.new-paper { position: relative; margin-bottom: 24px; }
+.new-paper summary { list-style: none; color: #fff; }
+.new-paper .actions { margin: 0; }
+.new-paper summary::-webkit-details-marker { display: none; }
+.new-paper form { position: absolute; right: 0; z-index: 5; display: grid; gap: 10px; width: 320px; margin-top: 8px; padding: 16px; border: 1px solid var(--line); background: #fff; }
+.new-paper label { display: grid; gap: 4px; font-weight: 600; }
+/* a message or a page's text written as it arrives (words.js), what can be put in beside it */
+.wording { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 40px; align-items: start; }
+.words-sheet { padding: 28px 32px; border: 1px solid var(--line); background: #fff; }
+.words-sheet:focus-within { border-color: var(--accent); }
+.words-subject { margin: 0 0 16px; }
+.words-body { min-height: 96px; line-height: 1.6; }
+.words-sheet [data-words]:focus { outline: none; }
+.words-rail { position: sticky; top: 16px; display: grid; gap: 8px; }
+.words-rail h4 { margin: 0; }
 .worded-own { margin: 0; font-size: 14px; }
 button.chip { padding: 2px 8px; background: #fff; font: inherit; font-size: 13px; cursor: pointer; }
 button.chip:hover { border-color: var(--accent); color: var(--accent); }
@@ -1056,59 +1062,89 @@ body:has(#paper) > .foot { display: none; }
 .paper-label { position: absolute; top: 0; right: 0; padding: 0 calc(6 * var(--px)); background: #b5b5b5; color: #fff; font: 600 calc(11 * var(--px)) / calc(18 * var(--px)) system-ui, sans-serif; }
 .paper-el.on .paper-label { background: var(--accent); }
 .paper-flow { height: 100%; overflow: hidden; opacity: 0.35; line-height: 1.45; }
-/* the content written on the page (flow.js): as it prints, what ConCampus fills in a tinted pill, the block written in
-   marked; it goes on below the text area where it is longer, to write in as it goes on */
+/* the content written on the page (flow.js): paragraph by paragraph in their styles, as core/paper.py sets them, what
+   ConCampus fills in a tinted pill; one shown only where a value is given says so in the margin. It goes on below the
+   text area where it is longer, to write in as it goes on */
 .paper-flow.live { height: auto; min-height: 100%; overflow: visible; opacity: 1; }
-.paper-flow.live .flow { min-height: 100%; user-select: text; cursor: text; }
+.paper-flow.live .flow { min-height: 100%; outline: none; user-select: text; cursor: text; }
 .paper-sheet:has(.paper-flow.live) { overflow: visible; }  /* content longer than the page goes on below it, still to write in */
 .paper-el:has(> .paper-flow.live)::after { content: none; }  /* nothing over the content: a click there puts the cursor in it */
-.paper-flow.live h1 { margin: 0 0 0.5em; font-family: var(--heading); font-size: var(--title); font-weight: 700; line-height: 1.2; }
-.paper-flow.live h2 { font-family: var(--heading); font-weight: 700; }
-.flow-block { position: relative; margin: 0 0 0.7em; border-radius: calc(2 * var(--px)); }
-.flow-block:hover { box-shadow: 0 0 0 calc(4 * var(--px)) #f3f3f3; background: #f3f3f3; }
-.flow-block.on { box-shadow: 0 0 0 calc(4 * var(--px)) var(--accent-pale); background: var(--accent-pale); }
-.flow-block.off { opacity: 0.45; }  /* shown only where its field is given, here not */
-.flow-block :is(th, td, .signatures span).off { opacity: 0.3; }  /* a column or signature whose fields are empty here: left out */
-.flow-block :is(h1, h2, dl, table, .sign, .signatures) { margin-bottom: 0; }
-.flow [contenteditable] { outline: none; cursor: text; min-height: 1.2em; }
-.flow-text.small { color: #5f5f5f; font-size: 0.85em; }
-.flow-qr::before { content: ""; float: right; width: 3.2em; height: 3.2em; margin-left: 1em; background: repeating-conic-gradient(#000 0 25%, #fff 0 50%) 0 0 / 0.8em 0.8em; opacity: 0.6; }  /* where the QR code stands */
+.paper-flow.middle .flow { display: flex; flex-direction: column; justify-content: center; }
+.flow-p { position: relative; margin: 0 0 0.7em; white-space: pre-wrap; }
+.flow-p.s-title { width: fit-content; min-width: calc(85 * var(--pt)); margin: 0 0 0.5em; font-family: var(--heading); font-size: var(--title); font-weight: 700; line-height: 1.2; }
+.barred .flow-p.s-title { padding-top: calc(9 * var(--pt)); background: linear-gradient(var(--accent), var(--accent)) top left / 100% calc(2.6 * var(--pt)) no-repeat; }  /* the bar over the title, as wide as it (core.paper.Bar) */
+.centred .flow-p.s-title { margin-inline: auto; }
+.flow-p.s-heading { margin: 1.4em 0 0.6em; font-family: var(--heading); font-size: 1.15em; font-weight: 700; }
+.flow-p.s-large { margin: 0.4em 0 0.7em; font-family: var(--heading); font-size: 1.6em; font-weight: 700; line-height: 1.3; }
+.flow-p:is(.s-small, .s-qr) { color: #5f5f5f; font-size: 0.8em; line-height: 1.4; }
+.flow-p.s-qr::after { content: ""; float: right; width: 4em; height: 4em; margin: -1em 0 0 1em; background: repeating-conic-gradient(#000 0 25%, #fff 0 50%) 0 0 / 1em 1em; opacity: 0.5; }  /* where the QR code stands */
+.flow-p.s-fact { display: grid; grid-template-columns: min(calc(136 * var(--pt)), 32%) 1fr; gap: 0 calc(8 * var(--pt)); margin: 0; padding: 0.15em 0; }  /* the term 48 mm at most, as core.paper.facts */
+.flow-p.s-fact .flow-cell:first-child { color: #5f5f5f; font-size: 0.9em; }
+.flow-p.s-fact + .flow-p:not(.s-fact), .flow-p:not(.s-fact) + .flow-p.s-fact { margin-top: 0.6em; }
+.flow-p.s-sign { display: flex; justify-content: space-between; gap: 2em; margin-top: 2.6em; color: #5f5f5f; font-size: 0.9em; }
+.centred .flow-p.s-sign { justify-content: center; color: inherit; }
+.flow-p.s-signatures { display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; gap: 3em; margin-top: 5em; font-size: 0.9em; text-align: center; }
+.flow-p.s-signatures .flow-cell { padding-top: 0.4em; border-top: 1px solid currentColor; }
+.flow-cell { min-width: 1em; }
+.flow-p.off, .flow-table.off { opacity: 0.45; }  /* shown only where its value is given, here not */
+.flow-cell.off, .flow-table :is(th, td).off { opacity: 0.3; }  /* a column or signature whose values are empty here: left out */
+:is(.flow-p, .flow-table)[data-if]::before { content: attr(data-if); position: absolute; top: 0.25em; right: 100%; width: calc(64 * var(--pt)); margin-right: calc(8 * var(--pt)); color: var(--blue); font: 600 calc(7 * var(--pt)) / 1.25 system-ui, sans-serif; text-align: right; white-space: normal; }  /* when it shows, in the margin */
+.flow-table { position: relative; margin: 1em 0; }
+.flow [contenteditable] { outline: none; cursor: text; }
 .flow-sample { opacity: 0.55; }  /* the list's further rows, as they will print */
-.flow-pill { padding: 0 0.15em; border-radius: 0.2em; background: #e3eefb; color: #12407a; white-space: pre-wrap; cursor: pointer; }
+.flow-pill { padding: 0 0.15em; border-radius: 0.2em; background: #e3eefb; color: #12407a; white-space: pre-wrap; cursor: pointer; box-decoration-break: clone; -webkit-box-decoration-break: clone; }  /* a value over lines: each line its own tint, all at the text's edge */
+.flow-pill:has(> .flow-pre) { padding: 0; background: none; color: inherit; }  /* what stands before a value prints as written: only the value tinted */
+.flow-value { padding: 0 0.15em; border-radius: 0.2em; background: #e3eefb; color: #12407a; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 .flow-pill.b { font-weight: 700; }
 td .flow-pill { cursor: help; }  /* in a list, a placeholder to point at, not to pick */
 .flow-pill.empty { border: 1px dashed #9cb5d6; background: none; color: #6b84a8; font-size: 0.85em; }
 .flow-pill.picked { outline: calc(2 * var(--px)) solid var(--blue); }
-.flow-empty { color: #9a9a9a; font-style: italic; }
-.flow-office { display: grid; gap: 6px; margin-bottom: 4px; }
-.flow-office label { font-weight: 600; font-size: 14px; }
-.flow-line { padding: 6px 10px; border: 1px solid #8a8a8a; border-radius: var(--radius); min-height: 34px; }
-.flow-line:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
-.flow-group { margin: 8px 0 4px; color: var(--muted); }
 .flow-fields { display: grid; gap: 2px; }
 .flow-fields button { display: flex; justify-content: space-between; gap: 12px; padding: 5px 8px; border: 0; border-radius: var(--radius); background: none; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
 .flow-fields button:hover { background: #e3eefb; }
 .flow-fields small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
-.flow-acts, .flow-new { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.flow-column { display: flex; align-items: center; gap: 10px; font-size: 14px; }
-.flow-column span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.paper-flow.middle { display: flex; flex-direction: column; justify-content: center; }
-.paper-flow p { margin: 0 0 0.7em; }
-.paper-bar { display: inline-block; width: 240px; max-width: 40%; height: 7.3px; margin-bottom: 8px; }  /* 30 mm, 2.6 pt, as core/paper.py Bar */
-.paper-flow.centred .paper-bar { display: block; margin-inline: auto; }
-.paper-title { margin-bottom: 0.5em; font-weight: 700; line-height: 1.2; }
-/* a document's own content in the text area (views.paper_content), in the page's units as the PDF sets it */
-.paper-flow :is(h2, h3) { margin: 1em 0 0.4em; font-size: 1.15em; }
-.paper-flow section { margin: 1em 0; }
 .paper-flow table { width: 100%; border-collapse: collapse; font-size: 0.9em; }
-.paper-flow :is(th, td) { padding: 0.2em 0.4em 0.2em 0; border-bottom: 1px solid #bbb; text-align: left; font-weight: inherit; letter-spacing: 0; text-transform: none; }
-.paper-flow th { font-weight: 700; }
+.paper-flow :is(th, td) { padding: 0.2em 0.35em; border-bottom: 1px solid #bbb; text-align: left; font-weight: inherit; letter-spacing: 0; text-transform: none; vertical-align: top; }
+.paper-flow :is(th, td):first-child { padding-left: 0; }  /* flush with the text's edges, as the PDF */
+.paper-flow :is(th, td):last-child { padding-right: 0; }
+.paper-flow th { color: #5f5f5f; font-size: 0.8em; font-weight: 700; text-transform: uppercase; }
 .paper-flow .num { text-align: right; }
-.paper-flow .facts { display: grid; grid-template-columns: 11em 1fr; gap: 0.2em 1em; margin: 0.6em 0; }
-.paper-flow .facts :is(dt, dd) { margin: 0; }
-.paper-flow :is(.sign, .signatures) { display: flex; justify-content: space-between; gap: 2em; margin-top: 3em; }
-.paper-flow .signatures span { flex: 1; padding-top: 0.3em; border-top: 1px solid currentColor; }
-.paper-flow.centred .sign { justify-content: center; }
+/* the rail, for what is picked in the content: a value, whose it is; a table's columns; the Hochschule's own text, worded there */
+.flow-about { display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; margin: 0; font-size: 14px; }
+.flow-about dt { color: var(--muted); }
+.flow-about dd { margin: 0; }
+.flow-columns { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.flow-columns li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.flow-columns span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flow-words { padding: 8px 10px; border: 1px solid #8a8a8a; border-radius: var(--radius); background: #fff; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }
+.flow-words:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.paper-shared { display: grid; gap: 2px; margin: -6px 0 0; padding: 0; color: var(--muted); font-size: 13px; list-style: none; }
+.paper-programs { display: grid; gap: 2px; max-height: 220px; overflow-y: auto; }
+.paper-programs .option { font-size: 14px; }
+/* over the page: the toolbar while the content is written, and asked once what is changed for whom */
+.paper-format { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; min-height: 32px; padding: 0 24px 10px; }
+.paper-format:has(> .paper-ask[hidden]:only-child) { display: none; }  /* who only designs: no toolbar, the row only while asked */
+.paper-type { display: flex; align-items: center; gap: 4px; }
+.paper-type select { width: 170px; height: 32px; padding: 0 30px 0 10px; font-size: 14px; }
+.paper-type button { height: 32px; padding: 0 10px; border: 1px solid #8a8a8a; border-radius: var(--radius); background: #fff; color: var(--ink); font-size: 14px; cursor: pointer; }
+.paper-type button:hover:not(:disabled) { background: var(--soft); }
+.paper-type :disabled { opacity: 0.45; cursor: default; }
+.paper-format-hint { margin-left: 8px; color: var(--muted); font-size: 13px; }
+.paper-ask { display: grid; gap: 6px; margin-left: auto; font-size: 14px; }
+.paper-ask[hidden] { display: none; }
+.paper-ask > div { display: flex; align-items: center; gap: 8px; padding-left: 10px; border-left: 4px solid var(--accent); }
+.paper-ask p { margin: 0 4px 0 0; font-weight: 600; }
+.paper-ask .btn { height: 32px; padding-block: 0; }  /* as tall as the toolbar's, the row keeps its height */
+.paper-ask.urgent > div { border-left-color: var(--red); color: var(--red); }  /* saved before it was said: asked again, in red */
+.paper-writing { outline: none; cursor: text; }
+/* the values to put in where the cursor stands (words.js) */
+.words-menu { position: fixed; z-index: 50; display: grid; grid-template-rows: auto 1fr; width: 320px; max-height: 330px; border: 1px solid var(--line); background: #fff; box-shadow: 0 6px 24px rgb(0 0 0 / 0.14); }
+.words-menu input { margin: 8px; }
+.words-menu > div { overflow-y: auto; padding: 0 4px 6px; }
+.words-menu p { margin: 8px 6px 2px; color: var(--muted); }
+.words-menu button { display: flex; justify-content: space-between; gap: 12px; width: 100%; padding: 5px 8px; border: 0; border-radius: var(--radius); background: none; font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.words-menu button:is(:hover, .on) { background: #e3eefb; }
+.words-menu small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
 .paper-window { position: absolute; border: var(--px) dashed var(--blue); pointer-events: none; }
 .paper-window small { position: absolute; bottom: calc(2 * var(--px)); right: calc(4 * var(--px)); color: var(--blue); font: calc(11 * var(--px)) system-ui, sans-serif; }
 .paper-mark { position: absolute; height: 3.2px; background: var(--muted); pointer-events: none; }  /* 0.4 pt */
@@ -1130,10 +1166,10 @@ td .flow-pill { cursor: help; }  /* in a list, a placeholder to point at, not to
 .paper-panel textarea { height: auto; }
 .paper-panel input[type=checkbox] { width: 16px; height: 16px; }
 .paper-panel label.option { padding-left: 26px; font-size: 14px; }
-.paper-panel > div:not(.actions), .paper-section > div:not(.row, .paper-checks, .paper-swatches), .paper-section .row > div { gap: 5px; }
+.paper-panel > div:not(.actions), .paper-section > div:not(.row, .paper-checks, .paper-swatches, .flow-words), .paper-section .row > div { gap: 5px; }
 .paper-section { display: grid; gap: 12px; margin: 2px 0 0; padding-top: 14px; border-top: 1px solid var(--line); }
 .paper-section h4 { display: flex; align-items: baseline; margin: 0; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
-.paper-section > div:not(.row, .paper-checks, .paper-swatches), .paper-section .row > div { display: grid; gap: 6px; align-content: start; }
+.paper-section > div:not(.row, .paper-checks, .paper-swatches, .flow-words), .paper-section .row > div { display: grid; gap: 6px; align-content: start; }
 .paper-panel label.option { font-weight: 400; }
 .paper-crumb { font-size: 14px; }
 .paper-crumb .arrow { height: 1em; vertical-align: -2px; }

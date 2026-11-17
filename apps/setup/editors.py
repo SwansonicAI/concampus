@@ -171,11 +171,11 @@ class DocumentTypeForm(forms.ModelForm):
 
 
 class InstitutionForm(forms.ModelForm):
-    """The Hochschule's own data, which its Briefbögen fill in."""
+    """The Hochschule's own data, which its documents fill in."""
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.lead = format_html('Schriftzug, Logo, Farbe, Anschrift und Bankverbindung füllen die <a href="{}">Briefbögen</a>.', reverse('documents:papers'))
+        self.lead = format_html('Schriftzug, Logo, Farbe, Anschrift und Bankverbindung füllen die <a href="{}">Dokumente</a>.', reverse('documents:bescheinigungen'))
 
 
 class OfficeForm(forms.ModelForm):

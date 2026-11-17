@@ -228,7 +228,7 @@ def exmatriculate(request, pk):
         values = {'grund': dict(EXITS)[reason], 'zum': date_format(on, 'j. F Y'), 'rueckmeldesemester': ', '.join(map(str, paid))}
         if not request.POST.get('bestaetigt'):
             notes = [f'Noch offen: {what}{f" ({who})" if who else ""}' for what, who in still] + [insurer] * bool(insurer)
-            return preview(request, f'Exmatrikulation, letzter Tag {date_format(on, "j.n.Y")}', [('Exmatrikulation', [study.person], study.wording('exmatrikulation', *after, **values))], 'Exmatrikulieren und Bescheid versenden', study.get_absolute_url(), notes)
+            return preview(request, f'Exmatrikulation, letzter Tag {date_format(on, "j.n.Y")}', [('Exmatrikulation', [study.person], study.wording('exmatrikulation', after, **values))], 'Exmatrikulieren und Bescheid versenden', study.get_absolute_url(), notes)
         with transaction.atomic():
             later.filter(paid=None).delete()
             later.update(withdrawn=True)  # what was paid stays on record, for its refund

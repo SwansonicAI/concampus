@@ -1,20 +1,9 @@
 {% extends base %}
+{% load composed %}
 {% block title %}Urkunde {{ study.person.name }}{% endblock %}
 {% block content %}
-{# Only ever made into the PDF (exams.transcripts.certificate). What the Urkunde says of itself is in its placeholders (core.paper.FIELDS): on a Briefbogen set without a text area, it is all there is; the rest flows where it has one #}
-<div class="document ceremony{% if copy %} copy{% endif %}" data-paper="urkunde" data-person="{{ study.person.legal_name }}" data-matrikel="{{ study.person.matriculation|default:'' }}"
-     data-person_geburtsname="{{ study.person.birth_name }}" data-person_geburtsdatum="{{ study.person.birth_date|date:'j. F Y' }}" data-person_geburtsort="{{ study.person.birth_place }}"
-     data-studium_studiengang="{{ study.program.name }}" data-studium_hauptfach="{{ study.subject }}" data-studium_grad="{{ study.program.qualification|default:study.program.degree }}"
-     data-dokument_datum="{{ completed|default:study.issued|date:'j. F Y' }}">
-  {% include "core/_letterhead.html" with plain=True %}
-  <h1>Urkunde</h1>
-  {% if copy %}<p class="muted"><small>Abschrift zur Information. Gültig ist die unterschriebene und gesiegelte Urkunde.</small></p>{% endif %}
-  <p style="margin-top: 32px">Die {{ institution.name }} verleiht</p>
-  <p style="font-size: 22px"><b>{{ study.person.legal_name }}</b>{% if study.person.birth_name %}, geb. {{ study.person.birth_name }}{% endif %}</p>
-  <p>geboren am {{ study.person.birth_date|date:"j. F Y" }}{% if study.person.birth_place %} in {{ study.person.birth_place }}{% endif %},</p>
-  <p>nach bestandener Prüfung im Studiengang {{ study.program.name }}, Hauptfach {{ study.subject }}, den akademischen Grad</p>
-  <p style="font-size: 22px"><b>{{ study.program.qualification|default:study.program.degree }}</b></p>
-  <div class="sign"><span>{% if institution.place %}{{ institution.place }}, {% endif %}{{ completed|default:study.issued|date:"j. F Y" }}</span></div>
-  <div class="signatures">{% for name in signature.splitlines %}<span>{{ name }}</span>{% endfor %}</div>
+{# Only ever made into the PDF (exams.transcripts.certificate) #}
+<div class="document{% if copy %} copy{% endif %}" data-paper="urkunde" data-person="{{ study.person.legal_name }}" data-matrikel="{{ study.person.matriculation|default:'' }}">
+  {% composed 'urkunde' %}
 </div>
 {% endblock %}

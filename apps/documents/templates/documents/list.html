@@ -3,23 +3,33 @@
 {% block content %}
 <div class="head">
   <h1>{{ title }}</h1>
-  {% if letter %}<div class="actions"><a class="btn ghost" href="{% url 'documents:paper' 'brief' %}">Briefvorlage gestalten</a></div>{% endif %}
+  {% if paper %}{# a new document: as another, until it is changed (views.copy) #}
+  <details class="new-paper">
+    <summary class="btn">Neues Dokument</summary>
+    <form method="post" action="{% url 'documents:copy' kind %}" class="form">
+      {% csrf_token %}
+      <label>Wie<select name="von">{% for key, name in sources %}<option value="{{ key }}">{{ name }}</option>{% endfor %}</select></label>
+      <label>Name<input name="name" maxlength="120" placeholder="z. B. {% if kind == 'bescheide' %}Zulassung{% else %}Zeugnis{% endif %} Lehramt"></label>
+      <div class="actions"><button class="btn small">Anlegen</button></div>
+    </form>
+  </details>
+  {% endif %}
 </div>
 <p class="lead">{{ lead }}</p>
 {% if 'word_texts' in user.roles %}
 <form class="toolbar">
-  <div class="inline"><label>Suche in allen Dokumenten<input type="search" name="q" value="{{ q }}" placeholder="Titel oder Wortlaut"></label></div>
+  <div class="inline"><label>Suche in allen Dokumenten<input type="search" name="q" value="{{ q }}" placeholder="Name oder Wortlaut"></label></div>
 </form>
 {% endif %}
 <table>
-  <thead><tr><th>Dokument</th>{% if kind != 'bescheinigungen' and kind != 'seiten' or q %}<th>Betreff</th>{% endif %}{% if q %}<th>Art</th>{% endif %}<th></th></tr></thead>
+  <thead><tr><th>Dokument</th>{% if paper and not q %}<th>Wie</th><th>Gilt für</th>{% else %}<th>Betreff</th>{% endif %}<th></th></tr></thead>
   <tbody>
-    {% for d, changed, subject in rows %}
+    {% for row in rows %}
     <tr>
-      <td><a href="{% url 'documents:document' d.kind d.key %}"><b>{{ d.title }}</b></a></td>
-      {% if kind != 'bescheinigungen' and kind != 'seiten' or q %}<td class="muted">{{ subject }}</td>{% endif %}
-      {% if q %}<td>{% if d.kind == 'bescheide' %}Bescheid{% elif d.kind == 'bescheinigungen' %}Bescheinigung{% elif d.kind == 'nachrichten' %}Nachricht{% else %}Seite{% endif %}</td>{% endif %}
-      <td>{% if changed %}<span class="badge open">geändert</span>{% endif %}</td>
+      <td><a href="{{ row.url }}"><b>{{ row.name }}</b></a></td>
+      {% if paper and not q %}<td class="muted">{{ row.follows }}</td><td class="muted">{% if row.copy %}{{ row.programs|default:"noch niemanden" }}{% else %}alle{% endif %}</td>
+      {% else %}<td class="muted">{{ row.about|default:"" }}</td>{% endif %}
+      <td>{% if row.changed %}<span class="badge open">eigen</span>{% endif %}</td>
     </tr>
     {% empty %}
     <tr><td colspan="4" class="empty">Kein Dokument sagt „{{ q }}“.</td></tr>

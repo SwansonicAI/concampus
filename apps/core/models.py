@@ -319,7 +319,6 @@ class Institution(Tracked, models.Model):
     closes = models.PositiveSmallIntegerField('Räume bis (Uhr)', default=22, validators=[MinValueValidator(1), MaxValueValidator(24)])
     walk_minutes = models.PositiveSmallIntegerField('Weg zwischen Gebäuden (Min.)', default=15, help_text='Kürzere Abstände im Stundenplan werden angemerkt.')
     feedback_days = models.PositiveSmallIntegerField('Antwort auf gemeldete Barrieren (Tage)', default=30, help_text='Wie das Landesgesetz zur Barrierefreiheit sie verlangt.')
-    papers = models.JSONField('Briefbögen der Dokumente', default=dict, blank=True)  # {document: Layout key} where not its standard (core.paper)
 
     class Meta:
         verbose_name = 'Hochschule'
@@ -929,25 +928,6 @@ class Text(Tracked, models.Model):
                 raise ValidationError({field: error.messages})
 
 
-class Layout(Tracked, models.Model):
-    """A Briefbogen: what the pages of a document show around its text, and how the text is set (core.paper). The
-    standard ones (paper.STANDARD) hold until the Hochschule saves its own under their key."""
-
-    capabilities = ('design_papers',)
-
-    key = models.SlugField('Schlüssel', max_length=40, unique=True)
-    name = models.CharField('Name', max_length=80)
-    design = models.JSONField('Gestaltung', default=dict)
-
-    class Meta:
-        ordering = ['name']
-        verbose_name = 'Briefbogen'
-        verbose_name_plural = 'Briefbögen'
-
-    def __str__(self):
-        return self.name
-
-
 class Artwork(Tracked, models.Model):
     """A picture or a font face for the Briefbögen: checked on upload, a picture drawn anew, a font made TrueType that
     may be embedded (core.paper.accept, core.paper.faces); a face's family, weight and slant read from the font itself."""
@@ -986,7 +966,8 @@ class Message(models.Model):
     created = models.DateTimeField('Gesendet', default=timezone.now)
     read = models.DateTimeField('Gelesen', null=True, blank=True)
     sender = models.CharField('Absender', max_length=200, blank=True, help_text='Bei Bescheiden: wer sie erlassen hat, wie es im Brief steht.')
-    template = models.CharField('Vorlage', max_length=40, blank=True, help_text='Bei einem Bescheid: der Text, aus dem er entstand.')
+    template = models.CharField('Dokument', max_length=60, blank=True, help_text='Bei einem Bescheid: das Dokument, aus dem er entstand.')
+    content = models.TextField('Inhalt', blank=True, help_text='Bei einem Bescheid: sein Inhalt, wie er erlassen wurde, gesetzt; so bleibt er bei jedem Druck derselbe.')
 
     class Meta:
         ordering = ['-created']
@@ -1005,8 +986,8 @@ class Message(models.Model):
         return f'{self.created:%Y}-{self.pk}' if self.sender else ''
 
     @classmethod
-    def send(cls, person, subject, body, link='', sender='', template=''):
-        message = cls.objects.create(person=person, subject=subject, body=body, link=link, sender=sender, template=template)
+    def send(cls, person, subject, body, link='', sender='', template='', content=''):
+        message = cls.objects.create(person=person, subject=subject, body=body, link=link, sender=sender, template=template, content=content)
         if person.email:  # the Postfach has it either way
             cls.mail(person, subject, body)
         return message

@@ -402,7 +402,6 @@ TEXTS = {
         'Bitte teilen Sie der Ausländerbehörde innerhalb von zwei Wochen mit, dass Ihr Studium hier beendet ist (§ 82 Abs. 6 Aufenthaltsgesetz).', on=('brief',),
     ),
     'absender_bescheide': Spec(BAUSTEIN, 'Absender der Bescheide', '', '{hochschule}', on=('brief',)),
-    'unterschrift_urkunden': Spec(BAUSTEIN, 'Unterschriften auf Urkunden', '', 'Präsidentin oder Präsident\nVorsitz Prüfungsausschuss', on=('urkunde',)),
     'ds_hochschulsystem': Spec(  # KMK/HRK 2018
         BAUSTEIN, 'Diploma Supplement: Hochschulsystem (Abschnitt 8)', '',
         'The information on the national higher education system on the following pages provides a context '
@@ -735,6 +734,22 @@ EXAMPLES = {  # what each placeholder holds, written as ConCampus fills it in, t
     'zweck': 'zum Nachteilsausgleich', 'link': 'https://campus.example/bestaetigen/…', 'zugang': 'https://campus.example/zugang/…', 'benutzername': 'emustermann',
 }
 UNLIKE = {'berechtigung_erteilt': {'ab': ''}, 'lehrauftrag': {'veranstaltungen': 'Kammermusik Streicher (2 SWS)'}}  # where a text fills one otherwise
+NAMES = {  # what each placeholder is, as the editor names it beside its example (core/static/core/words.js)
+    'vorname': 'Vorname', 'nachname': 'Nachname', 'hochschule': 'Hochschule', 'anschrift': 'Anschrift der Hochschule', 'ort': 'Ort der Hochschule',
+    'datum': 'Datum', 'studiengang': 'Studiengang', 'hauptfach': 'Hauptfach', 'semester': 'Semester', 'matrikelnummer': 'Matrikelnummer',
+    'frist': 'Frist', 'begruendung': 'Begründung', 'grund': 'Grund', 'zum': 'Tag der Exmatrikulation', 'wahl': 'Art der Wahl', 'schwerpunkt': 'Gewählt',
+    'fachsemester': 'Fachsemester', 'bisher': 'Bisheriges Studium', 'rueckmeldesemester': 'Semester der Rückmeldung', 'art': 'Art des Studiums',
+    'regelstudienzeit': 'Regelstudienzeit', 'erlaubt': 'Erlaubte Semester darüber', 'gezaehlt': 'Gezählte Semester', 'betrag': 'Betrag in €',
+    'modul': 'Modul', 'thema': 'Thema', 'gutachter': 'Gutachter:innen', 'massnahme': 'Maßnahme', 'pruefung': 'Prüfung', 'versuch': 'Versuch',
+    'link': 'Link zum Bestätigen', 'stufen': 'Nächste Stufen', 'termin': 'Termin', 'raum': 'Raum', 'programm': 'Programm', 'danach': 'Was folgt',
+    'fehlt': 'Was fehlt', 'beitrag': 'Semesterbeitrag in €', 'inhalt': 'Beschreibung der Wahl', 'aendern': 'Bis wann änderbar',
+    'veranstaltungen': 'Lehrveranstaltungen', 'veranstaltung': 'Lehrveranstaltung', 'besetzung': 'Besetzung', 'von': 'Wer es tut',
+    'betreuung': 'Betreuung', 'instrument': 'Instrument', 'benutzername': 'Benutzername', 'zugang': 'Link zum Zugang', 'platz': 'Platz',
+    'gruppe': 'Gruppe', 'zeit': 'Zeit', 'studierende': 'Studierende', 'anzahl': 'Wie viele fehlen', 'bewerbung': 'Bewerbung', 'entscheidung': 'Entscheidung',
+    'herkunft': 'Woher', 'buchung': 'Buchung', 'zeitraum': 'Zeitraum', 'umfang': 'Umfang', 'verguetung': 'Vergütung', 'tag': 'Tag', 'ab': 'Ab wann',
+    'kandidat': 'Zu werten', 'fuer': 'An Stelle von', 'berechtigung': 'Berechtigung', 'amt': 'Amt', 'bis': 'Bis wann', 'termine': 'Termine',
+    'neuer_termin': 'Neuer Termin', 'pruefungsteil': 'Prüfungsteil', 'ergebnis': 'Ergebnis', 'zweck': 'Wofür',
+}
 
 
 def examples(key):
@@ -782,26 +797,38 @@ def filled(template, values):
     return '\n\n'.join(p for p in template.split('\n\n') if kept(p)).format_map(values)
 
 
-def render(key, *after, **values):
-    """(subject, body) with the placeholders filled in and the text blocks `after` following; a Bescheid gets the
-    Rechtsbehelfsbelehrung (Spec.appealable), others where they name it."""
+def render(key, **values):
+    """(subject, body) of a message or a text block, with the placeholders filled in."""
     values = Values(basics(), **{name: str(value) for name, value in values.items()})
     subject, body = wording(key)
-    subject, body = subject.format_map(values), filled(body, values)
-    for block in dict.fromkeys([*after, *(['rechtsbehelf'] if TEXTS[key].appealable else [])]):
-        body += '\n\n' + filled(wording(block)[1], values)
-    return subject, body
+    return subject.format_map(values), filled(body, values)
 
 
 def block(key, **values):
     return render(key, **values)[1]
 
 
+def issued(key, person, **values):
+    """(document, subject, body, content) as `send` sends it: a Bescheid as its document has it (documents.catalogue),
+    anything else as its text."""
+    values = {'vorname': person.first_name, 'nachname': person.last_name, **values}
+    if TEXTS[key].group == BESCHEID:
+        from documents.catalogue import bescheid
+
+        return bescheid(key, values)
+    return '', *render(key, **values), ''
+
+
+def said(key, person, **values):
+    """(subject, body), to read before it is sent."""
+    return issued(key, person, **values)[1:3]
+
+
 def send(key, person, link='', **values):
-    """A message to the Postfach; a Bescheid with its sender, which gives it an Aktenzeichen to quote in a Widerspruch."""
-    subject, body = render(key, vorname=person.first_name, nachname=person.last_name, **values)
-    bescheid = TEXTS[key].group == BESCHEID
-    return Message.send(person, subject, body, link, sender=block('absender_bescheide') if bescheid else '', template=key if bescheid else '')
+    """A message to the Postfach; a Bescheid with its sender, which gives it an Aktenzeichen to quote in a Widerspruch,
+    and its content as issued, so it prints the same ever after."""
+    paper, subject, body, content = issued(key, person, **values)
+    return Message.send(person, subject, body, link, sender=block('absender_bescheide') if paper else '', template=paper, content=content)
 
 
 def mail(key, person, **values):

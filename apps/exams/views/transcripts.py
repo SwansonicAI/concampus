@@ -79,15 +79,14 @@ def issue(request, pk):
 
 
 def certificate(request, pk):
-    """The Urkunde conferring the degree, once the Zeugnis is issued: always as its PDF, which its Briefbogen may set from
-    its placeholders and Textfelder alone (core.paper.SET), so no page could say otherwise."""
+    """The Urkunde conferring the degree, once the Zeugnis is issued: always as its PDF, as its document sets it."""
     study = get_object_or_404(Study.objects.select_related('person', 'program', 'subject'), pk=pk, issued__isnull=False)
     office = request.user.may('decide_results', study)
     if not (office or study.person == request.user):
         raise PermissionDenied
     name = f'Urkunde {study.person.name}'
     return paper.respond(paper.pdf(render_to_string('exams/certificate.html', {
-        'study': study, 'completed': achievements(study)['completed'], 'copy': not office, 'signature': texts.block('unterschrift_urkunden'),
+        'study': study, 'completed': achievements(study)['completed'], 'copy': not office,
     }, request), name), name)
 
 

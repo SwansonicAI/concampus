@@ -4,6 +4,6 @@
 {% block content %}
 <div class="document" data-paper="notenliste">
   <p class="no-print actions"><a class="btn" href="{% querystring pdf=1 %}" target="_blank">PDF</a></p>
-  {% composed 'notenliste' %}
+  {% composed notice|yesno:'aushang,notenliste' %}
 </div>
 {% endblock %}

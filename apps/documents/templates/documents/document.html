@@ -1,30 +1,26 @@
 {% extends base %}
+{% load static %}
 {% block title %}{{ document.title }}{% endblock %}
 {% block content %}
 <p class="eyebrow"><a href="{{ back }}">{{ trail.0.0 }}</a></p>
-<div class="head">
-  <h1>{{ document.title }}</h1>
-  {% if letter %}<div class="actions"><a class="btn ghost" href="{% url 'documents:paper' 'brief' %}" title="Was jeden Bescheid umgibt: Briefkopf, Anschriftfeld, Fuß, Schrift">Briefvorlage gestalten</a></div>{% endif %}
-</div>
-{# What is worded on the document, and beside it the document as it arrives, a moment after each change (app.js, views.document_preview) #}
-<div class="wording">
-  <form method="post" class="form" data-preview="document-preview">
-    {% csrf_token %}
-    {% for key, spec, form, shared, fields in texts %}
-    {% if forloop.first %}<div class="worded" data-mark="{{ key }}">{% else %}<details class="worded" data-mark="{{ key }}"{% if form.errors %} open{% endif %}><summary><b>{{ spec.title }}</b>{% if shared %} <span class="muted">· steht {{ shared }}</span>{% endif %}</summary>{% endif %}
-      <div class="worded-fields">
-        {% if form.subject %}<div>{{ form.subject.as_field_group }}</div>{% endif %}
-        <div>{{ form.body.as_field_group }}</div>
-        <div class="chips" aria-label="Platzhalter einfügen">{% for name, example in fields %}<button type="button" class="chip" data-insert="{{ '{' }}{{ name }}{{ '}' }}" title="{{ example|default:'leer' }}">{{ name }}</button>{% endfor %}</div>
-        {% if form.instance.pk %}<p class="worded-own"><button class="link" name="standard" value="{{ key }}" formnovalidate>Auf Standard zurücksetzen</button> · <a href="{% url 'history' 'core.text' form.instance.pk %}">Verlauf</a></p>{% endif %}
-      </div>
-    {% if forloop.first %}</div>{% else %}</details>{% endif %}
-    {% endfor %}
-    {% if texts %}<div class="actions"><button class="btn">Speichern</button><a class="btn ghost" data-close href="{{ back }}">Abbrechen</a></div>{% endif %}
-  </form>
-  <div class="wording-preview">
-    <iframe name="document-frame" src="{% url 'documents:document_preview' kind document.key %}{% if document.letter %}#toolbar=0&amp;navpanes=0&amp;view=FitH{% endif %}" title="So kommt es an"></iframe>
+<h1>{{ document.title }}</h1>
+{# A message or a page's text as it arrives, written where it stands (core/static/core/words.js): the values in it an example for a made-up person; beside it, what can be put in #}
+<form method="post" class="wording" data-words-page="words-data">
+  {% csrf_token %}
+  {% for key, spec, form, fields in texts %}
+  <div class="words-sheet">
+    {% for errors in form.errors.values %}<p class="flash error">{{ errors|join:" " }}</p>{% endfor %}
+    {% if form.subject %}<h2 class="words-subject" data-words="{{ form.subject.html_name }}" data-text="{{ key }}" data-one-line aria-label="Betreff"></h2>{{ form.subject.as_hidden }}{% endif %}
+    <div class="words-body" data-words="{{ form.body.html_name }}" data-text="{{ key }}" aria-label="Text"></div>{{ form.body.as_hidden }}
   </div>
-</div>
-<form method="post" id="document-preview" action="{% url 'documents:document_preview' kind document.key %}{% if document.letter %}#toolbar=0&amp;navpanes=0&amp;view=FitH{% endif %}" target="document-frame">{% csrf_token %}</form>
+  <aside class="words-rail">
+    <h4>Werte einsetzen</h4>
+    <div class="flow-fields">{% for name, label, example in fields %}<button type="button" data-insert="{{ name }}" title="Einsetzen, wo die Schreibmarke steht"><span>{{ label }}</span><small>{{ example|default:'leer' }}</small></button>{% endfor %}</div>
+    <div class="actions"><button class="btn">Speichern</button><a class="btn ghost" data-close href="{{ back }}">Abbrechen</a></div>
+    {% if form.instance.pk %}<p class="worded-own"><button class="link" name="standard" value="{{ key }}" formnovalidate>Wie ConCampus es vorschlägt</button> · <a href="{% url 'history' 'core.text' form.instance.pk %}">Verlauf</a></p>{% endif %}
+  </aside>
+  {% endfor %}
+</form>
+{{ words|json_script:"words-data" }}
+<script src="{% static 'core/words.js' %}" defer></script>
 {% endblock %}

@@ -11,7 +11,6 @@ import re
 import time
 import uuid
 from collections import Counter, defaultdict
-from copy import deepcopy
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from functools import cached_property
@@ -37,9 +36,10 @@ from core.text import handle, untimed
 from admissions.auditions import invite
 from admissions.views.board import DECISIONS, grounds
 from core import destatis, history, keys, texts
-from core.models import Change, Entry, Holiday, Institute, Institution, Key, Layout, Membership, Message, Office, Person, Rating, Reveal, Term, Text
-from core.paper import DOCUMENTS as PAPERS, STANDARD
-from documents.compose import VORSCHLAG, runs
+from core.models import Change, Entry, Holiday, Institute, Institution, Key, Membership, Message, Office, Person, Rating, Reveal, Term, Text
+from documents.catalogue import vorschlag
+from documents.compose import runs
+from documents.models import Paper
 from courses import panel as sheets
 from courses.models import Appointment, Area, Assignment, Course, Ensemble, Format, Group, Obligation, Participation, Post, Rate, Recusal, Reduction, ReductionGround, Score, Signup
 from courses.panel import mean, rounding
@@ -476,30 +476,26 @@ DOCUMENTS = [  # key, name, condition, settings: what a complete application hol
     ('notice', 'Bescheid', 'never', {}),
     ('other', 'Sonstiges', 'never', {}),
 ]
-def own_templates():
-    """The HfM's own templates (core.paper.template): its student office issues the Bescheinigungen, its president and
-    the dean sign the Urkunde (RPSO 2026 § 23 Abs. 1)."""
-    offices = {'immatrikulation': 'Akademische und Studentische Angelegenheiten', 'studienzeiten': 'Akademische und Studentische Angelegenheiten',
-               'exmatrikulation': 'Akademische und Studentische Angelegenheiten', 'leistungen': 'Prüfungsamt', 'notenliste': 'Prüfungsamt'}
-    signing = [runs('Die Präsidentin'), runs('Die Dekanin der Fakultät')]  # RPSO 2026 § 23 Abs. 1: the head of the Hochschule and the dean
+def own_papers():
+    """The HfM's own documents (documents.catalogue): its student office issues the Bescheinigungen, the Prüfungsamt the
+    Zeugnisse and Notenlisten; its president and the dean sign Zeugnis, Urkunde and Diploma Supplement (RPSO 2026 § 23 Abs. 1)."""
+    offices = {
+        **dict.fromkeys(('immatrikulationsbescheinigung', 'studienzeiten', 'exmatrikulationsbescheinigung'), 'Akademische und Studentische Angelegenheiten'),
+        **dict.fromkeys(('zeugnis', 'leistungen', 'notenliste', 'aushang'), 'Prüfungsamt'),
+    }
     found = []
-    for doc in (*offices, 'supplement', 'supplement_de'):
-        flow = deepcopy(VORSCHLAG[doc]) | ({'office': runs(offices[doc])} if doc in offices else {})
-        for block in flow['blocks']:
-            if block['type'] == 'signatures' and doc != 'notenliste':
-                block['names'] = signing
-        found.append(Layout(key=doc, name=PAPERS[doc][0], design=deepcopy(STANDARD['bescheinigung'][1]) | {'flow': flow}))
-    urkunde = deepcopy(STANDARD['urkunde'][1])
-    signed = {'u1': 'Die Präsidentin', 'u2': 'Die Dekanin der Fakultät'}
-    for el in urkunde['elements']:
-        if el['id'] in signed:
-            el['text'] = signed[el['id']]
-    return found + [Layout(key='urkunde', name='Urkunde', design=urkunde)]
+    for occasion in (*offices, 'urkunde', 'supplement', 'supplement_de'):
+        paper = vorschlag(occasion)
+        paper.content['office'] = offices.get(occasion, '')
+        for b in paper.content['blocks']:
+            if b.get('style') == 'signatures' and occasion in ('zeugnis', 'urkunde', 'supplement', 'supplement_de'):
+                b['runs'] = runs('Die Präsidentin\tDie Dekanin der Fakultät')
+        found.append(paper)
+    return found
 
 
 TEXTS = {  # where the HfM words things its own way (core.texts has the defaults)
     'absender_bescheide': 'Akademische und Studentische Angelegenheiten',
-    'unterschrift_urkunden': 'Die Präsidentin\nDie Dekanin der Fakultät',
     'einladung': (
         'Ihr Termin: {termin} Uhr, {raum}.\n\nBitte erscheinen Sie 30 Minuten vorher; Einspielräume stehen bereit. Bringen Sie einen '
         'Lichtbildausweis mit, und wenn Sie mit Korrepetition spielen, die Noten für die Begleitung.'
@@ -1075,7 +1071,7 @@ class Command(BaseCommand):
             audition_fee=Decimal('50'),
         )
         Text.objects.bulk_create(Text(key=key, subject=texts.TEXTS[key].subject if key in texts.TEXTS else '', body=body) for key, body in TEXTS.items())
-        Layout.objects.bulk_create(own_templates())
+        Paper.objects.bulk_create(own_papers())
         RoomFunction.objects.bulk_create(RoomFunction(key=key, name=name, central=central, order=n) for n, (key, name, central) in enumerate(FUNCTIONS))
         BookingCategory.objects.bulk_create(
             BookingCategory(key=key, name=name, tone=tone, order=n, **settings) for n, (key, name, tone, settings) in enumerate(CATEGORIES)
@@ -1968,9 +1964,10 @@ class Command(BaseCommand):
                 Score.objects.filter(participation=lost).update(value=Decimal('5.0'))
                 for back in (1, 2):
                     self.failed_before(lost, back)
-                subject, body = lost.study.wording('endgueltig', pruefung=lost.course.title, modul=lost.module, versuch=3)  # sent with the result
+                template, subject, body, content = lost.study.bescheid('endgueltig', pruefung=lost.course.title, modul=lost.module, versuch=3)  # sent with the result
                 when = lost.course.released + timedelta(days=2)
-                notice = Message.objects.create(person=lost.study.person, subject=subject, body=body, sender=texts.block('absender_bescheide'), created=when, read=when)
+                notice = Message.objects.create(person=lost.study.person, subject=subject, body=body, sender=texts.block('absender_bescheide'), created=when, read=when,
+                                                template=template, content=content)
                 Document.objects.create(person=lost.study.person, study=lost.study, kind_id='notice', title=subject, message=notice, created=when, template='endgueltig')
                 lost.study.participations.filter(course__term=now).delete()  # with the Prüfungsanspruch lost, nothing new this semester
                 lost.study.ensembles.clear()
@@ -2727,16 +2724,17 @@ class Command(BaseCommand):
         study = self.demo_study()
         lesson = Booking.objects.filter(participants=demo, course__kind=Course.Kind.LESSON, course__term=self.current).select_related('room', 'course').order_by('start').first()
         past = [  # what she received before: her place, her Immatrikulation, her lesson time
-            (*study.wording('zulassung', frist=f'{date(2024, 6, 14):%d.%m.%Y}', begruendung=''), at(date(2024, 5, 31), hour=10), 'zulassung'),
-            (*study.wording('immatrikulation'), at(study.start_term.start - timedelta(days=10), hour=10), 'immatrikulation'),
+            (study.bescheid('zulassung', frist=f'{date(2024, 6, 14):%d.%m.%Y}', begruendung=''), at(date(2024, 5, 31), hour=10), 'zulassung'),
+            (study.bescheid('immatrikulation'), at(study.start_term.start - timedelta(days=10), hour=10), 'immatrikulation'),
         ]
         if lesson:
-            past.append((*texts.render(
-                'unterrichtszeit', vorname=demo.first_name, nachname=demo.last_name, veranstaltung=lesson.course.title, von=wendt,
+            past.append((texts.issued(
+                'unterrichtszeit', demo, veranstaltung=lesson.course.title, von=wendt,
                 zeit=date_format(timezone.localtime(lesson.start), 'l, G:i') + ' Uhr', raum=lesson.room, ab=date_format(timezone.localtime(lesson.start), 'j.n.Y'),
             ), at(self.current.start - timedelta(days=5), hour=16), ''))
-        for subject, body, when, notice in past:
-            sent = Message.objects.create(person=demo, subject=subject, body=body, created=when, read=when, sender=texts.block('absender_bescheide') if notice else '')
+        for (template, subject, body, content), when, notice in past:
+            sent = Message.objects.create(person=demo, subject=subject, body=body, created=when, read=when, sender=texts.block('absender_bescheide') if notice else '',
+                                          template=template, content=content)
             if notice:
                 Document.objects.create(person=demo, study=study, kind_id='notice', title=subject, message=sent, created=when, template=notice)
         Message.objects.bulk_create([
@@ -2758,11 +2756,12 @@ class Command(BaseCommand):
         decided = Study.objects.filter(status__in=list(DECISIONS), start_term__in=[self.current, self.next])
         for study in decided.select_related('person', 'program', 'subject', 'start_term'):
             deadline = study.since + timedelta(days=Institution.get().accept_days)
-            notices.append((study, DECISIONS[study.status], *study.wording(DECISIONS[study.status], frist=f'{deadline:%d.%m.%Y}', datum=f'{study.since:%d.%m.%Y}', begruendung=grounds(study)), at(study.since, hour=10)))
+            notices.append((study, DECISIONS[study.status], study.bescheid(DECISIONS[study.status], frist=f'{deadline:%d.%m.%Y}', datum=f'{study.since:%d.%m.%Y}', begruendung=grounds(study)), at(study.since, hour=10)))
         for study in (s for s in self.enrolled if s.fs == 1):
-            notices.append((study, 'immatrikulation', *study.wording('immatrikulation'), at(study.start_term.start - timedelta(days=10), hour=10)))
+            notices.append((study, 'immatrikulation', study.bescheid('immatrikulation'), at(study.start_term.start - timedelta(days=10), hour=10)))
         sender = texts.block('absender_bescheide')
         sent = Message.objects.bulk_create(
-            Message(person=s.person, subject=title, body=text, sender=sender, created=when, read=when) for s, _, title, text, when in notices
+            Message(person=s.person, subject=title, body=text, sender=sender, created=when, read=when, template=template, content=content)
+            for s, _, (template, title, text, content), when in notices
         )
-        Document.objects.bulk_create(Document(person=s.person, study=s, kind_id='notice', title=title, message=m, created=when, template=key) for (s, key, title, _, when), m in zip(notices, sent))
+        Document.objects.bulk_create(Document(person=s.person, study=s, kind_id='notice', title=m.subject, message=m, created=when, template=key) for (s, key, _, when), m in zip(notices, sent))

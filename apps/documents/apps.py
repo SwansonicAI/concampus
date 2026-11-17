@@ -31,11 +31,9 @@ class DocumentsConfig(Tile, AppConfig):
         from .views import kinds
 
         words = {
-            'bescheide': 'dokumente texte wortlaut vorlagen briefe rechtsbehelfsbelehrung zulassung ablehnung',
-            'bescheinigungen': 'dokumente immatrikulationsbescheinigung zeugnis urkunde diploma supplement leihvertrag notenliste unterschriften absender',
+            'bescheide': 'dokumente texte wortlaut vorlagen briefe briefkopf briefbogen rechtsbehelfsbelehrung zulassung ablehnung',
+            'bescheinigungen': 'dokumente immatrikulationsbescheinigung zeugnis urkunde diploma supplement leihvertrag notenliste unterschriften absender gestaltung',
             'nachrichten': 'dokumente texte wortlaut e-mail postfach',
             'seiten': 'dokumente texte anmeldeseite barrierefreiheit einwilligung datenschutz',
         }
-        return [feature(KINDS[kind][0], reverse(f'documents:{kind}'), words[kind]) for kind in kinds(person)] + [
-            feature('Briefvorlage', reverse('documents:paper', args=['brief']), 'dokumente brief briefkopf briefbogen logo schrift gestaltung layout vorlage'),
-        ] * ('design_papers' in person.roles)
+        return [feature(KINDS[kind][0], reverse(f'documents:{kind}'), words[kind]) for kind in kinds(person)]

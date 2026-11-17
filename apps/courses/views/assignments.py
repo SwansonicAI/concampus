@@ -206,7 +206,7 @@ def grant(request):
     beyond = [a.person.last_name for a, _ in granting if limit and a.hours > limit]
     if not request.POST.get('bestaetigt'):
         a, courses = granting[0]
-        wording = texts.render('lehrauftrag', vorname=a.person.first_name, nachname=a.person.last_name, **bescheid(a, courses, request.user))
+        wording = texts.said('lehrauftrag', a.person, **bescheid(a, courses, request.user))
         unscoped, unrated = [a.person.last_name for a, _ in granting if not a.hours], [a.person.last_name for a, _ in granting if not a.rate]
         notes = [
             *([f'Über {number_format(limit)} SWS: {", ".join(beyond)}. Viel Lehre im Auftrag kann als Beschäftigung gelten.'] if beyond else []),
