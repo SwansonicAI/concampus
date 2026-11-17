@@ -56,6 +56,17 @@ if ($people && $username !== '') {
 $PAGE->set_title(get_string($people === null ? 'access' : 'choose', 'auth_concampus'));
 $logo = $OUTPUT->get_logo_url();
 echo $OUTPUT->header();
+// The choice of people wider than Moodle's login card: one profile each side by side, a group to choose from in a row of
+// its own, its button inside the card. Here, not in the template, which Moodle caches until an admin purges it.
+echo '<style>
+    #page-auth-concampus-index .login-container:has(.btn-block) { width: 760px !important; max-width: 100% !important; }
+    #page-auth-concampus-index .loginform:has(.btn-block) { display: flex; flex-wrap: wrap; column-gap: .75rem; }
+    #page-auth-concampus-index .loginform:has(.btn-block) > * { flex: 0 0 100%; }
+    #page-auth-concampus-index .loginform > form:has(.btn-block) { flex: 0 0 calc(50% - .375rem); }
+    #page-auth-concampus-index .loginform .btn-block { height: 100%; }
+    #page-auth-concampus-index .loginform .custom-select { flex: 1; min-width: 0; }
+    @media (max-width: 576px) { #page-auth-concampus-index .loginform > form:has(.btn-block) { flex-basis: 100%; } }
+</style>';
 echo $OUTPUT->render_from_template('auth_concampus/index', [
     'logourl' => $logo ? $logo->out(false) : '', 'sitename' => format_string($SITE->fullname), 'error' => $error,
     'url' => $url->out(false), 'sesskey' => sesskey(), 'admitted' => $people !== null,
