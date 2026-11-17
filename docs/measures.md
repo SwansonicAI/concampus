@@ -124,8 +124,8 @@ periods and rules: `docs/rules.md`; the legal requirements: `docs/legal.md`.
 
 ## Testing and review (Art. 32(1)(d))
 
-- Every change runs the automated tests before it is deployed (GitHub Actions, `.github/workflows/deploy.yml`): 147
-  tests, among them the rights of every role on every page, the deletion periods, the restriction, the complete copy
+- The automated tests run locally (`manage.py test`); while a prototype, a push to main deploys without them (GitHub
+  Actions, `.github/workflows/deploy.yml`). The tests: among them the rights of every role on every page, the deletion periods, the restriction, the complete copy
   without passwords, and that no Hochschule's name is in the code.
 - Accessibility checked automatically against WCAG 2.1 AA on 48 pages (`docs/legal.md`).
 - **Open**: a security concept after BSI IT-Grundschutz (Profil für Hochschulen) and a penetration test; a manual
