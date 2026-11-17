@@ -7,6 +7,7 @@ messages and the texts on ConCampus's own pages, worded each on its own (core.te
 from copy import deepcopy
 from dataclasses import dataclass
 
+from django.utils.html import escape
 from django.utils.text import slugify
 
 from core import paper
@@ -191,13 +192,15 @@ def issue(p, person, sender, study=None):
     values = {'vorname': person.first_name, 'nachname': person.last_name, 'matrikelnummer': person.matriculation or ''}
     values |= {'studiengang': study.program.title, 'hauptfach': str(study.subject)} if study else {}
     values = letter_values(FREE, values) | {'absender': sender}
-    return Message.send(person, subject(p.content, values) or p.name, text(p.content, values), sender=sender, template=p.key, content=html(p.content, values, {}))
+    marker = f'<i hidden class="no-print" data-page="{escape(p.key)}" data-vorlage="{escape(letterhead_of(p, letterheads()).key)}"></i>'  # its page even once it is deleted
+    return Message.send(person, subject(p.content, values) or p.name, text(p.content, values), sender=sender, template=p.key, content=marker + html(p.content, values, {}))
 
 
-def page(key):
-    """The page a document is set on (core.paper.pdf): its Vorlage's; one no longer there, the Brief's."""
-    found = papers()
-    return letterhead_of(found.get(key) or found['brief'], letterheads()).page
+def page(key, vorlage=None):
+    """The page a document is set on (core.paper.pdf): the Vorlage it was issued on while there is one, else its
+    Vorlage's; a document no longer there, the Brief's."""
+    found, heads = papers(), letterheads()
+    return (heads.get(vorlage) or letterhead_of(found.get(key) or found['brief'], heads)).page
 
 
 def free_key(name, model=Paper, more=OCCASIONS):

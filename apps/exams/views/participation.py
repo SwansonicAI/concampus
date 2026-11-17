@@ -43,7 +43,7 @@ def attest(request, pk):
     course = get_object_or_404(Course, pk=pk, kind=Course.Kind.EXAM, released=None)
     if not request.user.may('decide_results', course):
         raise PermissionDenied('Einen Rücktritt verbucht das Amt, das die Ergebnisse einträgt.')
-    p = get_object_or_404(course.participations.select_related('study__person'), pk=request.POST.get('participation'), passed=None)
+    p = get_object_or_404(course.participations.select_related('study__person'), pk=request.POST.get('participation') or None, passed=None)
     attest, refusal = filed(p.study, request, f'zum Rücktritt von {course.title}')
     if refusal:
         messages.error(request, refusal)

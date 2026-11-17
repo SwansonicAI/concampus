@@ -113,11 +113,13 @@ DOCUMENTS = {  # key (data-paper on the template's .document), none a Bescheid's
 }
 
 
-def template(doc):
-    """A document's page: as the Hochschule has made it, else ConCampus's (documents.catalogue)."""
+def template(el):
+    """A `.document`'s page (documents.catalogue.page): of the document its content names (documents.compose) and the
+    Vorlage it was issued on, else of its data-paper, else a letter's."""
     from documents.catalogue import page
 
-    return page(doc)
+    marker = next(el.iterfind('.//*[@data-page]'), None)
+    return page(marker.get('data-page'), marker.get('data-vorlage')) if marker is not None else page(el.get('data-paper') or 'brief')
 
 
 def element(kind, key, x, y, w, h, pages='all', **fields):
@@ -987,12 +989,6 @@ def blocks(el, look, width):
 
 # ---- the PDF -------------------------------------------------------------------------------------------------------
 
-def document_of(el):
-    """Which document a `.document` is, for its page: as its content says (documents.compose), else its data-paper, else a letter."""
-    marker = next(el.iterfind('.//*[@data-page]'), None)
-    return marker.get('data-page') if marker is not None else el.get('data-paper') or 'brief'
-
-
 def meta_of(el, institution, title=''):
     """What a `.document` tells the pages around it: its title, office, person and date, a letter's address and
     information block."""
@@ -1022,7 +1018,7 @@ def pdf(page, title='', design=None):
     story, templates = [], []
     for index, el in enumerate(root.find_class('document')):
         kind = classes(el)
-        layout = design or template(document_of(el))
+        layout = design or template(el)
         look = Look(layout['style'], accent, own)
         meta = meta_of(el, institution, title) | {'copy': 'copy' in kind}
         sheet = Sheet(institution, layout, meta, accent, own)
